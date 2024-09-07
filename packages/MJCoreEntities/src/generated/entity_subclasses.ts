@@ -1,8 +1,13 @@
 import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
+
+export const loadModule = () => {
+  // no-op, only used to ensure this file is a valid module and to allow easy loading
+}
+
      
-        
+ 
 /**
  * zod schema definition for the entity Action Authorizations
  */
@@ -47,7 +52,7 @@ export const ActionAuthorizationSchema = z.object({
 });
 
 export type ActionAuthorizationEntityType = z.infer<typeof ActionAuthorizationSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Categories
  */
@@ -100,7 +105,7 @@ export const ActionCategorySchema = z.object({
 });
 
 export type ActionCategoryEntityType = z.infer<typeof ActionCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity Action Context Types
  */
@@ -133,7 +138,7 @@ export const ActionContextTypeSchema = z.object({
 });
 
 export type ActionContextTypeEntityType = z.infer<typeof ActionContextTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Contexts
  */
@@ -185,7 +190,7 @@ export const ActionContextSchema = z.object({
 });
 
 export type ActionContextEntityType = z.infer<typeof ActionContextSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Execution Logs
  */
@@ -250,7 +255,7 @@ export const ActionExecutionLogSchema = z.object({
 });
 
 export type ActionExecutionLogEntityType = z.infer<typeof ActionExecutionLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Filters
  */
@@ -289,7 +294,7 @@ export const ActionFilterSchema = z.object({
 });
 
 export type ActionFilterEntityType = z.infer<typeof ActionFilterSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Libraries
  */
@@ -335,7 +340,7 @@ export const ActionLibrarySchema = z.object({
 });
 
 export type ActionLibraryEntityType = z.infer<typeof ActionLibrarySchema>;
-       
+
 /**
  * zod schema definition for the entity Action Params
  */
@@ -409,7 +414,7 @@ export const ActionParamSchema = z.object({
 });
 
 export type ActionParamEntityType = z.infer<typeof ActionParamSchema>;
-       
+
 /**
  * zod schema definition for the entity Action Result Codes
  */
@@ -456,7 +461,7 @@ export const ActionResultCodeSchema = z.object({
 });
 
 export type ActionResultCodeEntityType = z.infer<typeof ActionResultCodeSchema>;
-       
+
 /**
  * zod schema definition for the entity Actions
  */
@@ -582,7 +587,7 @@ export const ActionSchema = z.object({
 });
 
 export type ActionEntityType = z.infer<typeof ActionSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Actions
  */
@@ -631,7 +636,7 @@ export const AIActionSchema = z.object({
 });
 
 export type AIActionEntityType = z.infer<typeof AIActionSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Model Actions
  */
@@ -677,7 +682,7 @@ export const AIModelActionSchema = z.object({
 });
 
 export type AIModelActionEntityType = z.infer<typeof AIModelActionSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Model Types
  */
@@ -708,7 +713,7 @@ export const AIModelTypeSchema = z.object({
 });
 
 export type AIModelTypeEntityType = z.infer<typeof AIModelTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Models
  */
@@ -785,7 +790,6 @@ export const AIModelSchema = z.object({
         * * Field Name: ModelSelectionInsights
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
@@ -794,7 +798,7 @@ export const AIModelSchema = z.object({
 });
 
 export type AIModelEntityType = z.infer<typeof AIModelSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Prompt Categories
  */
@@ -835,7 +839,7 @@ export const AIPromptCategorySchema = z.object({
 });
 
 export type AIPromptCategoryEntityType = z.infer<typeof AIPromptCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity AI Prompt Types
  */
@@ -866,7 +870,7 @@ export const AIPromptTypeSchema = z.object({
 });
 
 export type AIPromptTypeEntityType = z.infer<typeof AIPromptTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Prompts
  */
@@ -948,7 +952,7 @@ export const AIPromptSchema = z.object({
 });
 
 export type AIPromptEntityType = z.infer<typeof AIPromptSchema>;
-       
+
 /**
  * zod schema definition for the entity AI Result Cache
  */
@@ -1020,7 +1024,7 @@ export const AIResultCacheSchema = z.object({
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
-       
+
 /**
  * zod schema definition for the entity Application Entities
  */
@@ -1083,7 +1087,7 @@ export const ApplicationEntitySchema = z.object({
 });
 
 export type ApplicationEntityEntityType = z.infer<typeof ApplicationEntitySchema>;
-       
+
 /**
  * zod schema definition for the entity Application Settings
  */
@@ -1127,7 +1131,7 @@ export const ApplicationSettingSchema = z.object({
 });
 
 export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSchema>;
-       
+
 /**
  * zod schema definition for the entity Applications
  */
@@ -1166,7 +1170,7 @@ export const ApplicationSchema = z.object({
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
-       
+
 /**
  * zod schema definition for the entity Audit Log Types
  */
@@ -1215,7 +1219,7 @@ export const AuditLogTypeSchema = z.object({
 });
 
 export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Audit Logs
  */
@@ -1295,7 +1299,7 @@ export const AuditLogSchema = z.object({
 });
 
 export type AuditLogEntityType = z.infer<typeof AuditLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Authorization Roles
  */
@@ -1345,7 +1349,7 @@ export const AuthorizationRoleSchema = z.object({
 });
 
 export type AuthorizationRoleEntityType = z.infer<typeof AuthorizationRoleSchema>;
-       
+
 /**
  * zod schema definition for the entity Authorizations
  */
@@ -1396,7 +1400,7 @@ export const AuthorizationSchema = z.object({
 });
 
 export type AuthorizationEntityType = z.infer<typeof AuthorizationSchema>;
-       
+
 /**
  * zod schema definition for the entity Communication Base Message Types
  */
@@ -1446,7 +1450,7 @@ export const CommunicationBaseMessageTypeSchema = z.object({
 });
 
 export type CommunicationBaseMessageTypeEntityType = z.infer<typeof CommunicationBaseMessageTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Communication Logs
  */
@@ -1528,7 +1532,7 @@ export const CommunicationLogSchema = z.object({
 });
 
 export type CommunicationLogEntityType = z.infer<typeof CommunicationLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Communication Provider Message Types
  */
@@ -1588,7 +1592,7 @@ export const CommunicationProviderMessageTypeSchema = z.object({
 });
 
 export type CommunicationProviderMessageTypeEntityType = z.infer<typeof CommunicationProviderMessageTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Communication Providers
  */
@@ -1641,7 +1645,7 @@ export const CommunicationProviderSchema = z.object({
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
-       
+
 /**
  * zod schema definition for the entity Communication Runs
  */
@@ -1710,7 +1714,7 @@ export const CommunicationRunSchema = z.object({
 });
 
 export type CommunicationRunEntityType = z.infer<typeof CommunicationRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Companies
  */
@@ -1749,7 +1753,7 @@ export const CompanySchema = z.object({
 });
 
 export type CompanyEntityType = z.infer<typeof CompanySchema>;
-       
+
 /**
  * zod schema definition for the entity Company Integration Record Maps
  */
@@ -1794,7 +1798,7 @@ export const CompanyIntegrationRecordMapSchema = z.object({
 });
 
 export type CompanyIntegrationRecordMapEntityType = z.infer<typeof CompanyIntegrationRecordMapSchema>;
-       
+
 /**
  * zod schema definition for the entity Company Integration Run API Logs
  */
@@ -1850,7 +1854,7 @@ export const CompanyIntegrationRunAPILogSchema = z.object({
 });
 
 export type CompanyIntegrationRunAPILogEntityType = z.infer<typeof CompanyIntegrationRunAPILogSchema>;
-       
+
 /**
  * zod schema definition for the entity Company Integration Run Details
  */
@@ -1910,7 +1914,7 @@ export const CompanyIntegrationRunDetailSchema = z.object({
 });
 
 export type CompanyIntegrationRunDetailEntityType = z.infer<typeof CompanyIntegrationRunDetailSchema>;
-       
+
 /**
  * zod schema definition for the entity Company Integration Runs
  */
@@ -1957,12 +1961,11 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Company Integrations
  */
@@ -2060,7 +2063,7 @@ export const CompanyIntegrationSchema = z.object({
 });
 
 export type CompanyIntegrationEntityType = z.infer<typeof CompanyIntegrationSchema>;
-       
+
 /**
  * zod schema definition for the entity Conversation Details
  */
@@ -2119,7 +2122,7 @@ export const ConversationDetailSchema = z.object({
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
-       
+
 /**
  * zod schema definition for the entity Conversations
  */
@@ -2195,7 +2198,7 @@ export const ConversationSchema = z.object({
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
-       
+
 /**
  * zod schema definition for the entity Dashboard Categories
  */
@@ -2244,7 +2247,7 @@ export const DashboardCategorySchema = z.object({
 });
 
 export type DashboardCategoryEntityType = z.infer<typeof DashboardCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity Dashboards
  */
@@ -2297,7 +2300,7 @@ export const DashboardSchema = z.object({
 });
 
 export type DashboardEntityType = z.infer<typeof DashboardSchema>;
-       
+
 /**
  * zod schema definition for the entity Data Context Items
  */
@@ -2388,7 +2391,7 @@ export const DataContextItemSchema = z.object({
 });
 
 export type DataContextItemEntityType = z.infer<typeof DataContextItemSchema>;
-       
+
 /**
  * zod schema definition for the entity Data Contexts
  */
@@ -2432,7 +2435,7 @@ export const DataContextSchema = z.object({
 });
 
 export type DataContextEntityType = z.infer<typeof DataContextSchema>;
-       
+
 /**
  * zod schema definition for the entity Dataset Items
  */
@@ -2494,7 +2497,7 @@ export const DatasetItemSchema = z.object({
 });
 
 export type DatasetItemEntityType = z.infer<typeof DatasetItemSchema>;
-       
+
 /**
  * zod schema definition for the entity Datasets
  */
@@ -2525,7 +2528,7 @@ export const DatasetSchema = z.object({
 });
 
 export type DatasetEntityType = z.infer<typeof DatasetSchema>;
-       
+
 /**
  * zod schema definition for the entity Duplicate Run Detail Matches
  */
@@ -2613,7 +2616,7 @@ export const DuplicateRunDetailMatchSchema = z.object({
 });
 
 export type DuplicateRunDetailMatchEntityType = z.infer<typeof DuplicateRunDetailMatchSchema>;
-       
+
 /**
  * zod schema definition for the entity Duplicate Run Details
  */
@@ -2681,7 +2684,7 @@ export const DuplicateRunDetailSchema = z.object({
 });
 
 export type DuplicateRunDetailEntityType = z.infer<typeof DuplicateRunDetailSchema>;
-       
+
 /**
  * zod schema definition for the entity Duplicate Runs
  */
@@ -2778,7 +2781,7 @@ export const DuplicateRunSchema = z.object({
 });
 
 export type DuplicateRunEntityType = z.infer<typeof DuplicateRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Employee Company Integrations
  */
@@ -2819,7 +2822,7 @@ export const EmployeeCompanyIntegrationSchema = z.object({
 });
 
 export type EmployeeCompanyIntegrationEntityType = z.infer<typeof EmployeeCompanyIntegrationSchema>;
-       
+
 /**
  * zod schema definition for the entity Employee Roles
  */
@@ -2856,7 +2859,7 @@ export const EmployeeRoleSchema = z.object({
 });
 
 export type EmployeeRoleEntityType = z.infer<typeof EmployeeRoleSchema>;
-       
+
 /**
  * zod schema definition for the entity Employee Skills
  */
@@ -2893,7 +2896,7 @@ export const EmployeeSkillSchema = z.object({
 });
 
 export type EmployeeSkillEntityType = z.infer<typeof EmployeeSkillSchema>;
-       
+
 /**
  * zod schema definition for the entity Employees
  */
@@ -2971,7 +2974,7 @@ export const EmployeeSchema = z.object({
 });
 
 export type EmployeeEntityType = z.infer<typeof EmployeeSchema>;
-       
+
 /**
  * zod schema definition for the entity Entities
  */
@@ -3246,7 +3249,7 @@ export const EntitySchema = z.object({
 });
 
 export type EntityEntityType = z.infer<typeof EntitySchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Action Filters
  */
@@ -3295,7 +3298,7 @@ export const EntityActionFilterSchema = z.object({
 });
 
 export type EntityActionFilterEntityType = z.infer<typeof EntityActionFilterSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Action Invocation Types
  */
@@ -3333,7 +3336,7 @@ export const EntityActionInvocationTypeSchema = z.object({
 });
 
 export type EntityActionInvocationTypeEntityType = z.infer<typeof EntityActionInvocationTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Action Invocations
  */
@@ -3381,7 +3384,7 @@ export const EntityActionInvocationSchema = z.object({
 });
 
 export type EntityActionInvocationEntityType = z.infer<typeof EntityActionInvocationSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Action Params
  */
@@ -3439,7 +3442,7 @@ export const EntityActionParamSchema = z.object({
 });
 
 export type EntityActionParamEntityType = z.infer<typeof EntityActionParamSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Actions
  */
@@ -3491,7 +3494,7 @@ export const EntityActionSchema = z.object({
 });
 
 export type EntityActionEntityType = z.infer<typeof EntityActionSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity AI Actions
  */
@@ -3593,7 +3596,7 @@ export const EntityAIActionSchema = z.object({
 });
 
 export type EntityAIActionEntityType = z.infer<typeof EntityAIActionSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Communication Fields
  */
@@ -3631,7 +3634,7 @@ export const EntityCommunicationFieldSchema = z.object({
 });
 
 export type EntityCommunicationFieldEntityType = z.infer<typeof EntityCommunicationFieldSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Communication Message Types
  */
@@ -3678,7 +3681,7 @@ export const EntityCommunicationMessageTypeSchema = z.object({
 });
 
 export type EntityCommunicationMessageTypeEntityType = z.infer<typeof EntityCommunicationMessageTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Document Runs
  */
@@ -3729,7 +3732,7 @@ export const EntityDocumentRunSchema = z.object({
 });
 
 export type EntityDocumentRunEntityType = z.infer<typeof EntityDocumentRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Document Settings
  */
@@ -3773,7 +3776,7 @@ export const EntityDocumentSettingSchema = z.object({
 });
 
 export type EntityDocumentSettingEntityType = z.infer<typeof EntityDocumentSettingSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Document Types
  */
@@ -3804,7 +3807,7 @@ export const EntityDocumentTypeSchema = z.object({
 });
 
 export type EntityDocumentTypeEntityType = z.infer<typeof EntityDocumentTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Documents
  */
@@ -3897,7 +3900,7 @@ export const EntityDocumentSchema = z.object({
 });
 
 export type EntityDocumentEntityType = z.infer<typeof EntityDocumentSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Field Values
  */
@@ -3953,7 +3956,7 @@ export const EntityFieldValueSchema = z.object({
 });
 
 export type EntityFieldValueEntityType = z.infer<typeof EntityFieldValueSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Fields
  */
@@ -4250,7 +4253,7 @@ export const EntityFieldSchema = z.object({
 });
 
 export type EntityFieldEntityType = z.infer<typeof EntityFieldSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Permissions
  */
@@ -4350,7 +4353,7 @@ export const EntityPermissionSchema = z.object({
 });
 
 export type EntityPermissionEntityType = z.infer<typeof EntityPermissionSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Record Documents
  */
@@ -4420,7 +4423,7 @@ export const EntityRecordDocumentSchema = z.object({
 });
 
 export type EntityRecordDocumentEntityType = z.infer<typeof EntityRecordDocumentSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Relationship Display Components
  */
@@ -4461,7 +4464,7 @@ export const EntityRelationshipDisplayComponentSchema = z.object({
 });
 
 export type EntityRelationshipDisplayComponentEntityType = z.infer<typeof EntityRelationshipDisplayComponentSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Relationships
  */
@@ -4627,7 +4630,7 @@ export const EntityRelationshipSchema = z.object({
 });
 
 export type EntityRelationshipEntityType = z.infer<typeof EntityRelationshipSchema>;
-       
+
 /**
  * zod schema definition for the entity Entity Settings
  */
@@ -4671,7 +4674,7 @@ export const EntitySettingSchema = z.object({
 });
 
 export type EntitySettingEntityType = z.infer<typeof EntitySettingSchema>;
-       
+
 /**
  * zod schema definition for the entity Error Logs
  */
@@ -4723,7 +4726,7 @@ export const ErrorLogSchema = z.object({
 });
 
 export type ErrorLogEntityType = z.infer<typeof ErrorLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Explorer Navigation Items
  */
@@ -4795,7 +4798,7 @@ export const ExplorerNavigationItemSchema = z.object({
 });
 
 export type ExplorerNavigationItemEntityType = z.infer<typeof ExplorerNavigationItemSchema>;
-       
+
 /**
  * zod schema definition for the entity File Categories
  */
@@ -4835,7 +4838,7 @@ export const FileCategorySchema = z.object({
 });
 
 export type FileCategoryEntityType = z.infer<typeof FileCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity File Entity Record Links
  */
@@ -4880,7 +4883,7 @@ export const FileEntityRecordLinkSchema = z.object({
 });
 
 export type FileEntityRecordLinkEntityType = z.infer<typeof FileEntityRecordLinkSchema>;
-       
+
 /**
  * zod schema definition for the entity File Storage Providers
  */
@@ -4929,7 +4932,7 @@ export const FileStorageProviderSchema = z.object({
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
-       
+
 /**
  * zod schema definition for the entity Files
  */
@@ -4992,7 +4995,7 @@ export const FileSchema = z.object({
 });
 
 export type FileEntityType = z.infer<typeof FileSchema>;
-       
+
 /**
  * zod schema definition for the entity flyway _schema _histories
  */
@@ -5051,7 +5054,7 @@ export const flyway_schema_historySchema = z.object({
 });
 
 export type flyway_schema_historyEntityType = z.infer<typeof flyway_schema_historySchema>;
-       
+
 /**
  * zod schema definition for the entity Integration URL Formats
  */
@@ -5103,7 +5106,7 @@ export const IntegrationURLFormatSchema = z.object({
 });
 
 export type IntegrationURLFormatEntityType = z.infer<typeof IntegrationURLFormatSchema>;
-       
+
 /**
  * zod schema definition for the entity Integrations
  */
@@ -5153,7 +5156,7 @@ export const IntegrationSchema = z.object({
 });
 
 export type IntegrationEntityType = z.infer<typeof IntegrationSchema>;
-       
+
 /**
  * zod schema definition for the entity Libraries
  */
@@ -5205,7 +5208,7 @@ export const LibrarySchema = z.object({
 });
 
 export type LibraryEntityType = z.infer<typeof LibrarySchema>;
-       
+
 /**
  * zod schema definition for the entity Library Items
  */
@@ -5254,7 +5257,7 @@ export const LibraryItemSchema = z.object({
 });
 
 export type LibraryItemEntityType = z.infer<typeof LibraryItemSchema>;
-       
+
 /**
  * zod schema definition for the entity List Categories
  */
@@ -5303,7 +5306,7 @@ export const ListCategorySchema = z.object({
 });
 
 export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity List Details
  */
@@ -5362,7 +5365,7 @@ export const ListDetailSchema = z.object({
 });
 
 export type ListDetailEntityType = z.infer<typeof ListDetailSchema>;
-       
+
 /**
  * zod schema definition for the entity Lists
  */
@@ -5426,7 +5429,7 @@ export const ListSchema = z.object({
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
-       
+
 /**
  * zod schema definition for the entity Output Delivery Types
  */
@@ -5457,7 +5460,7 @@ export const OutputDeliveryTypeSchema = z.object({
 });
 
 export type OutputDeliveryTypeEntityType = z.infer<typeof OutputDeliveryTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Output Format Types
  */
@@ -5492,7 +5495,7 @@ export const OutputFormatTypeSchema = z.object({
 });
 
 export type OutputFormatTypeEntityType = z.infer<typeof OutputFormatTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Output Trigger Types
  */
@@ -5523,7 +5526,7 @@ export const OutputTriggerTypeSchema = z.object({
 });
 
 export type OutputTriggerTypeEntityType = z.infer<typeof OutputTriggerTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Queries
  */
@@ -5605,7 +5608,7 @@ export const QuerySchema = z.object({
 });
 
 export type QueryEntityType = z.infer<typeof QuerySchema>;
-       
+
 /**
  * zod schema definition for the entity Query Categories
  */
@@ -5654,7 +5657,7 @@ export const QueryCategorySchema = z.object({
 });
 
 export type QueryCategoryEntityType = z.infer<typeof QueryCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity Query Fields
  */
@@ -5739,7 +5742,7 @@ export const QueryFieldSchema = z.object({
 });
 
 export type QueryFieldEntityType = z.infer<typeof QueryFieldSchema>;
-       
+
 /**
  * zod schema definition for the entity Query Permissions
  */
@@ -5780,7 +5783,7 @@ export const QueryPermissionSchema = z.object({
 });
 
 export type QueryPermissionEntityType = z.infer<typeof QueryPermissionSchema>;
-       
+
 /**
  * zod schema definition for the entity Queue Tasks
  */
@@ -5850,7 +5853,7 @@ export const QueueTaskSchema = z.object({
 });
 
 export type QueueTaskEntityType = z.infer<typeof QueueTaskSchema>;
-       
+
 /**
  * zod schema definition for the entity Queue Types
  */
@@ -5894,7 +5897,7 @@ export const QueueTypeSchema = z.object({
 });
 
 export type QueueTypeEntityType = z.infer<typeof QueueTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Queues
  */
@@ -5988,7 +5991,7 @@ export const QueueSchema = z.object({
 });
 
 export type QueueEntityType = z.infer<typeof QueueSchema>;
-       
+
 /**
  * zod schema definition for the entity Recommendation Items
  */
@@ -6035,7 +6038,7 @@ export const RecommendationItemSchema = z.object({
 });
 
 export type RecommendationItemEntityType = z.infer<typeof RecommendationItemSchema>;
-       
+
 /**
  * zod schema definition for the entity Recommendation Providers
  */
@@ -6066,7 +6069,7 @@ export const RecommendationProviderSchema = z.object({
 });
 
 export type RecommendationProviderEntityType = z.infer<typeof RecommendationProviderSchema>;
-       
+
 /**
  * zod schema definition for the entity Recommendation Runs
  */
@@ -6133,7 +6136,7 @@ export const RecommendationRunSchema = z.object({
 });
 
 export type RecommendationRunEntityType = z.infer<typeof RecommendationRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Recommendations
  */
@@ -6175,7 +6178,7 @@ export const RecommendationSchema = z.object({
 });
 
 export type RecommendationEntityType = z.infer<typeof RecommendationSchema>;
-       
+
 /**
  * zod schema definition for the entity Record Change Replay Runs
  */
@@ -6228,7 +6231,7 @@ export const RecordChangeReplayRunSchema = z.object({
 });
 
 export type RecordChangeReplayRunEntityType = z.infer<typeof RecordChangeReplayRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Record Changes
  */
@@ -6345,7 +6348,7 @@ export const RecordChangeSchema = z.object({
 });
 
 export type RecordChangeEntityType = z.infer<typeof RecordChangeSchema>;
-       
+
 /**
  * zod schema definition for the entity Record Merge Deletion Logs
  */
@@ -6391,7 +6394,7 @@ export const RecordMergeDeletionLogSchema = z.object({
 });
 
 export type RecordMergeDeletionLogEntityType = z.infer<typeof RecordMergeDeletionLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Record Merge Logs
  */
@@ -6482,7 +6485,7 @@ export const RecordMergeLogSchema = z.object({
 });
 
 export type RecordMergeLogEntityType = z.infer<typeof RecordMergeLogSchema>;
-       
+
 /**
  * zod schema definition for the entity Report Categories
  */
@@ -6531,7 +6534,7 @@ export const ReportCategorySchema = z.object({
 });
 
 export type ReportCategoryEntityType = z.infer<typeof ReportCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity Report Snapshots
  */
@@ -6576,7 +6579,7 @@ export const ReportSnapshotSchema = z.object({
 });
 
 export type ReportSnapshotEntityType = z.infer<typeof ReportSnapshotSchema>;
-       
+
 /**
  * zod schema definition for the entity Reports
  */
@@ -6706,7 +6709,7 @@ export const ReportSchema = z.object({
 });
 
 export type ReportEntityType = z.infer<typeof ReportSchema>;
-       
+
 /**
  * zod schema definition for the entity Resource Types
  */
@@ -6754,7 +6757,7 @@ export const ResourceTypeSchema = z.object({
 });
 
 export type ResourceTypeEntityType = z.infer<typeof ResourceTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Roles
  */
@@ -6792,7 +6795,7 @@ export const RoleSchema = z.object({
 });
 
 export type RoleEntityType = z.infer<typeof RoleSchema>;
-       
+
 /**
  * zod schema definition for the entity Row Level Security Filters
  */
@@ -6827,7 +6830,7 @@ export const RowLevelSecurityFilterSchema = z.object({
 });
 
 export type RowLevelSecurityFilterEntityType = z.infer<typeof RowLevelSecurityFilterSchema>;
-       
+
 /**
  * zod schema definition for the entity Scheduled Action Params
  */
@@ -6884,7 +6887,7 @@ export const ScheduledActionParamSchema = z.object({
 });
 
 export type ScheduledActionParamEntityType = z.infer<typeof ScheduledActionParamSchema>;
-       
+
 /**
  * zod schema definition for the entity Scheduled Actions
  */
@@ -6991,7 +6994,7 @@ export const ScheduledActionSchema = z.object({
 });
 
 export type ScheduledActionEntityType = z.infer<typeof ScheduledActionSchema>;
-       
+
 /**
  * zod schema definition for the entity Schema Info
  */
@@ -7030,7 +7033,7 @@ export const SchemaInfoSchema = z.object({
 });
 
 export type SchemaInfoEntityType = z.infer<typeof SchemaInfoSchema>;
-       
+
 /**
  * zod schema definition for the entity Skills
  */
@@ -7064,7 +7067,7 @@ export const SkillSchema = z.object({
 });
 
 export type SkillEntityType = z.infer<typeof SkillSchema>;
-       
+
 /**
  * zod schema definition for the entity Tagged Items
  */
@@ -7109,7 +7112,7 @@ export const TaggedItemSchema = z.object({
 });
 
 export type TaggedItemEntityType = z.infer<typeof TaggedItemSchema>;
-       
+
 /**
  * zod schema definition for the entity Tags
  */
@@ -7153,7 +7156,7 @@ export const TagSchema = z.object({
 });
 
 export type TagEntityType = z.infer<typeof TagSchema>;
-       
+
 /**
  * zod schema definition for the entity Template Categories
  */
@@ -7204,7 +7207,7 @@ export const TemplateCategorySchema = z.object({
 });
 
 export type TemplateCategoryEntityType = z.infer<typeof TemplateCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity Template Content Types
  */
@@ -7252,7 +7255,7 @@ export const TemplateContentTypeSchema = z.object({
 });
 
 export type TemplateContentTypeEntityType = z.infer<typeof TemplateContentTypeSchema>;
-       
+
 /**
  * zod schema definition for the entity Template Contents
  */
@@ -7309,7 +7312,7 @@ export const TemplateContentSchema = z.object({
 });
 
 export type TemplateContentEntityType = z.infer<typeof TemplateContentSchema>;
-       
+
 /**
  * zod schema definition for the entity Template Params
  */
@@ -7403,7 +7406,7 @@ export const TemplateParamSchema = z.object({
 });
 
 export type TemplateParamEntityType = z.infer<typeof TemplateParamSchema>;
-       
+
 /**
  * zod schema definition for the entity Templates
  */
@@ -7475,7 +7478,7 @@ export const TemplateSchema = z.object({
 });
 
 export type TemplateEntityType = z.infer<typeof TemplateSchema>;
-       
+
 /**
  * zod schema definition for the entity User Application Entities
  */
@@ -7523,7 +7526,7 @@ export const UserApplicationEntitySchema = z.object({
 });
 
 export type UserApplicationEntityEntityType = z.infer<typeof UserApplicationEntitySchema>;
-       
+
 /**
  * zod schema definition for the entity User Applications
  */
@@ -7572,7 +7575,7 @@ export const UserApplicationSchema = z.object({
 });
 
 export type UserApplicationEntityType = z.infer<typeof UserApplicationSchema>;
-       
+
 /**
  * zod schema definition for the entity User Favorites
  */
@@ -7619,7 +7622,7 @@ export const UserFavoriteSchema = z.object({
 });
 
 export type UserFavoriteEntityType = z.infer<typeof UserFavoriteSchema>;
-       
+
 /**
  * zod schema definition for the entity User Notifications
  */
@@ -7685,7 +7688,7 @@ export const UserNotificationSchema = z.object({
 });
 
 export type UserNotificationEntityType = z.infer<typeof UserNotificationSchema>;
-       
+
 /**
  * zod schema definition for the entity User Record Logs
  */
@@ -7760,7 +7763,7 @@ export const UserRecordLogSchema = z.object({
 });
 
 export type UserRecordLogEntityType = z.infer<typeof UserRecordLogSchema>;
-       
+
 /**
  * zod schema definition for the entity User Roles
  */
@@ -7801,7 +7804,7 @@ export const UserRoleSchema = z.object({
 });
 
 export type UserRoleEntityType = z.infer<typeof UserRoleSchema>;
-       
+
 /**
  * zod schema definition for the entity User View Categories
  */
@@ -7859,7 +7862,7 @@ export const UserViewCategorySchema = z.object({
 });
 
 export type UserViewCategoryEntityType = z.infer<typeof UserViewCategorySchema>;
-       
+
 /**
  * zod schema definition for the entity User View Run Details
  */
@@ -7898,7 +7901,7 @@ export const UserViewRunDetailSchema = z.object({
 });
 
 export type UserViewRunDetailEntityType = z.infer<typeof UserViewRunDetailSchema>;
-       
+
 /**
  * zod schema definition for the entity User View Runs
  */
@@ -7942,7 +7945,7 @@ export const UserViewRunSchema = z.object({
 });
 
 export type UserViewRunEntityType = z.infer<typeof UserViewRunSchema>;
-       
+
 /**
  * zod schema definition for the entity User Views
  */
@@ -8062,7 +8065,7 @@ export const UserViewSchema = z.object({
 });
 
 export type UserViewEntityType = z.infer<typeof UserViewSchema>;
-       
+
 /**
  * zod schema definition for the entity Users
  */
@@ -8157,7 +8160,7 @@ export const UserSchema = z.object({
 });
 
 export type UserEntityType = z.infer<typeof UserSchema>;
-       
+
 /**
  * zod schema definition for the entity Vector Databases
  */
@@ -8196,7 +8199,7 @@ export const VectorDatabaseSchema = z.object({
 });
 
 export type VectorDatabaseEntityType = z.infer<typeof VectorDatabaseSchema>;
-       
+
 /**
  * zod schema definition for the entity Vector Indexes
  */
@@ -8245,7 +8248,7 @@ export const VectorIndexSchema = z.object({
 });
 
 export type VectorIndexEntityType = z.infer<typeof VectorIndexSchema>;
-       
+
 /**
  * zod schema definition for the entity Version Installations
  */
@@ -8320,7 +8323,7 @@ export const VersionInstallationSchema = z.object({
 });
 
 export type VersionInstallationEntityType = z.infer<typeof VersionInstallationSchema>;
-       
+
 /**
  * zod schema definition for the entity Workflow Engines
  */
@@ -8356,7 +8359,7 @@ export const WorkflowEngineSchema = z.object({
 });
 
 export type WorkflowEngineEntityType = z.infer<typeof WorkflowEngineSchema>;
-       
+
 /**
  * zod schema definition for the entity Workflow Runs
  */
@@ -8416,7 +8419,7 @@ export const WorkflowRunSchema = z.object({
 });
 
 export type WorkflowRunEntityType = z.infer<typeof WorkflowRunSchema>;
-       
+
 /**
  * zod schema definition for the entity Workflows
  */
@@ -8486,7 +8489,7 @@ export const WorkflowSchema = z.object({
 });
 
 export type WorkflowEntityType = z.infer<typeof WorkflowSchema>;
-       
+
 /**
  * zod schema definition for the entity Workspace Items
  */
@@ -8547,7 +8550,7 @@ export const WorkspaceItemSchema = z.object({
 });
 
 export type WorkspaceItemEntityType = z.infer<typeof WorkspaceItemSchema>;
-       
+
 /**
  * zod schema definition for the entity Workspaces
  */
@@ -8589,7 +8592,7 @@ export const WorkspaceSchema = z.object({
 export type WorkspaceEntityType = z.infer<typeof WorkspaceSchema>;
  
  
-            
+
 /**
  * Action Authorizations - strongly typed entity sub-class
  * * Schema: __mj
@@ -8613,7 +8616,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * @memberof ActionAuthorizationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -8626,7 +8629,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -8636,7 +8639,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -8649,7 +8652,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
     */
-    get AuthorizationID(): string {  
+    get AuthorizationID(): string {
         return this.Get('AuthorizationID');
     }
     set AuthorizationID(value: string) {
@@ -8661,7 +8664,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -8674,7 +8677,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -8684,7 +8687,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -8693,7 +8696,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 
@@ -8702,12 +8705,12 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string {  
+    get Authorization(): string {
         return this.Get('Authorization');
     }
 }
 
-            
+
 /**
  * Action Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -8731,7 +8734,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * @memberof ActionCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -8744,7 +8747,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -8754,7 +8757,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the action category.
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -8767,7 +8770,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the action category.
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -8780,7 +8783,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -8799,7 +8802,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     *   * Pending
     * * Description: Status of the action category (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -8812,7 +8815,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -8822,7 +8825,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -8831,12 +8834,12 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * Action Context Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -8860,7 +8863,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * @memberof ActionContextTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -8873,7 +8876,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -8883,7 +8886,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the context type.
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -8896,7 +8899,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the context type.
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -8909,7 +8912,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -8919,12 +8922,12 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Action Contexts - strongly typed entity sub-class
  * * Schema: __mj
@@ -8948,7 +8951,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * @memberof ActionContextEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -8961,7 +8964,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -8971,7 +8974,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -8984,7 +8987,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Context Types (vwActionContextTypes.ID)
     */
-    get ContextTypeID(): string | null {  
+    get ContextTypeID(): string | null {
         return this.Get('ContextTypeID');
     }
     set ContextTypeID(value: string | null) {
@@ -9003,7 +9006,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     *   * Pending
     * * Description: Status of the action context (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -9016,7 +9019,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9026,7 +9029,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -9035,7 +9038,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 
@@ -9044,12 +9047,12 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * Display Name: Context Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ContextType(): string | null {  
+    get ContextType(): string | null {
         return this.Get('ContextType');
     }
 }
 
-            
+
 /**
  * Action Execution Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -9073,7 +9076,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * @memberof ActionExecutionLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9086,7 +9089,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9096,7 +9099,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -9110,7 +9113,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * Default Value: getdate()
     * * Description: Timestamp of when the action started execution.
     */
-    get StartedAt(): Date {  
+    get StartedAt(): Date {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date) {
@@ -9123,7 +9126,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: datetime
     * * Description: Timestamp of when the action ended execution.
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -9135,7 +9138,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * Display Name: Params
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Params(): string | null {  
+    get Params(): string | null {
         return this.Get('Params');
     }
     set Params(value: string | null) {
@@ -9147,7 +9150,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * Display Name: Result Code
     * * SQL Data Type: nvarchar(255)
     */
-    get ResultCode(): string | null {  
+    get ResultCode(): string | null {
         return this.Get('ResultCode');
     }
     set ResultCode(value: string | null) {
@@ -9160,7 +9163,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -9173,7 +9176,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: int
     * * Description: Number of days to retain the log; NULL for indefinite retention.
     */
-    get RetentionPeriod(): number | null {  
+    get RetentionPeriod(): number | null {
         return this.Get('RetentionPeriod');
     }
     set RetentionPeriod(value: number | null) {
@@ -9186,7 +9189,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9196,7 +9199,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -9205,7 +9208,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 
@@ -9214,12 +9217,12 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Action Filters - strongly typed entity sub-class
  * * Schema: __mj
@@ -9243,7 +9246,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * @memberof ActionFilterEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9256,7 +9259,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9265,7 +9268,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * Display Name: User Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UserDescription(): string {  
+    get UserDescription(): string {
         return this.Get('UserDescription');
     }
     set UserDescription(value: string) {
@@ -9277,7 +9280,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * Display Name: User Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UserComments(): string | null {  
+    get UserComments(): string | null {
         return this.Get('UserComments');
     }
     set UserComments(value: string | null) {
@@ -9289,7 +9292,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * Display Name: Code
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Code(): string {  
+    get Code(): string {
         return this.Get('Code');
     }
     set Code(value: string) {
@@ -9301,7 +9304,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * Display Name: Code Explanation
     * * SQL Data Type: nvarchar(MAX)
     */
-    get CodeExplanation(): string | null {  
+    get CodeExplanation(): string | null {
         return this.Get('CodeExplanation');
     }
     set CodeExplanation(value: string | null) {
@@ -9314,7 +9317,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9324,12 +9327,12 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Action Libraries - strongly typed entity sub-class
  * * Schema: __mj
@@ -9353,7 +9356,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * @memberof ActionLibraryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9366,7 +9369,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9376,7 +9379,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -9389,7 +9392,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
     */
-    get LibraryID(): string {  
+    get LibraryID(): string {
         return this.Get('LibraryID');
     }
     set LibraryID(value: string) {
@@ -9402,7 +9405,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: List of classes and functions used by the action from the library.
     */
-    get ItemsUsed(): string | null {  
+    get ItemsUsed(): string | null {
         return this.Get('ItemsUsed');
     }
     set ItemsUsed(value: string | null) {
@@ -9415,7 +9418,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9425,7 +9428,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -9434,7 +9437,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 
@@ -9443,12 +9446,12 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * * Display Name: Library
     * * SQL Data Type: nvarchar(255)
     */
-    get Library(): string {  
+    get Library(): string {
         return this.Get('Library');
     }
 }
 
-            
+
 /**
  * Action Params - strongly typed entity sub-class
  * * Schema: __mj
@@ -9472,7 +9475,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * @memberof ActionParamEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9485,7 +9488,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9495,7 +9498,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -9507,7 +9510,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -9519,7 +9522,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * Display Name: Default Value
     * * SQL Data Type: nvarchar(MAX)
     */
-    get DefaultValue(): string | null {  
+    get DefaultValue(): string | null {
         return this.Get('DefaultValue');
     }
     set DefaultValue(value: string | null) {
@@ -9536,7 +9539,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * Output
     *   * Both
     */
-    get Type(): 'Input' | 'Output' | 'Both' {  
+    get Type(): 'Input' | 'Output' | 'Both' {
         return this.Get('Type');
     }
     set Type(value: 'Input' | 'Output' | 'Both') {
@@ -9555,7 +9558,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     *   * Other
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
-    get ValueType(): 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' {  
+    get ValueType(): 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' {
         return this.Get('ValueType');
     }
     set ValueType(value: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other') {
@@ -9568,7 +9571,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsArray(): boolean {  
+    get IsArray(): boolean {
         return this.Get('IsArray');
     }
     set IsArray(value: boolean) {
@@ -9580,7 +9583,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -9593,7 +9596,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsRequired(): boolean {  
+    get IsRequired(): boolean {
         return this.Get('IsRequired');
     }
     set IsRequired(value: boolean) {
@@ -9606,7 +9609,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9616,7 +9619,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -9625,12 +9628,12 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 }
 
-            
+
 /**
  * Action Result Codes - strongly typed entity sub-class
  * * Schema: __mj
@@ -9654,7 +9657,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * @memberof ActionResultCodeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9667,7 +9670,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9677,7 +9680,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -9689,7 +9692,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * Display Name: Result Code
     * * SQL Data Type: nvarchar(255)
     */
-    get ResultCode(): string {  
+    get ResultCode(): string {
         return this.Get('ResultCode');
     }
     set ResultCode(value: string) {
@@ -9703,7 +9706,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * Default Value: 0
     * * Description: Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.
     */
-    get IsSuccess(): boolean {  
+    get IsSuccess(): boolean {
         return this.Get('IsSuccess');
     }
     set IsSuccess(value: boolean) {
@@ -9716,7 +9719,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the result code.
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -9729,7 +9732,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -9739,7 +9742,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -9748,12 +9751,12 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 }
 
-            
+
 /**
  * Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -9777,7 +9780,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * @memberof ActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -9790,7 +9793,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -9800,7 +9803,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -9812,7 +9815,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(425)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -9824,7 +9827,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -9842,7 +9845,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     *   * Custom
     * * Description: Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.
     */
-    get Type(): 'Generated' | 'Custom' {  
+    get Type(): 'Generated' | 'Custom' {
         return this.Get('Type');
     }
     set Type(value: 'Generated' | 'Custom') {
@@ -9854,7 +9857,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: User Prompt
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UserPrompt(): string | null {  
+    get UserPrompt(): string | null {
         return this.Get('UserPrompt');
     }
     set UserPrompt(value: string | null) {
@@ -9867,7 +9870,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: User's comments not shared with the LLM.
     */
-    get UserComments(): string | null {  
+    get UserComments(): string | null {
         return this.Get('UserComments');
     }
     set UserComments(value: string | null) {
@@ -9879,7 +9882,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: Code
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Code(): string | null {  
+    get Code(): string | null {
         return this.Get('Code');
     }
     set Code(value: string | null) {
@@ -9892,7 +9895,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: AI's explanation of the code.
     */
-    get CodeComments(): string | null {  
+    get CodeComments(): string | null {
         return this.Get('CodeComments');
     }
     set CodeComments(value: string | null) {
@@ -9911,7 +9914,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     *   * Pending
     * * Description: An action won't be usable until the code is approved.
     */
-    get CodeApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+    get CodeApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {
         return this.Get('CodeApprovalStatus');
     }
     set CodeApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
@@ -9924,7 +9927,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional comments when an individual (or an AI) reviews and approves the code.
     */
-    get CodeApprovalComments(): string | null {  
+    get CodeApprovalComments(): string | null {
         return this.Get('CodeApprovalComments');
     }
     set CodeApprovalComments(value: string | null) {
@@ -9937,7 +9940,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get CodeApprovedByUserID(): string | null {  
+    get CodeApprovedByUserID(): string | null {
         return this.Get('CodeApprovedByUserID');
     }
     set CodeApprovedByUserID(value: string | null) {
@@ -9950,7 +9953,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: datetime
     * * Description: When the code was approved.
     */
-    get CodeApprovedAt(): Date | null {  
+    get CodeApprovedAt(): Date | null {
         return this.Get('CodeApprovedAt');
     }
     set CodeApprovedAt(value: Date | null) {
@@ -9964,7 +9967,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit
     */
-    get CodeLocked(): boolean {  
+    get CodeLocked(): boolean {
         return this.Get('CodeLocked');
     }
     set CodeLocked(value: boolean) {
@@ -9978,7 +9981,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
     */
-    get ForceCodeGeneration(): boolean {  
+    get ForceCodeGeneration(): boolean {
         return this.Get('ForceCodeGeneration');
     }
     set ForceCodeGeneration(value: boolean) {
@@ -9991,7 +9994,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: int
     * * Description: Number of days to retain execution logs; NULL for indefinite.
     */
-    get RetentionPeriod(): number | null {  
+    get RetentionPeriod(): number | null {
         return this.Get('RetentionPeriod');
     }
     set RetentionPeriod(value: number | null) {
@@ -10010,7 +10013,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     *   * Pending
     * * Description: Status of the action (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -10023,7 +10026,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10033,7 +10036,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10042,7 +10045,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -10051,12 +10054,12 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Display Name: Code Approved By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CodeApprovedByUser(): string | null {  
+    get CodeApprovedByUser(): string | null {
         return this.Get('CodeApprovedByUser');
     }
 }
 
-            
+
 /**
  * AI Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -10080,7 +10083,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * @memberof AIActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10093,7 +10096,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10102,7 +10105,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10114,7 +10117,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10126,7 +10129,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * Display Name: Default Prompt
     * * SQL Data Type: nvarchar(MAX)
     */
-    get DefaultPrompt(): string | null {  
+    get DefaultPrompt(): string | null {
         return this.Get('DefaultPrompt');
     }
     set DefaultPrompt(value: string | null) {
@@ -10139,7 +10142,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
-    get DefaultModelID(): string | null {  
+    get DefaultModelID(): string | null {
         return this.Get('DefaultModelID');
     }
     set DefaultModelID(value: string | null) {
@@ -10152,7 +10155,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -10165,7 +10168,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10175,7 +10178,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10184,12 +10187,12 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * * Display Name: Default Model
     * * SQL Data Type: nvarchar(50)
     */
-    get DefaultModel(): string | null {  
+    get DefaultModel(): string | null {
         return this.Get('DefaultModel');
     }
 }
 
-            
+
 /**
  * AI Model Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -10213,7 +10216,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * @memberof AIModelActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10226,7 +10229,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10236,7 +10239,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
-    get AIModelID(): string {  
+    get AIModelID(): string {
         return this.Get('AIModelID');
     }
     set AIModelID(value: string) {
@@ -10249,7 +10252,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
     */
-    get AIActionID(): string {  
+    get AIActionID(): string {
         return this.Get('AIActionID');
     }
     set AIActionID(value: string) {
@@ -10262,7 +10265,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -10275,7 +10278,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10285,7 +10288,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10294,7 +10297,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {  
+    get AIModel(): string {
         return this.Get('AIModel');
     }
 
@@ -10303,12 +10306,12 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * * Display Name: AIAction
     * * SQL Data Type: nvarchar(50)
     */
-    get AIAction(): string {  
+    get AIAction(): string {
         return this.Get('AIAction');
     }
 }
 
-            
+
 /**
  * AI Model Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -10332,7 +10335,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * @memberof AIModelTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10345,7 +10348,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10354,7 +10357,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10366,7 +10369,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10379,7 +10382,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10389,12 +10392,12 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * AI Models - strongly typed entity sub-class
  * * Schema: __mj
@@ -10418,7 +10421,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * @memberof AIModelEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10431,7 +10434,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10440,7 +10443,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10452,7 +10455,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10464,7 +10467,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: Vendor
     * * SQL Data Type: nvarchar(50)
     */
-    get Vendor(): string | null {  
+    get Vendor(): string | null {
         return this.Get('Vendor');
     }
     set Vendor(value: string | null) {
@@ -10477,7 +10480,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
     */
-    get AIModelTypeID(): string {  
+    get AIModelTypeID(): string {
         return this.Get('AIModelTypeID');
     }
     set AIModelTypeID(value: string) {
@@ -10491,7 +10494,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Default Value: 0
     * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.
     */
-    get PowerRank(): number | null {  
+    get PowerRank(): number | null {
         return this.Get('PowerRank');
     }
     set PowerRank(value: number | null) {
@@ -10504,7 +10507,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -10516,7 +10519,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
     */
-    get DriverClass(): string | null {  
+    get DriverClass(): string | null {
         return this.Get('DriverClass');
     }
     set DriverClass(value: string | null) {
@@ -10528,7 +10531,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(255)
     */
-    get DriverImportPath(): string | null {  
+    get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
     }
     set DriverImportPath(value: string | null) {
@@ -10541,7 +10544,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: nvarchar(100)
     * * Description: The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls
     */
-    get APIName(): string | null {  
+    get APIName(): string | null {
         return this.Get('APIName');
     }
     set APIName(value: string | null) {
@@ -10554,7 +10557,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10564,7 +10567,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10575,7 +10578,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Default Value: 0
     * * Description: Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.
     */
-    get SpeedRank(): number | null {  
+    get SpeedRank(): number | null {
         return this.Get('SpeedRank');
     }
     set SpeedRank(value: number | null) {
@@ -10589,7 +10592,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Default Value: 0
     * * Description: Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.
     */
-    get CostRank(): number | null {  
+    get CostRank(): number | null {
         return this.Get('CostRank');
     }
     set CostRank(value: number | null) {
@@ -10600,10 +10603,9 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Field Name: ModelSelectionInsights
     * * Display Name: Model Selection Insights
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.
     */
-    get ModelSelectionInsights(): string | null {  
+    get ModelSelectionInsights(): string | null {
         return this.Get('ModelSelectionInsights');
     }
     set ModelSelectionInsights(value: string | null) {
@@ -10615,12 +10617,12 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * * Display Name: AIModel Type
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModelType(): string {  
+    get AIModelType(): string {
         return this.Get('AIModelType');
     }
 }
 
-            
+
 /**
  * AI Prompt Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -10644,7 +10646,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * @memberof AIPromptCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10657,7 +10659,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10666,7 +10668,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10680,7 +10682,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
     * * Description: Parent category ID for hierarchical organization.
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -10692,7 +10694,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10705,7 +10707,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10715,7 +10717,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10724,12 +10726,12 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * AI Prompt Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -10753,7 +10755,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * @memberof AIPromptTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10766,7 +10768,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10775,7 +10777,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10787,7 +10789,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10800,7 +10802,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10810,12 +10812,12 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * AI Prompts - strongly typed entity sub-class
  * * Schema: __mj
@@ -10839,7 +10841,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * @memberof AIPromptEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -10852,7 +10854,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -10861,7 +10863,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -10873,7 +10875,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -10887,7 +10889,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     * * Description: Reference to the template used for the prompt.
     */
-    get TemplateID(): string {  
+    get TemplateID(): string {
         return this.Get('TemplateID');
     }
     set TemplateID(value: string) {
@@ -10901,7 +10903,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
     * * Description: Reference to the category the prompt belongs to.
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -10915,7 +10917,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Related Entity/Foreign Key: AI Prompt Types (vwAIPromptTypes.ID)
     * * Description: Reference to the type of the prompt.
     */
-    get TypeID(): string {  
+    get TypeID(): string {
         return this.Get('TypeID');
     }
     set TypeID(value: string) {
@@ -10932,7 +10934,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Active
     *   * Disabled
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' {  
+    get Status(): 'Pending' | 'Active' | 'Disabled' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Active' | 'Disabled') {
@@ -10946,7 +10948,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: 0
     * * Description: Indicates whether the results of the prompt should be cached.
     */
-    get CacheResults(): boolean {  
+    get CacheResults(): boolean {
         return this.Get('CacheResults');
     }
     set CacheResults(value: boolean) {
@@ -10960,7 +10962,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: 0
     * * Description: Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.
     */
-    get CacheExpiration(): number {  
+    get CacheExpiration(): number {
         return this.Get('CacheExpiration');
     }
     set CacheExpiration(value: number) {
@@ -10973,7 +10975,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -10983,7 +10985,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -10992,7 +10994,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {  
+    get Template(): string {
         return this.Get('Template');
     }
 
@@ -11001,7 +11003,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -11010,12 +11012,12 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
 }
 
-            
+
 /**
  * AI Result Cache - strongly typed entity sub-class
  * * Schema: __mj
@@ -11039,7 +11041,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * @memberof AIResultCacheEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11052,7 +11054,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11063,7 +11065,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
     * * Description: Reference to the AI prompt this result corresponds to.
     */
-    get AIPromptID(): string {  
+    get AIPromptID(): string {
         return this.Get('AIPromptID');
     }
     set AIPromptID(value: string) {
@@ -11077,7 +11079,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: Reference to the AI model that generated this result.
     */
-    get AIModelID(): string {  
+    get AIModelID(): string {
         return this.Get('AIModelID');
     }
     set AIModelID(value: string) {
@@ -11090,7 +11092,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp of when this result was generated.
     */
-    get RunAt(): Date {  
+    get RunAt(): Date {
         return this.Get('RunAt');
     }
     set RunAt(value: Date) {
@@ -11103,7 +11105,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The prompt text used to generate this result.
     */
-    get PromptText(): string {  
+    get PromptText(): string {
         return this.Get('PromptText');
     }
     set PromptText(value: string) {
@@ -11116,7 +11118,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The text of the result generated by the AI model.
     */
-    get ResultText(): string | null {  
+    get ResultText(): string | null {
         return this.Get('ResultText');
     }
     set ResultText(value: string | null) {
@@ -11133,7 +11135,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     *   * Expired
     * * Description: The status of this result, indicating whether it is currently active or expired.
     */
-    get Status(): 'Active' | 'Expired' {  
+    get Status(): 'Active' | 'Expired' {
         return this.Get('Status');
     }
     set Status(value: 'Active' | 'Expired') {
@@ -11146,7 +11148,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp of when this result was marked as expired.
     */
-    get ExpiredOn(): Date | null {  
+    get ExpiredOn(): Date | null {
         return this.Get('ExpiredOn');
     }
     set ExpiredOn(value: Date | null) {
@@ -11159,7 +11161,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11169,7 +11171,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -11178,7 +11180,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Display Name: AIPrompt
     * * SQL Data Type: nvarchar(255)
     */
-    get AIPrompt(): string {  
+    get AIPrompt(): string {
         return this.Get('AIPrompt');
     }
 
@@ -11187,12 +11189,12 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {  
+    get AIModel(): string {
         return this.Get('AIModel');
     }
 }
 
-            
+
 /**
  * Application Entities - strongly typed entity sub-class
  * * Schema: __mj
@@ -11216,7 +11218,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * @memberof ApplicationEntityEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11228,7 +11230,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11238,7 +11240,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     */
-    get ApplicationID(): string {  
+    get ApplicationID(): string {
         return this.Get('ApplicationID');
     }
     set ApplicationID(value: string) {
@@ -11251,7 +11253,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -11262,7 +11264,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Field Name: Sequence
     * * SQL Data Type: int
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -11276,7 +11278,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Default Value: 1
     * * Description: When set to 1, the entity will be included by default for a new user when they first access the application in question
     */
-    get DefaultForNewUser(): boolean {  
+    get DefaultForNewUser(): boolean {
         return this.Get('DefaultForNewUser');
     }
     set DefaultForNewUser(value: boolean) {
@@ -11289,7 +11291,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11299,7 +11301,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -11307,7 +11309,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Field Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {  
+    get Application(): string {
         return this.Get('Application');
     }
 
@@ -11315,7 +11317,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -11324,7 +11326,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Display Name: Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseTable(): string {  
+    get EntityBaseTable(): string {
         return this.Get('EntityBaseTable');
     }
 
@@ -11333,7 +11335,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Display Name: Entity Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityCodeName(): string | null {  
+    get EntityCodeName(): string | null {
         return this.Get('EntityCodeName');
     }
 
@@ -11342,7 +11344,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Display Name: Entity Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityClassName(): string | null {  
+    get EntityClassName(): string | null {
         return this.Get('EntityClassName');
     }
 
@@ -11351,12 +11353,12 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * * Display Name: Entity Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityBaseTableCodeName(): string | null {  
+    get EntityBaseTableCodeName(): string | null {
         return this.Get('EntityBaseTableCodeName');
     }
 }
 
-            
+
 /**
  * Application Settings - strongly typed entity sub-class
  * * Schema: __mj
@@ -11379,7 +11381,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * @memberof ApplicationSettingEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11392,7 +11394,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11402,7 +11404,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     */
-    get ApplicationID(): string {  
+    get ApplicationID(): string {
         return this.Get('ApplicationID');
     }
     set ApplicationID(value: string) {
@@ -11414,7 +11416,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -11426,7 +11428,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Display Name: Value
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Value(): string {  
+    get Value(): string {
         return this.Get('Value');
     }
     set Value(value: string) {
@@ -11438,7 +11440,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -11451,7 +11453,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11461,7 +11463,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -11470,12 +11472,12 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {  
+    get Application(): string {
         return this.Get('Application');
     }
 }
 
-            
+
 /**
  * Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -11499,7 +11501,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * @memberof ApplicationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11511,7 +11513,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11519,7 +11521,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -11530,7 +11532,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -11543,7 +11545,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * SQL Data Type: nvarchar(500)
     * * Description: Specify the CSS class information for the display icon for each application.
     */
-    get Icon(): string | null {  
+    get Icon(): string | null {
         return this.Get('Icon');
     }
     set Icon(value: string | null) {
@@ -11557,7 +11559,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * Default Value: 1
     * * Description: If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.
     */
-    get DefaultForNewUser(): boolean {  
+    get DefaultForNewUser(): boolean {
         return this.Get('DefaultForNewUser');
     }
     set DefaultForNewUser(value: boolean) {
@@ -11570,7 +11572,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11580,12 +11582,12 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Audit Log Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -11608,7 +11610,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * @memberof AuditLogTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11645,7 +11647,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11654,7 +11656,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -11666,7 +11668,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -11679,7 +11681,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -11692,7 +11694,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
     */
-    get AuthorizationID(): string | null {  
+    get AuthorizationID(): string | null {
         return this.Get('AuthorizationID');
     }
     set AuthorizationID(value: string | null) {
@@ -11705,7 +11707,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11715,7 +11717,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -11724,7 +11726,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(50)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -11733,12 +11735,12 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string | null {  
+    get Authorization(): string | null {
         return this.Get('Authorization');
     }
 }
 
-            
+
 /**
  * Audit Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -11761,7 +11763,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * @memberof AuditLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -11786,7 +11788,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -11796,7 +11798,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -11809,7 +11811,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
     */
-    get AuditLogTypeID(): string {  
+    get AuditLogTypeID(): string {
         return this.Get('AuditLogTypeID');
     }
     set AuditLogTypeID(value: string) {
@@ -11822,7 +11824,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
     */
-    get AuthorizationID(): string | null {  
+    get AuthorizationID(): string | null {
         return this.Get('AuthorizationID');
     }
     set AuthorizationID(value: string | null) {
@@ -11839,7 +11841,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     *   * Success
     *   * Failed
     */
-    get Status(): 'Success' | 'Failed' {  
+    get Status(): 'Success' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Success' | 'Failed') {
@@ -11851,7 +11853,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -11863,7 +11865,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Details
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Details(): string | null {  
+    get Details(): string | null {
         return this.Get('Details');
     }
     set Details(value: string | null) {
@@ -11876,7 +11878,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string | null {  
+    get EntityID(): string | null {
         return this.Get('EntityID');
     }
     set EntityID(value: string | null) {
@@ -11888,7 +11890,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Record
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string | null {  
+    get RecordID(): string | null {
         return this.Get('RecordID');
     }
     set RecordID(value: string | null) {
@@ -11901,7 +11903,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -11911,7 +11913,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -11920,7 +11922,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -11929,7 +11931,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Audit Log Type
     * * SQL Data Type: nvarchar(50)
     */
-    get AuditLogType(): string {  
+    get AuditLogType(): string {
         return this.Get('AuditLogType');
     }
 
@@ -11938,7 +11940,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string | null {  
+    get Authorization(): string | null {
         return this.Get('Authorization');
     }
 
@@ -11947,12 +11949,12 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string | null {  
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Authorization Roles - strongly typed entity sub-class
  * * Schema: __mj
@@ -11975,7 +11977,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * @memberof AuthorizationRoleEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12012,7 +12014,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12022,7 +12024,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
     */
-    get AuthorizationID(): string {  
+    get AuthorizationID(): string {
         return this.Get('AuthorizationID');
     }
     set AuthorizationID(value: string) {
@@ -12035,7 +12037,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
-    get RoleID(): string {  
+    get RoleID(): string {
         return this.Get('RoleID');
     }
     set RoleID(value: string) {
@@ -12052,7 +12054,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     *   * Allow - User allowed to execute tasks linked to this authorization
     *   * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
     */
-    get Type(): 'Allow' | 'Deny' {  
+    get Type(): 'Allow' | 'Deny' {
         return this.Get('Type');
     }
     set Type(value: 'Allow' | 'Deny') {
@@ -12065,7 +12067,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12075,7 +12077,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -12084,7 +12086,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
     */
-    get Authorization(): string {  
+    get Authorization(): string {
         return this.Get('Authorization');
     }
 
@@ -12093,12 +12095,12 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {  
+    get Role(): string {
         return this.Get('Role');
     }
 }
 
-            
+
 /**
  * Authorizations - strongly typed entity sub-class
  * * Schema: __mj
@@ -12121,7 +12123,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * @memberof AuthorizationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12158,7 +12160,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12168,7 +12170,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -12180,7 +12182,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -12193,7 +12195,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -12207,7 +12209,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * Default Value: 1
     * * Description: When set to 1, Audit Log records are created whenever this authorization is invoked for a user
     */
-    get UseAuditLog(): boolean {  
+    get UseAuditLog(): boolean {
         return this.Get('UseAuditLog');
     }
     set UseAuditLog(value: boolean) {
@@ -12219,7 +12221,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -12232,7 +12234,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12242,7 +12244,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -12251,12 +12253,12 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * Communication Base Message Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -12280,7 +12282,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * @memberof CommunicationBaseMessageTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12305,7 +12307,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12314,7 +12316,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
     set Type(value: string) {
@@ -12328,7 +12330,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * Default Value: 0
     * * Description: Indicates if attachments are supported.
     */
-    get SupportsAttachments(): boolean {  
+    get SupportsAttachments(): boolean {
         return this.Get('SupportsAttachments');
     }
     set SupportsAttachments(value: boolean) {
@@ -12342,7 +12344,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * Default Value: 0
     * * Description: Indicates if a subject line is supported.
     */
-    get SupportsSubjectLine(): boolean {  
+    get SupportsSubjectLine(): boolean {
         return this.Get('SupportsSubjectLine');
     }
     set SupportsSubjectLine(value: boolean) {
@@ -12356,7 +12358,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * Default Value: 0
     * * Description: Indicates if HTML content is supported.
     */
-    get SupportsHtml(): boolean {  
+    get SupportsHtml(): boolean {
         return this.Get('SupportsHtml');
     }
     set SupportsHtml(value: boolean) {
@@ -12369,7 +12371,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * SQL Data Type: int
     * * Description: The maximum size in bytes for the message.
     */
-    get MaxBytes(): number | null {  
+    get MaxBytes(): number | null {
         return this.Get('MaxBytes');
     }
     set MaxBytes(value: number | null) {
@@ -12382,7 +12384,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12392,12 +12394,12 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Communication Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -12421,7 +12423,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * @memberof CommunicationLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12446,7 +12448,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12456,7 +12458,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
     */
-    get CommunicationProviderID(): string {  
+    get CommunicationProviderID(): string {
         return this.Get('CommunicationProviderID');
     }
     set CommunicationProviderID(value: string) {
@@ -12469,7 +12471,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Provider Message Types (vwCommunicationProviderMessageTypes.ID)
     */
-    get CommunicationProviderMessageTypeID(): string {  
+    get CommunicationProviderMessageTypeID(): string {
         return this.Get('CommunicationProviderMessageTypeID');
     }
     set CommunicationProviderMessageTypeID(value: string) {
@@ -12482,7 +12484,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Runs (vwCommunicationRuns.ID)
     */
-    get CommunicationRunID(): string | null {  
+    get CommunicationRunID(): string | null {
         return this.Get('CommunicationRunID');
     }
     set CommunicationRunID(value: string | null) {
@@ -12499,7 +12501,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     *   * Receiving
     * * Description: The direction of the communication log (Sending or Receiving).
     */
-    get Direction(): 'Sending' | 'Receiving' {  
+    get Direction(): 'Sending' | 'Receiving' {
         return this.Get('Direction');
     }
     set Direction(value: 'Sending' | 'Receiving') {
@@ -12512,7 +12514,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: datetime
     * * Description: The date and time when the message was logged.
     */
-    get MessageDate(): Date {  
+    get MessageDate(): Date {
         return this.Get('MessageDate');
     }
     set MessageDate(value: Date) {
@@ -12532,7 +12534,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     *   * Failed
     * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).
     */
-    get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+    get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
@@ -12545,7 +12547,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The content of the logged message.
     */
-    get MessageContent(): string | null {  
+    get MessageContent(): string | null {
         return this.Get('MessageContent');
     }
     set MessageContent(value: string | null) {
@@ -12558,7 +12560,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The error message if the message sending failed.
     */
-    get ErrorMessage(): string | null {  
+    get ErrorMessage(): string | null {
         return this.Get('ErrorMessage');
     }
     set ErrorMessage(value: string | null) {
@@ -12571,7 +12573,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12581,7 +12583,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -12590,7 +12592,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {  
+    get CommunicationProvider(): string {
         return this.Get('CommunicationProvider');
     }
 
@@ -12599,12 +12601,12 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * Display Name: Communication Provider Message Type
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProviderMessageType(): string {  
+    get CommunicationProviderMessageType(): string {
         return this.Get('CommunicationProviderMessageType');
     }
 }
 
-            
+
 /**
  * Communication Provider Message Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -12628,7 +12630,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * @memberof CommunicationProviderMessageTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12641,7 +12643,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12651,7 +12653,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
     */
-    get CommunicationProviderID(): string {  
+    get CommunicationProviderID(): string {
         return this.Get('CommunicationProviderID');
     }
     set CommunicationProviderID(value: string) {
@@ -12664,7 +12666,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
     */
-    get CommunicationBaseMessageTypeID(): string {  
+    get CommunicationBaseMessageTypeID(): string {
         return this.Get('CommunicationBaseMessageTypeID');
     }
     set CommunicationBaseMessageTypeID(value: string) {
@@ -12676,7 +12678,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -12694,7 +12696,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     *   * Active
     * * Description: The status of the provider message type (Disabled or Active).
     */
-    get Status(): 'Disabled' | 'Active' {  
+    get Status(): 'Disabled' | 'Active' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active') {
@@ -12707,7 +12709,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Additional attributes specific to the provider message type.
     */
-    get AdditionalAttributes(): string | null {  
+    get AdditionalAttributes(): string | null {
         return this.Get('AdditionalAttributes');
     }
     set AdditionalAttributes(value: string | null) {
@@ -12720,7 +12722,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12730,7 +12732,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -12739,7 +12741,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * Display Name: Communication Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get CommunicationProvider(): string {  
+    get CommunicationProvider(): string {
         return this.Get('CommunicationProvider');
     }
 
@@ -12748,12 +12750,12 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * Display Name: Communication Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get CommunicationBaseMessageType(): string {  
+    get CommunicationBaseMessageType(): string {
         return this.Get('CommunicationBaseMessageType');
     }
 }
 
-            
+
 /**
  * Communication Providers - strongly typed entity sub-class
  * * Schema: __mj
@@ -12777,7 +12779,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * @memberof CommunicationProviderEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12802,7 +12804,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12811,7 +12813,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -12823,7 +12825,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -12841,7 +12843,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     *   * Active
     * * Description: The status of the communication provider (Disabled or Active).
     */
-    get Status(): 'Disabled' | 'Active' {  
+    get Status(): 'Disabled' | 'Active' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active') {
@@ -12855,7 +12857,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * Default Value: 1
     * * Description: Indicates if the provider supports sending messages.
     */
-    get SupportsSending(): boolean {  
+    get SupportsSending(): boolean {
         return this.Get('SupportsSending');
     }
     set SupportsSending(value: boolean) {
@@ -12869,7 +12871,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * Default Value: 0
     * * Description: Indicates if the provider supports receiving messages.
     */
-    get SupportsReceiving(): boolean {  
+    get SupportsReceiving(): boolean {
         return this.Get('SupportsReceiving');
     }
     set SupportsReceiving(value: boolean) {
@@ -12882,7 +12884,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -12892,12 +12894,12 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Communication Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -12921,7 +12923,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * @memberof CommunicationRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -12946,7 +12948,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -12956,7 +12958,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -12973,7 +12975,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     *   * Receiving
     * * Description: The direction of the communication run (Sending or Receiving).
     */
-    get Direction(): 'Sending' | 'Receiving' {  
+    get Direction(): 'Sending' | 'Receiving' {
         return this.Get('Direction');
     }
     set Direction(value: 'Sending' | 'Receiving') {
@@ -12992,7 +12994,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     *   * Failed
     * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).
     */
-    get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+    get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
@@ -13004,7 +13006,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * Display Name: Started At
     * * SQL Data Type: datetime
     */
-    get StartedAt(): Date | null {  
+    get StartedAt(): Date | null {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date | null) {
@@ -13016,7 +13018,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -13028,7 +13030,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -13041,7 +13043,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The error message if the communication run failed.
     */
-    get ErrorMessage(): string | null {  
+    get ErrorMessage(): string | null {
         return this.Get('ErrorMessage');
     }
     set ErrorMessage(value: string | null) {
@@ -13054,7 +13056,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13064,7 +13066,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -13073,12 +13075,12 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Companies - strongly typed entity sub-class
  * * Schema: __mj
@@ -13102,7 +13104,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * @memberof CompanyEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13114,7 +13116,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13122,7 +13124,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -13133,7 +13135,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(200)
     */
-    get Description(): string {  
+    get Description(): string {
         return this.Get('Description');
     }
     set Description(value: string) {
@@ -13144,7 +13146,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * Field Name: Website
     * * SQL Data Type: nvarchar(100)
     */
-    get Website(): string | null {  
+    get Website(): string | null {
         return this.Get('Website');
     }
     set Website(value: string | null) {
@@ -13156,7 +13158,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * Display Name: Logo URL
     * * SQL Data Type: nvarchar(500)
     */
-    get LogoURL(): string | null {  
+    get LogoURL(): string | null {
         return this.Get('LogoURL');
     }
     set LogoURL(value: string | null) {
@@ -13168,7 +13170,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * Display Name: Domain
     * * SQL Data Type: nvarchar(255)
     */
-    get Domain(): string | null {  
+    get Domain(): string | null {
         return this.Get('Domain');
     }
     set Domain(value: string | null) {
@@ -13181,7 +13183,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13191,12 +13193,12 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Company Integration Record Maps - strongly typed entity sub-class
  * * Schema: __mj
@@ -13219,7 +13221,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * @memberof CompanyIntegrationRecordMapEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13244,7 +13246,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13254,7 +13256,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
-    get CompanyIntegrationID(): string {  
+    get CompanyIntegrationID(): string {
         return this.Get('CompanyIntegrationID');
     }
     set CompanyIntegrationID(value: string) {
@@ -13266,7 +13268,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * Display Name: External System Record ID
     * * SQL Data Type: nvarchar(750)
     */
-    get ExternalSystemRecordID(): string {  
+    get ExternalSystemRecordID(): string {
         return this.Get('ExternalSystemRecordID');
     }
     set ExternalSystemRecordID(value: string) {
@@ -13279,7 +13281,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -13291,7 +13293,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * Display Name: Entity Record ID
     * * SQL Data Type: nvarchar(750)
     */
-    get EntityRecordID(): string {  
+    get EntityRecordID(): string {
         return this.Get('EntityRecordID');
     }
     set EntityRecordID(value: string) {
@@ -13304,7 +13306,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13314,7 +13316,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -13323,12 +13325,12 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Company Integration Run API Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -13351,7 +13353,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * @memberof CompanyIntegrationRunAPILogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13375,7 +13377,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13385,7 +13387,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
-    get CompanyIntegrationRunID(): string {  
+    get CompanyIntegrationRunID(): string {
         return this.Get('CompanyIntegrationRunID');
     }
     set CompanyIntegrationRunID(value: string) {
@@ -13398,7 +13400,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get ExecutedAt(): Date {  
+    get ExecutedAt(): Date {
         return this.Get('ExecutedAt');
     }
     set ExecutedAt(value: Date) {
@@ -13411,7 +13413,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsSuccess(): boolean {  
+    get IsSuccess(): boolean {
         return this.Get('IsSuccess');
     }
     set IsSuccess(value: boolean) {
@@ -13432,7 +13434,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     *   * HEAD
     *   * OPTIONS
     */
-    get RequestMethod(): 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | null {  
+    get RequestMethod(): 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | null {
         return this.Get('RequestMethod');
     }
     set RequestMethod(value: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | null) {
@@ -13443,7 +13445,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * Field Name: URL
     * * SQL Data Type: nvarchar(MAX)
     */
-    get URL(): string | null {  
+    get URL(): string | null {
         return this.Get('URL');
     }
     set URL(value: string | null) {
@@ -13454,7 +13456,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * Field Name: Parameters
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Parameters(): string | null {  
+    get Parameters(): string | null {
         return this.Get('Parameters');
     }
     set Parameters(value: string | null) {
@@ -13467,7 +13469,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13477,12 +13479,12 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Company Integration Run Details - strongly typed entity sub-class
  * * Schema: __mj
@@ -13505,7 +13507,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * @memberof CompanyIntegrationRunDetailEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13529,7 +13531,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13539,7 +13541,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
-    get CompanyIntegrationRunID(): string {  
+    get CompanyIntegrationRunID(): string {
         return this.Get('CompanyIntegrationRunID');
     }
     set CompanyIntegrationRunID(value: string) {
@@ -13552,7 +13554,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -13564,7 +13566,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * Display Name: Record
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -13575,7 +13577,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * Field Name: Action
     * * SQL Data Type: nchar(20)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
     set Action(value: string) {
@@ -13588,7 +13590,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get ExecutedAt(): Date {  
+    get ExecutedAt(): Date {
         return this.Get('ExecutedAt');
     }
     set ExecutedAt(value: Date) {
@@ -13601,7 +13603,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsSuccess(): boolean {  
+    get IsSuccess(): boolean {
         return this.Get('IsSuccess');
     }
     set IsSuccess(value: boolean) {
@@ -13614,7 +13616,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13624,7 +13626,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -13632,7 +13634,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -13641,7 +13643,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * Display Name: Run Started At
     * * SQL Data Type: datetime
     */
-    get RunStartedAt(): Date | null {  
+    get RunStartedAt(): Date | null {
         return this.Get('RunStartedAt');
     }
 
@@ -13650,12 +13652,12 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * * Display Name: Run Ended At
     * * SQL Data Type: datetime
     */
-    get RunEndedAt(): Date | null {  
+    get RunEndedAt(): Date | null {
         return this.Get('RunEndedAt');
     }
 }
 
-            
+
 /**
  * Company Integration Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -13678,7 +13680,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * @memberof CompanyIntegrationRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13702,7 +13704,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13712,7 +13714,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
-    get CompanyIntegrationID(): string {  
+    get CompanyIntegrationID(): string {
         return this.Get('CompanyIntegrationID');
     }
     set CompanyIntegrationID(value: string) {
@@ -13725,7 +13727,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get RunByUserID(): string {  
+    get RunByUserID(): string {
         return this.Get('RunByUserID');
     }
     set RunByUserID(value: string) {
@@ -13737,7 +13739,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Display Name: Started At
     * * SQL Data Type: datetime
     */
-    get StartedAt(): Date | null {  
+    get StartedAt(): Date | null {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date | null) {
@@ -13749,7 +13751,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -13761,7 +13763,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Display Name: Total Records
     * * SQL Data Type: int
     */
-    get TotalRecords(): number {  
+    get TotalRecords(): number {
         return this.Get('TotalRecords');
     }
     set TotalRecords(value: number) {
@@ -13772,7 +13774,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -13785,7 +13787,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -13795,7 +13797,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -13803,14 +13805,13 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
-    get RunByUser(): string {  
+    get RunByUser(): string {
         return this.Get('RunByUser');
     }
 }
 
-            
+
 /**
  * Company Integrations - strongly typed entity sub-class
  * * Schema: __mj
@@ -13834,7 +13835,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * @memberof CompanyIntegrationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -13858,7 +13859,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -13868,7 +13869,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
     */
-    get CompanyID(): string {  
+    get CompanyID(): string {
         return this.Get('CompanyID');
     }
     set CompanyID(value: string) {
@@ -13881,7 +13882,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
     */
-    get IntegrationID(): string {  
+    get IntegrationID(): string {
         return this.Get('IntegrationID');
     }
     set IntegrationID(value: string) {
@@ -13893,7 +13894,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Is Active
     * * SQL Data Type: bit
     */
-    get IsActive(): boolean | null {  
+    get IsActive(): boolean | null {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean | null) {
@@ -13905,7 +13906,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Access Token
     * * SQL Data Type: nvarchar(255)
     */
-    get AccessToken(): string | null {  
+    get AccessToken(): string | null {
         return this.Get('AccessToken');
     }
     set AccessToken(value: string | null) {
@@ -13917,7 +13918,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Refresh Token
     * * SQL Data Type: nvarchar(255)
     */
-    get RefreshToken(): string | null {  
+    get RefreshToken(): string | null {
         return this.Get('RefreshToken');
     }
     set RefreshToken(value: string | null) {
@@ -13929,7 +13930,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Token Expiration Date
     * * SQL Data Type: datetime
     */
-    get TokenExpirationDate(): Date | null {  
+    get TokenExpirationDate(): Date | null {
         return this.Get('TokenExpirationDate');
     }
     set TokenExpirationDate(value: Date | null) {
@@ -13940,7 +13941,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Field Name: APIKey
     * * SQL Data Type: nvarchar(255)
     */
-    get APIKey(): string | null {  
+    get APIKey(): string | null {
         return this.Get('APIKey');
     }
     set APIKey(value: string | null) {
@@ -13952,7 +13953,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: ExternalSystem
     * * SQL Data Type: nvarchar(100)
     */
-    get ExternalSystemID(): string | null {  
+    get ExternalSystemID(): string | null {
         return this.Get('ExternalSystemID');
     }
     set ExternalSystemID(value: string | null) {
@@ -13965,7 +13966,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsExternalSystemReadOnly(): boolean {  
+    get IsExternalSystemReadOnly(): boolean {
         return this.Get('IsExternalSystemReadOnly');
     }
     set IsExternalSystemReadOnly(value: boolean) {
@@ -13977,7 +13978,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Client
     * * SQL Data Type: nvarchar(255)
     */
-    get ClientID(): string | null {  
+    get ClientID(): string | null {
         return this.Get('ClientID');
     }
     set ClientID(value: string | null) {
@@ -13989,7 +13990,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Client Secret
     * * SQL Data Type: nvarchar(255)
     */
-    get ClientSecret(): string | null {  
+    get ClientSecret(): string | null {
         return this.Get('ClientSecret');
     }
     set ClientSecret(value: string | null) {
@@ -14001,7 +14002,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Custom Attribute 1
     * * SQL Data Type: nvarchar(255)
     */
-    get CustomAttribute1(): string | null {  
+    get CustomAttribute1(): string | null {
         return this.Get('CustomAttribute1');
     }
     set CustomAttribute1(value: string | null) {
@@ -14014,7 +14015,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14024,7 +14025,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14032,7 +14033,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Field Name: Company
     * * SQL Data Type: nvarchar(50)
     */
-    get Company(): string {  
+    get Company(): string {
         return this.Get('Company');
     }
 
@@ -14040,7 +14041,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Field Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
-    get Integration(): string {  
+    get Integration(): string {
         return this.Get('Integration');
     }
 
@@ -14049,7 +14050,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Driver Class Name
     * * SQL Data Type: nvarchar(100)
     */
-    get DriverClassName(): string | null {  
+    get DriverClassName(): string | null {
         return this.Get('DriverClassName');
     }
 
@@ -14058,7 +14059,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(100)
     */
-    get DriverImportPath(): string | null {  
+    get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
     }
 
@@ -14067,7 +14068,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: LastRun
     * * SQL Data Type: uniqueidentifier
     */
-    get LastRunID(): string | null {  
+    get LastRunID(): string | null {
         return this.Get('LastRunID');
     }
 
@@ -14076,7 +14077,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Last Run Started At
     * * SQL Data Type: datetime
     */
-    get LastRunStartedAt(): Date | null {  
+    get LastRunStartedAt(): Date | null {
         return this.Get('LastRunStartedAt');
     }
 
@@ -14085,12 +14086,12 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * * Display Name: Last Run Ended At
     * * SQL Data Type: datetime
     */
-    get LastRunEndedAt(): Date | null {  
+    get LastRunEndedAt(): Date | null {
         return this.Get('LastRunEndedAt');
     }
 }
 
-            
+
 /**
  * Conversation Details - strongly typed entity sub-class
  * * Schema: __mj
@@ -14113,7 +14114,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * @memberof ConversationDetailEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14126,7 +14127,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14136,7 +14137,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     */
-    get ConversationID(): string {  
+    get ConversationID(): string {
         return this.Get('ConversationID');
     }
     set ConversationID(value: string) {
@@ -14148,7 +14149,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Display Name: External ID
     * * SQL Data Type: nvarchar(100)
     */
-    get ExternalID(): string | null {  
+    get ExternalID(): string | null {
         return this.Get('ExternalID');
     }
     set ExternalID(value: string | null) {
@@ -14166,7 +14167,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     *   * AI
     *   * Error
     */
-    get Role(): 'User' | 'AI' | 'Error' {  
+    get Role(): 'User' | 'AI' | 'Error' {
         return this.Get('Role');
     }
     set Role(value: 'User' | 'AI' | 'Error') {
@@ -14178,7 +14179,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Message(): string {  
+    get Message(): string {
         return this.Get('Message');
     }
     set Message(value: string) {
@@ -14190,7 +14191,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Display Name: Error
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Error(): string | null {  
+    get Error(): string | null {
         return this.Get('Error');
     }
     set Error(value: string | null) {
@@ -14203,7 +14204,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get HiddenToUser(): boolean {  
+    get HiddenToUser(): boolean {
         return this.Get('HiddenToUser');
     }
     set HiddenToUser(value: boolean) {
@@ -14216,7 +14217,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14226,7 +14227,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14235,12 +14236,12 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
-    get Conversation(): string | null {  
+    get Conversation(): string | null {
         return this.Get('Conversation');
     }
 }
 
-            
+
 /**
  * Conversations - strongly typed entity sub-class
  * * Schema: __mj
@@ -14263,7 +14264,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * @memberof ConversationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14276,7 +14277,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14286,7 +14287,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -14298,7 +14299,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: External ID
     * * SQL Data Type: nvarchar(500)
     */
-    get ExternalID(): string | null {  
+    get ExternalID(): string | null {
         return this.Get('ExternalID');
     }
     set ExternalID(value: string | null) {
@@ -14310,7 +14311,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string | null {  
+    get Name(): string | null {
         return this.Get('Name');
     }
     set Name(value: string | null) {
@@ -14322,7 +14323,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -14335,7 +14336,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Default Value: Skip
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
     set Type(value: string) {
@@ -14348,7 +14349,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsArchived(): boolean {  
+    get IsArchived(): boolean {
         return this.Get('IsArchived');
     }
     set IsArchived(value: boolean) {
@@ -14361,7 +14362,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get LinkedEntityID(): string | null {  
+    get LinkedEntityID(): string | null {
         return this.Get('LinkedEntityID');
     }
     set LinkedEntityID(value: string | null) {
@@ -14373,7 +14374,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: Linked Record ID
     * * SQL Data Type: nvarchar(500)
     */
-    get LinkedRecordID(): string | null {  
+    get LinkedRecordID(): string | null {
         return this.Get('LinkedRecordID');
     }
     set LinkedRecordID(value: string | null) {
@@ -14386,7 +14387,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
-    get DataContextID(): string | null {  
+    get DataContextID(): string | null {
         return this.Get('DataContextID');
     }
     set DataContextID(value: string | null) {
@@ -14399,7 +14400,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14409,7 +14410,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14418,7 +14419,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -14427,7 +14428,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: Linked Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get LinkedEntity(): string | null {  
+    get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
     }
 
@@ -14436,12 +14437,12 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
-    get DataContext(): string | null {  
+    get DataContext(): string | null {
         return this.Get('DataContext');
     }
 }
 
-            
+
 /**
  * Dashboard Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -14464,7 +14465,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * @memberof DashboardCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14477,7 +14478,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14486,7 +14487,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -14498,7 +14499,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -14511,7 +14512,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -14524,7 +14525,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -14537,7 +14538,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14547,7 +14548,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14556,7 +14557,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -14565,12 +14566,12 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Dashboards - strongly typed entity sub-class
  * * Schema: __mj
@@ -14594,7 +14595,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * @memberof DashboardEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14607,7 +14608,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14616,7 +14617,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -14628,7 +14629,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -14641,7 +14642,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -14654,7 +14655,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -14666,7 +14667,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: UIConfig Details
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UIConfigDetails(): string {  
+    get UIConfigDetails(): string {
         return this.Get('UIConfigDetails');
     }
     set UIConfigDetails(value: string) {
@@ -14679,7 +14680,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14689,7 +14690,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14698,7 +14699,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -14707,12 +14708,12 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 }
 
-            
+
 /**
  * Data Context Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -14736,7 +14737,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * @memberof DataContextItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14749,7 +14750,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14759,7 +14760,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
-    get DataContextID(): string {  
+    get DataContextID(): string {
         return this.Get('DataContextID');
     }
     set DataContextID(value: string) {
@@ -14779,7 +14780,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     *   * full_entity
     * * Description: The type of the item, either "view", "query", "full_entity", "single_record", or "sql"
     */
-    get Type(): 'view' | 'sql' | 'query' | 'single_record' | 'full_entity' {  
+    get Type(): 'view' | 'sql' | 'query' | 'single_record' | 'full_entity' {
         return this.Get('Type');
     }
     set Type(value: 'view' | 'sql' | 'query' | 'single_record' | 'full_entity') {
@@ -14792,7 +14793,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
     */
-    get ViewID(): string | null {  
+    get ViewID(): string | null {
         return this.Get('ViewID');
     }
     set ViewID(value: string | null) {
@@ -14805,7 +14806,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Queries (vwQueries.ID)
     */
-    get QueryID(): string | null {  
+    get QueryID(): string | null {
         return this.Get('QueryID');
     }
     set QueryID(value: string | null) {
@@ -14818,7 +14819,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string | null {  
+    get EntityID(): string | null {
         return this.Get('EntityID');
     }
     set EntityID(value: string | null) {
@@ -14831,7 +14832,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: nvarchar(450)
     * * Description: The Primary Key value for the record, only used when Type='single_record'
     */
-    get RecordID(): string | null {  
+    get RecordID(): string | null {
         return this.Get('RecordID');
     }
     set RecordID(value: string | null) {
@@ -14844,7 +14845,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Only used when Type=sql
     */
-    get SQL(): string | null {  
+    get SQL(): string | null {
         return this.Get('SQL');
     }
     set SQL(value: string | null) {
@@ -14857,7 +14858,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.
     */
-    get DataJSON(): string | null {  
+    get DataJSON(): string | null {
         return this.Get('DataJSON');
     }
     set DataJSON(value: string | null) {
@@ -14870,7 +14871,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: datetime
     * * Description: If DataJSON is populated, this field will show the date the the data was captured
     */
-    get LastRefreshedAt(): Date | null {  
+    get LastRefreshedAt(): Date | null {
         return this.Get('LastRefreshedAt');
     }
     set LastRefreshedAt(value: Date | null) {
@@ -14883,7 +14884,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -14893,7 +14894,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -14902,7 +14903,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
-    get DataContext(): string {  
+    get DataContext(): string {
         return this.Get('DataContext');
     }
 
@@ -14911,7 +14912,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * Display Name: View
     * * SQL Data Type: nvarchar(100)
     */
-    get View(): string | null {  
+    get View(): string | null {
         return this.Get('View');
     }
 
@@ -14920,7 +14921,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string | null {  
+    get Query(): string | null {
         return this.Get('Query');
     }
 
@@ -14929,12 +14930,12 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string | null {  
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Data Contexts - strongly typed entity sub-class
  * * Schema: __mj
@@ -14958,7 +14959,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * @memberof DataContextEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -14971,7 +14972,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -14980,7 +14981,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -14992,7 +14993,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -15005,7 +15006,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -15017,7 +15018,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * Display Name: Last Refreshed At
     * * SQL Data Type: datetime
     */
-    get LastRefreshedAt(): Date | null {  
+    get LastRefreshedAt(): Date | null {
         return this.Get('LastRefreshedAt');
     }
     set LastRefreshedAt(value: Date | null) {
@@ -15030,7 +15031,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15040,7 +15041,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -15049,12 +15050,12 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Dataset Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -15078,7 +15079,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * @memberof DatasetItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -15115,7 +15116,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -15124,7 +15125,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Code
     * * SQL Data Type: nvarchar(50)
     */
-    get Code(): string {  
+    get Code(): string {
         return this.Get('Code');
     }
     set Code(value: string) {
@@ -15137,7 +15138,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Datasets (vwDatasets.ID)
     */
-    get DatasetID(): string {  
+    get DatasetID(): string {
         return this.Get('DatasetID');
     }
     set DatasetID(value: string) {
@@ -15150,7 +15151,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -15163,7 +15164,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -15175,7 +15176,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Where Clause
     * * SQL Data Type: nvarchar(MAX)
     */
-    get WhereClause(): string | null {  
+    get WhereClause(): string | null {
         return this.Get('WhereClause');
     }
     set WhereClause(value: string | null) {
@@ -15187,7 +15188,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Date Field To Check
     * * SQL Data Type: nvarchar(100)
     */
-    get DateFieldToCheck(): string {  
+    get DateFieldToCheck(): string {
         return this.Get('DateFieldToCheck');
     }
     set DateFieldToCheck(value: string) {
@@ -15199,7 +15200,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -15212,7 +15213,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15222,7 +15223,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -15231,7 +15232,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Dataset
     * * SQL Data Type: nvarchar(100)
     */
-    get Dataset(): string {  
+    get Dataset(): string {
         return this.Get('Dataset');
     }
 
@@ -15240,12 +15241,12 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Datasets - strongly typed entity sub-class
  * * Schema: __mj
@@ -15269,7 +15270,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * @memberof DatasetEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -15306,7 +15307,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -15315,7 +15316,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -15327,7 +15328,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -15340,7 +15341,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15350,12 +15351,12 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Duplicate Run Detail Matches - strongly typed entity sub-class
  * * Schema: __mj
@@ -15378,7 +15379,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * @memberof DuplicateRunDetailMatchEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -15403,7 +15404,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -15413,7 +15414,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
-    get DuplicateRunDetailID(): string {  
+    get DuplicateRunDetailID(): string {
         return this.Get('DuplicateRunDetailID');
     }
     set DuplicateRunDetailID(value: string) {
@@ -15431,7 +15432,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     *   * Vector
     * * Description: Either Vector or SP
     */
-    get MatchSource(): 'SP' | 'Vector' {  
+    get MatchSource(): 'SP' | 'Vector' {
         return this.Get('MatchSource');
     }
     set MatchSource(value: 'SP' | 'Vector') {
@@ -15443,7 +15444,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * Display Name: Match Record ID
     * * SQL Data Type: nvarchar(500)
     */
-    get MatchRecordID(): string {  
+    get MatchRecordID(): string {
         return this.Get('MatchRecordID');
     }
     set MatchRecordID(value: string) {
@@ -15457,7 +15458,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * Default Value: 0
     * * Description: Value between 0 and 1 designating the computed probability of a match
     */
-    get MatchProbability(): number {  
+    get MatchProbability(): number {
         return this.Get('MatchProbability');
     }
     set MatchProbability(value: number) {
@@ -15470,7 +15471,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get MatchedAt(): Date {  
+    get MatchedAt(): Date {
         return this.Get('MatchedAt');
     }
     set MatchedAt(value: Date) {
@@ -15483,7 +15484,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Ignore
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
     set Action(value: string) {
@@ -15501,7 +15502,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     *   * Approved
     *   * Pending
     */
-    get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+    get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {
         return this.Get('ApprovalStatus');
     }
     set ApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
@@ -15514,7 +15515,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
     */
-    get RecordMergeLogID(): string | null {  
+    get RecordMergeLogID(): string | null {
         return this.Get('RecordMergeLogID');
     }
     set RecordMergeLogID(value: string | null) {
@@ -15532,7 +15533,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     *   * Complete
     *   * Pending
     */
-    get MergeStatus(): 'Error' | 'Complete' | 'Pending' {  
+    get MergeStatus(): 'Error' | 'Complete' | 'Pending' {
         return this.Get('MergeStatus');
     }
     set MergeStatus(value: 'Error' | 'Complete' | 'Pending') {
@@ -15545,7 +15546,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get MergedAt(): Date {  
+    get MergedAt(): Date {
         return this.Get('MergedAt');
     }
     set MergedAt(value: Date) {
@@ -15558,7 +15559,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15568,12 +15569,12 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Duplicate Run Details - strongly typed entity sub-class
  * * Schema: __mj
@@ -15596,7 +15597,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * @memberof DuplicateRunDetailEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -15621,7 +15622,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -15631,7 +15632,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
     */
-    get DuplicateRunID(): string {  
+    get DuplicateRunID(): string {
         return this.Get('DuplicateRunID');
     }
     set DuplicateRunID(value: string) {
@@ -15643,7 +15644,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * Display Name: Record ID
     * * SQL Data Type: nvarchar(500)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -15662,7 +15663,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     *   * Complete
     *   * Pending
     */
-    get MatchStatus(): 'Error' | 'Skipped' | 'Complete' | 'Pending' {  
+    get MatchStatus(): 'Error' | 'Skipped' | 'Complete' | 'Pending' {
         return this.Get('MatchStatus');
     }
     set MatchStatus(value: 'Error' | 'Skipped' | 'Complete' | 'Pending') {
@@ -15675,7 +15676,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped
     */
-    get SkippedReason(): string | null {  
+    get SkippedReason(): string | null {
         return this.Get('SkippedReason');
     }
     set SkippedReason(value: string | null) {
@@ -15688,7 +15689,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.
     */
-    get MatchErrorMessage(): string | null {  
+    get MatchErrorMessage(): string | null {
         return this.Get('MatchErrorMessage');
     }
     set MatchErrorMessage(value: string | null) {
@@ -15707,7 +15708,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     *   * Pending
     *   * Not Applicable
     */
-    get MergeStatus(): 'Error' | 'Complete' | 'Pending' | 'Not Applicable' {  
+    get MergeStatus(): 'Error' | 'Complete' | 'Pending' | 'Not Applicable' {
         return this.Get('MergeStatus');
     }
     set MergeStatus(value: 'Error' | 'Complete' | 'Pending' | 'Not Applicable') {
@@ -15719,7 +15720,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * Display Name: Merge Error Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get MergeErrorMessage(): string | null {  
+    get MergeErrorMessage(): string | null {
         return this.Get('MergeErrorMessage');
     }
     set MergeErrorMessage(value: string | null) {
@@ -15732,7 +15733,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15742,12 +15743,12 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Duplicate Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -15770,7 +15771,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * @memberof DuplicateRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -15795,7 +15796,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -15805,7 +15806,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -15818,7 +15819,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get StartedByUserID(): string {  
+    get StartedByUserID(): string {
         return this.Get('StartedByUserID');
     }
     set StartedByUserID(value: string) {
@@ -15831,7 +15832,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Lists (vwLists.ID)
     */
-    get SourceListID(): string {  
+    get SourceListID(): string {
         return this.Get('SourceListID');
     }
     set SourceListID(value: string) {
@@ -15844,7 +15845,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get StartedAt(): Date {  
+    get StartedAt(): Date {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date) {
@@ -15856,7 +15857,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -15874,7 +15875,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     *   * Approved
     *   * Pending
     */
-    get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+    get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {
         return this.Get('ApprovalStatus');
     }
     set ApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
@@ -15886,7 +15887,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Approval Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ApprovalComments(): string | null {  
+    get ApprovalComments(): string | null {
         return this.Get('ApprovalComments');
     }
     set ApprovalComments(value: string | null) {
@@ -15899,7 +15900,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get ApprovedByUserID(): string | null {  
+    get ApprovedByUserID(): string | null {
         return this.Get('ApprovedByUserID');
     }
     set ApprovedByUserID(value: string | null) {
@@ -15918,7 +15919,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     *   * In Progress
     *   * Pending
     */
-    get ProcessingStatus(): 'Failed' | 'Complete' | 'In Progress' | 'Pending' {  
+    get ProcessingStatus(): 'Failed' | 'Complete' | 'In Progress' | 'Pending' {
         return this.Get('ProcessingStatus');
     }
     set ProcessingStatus(value: 'Failed' | 'Complete' | 'In Progress' | 'Pending') {
@@ -15930,7 +15931,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Processing Error Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ProcessingErrorMessage(): string | null {  
+    get ProcessingErrorMessage(): string | null {
         return this.Get('ProcessingErrorMessage');
     }
     set ProcessingErrorMessage(value: string | null) {
@@ -15943,7 +15944,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -15953,7 +15954,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -15962,7 +15963,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -15971,7 +15972,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Started By User
     * * SQL Data Type: nvarchar(100)
     */
-    get StartedByUser(): string {  
+    get StartedByUser(): string {
         return this.Get('StartedByUser');
     }
 
@@ -15980,7 +15981,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Source List
     * * SQL Data Type: nvarchar(100)
     */
-    get SourceList(): string {  
+    get SourceList(): string {
         return this.Get('SourceList');
     }
 
@@ -15989,12 +15990,12 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
     */
-    get ApprovedByUser(): string | null {  
+    get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
     }
 }
 
-            
+
 /**
  * Employee Company Integrations - strongly typed entity sub-class
  * * Schema: __mj
@@ -16017,7 +16018,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * @memberof EmployeeCompanyIntegrationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -16041,7 +16042,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -16051,7 +16052,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
-    get EmployeeID(): string {  
+    get EmployeeID(): string {
         return this.Get('EmployeeID');
     }
     set EmployeeID(value: string) {
@@ -16064,7 +16065,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
-    get CompanyIntegrationID(): string {  
+    get CompanyIntegrationID(): string {
         return this.Get('CompanyIntegrationID');
     }
     set CompanyIntegrationID(value: string) {
@@ -16076,7 +16077,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * Display Name: External System Record
     * * SQL Data Type: nvarchar(750)
     */
-    get ExternalSystemRecordID(): string {  
+    get ExternalSystemRecordID(): string {
         return this.Get('ExternalSystemRecordID');
     }
     set ExternalSystemRecordID(value: string) {
@@ -16089,7 +16090,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -16102,7 +16103,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -16112,12 +16113,12 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Employee Roles - strongly typed entity sub-class
  * * Schema: __mj
@@ -16140,7 +16141,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * @memberof EmployeeRoleEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -16165,7 +16166,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -16175,7 +16176,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
-    get EmployeeID(): string {  
+    get EmployeeID(): string {
         return this.Get('EmployeeID');
     }
     set EmployeeID(value: string) {
@@ -16188,7 +16189,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
-    get RoleID(): string {  
+    get RoleID(): string {
         return this.Get('RoleID');
     }
     set RoleID(value: string) {
@@ -16201,7 +16202,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -16211,7 +16212,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -16220,12 +16221,12 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {  
+    get Role(): string {
         return this.Get('Role');
     }
 }
 
-            
+
 /**
  * Employee Skills - strongly typed entity sub-class
  * * Schema: __mj
@@ -16248,7 +16249,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * @memberof EmployeeSkillEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -16273,7 +16274,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -16283,7 +16284,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
-    get EmployeeID(): string {  
+    get EmployeeID(): string {
         return this.Get('EmployeeID');
     }
     set EmployeeID(value: string) {
@@ -16296,7 +16297,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Skills (vwSkills.ID)
     */
-    get SkillID(): string {  
+    get SkillID(): string {
         return this.Get('SkillID');
     }
     set SkillID(value: string) {
@@ -16309,7 +16310,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -16319,7 +16320,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -16328,12 +16329,12 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(50)
     */
-    get Skill(): string {  
+    get Skill(): string {
         return this.Get('Skill');
     }
 }
 
-            
+
 /**
  * Employees - strongly typed entity sub-class
  * * Schema: __mj
@@ -16357,7 +16358,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * @memberof EmployeeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -16369,7 +16370,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -16379,7 +16380,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newid()
     */
-    get BCMID(): string {  
+    get BCMID(): string {
         return this.Get('BCMID');
     }
 
@@ -16388,7 +16389,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: First Name
     * * SQL Data Type: nvarchar(30)
     */
-    get FirstName(): string {  
+    get FirstName(): string {
         return this.Get('FirstName');
     }
     set FirstName(value: string) {
@@ -16400,7 +16401,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: Last Name
     * * SQL Data Type: nvarchar(50)
     */
-    get LastName(): string {  
+    get LastName(): string {
         return this.Get('LastName');
     }
     set LastName(value: string) {
@@ -16413,7 +16414,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
     */
-    get CompanyID(): string {  
+    get CompanyID(): string {
         return this.Get('CompanyID');
     }
     set CompanyID(value: string) {
@@ -16426,7 +16427,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
-    get SupervisorID(): string | null {  
+    get SupervisorID(): string | null {
         return this.Get('SupervisorID');
     }
     set SupervisorID(value: string | null) {
@@ -16437,7 +16438,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Field Name: Title
     * * SQL Data Type: nvarchar(50)
     */
-    get Title(): string | null {  
+    get Title(): string | null {
         return this.Get('Title');
     }
     set Title(value: string | null) {
@@ -16448,7 +16449,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Field Name: Email
     * * SQL Data Type: nvarchar(100)
     */
-    get Email(): string {  
+    get Email(): string {
         return this.Get('Email');
     }
     set Email(value: string) {
@@ -16459,7 +16460,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Field Name: Phone
     * * SQL Data Type: nvarchar(20)
     */
-    get Phone(): string | null {  
+    get Phone(): string | null {
         return this.Get('Phone');
     }
     set Phone(value: string | null) {
@@ -16471,7 +16472,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get Active(): boolean {  
+    get Active(): boolean {
         return this.Get('Active');
     }
     set Active(value: boolean) {
@@ -16484,7 +16485,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -16494,7 +16495,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -16503,7 +16504,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: First Last
     * * SQL Data Type: nvarchar(81)
     */
-    get FirstLast(): string | null {  
+    get FirstLast(): string | null {
         return this.Get('FirstLast');
     }
 
@@ -16512,7 +16513,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: Supervisor
     * * SQL Data Type: nvarchar(81)
     */
-    get Supervisor(): string | null {  
+    get Supervisor(): string | null {
         return this.Get('Supervisor');
     }
 
@@ -16521,7 +16522,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: Supervisor First Name
     * * SQL Data Type: nvarchar(30)
     */
-    get SupervisorFirstName(): string | null {  
+    get SupervisorFirstName(): string | null {
         return this.Get('SupervisorFirstName');
     }
 
@@ -16530,7 +16531,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: Supervisor Last Name
     * * SQL Data Type: nvarchar(50)
     */
-    get SupervisorLastName(): string | null {  
+    get SupervisorLastName(): string | null {
         return this.Get('SupervisorLastName');
     }
 
@@ -16539,12 +16540,12 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * * Display Name: Supervisor Email
     * * SQL Data Type: nvarchar(100)
     */
-    get SupervisorEmail(): string | null {  
+    get SupervisorEmail(): string | null {
         return this.Get('SupervisorEmail');
     }
 }
 
-            
+
 /**
  * Entities - strongly typed entity sub-class
  * * Schema: __mj
@@ -16568,7 +16569,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * @memberof EntityEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -16580,7 +16581,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -16590,7 +16591,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -16601,7 +16602,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -16613,7 +16614,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Name Suffix
     * * SQL Data Type: nvarchar(255)
     */
-    get NameSuffix(): string | null {  
+    get NameSuffix(): string | null {
         return this.Get('NameSuffix');
     }
     set NameSuffix(value: string | null) {
@@ -16624,7 +16625,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -16638,7 +16639,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 1
     * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
     */
-    get AutoUpdateDescription(): boolean {  
+    get AutoUpdateDescription(): boolean {
         return this.Get('AutoUpdateDescription');
     }
     set AutoUpdateDescription(value: boolean) {
@@ -16650,7 +16651,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get BaseTable(): string {  
+    get BaseTable(): string {
         return this.Get('BaseTable');
     }
 
@@ -16659,7 +16660,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get BaseView(): string {  
+    get BaseView(): string {
         return this.Get('BaseView');
     }
     set BaseView(value: string) {
@@ -16673,7 +16674,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 1
     * * Description: When set to 0, CodeGen no longer generates a base view for the entity.
     */
-    get BaseViewGenerated(): boolean {  
+    get BaseViewGenerated(): boolean {
         return this.Get('BaseViewGenerated');
     }
     set BaseViewGenerated(value: boolean) {
@@ -16686,7 +16687,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Default Value: dbo
     */
-    get SchemaName(): string {  
+    get SchemaName(): string {
         return this.Get('SchemaName');
     }
 
@@ -16696,7 +16697,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get VirtualEntity(): boolean {  
+    get VirtualEntity(): boolean {
         return this.Get('VirtualEntity');
     }
     set VirtualEntity(value: boolean) {
@@ -16710,7 +16711,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 1
     * * Description: When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.
     */
-    get TrackRecordChanges(): boolean {  
+    get TrackRecordChanges(): boolean {
         return this.Get('TrackRecordChanges');
     }
     set TrackRecordChanges(value: boolean) {
@@ -16724,7 +16725,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 1
     * * Description: When set to 1, accessing a record by an end-user will result in an Audit Log record being created
     */
-    get AuditRecordAccess(): boolean {  
+    get AuditRecordAccess(): boolean {
         return this.Get('AuditRecordAccess');
     }
     set AuditRecordAccess(value: boolean) {
@@ -16738,7 +16739,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 1
     * * Description: When set to 1, users running a view against this entity will result in an Audit Log record being created.
     */
-    get AuditViewRuns(): boolean {  
+    get AuditViewRuns(): boolean {
         return this.Get('AuditViewRuns');
     }
     set AuditViewRuns(value: boolean) {
@@ -16752,7 +16753,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: If set to 0, the entity will not be available at all in the GraphQL API or the object model.
     */
-    get IncludeInAPI(): boolean {  
+    get IncludeInAPI(): boolean {
         return this.Get('IncludeInAPI');
     }
     set IncludeInAPI(value: boolean) {
@@ -16766,7 +16767,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.
     */
-    get AllowAllRowsAPI(): boolean {  
+    get AllowAllRowsAPI(): boolean {
         return this.Get('AllowAllRowsAPI');
     }
     set AllowAllRowsAPI(value: boolean) {
@@ -16780,7 +16781,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
     */
-    get AllowUpdateAPI(): boolean {  
+    get AllowUpdateAPI(): boolean {
         return this.Get('AllowUpdateAPI');
     }
     set AllowUpdateAPI(value: boolean) {
@@ -16794,7 +16795,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
     */
-    get AllowCreateAPI(): boolean {  
+    get AllowCreateAPI(): boolean {
         return this.Get('AllowCreateAPI');
     }
     set AllowCreateAPI(value: boolean) {
@@ -16808,7 +16809,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
     */
-    get AllowDeleteAPI(): boolean {  
+    get AllowDeleteAPI(): boolean {
         return this.Get('AllowDeleteAPI');
     }
     set AllowDeleteAPI(value: boolean) {
@@ -16822,7 +16823,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: Set to 1 if a custom resolver has been created for the entity.
     */
-    get CustomResolverAPI(): boolean {  
+    get CustomResolverAPI(): boolean {
         return this.Get('CustomResolverAPI');
     }
     set CustomResolverAPI(value: boolean) {
@@ -16836,7 +16837,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: Enabling this bit will result in search being possible at the API and UI layers
     */
-    get AllowUserSearchAPI(): boolean {  
+    get AllowUserSearchAPI(): boolean {
         return this.Get('AllowUserSearchAPI');
     }
     set AllowUserSearchAPI(value: boolean) {
@@ -16849,7 +16850,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get FullTextSearchEnabled(): boolean {  
+    get FullTextSearchEnabled(): boolean {
         return this.Get('FullTextSearchEnabled');
     }
     set FullTextSearchEnabled(value: boolean) {
@@ -16861,7 +16862,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Full Text Catalog
     * * SQL Data Type: nvarchar(255)
     */
-    get FullTextCatalog(): string | null {  
+    get FullTextCatalog(): string | null {
         return this.Get('FullTextCatalog');
     }
     set FullTextCatalog(value: string | null) {
@@ -16874,7 +16875,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get FullTextCatalogGenerated(): boolean {  
+    get FullTextCatalogGenerated(): boolean {
         return this.Get('FullTextCatalogGenerated');
     }
     set FullTextCatalogGenerated(value: boolean) {
@@ -16886,7 +16887,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Full Text Index
     * * SQL Data Type: nvarchar(255)
     */
-    get FullTextIndex(): string | null {  
+    get FullTextIndex(): string | null {
         return this.Get('FullTextIndex');
     }
     set FullTextIndex(value: string | null) {
@@ -16899,7 +16900,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get FullTextIndexGenerated(): boolean {  
+    get FullTextIndexGenerated(): boolean {
         return this.Get('FullTextIndexGenerated');
     }
     set FullTextIndexGenerated(value: boolean) {
@@ -16911,7 +16912,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Full Text Search Function
     * * SQL Data Type: nvarchar(255)
     */
-    get FullTextSearchFunction(): string | null {  
+    get FullTextSearchFunction(): string | null {
         return this.Get('FullTextSearchFunction');
     }
     set FullTextSearchFunction(value: string | null) {
@@ -16924,7 +16925,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get FullTextSearchFunctionGenerated(): boolean {  
+    get FullTextSearchFunctionGenerated(): boolean {
         return this.Get('FullTextSearchFunctionGenerated');
     }
     set FullTextSearchFunctionGenerated(value: boolean) {
@@ -16937,7 +16938,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: int
     * * Default Value: 1000
     */
-    get UserViewMaxRows(): number | null {  
+    get UserViewMaxRows(): number | null {
         return this.Get('UserViewMaxRows');
     }
     set UserViewMaxRows(value: number | null) {
@@ -16949,7 +16950,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: spCreate
     * * SQL Data Type: nvarchar(255)
     */
-    get spCreate(): string | null {  
+    get spCreate(): string | null {
         return this.Get('spCreate');
     }
     set spCreate(value: string | null) {
@@ -16961,7 +16962,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: spUpdate
     * * SQL Data Type: nvarchar(255)
     */
-    get spUpdate(): string | null {  
+    get spUpdate(): string | null {
         return this.Get('spUpdate');
     }
     set spUpdate(value: string | null) {
@@ -16973,7 +16974,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: spDelete
     * * SQL Data Type: nvarchar(255)
     */
-    get spDelete(): string | null {  
+    get spDelete(): string | null {
         return this.Get('spDelete');
     }
     set spDelete(value: string | null) {
@@ -16986,7 +16987,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get spCreateGenerated(): boolean {  
+    get spCreateGenerated(): boolean {
         return this.Get('spCreateGenerated');
     }
     set spCreateGenerated(value: boolean) {
@@ -16999,7 +17000,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get spUpdateGenerated(): boolean {  
+    get spUpdateGenerated(): boolean {
         return this.Get('spUpdateGenerated');
     }
     set spUpdateGenerated(value: boolean) {
@@ -17012,7 +17013,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get spDeleteGenerated(): boolean {  
+    get spDeleteGenerated(): boolean {
         return this.Get('spDeleteGenerated');
     }
     set spDeleteGenerated(value: boolean) {
@@ -17026,7 +17027,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
     */
-    get CascadeDeletes(): boolean {  
+    get CascadeDeletes(): boolean {
         return this.Get('CascadeDeletes');
     }
     set CascadeDeletes(value: boolean) {
@@ -17044,7 +17045,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     *   * Soft
     * * Description: Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.
     */
-    get DeleteType(): 'Hard' | 'Soft' {  
+    get DeleteType(): 'Hard' | 'Soft' {
         return this.Get('DeleteType');
     }
     set DeleteType(value: 'Hard' | 'Soft') {
@@ -17058,7 +17059,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: 0
     * * Description: This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft
     */
-    get AllowRecordMerge(): boolean {  
+    get AllowRecordMerge(): boolean {
         return this.Get('AllowRecordMerge');
     }
     set AllowRecordMerge(value: boolean) {
@@ -17071,7 +17072,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
     */
-    get spMatch(): string | null {  
+    get spMatch(): string | null {
         return this.Get('spMatch');
     }
     set spMatch(value: string | null) {
@@ -17089,7 +17090,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     *   * Dropdown
     * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.
     */
-    get RelationshipDefaultDisplayType(): 'Search' | 'Dropdown' {  
+    get RelationshipDefaultDisplayType(): 'Search' | 'Dropdown' {
         return this.Get('RelationshipDefaultDisplayType');
     }
     set RelationshipDefaultDisplayType(value: 'Search' | 'Dropdown') {
@@ -17102,7 +17103,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get UserFormGenerated(): boolean {  
+    get UserFormGenerated(): boolean {
         return this.Get('UserFormGenerated');
     }
     set UserFormGenerated(value: boolean) {
@@ -17114,7 +17115,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Entity Object Subclass Name
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityObjectSubclassName(): string | null {  
+    get EntityObjectSubclassName(): string | null {
         return this.Get('EntityObjectSubclassName');
     }
     set EntityObjectSubclassName(value: string | null) {
@@ -17126,7 +17127,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Entity Object Subclass Import
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityObjectSubclassImport(): string | null {  
+    get EntityObjectSubclassImport(): string | null {
         return this.Get('EntityObjectSubclassImport');
     }
     set EntityObjectSubclassImport(value: string | null) {
@@ -17139,7 +17140,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.
     */
-    get PreferredCommunicationField(): string | null {  
+    get PreferredCommunicationField(): string | null {
         return this.Get('PreferredCommunicationField');
     }
     set PreferredCommunicationField(value: string | null) {
@@ -17152,7 +17153,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: nvarchar(500)
     * * Description: Optional, specify an icon (CSS Class) for each entity for display in the UI
     */
-    get Icon(): string | null {  
+    get Icon(): string | null {
         return this.Get('Icon');
     }
     set Icon(value: string | null) {
@@ -17165,7 +17166,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17175,7 +17176,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -17184,7 +17185,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get CodeName(): string | null {  
+    get CodeName(): string | null {
         return this.Get('CodeName');
     }
 
@@ -17193,7 +17194,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ClassName(): string | null {  
+    get ClassName(): string | null {
         return this.Get('ClassName');
     }
 
@@ -17202,7 +17203,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get BaseTableCodeName(): string | null {  
+    get BaseTableCodeName(): string | null {
         return this.Get('BaseTableCodeName');
     }
 
@@ -17211,7 +17212,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Parent Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get ParentEntity(): string | null {  
+    get ParentEntity(): string | null {
         return this.Get('ParentEntity');
     }
 
@@ -17220,7 +17221,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Parent Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get ParentBaseTable(): string | null {  
+    get ParentBaseTable(): string | null {
         return this.Get('ParentBaseTable');
     }
 
@@ -17229,12 +17230,12 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Parent Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get ParentBaseView(): string | null {  
+    get ParentBaseView(): string | null {
         return this.Get('ParentBaseView');
     }
 }
 
-            
+
 /**
  * Entity Action Filters - strongly typed entity sub-class
  * * Schema: __mj
@@ -17258,7 +17259,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * @memberof EntityActionFilterEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17271,7 +17272,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17281,7 +17282,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
-    get EntityActionID(): string {  
+    get EntityActionID(): string {
         return this.Get('EntityActionID');
     }
     set EntityActionID(value: string) {
@@ -17294,7 +17295,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
     */
-    get ActionFilterID(): string {  
+    get ActionFilterID(): string {
         return this.Get('ActionFilterID');
     }
     set ActionFilterID(value: string) {
@@ -17307,7 +17308,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: int
     * * Description: Order of filter execution.
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -17326,7 +17327,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     *   * Pending
     * * Description: Status of the entity action filter (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -17339,7 +17340,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17349,12 +17350,12 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Entity Action Invocation Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -17378,7 +17379,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * @memberof EntityActionInvocationTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17391,7 +17392,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17401,7 +17402,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the invocation type such as Record Created/Updated/etc.
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -17414,7 +17415,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the invocation type.
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -17427,7 +17428,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get DisplaySequence(): number {  
+    get DisplaySequence(): number {
         return this.Get('DisplaySequence');
     }
     set DisplaySequence(value: number) {
@@ -17440,7 +17441,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17450,12 +17451,12 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Entity Action Invocations - strongly typed entity sub-class
  * * Schema: __mj
@@ -17479,7 +17480,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * @memberof EntityActionInvocationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17492,7 +17493,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17502,7 +17503,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
-    get EntityActionID(): string {  
+    get EntityActionID(): string {
         return this.Get('EntityActionID');
     }
     set EntityActionID(value: string) {
@@ -17515,7 +17516,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     */
-    get InvocationTypeID(): string {  
+    get InvocationTypeID(): string {
         return this.Get('InvocationTypeID');
     }
     set InvocationTypeID(value: string) {
@@ -17534,7 +17535,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     *   * Pending
     * * Description: Status of the entity action invocation (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -17547,7 +17548,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17557,7 +17558,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -17566,12 +17567,12 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * Display Name: Invocation Type
     * * SQL Data Type: nvarchar(255)
     */
-    get InvocationType(): string {  
+    get InvocationType(): string {
         return this.Get('InvocationType');
     }
 }
 
-            
+
 /**
  * Entity Action Params - strongly typed entity sub-class
  * * Schema: __mj
@@ -17595,7 +17596,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * @memberof EntityActionParamEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17608,7 +17609,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17618,7 +17619,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
     */
-    get EntityActionID(): string {  
+    get EntityActionID(): string {
         return this.Get('EntityActionID');
     }
     set EntityActionID(value: string) {
@@ -17631,7 +17632,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
     */
-    get ActionParamID(): string {  
+    get ActionParamID(): string {
         return this.Get('ActionParamID');
     }
     set ActionParamID(value: string) {
@@ -17650,7 +17651,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     *   * Entity Field
     * * Description: Type of the value, which can be Static, Entity Object, or Script.
     */
-    get ValueType(): 'Static' | 'Entity Object' | 'Script' | 'Entity Field' {  
+    get ValueType(): 'Static' | 'Entity Object' | 'Script' | 'Entity Field' {
         return this.Get('ValueType');
     }
     set ValueType(value: 'Static' | 'Entity Object' | 'Script' | 'Entity Field') {
@@ -17663,7 +17664,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.
     */
-    get Value(): string | null {  
+    get Value(): string | null {
         return this.Get('Value');
     }
     set Value(value: string | null) {
@@ -17676,7 +17677,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Additional comments regarding the parameter.
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -17689,7 +17690,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17699,7 +17700,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -17708,12 +17709,12 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
     */
-    get ActionParam(): string {  
+    get ActionParam(): string {
         return this.Get('ActionParam');
     }
 }
 
-            
+
 /**
  * Entity Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -17737,7 +17738,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * @memberof EntityActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17750,7 +17751,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -17763,7 +17764,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -17782,7 +17783,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     *   * Pending
     * * Description: Status of the entity action (Pending, Active, Disabled).
     */
-    get Status(): 'Disabled' | 'Active' | 'Pending' {  
+    get Status(): 'Disabled' | 'Active' | 'Pending' {
         return this.Get('Status');
     }
     set Status(value: 'Disabled' | 'Active' | 'Pending') {
@@ -17795,7 +17796,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -17805,7 +17806,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -17815,7 +17816,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17824,7 +17825,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -17833,12 +17834,12 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 }
 
-            
+
 /**
  * Entity AI Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -17862,7 +17863,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * @memberof EntityAIActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -17875,7 +17876,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -17885,7 +17886,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -17898,7 +17899,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
-    get AIModelID(): string {  
+    get AIModelID(): string {
         return this.Get('AIModelID');
     }
     set AIModelID(value: string) {
@@ -17911,7 +17912,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
     */
-    get AIActionID(): string {  
+    get AIActionID(): string {
         return this.Get('AIActionID');
     }
     set AIActionID(value: string) {
@@ -17923,7 +17924,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -17935,7 +17936,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Prompt(): string | null {  
+    get Prompt(): string | null {
         return this.Get('Prompt');
     }
     set Prompt(value: string | null) {
@@ -17952,7 +17953,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     *   * after save
     *   * before save
     */
-    get TriggerEvent(): 'after save' | 'before save' {  
+    get TriggerEvent(): 'after save' | 'before save' {
         return this.Get('TriggerEvent');
     }
     set TriggerEvent(value: 'after save' | 'before save') {
@@ -17964,7 +17965,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: User Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UserMessage(): string {  
+    get UserMessage(): string {
         return this.Get('UserMessage');
     }
     set UserMessage(value: string) {
@@ -17981,7 +17982,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     *   * entity
     *   * field
     */
-    get OutputType(): 'entity' | 'field' {  
+    get OutputType(): 'entity' | 'field' {
         return this.Get('OutputType');
     }
     set OutputType(value: 'entity' | 'field') {
@@ -17993,7 +17994,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Output Field
     * * SQL Data Type: nvarchar(50)
     */
-    get OutputField(): string | null {  
+    get OutputField(): string | null {
         return this.Get('OutputField');
     }
     set OutputField(value: string | null) {
@@ -18006,7 +18007,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get SkipIfOutputFieldNotEmpty(): boolean {  
+    get SkipIfOutputFieldNotEmpty(): boolean {
         return this.Get('SkipIfOutputFieldNotEmpty');
     }
     set SkipIfOutputFieldNotEmpty(value: boolean) {
@@ -18019,7 +18020,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get OutputEntityID(): string | null {  
+    get OutputEntityID(): string | null {
         return this.Get('OutputEntityID');
     }
     set OutputEntityID(value: string | null) {
@@ -18031,7 +18032,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -18044,7 +18045,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18054,7 +18055,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -18063,7 +18064,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -18072,7 +18073,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {  
+    get AIModel(): string {
         return this.Get('AIModel');
     }
 
@@ -18081,7 +18082,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: AIAction
     * * SQL Data Type: nvarchar(50)
     */
-    get AIAction(): string {  
+    get AIAction(): string {
         return this.Get('AIAction');
     }
 
@@ -18090,12 +18091,12 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Display Name: Output Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get OutputEntity(): string | null {  
+    get OutputEntity(): string | null {
         return this.Get('OutputEntity');
     }
 }
 
-            
+
 /**
  * Entity Communication Fields - strongly typed entity sub-class
  * * Schema: __mj
@@ -18119,7 +18120,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * @memberof EntityCommunicationFieldEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18144,7 +18145,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18154,7 +18155,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Communication Message Types (vwEntityCommunicationMessageTypes.ID)
     */
-    get EntityCommunicationMessageTypeID(): string {  
+    get EntityCommunicationMessageTypeID(): string {
         return this.Get('EntityCommunicationMessageTypeID');
     }
     set EntityCommunicationMessageTypeID(value: string) {
@@ -18167,7 +18168,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: nvarchar(500)
     * * Description: Name of the field in the entity that maps to the communication base message type
     */
-    get FieldName(): string {  
+    get FieldName(): string {
         return this.Get('FieldName');
     }
     set FieldName(value: string) {
@@ -18180,7 +18181,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: int
     * * Description: Priority of the field for the communication base message type
     */
-    get Priority(): number {  
+    get Priority(): number {
         return this.Get('Priority');
     }
     set Priority(value: number) {
@@ -18193,7 +18194,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18203,12 +18204,12 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Entity Communication Message Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -18232,7 +18233,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * @memberof EntityCommunicationMessageTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18257,7 +18258,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18267,7 +18268,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -18280,7 +18281,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
     */
-    get BaseMessageTypeID(): string {  
+    get BaseMessageTypeID(): string {
         return this.Get('BaseMessageTypeID');
     }
     set BaseMessageTypeID(value: string) {
@@ -18294,7 +18295,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * Default Value: 1
     * * Description: Indicates whether the message type is active
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -18307,7 +18308,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18317,7 +18318,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -18326,7 +18327,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -18335,12 +18336,12 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * * Display Name: Base Message Type
     * * SQL Data Type: nvarchar(100)
     */
-    get BaseMessageType(): string {  
+    get BaseMessageType(): string {
         return this.Get('BaseMessageType');
     }
 }
 
-            
+
 /**
  * Entity Document Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -18363,7 +18364,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * @memberof EntityDocumentRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18388,7 +18389,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18398,7 +18399,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
     */
-    get EntityDocumentID(): string {  
+    get EntityDocumentID(): string {
         return this.Get('EntityDocumentID');
     }
     set EntityDocumentID(value: string) {
@@ -18410,7 +18411,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * Display Name: Started At
     * * SQL Data Type: datetime
     */
-    get StartedAt(): Date | null {  
+    get StartedAt(): Date | null {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date | null) {
@@ -18422,7 +18423,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -18441,7 +18442,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     *   * Failed
     * * Description: Can be Pending, In Progress, Completed, or Failed
     */
-    get Status(): 'Pending' | 'Complete' | 'Failed' {  
+    get Status(): 'Pending' | 'Complete' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Complete' | 'Failed') {
@@ -18454,7 +18455,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18464,7 +18465,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -18473,12 +18474,12 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {  
+    get EntityDocument(): string {
         return this.Get('EntityDocument');
     }
 }
 
-            
+
 /**
  * Entity Document Settings - strongly typed entity sub-class
  * * Schema: __mj
@@ -18501,7 +18502,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * @memberof EntityDocumentSettingEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18526,7 +18527,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18536,7 +18537,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
     */
-    get EntityDocumentID(): string {  
+    get EntityDocumentID(): string {
         return this.Get('EntityDocumentID');
     }
     set EntityDocumentID(value: string) {
@@ -18548,7 +18549,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -18560,7 +18561,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * Display Name: Value
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Value(): string {  
+    get Value(): string {
         return this.Get('Value');
     }
     set Value(value: string) {
@@ -18572,7 +18573,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -18585,7 +18586,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18595,7 +18596,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -18604,12 +18605,12 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {  
+    get EntityDocument(): string {
         return this.Get('EntityDocument');
     }
 }
 
-            
+
 /**
  * Entity Document Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -18632,7 +18633,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * @memberof EntityDocumentTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18657,7 +18658,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18666,7 +18667,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -18678,7 +18679,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -18691,7 +18692,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18701,12 +18702,12 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Entity Documents - strongly typed entity sub-class
  * * Schema: __mj
@@ -18729,7 +18730,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * @memberof EntityDocumentEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18754,7 +18755,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -18763,7 +18764,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(250)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -18776,7 +18777,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Document Types (vwEntityDocumentTypes.ID)
     */
-    get TypeID(): string {  
+    get TypeID(): string {
         return this.Get('TypeID');
     }
     set TypeID(value: string) {
@@ -18789,7 +18790,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -18802,7 +18803,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
     */
-    get VectorDatabaseID(): string {  
+    get VectorDatabaseID(): string {
         return this.Get('VectorDatabaseID');
     }
     set VectorDatabaseID(value: string) {
@@ -18819,7 +18820,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     *   * Active
     *   * Inactive
     */
-    get Status(): 'Active' | 'Inactive' {  
+    get Status(): 'Active' | 'Inactive' {
         return this.Get('Status');
     }
     set Status(value: 'Active' | 'Inactive') {
@@ -18832,7 +18833,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
-    get TemplateID(): string {  
+    get TemplateID(): string {
         return this.Get('TemplateID');
     }
     set TemplateID(value: string) {
@@ -18845,7 +18846,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
-    get AIModelID(): string {  
+    get AIModelID(): string {
         return this.Get('AIModelID');
     }
     set AIModelID(value: string) {
@@ -18859,7 +18860,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Default Value: 1
     * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
-    get PotentialMatchThreshold(): number {  
+    get PotentialMatchThreshold(): number {
         return this.Get('PotentialMatchThreshold');
     }
     set PotentialMatchThreshold(value: number) {
@@ -18873,7 +18874,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Default Value: 1
     * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
-    get AbsoluteMatchThreshold(): number {  
+    get AbsoluteMatchThreshold(): number {
         return this.Get('AbsoluteMatchThreshold');
     }
     set AbsoluteMatchThreshold(value: number) {
@@ -18886,7 +18887,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -18896,7 +18897,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -18905,7 +18906,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
 
@@ -18914,7 +18915,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -18923,7 +18924,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: Vector Database
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {  
+    get VectorDatabase(): string {
         return this.Get('VectorDatabase');
     }
 
@@ -18932,7 +18933,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {  
+    get Template(): string {
         return this.Get('Template');
     }
 
@@ -18941,12 +18942,12 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {  
+    get AIModel(): string {
         return this.Get('AIModel');
     }
 }
 
-            
+
 /**
  * Entity Field Values - strongly typed entity sub-class
  * * Schema: __mj
@@ -18969,7 +18970,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * @memberof EntityFieldValueEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -18994,7 +18995,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -19004,7 +19005,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.ID)
     */
-    get EntityFieldID(): string {  
+    get EntityFieldID(): string {
         return this.Get('EntityFieldID');
     }
     set EntityFieldID(value: string) {
@@ -19016,7 +19017,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Sequence
     * * SQL Data Type: int
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -19028,7 +19029,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Value
     * * SQL Data Type: nvarchar(255)
     */
-    get Value(): string {  
+    get Value(): string {
         return this.Get('Value');
     }
     set Value(value: string) {
@@ -19040,7 +19041,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Code
     * * SQL Data Type: nvarchar(50)
     */
-    get Code(): string | null {  
+    get Code(): string | null {
         return this.Get('Code');
     }
     set Code(value: string | null) {
@@ -19052,7 +19053,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -19065,7 +19066,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -19075,7 +19076,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -19084,7 +19085,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Entity Field
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityField(): string {  
+    get EntityField(): string {
         return this.Get('EntityField');
     }
 
@@ -19093,7 +19094,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -19102,12 +19103,12 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
 }
 
-            
+
 /**
  * Entity Fields - strongly typed entity sub-class
  * * Schema: __mj
@@ -19131,7 +19132,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * @memberof EntityFieldEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -19143,7 +19144,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -19153,7 +19154,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
 
@@ -19163,7 +19164,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: Display order of the field within the entity
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
 
@@ -19172,7 +19173,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field within the database table
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
 
@@ -19182,7 +19183,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: A user friendly alternative to the field name
     */
-    get DisplayName(): string | null {  
+    get DisplayName(): string | null {
         return this.Get('DisplayName');
     }
     set DisplayName(value: string | null) {
@@ -19194,7 +19195,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Descriptive text explaining the purpose of the field
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -19208,7 +19209,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
     */
-    get AutoUpdateDescription(): boolean {  
+    get AutoUpdateDescription(): boolean {
         return this.Get('AutoUpdateDescription');
     }
     set AutoUpdateDescription(value: boolean) {
@@ -19222,7 +19223,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
     */
-    get IsPrimaryKey(): boolean {  
+    get IsPrimaryKey(): boolean {
         return this.Get('IsPrimaryKey');
     }
     set IsPrimaryKey(value: boolean) {
@@ -19236,7 +19237,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.
     */
-    get IsUnique(): boolean {  
+    get IsUnique(): boolean {
         return this.Get('IsUnique');
     }
     set IsUnique(value: boolean) {
@@ -19249,7 +19250,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
     set Category(value: string | null) {
@@ -19261,7 +19262,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
 
@@ -19270,7 +19271,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: int
     * * Description: SQL data length (auto maintained by CodeGen)
     */
-    get Length(): number | null {  
+    get Length(): number | null {
         return this.Get('Length');
     }
 
@@ -19279,7 +19280,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: int
     * * Description: SQL precision (auto maintained by CodeGen)
     */
-    get Precision(): number | null {  
+    get Precision(): number | null {
         return this.Get('Precision');
     }
 
@@ -19288,7 +19289,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: int
     * * Description: SQL scale (auto maintained by CodeGen)
     */
-    get Scale(): number | null {  
+    get Scale(): number | null {
         return this.Get('Scale');
     }
 
@@ -19299,7 +19300,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: Does the column allow null or not (auto maintained by CodeGen)
     */
-    get AllowsNull(): boolean {  
+    get AllowsNull(): boolean {
         return this.Get('AllowsNull');
     }
 
@@ -19309,7 +19310,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: If a default value is defined for the field it is stored here (auto maintained by CodeGen)
     */
-    get DefaultValue(): string | null {  
+    get DefaultValue(): string | null {
         return this.Get('DefaultValue');
     }
 
@@ -19320,7 +19321,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
     */
-    get AutoIncrement(): boolean {  
+    get AutoIncrement(): boolean {
         return this.Get('AutoIncrement');
     }
 
@@ -19336,7 +19337,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     *   * ListOrUserEntry
     * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
     */
-    get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {  
+    get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {
         return this.Get('ValueListType');
     }
     set ValueListType(value: 'None' | 'List' | 'ListOrUserEntry') {
@@ -19364,7 +19365,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     *   * Code
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
-    get ExtendedType(): 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null {  
+    get ExtendedType(): 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null {
         return this.Get('ExtendedType');
     }
     set ExtendedType(value: 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null) {
@@ -19385,7 +19386,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     *   * Other
     * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
     */
-    get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null {  
+    get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null {
         return this.Get('CodeType');
     }
     set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null) {
@@ -19399,7 +19400,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, this field will be included by default in any new view created by a user.
     */
-    get DefaultInView(): boolean {  
+    get DefaultInView(): boolean {
         return this.Get('DefaultInView');
     }
     set DefaultInView(value: boolean) {
@@ -19412,7 +19413,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: NULL
     */
-    get ViewCellTemplate(): string | null {  
+    get ViewCellTemplate(): string | null {
         return this.Get('ViewCellTemplate');
     }
     set ViewCellTemplate(value: string | null) {
@@ -19425,7 +19426,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: int
     * * Description: Determines the default width for this field when included in a view
     */
-    get DefaultColumnWidth(): number | null {  
+    get DefaultColumnWidth(): number | null {
         return this.Get('DefaultColumnWidth');
     }
     set DefaultColumnWidth(value: number | null) {
@@ -19439,7 +19440,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
     */
-    get AllowUpdateAPI(): boolean {  
+    get AllowUpdateAPI(): boolean {
         return this.Get('AllowUpdateAPI');
     }
     set AllowUpdateAPI(value: boolean) {
@@ -19453,7 +19454,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
     */
-    get AllowUpdateInView(): boolean {  
+    get AllowUpdateInView(): boolean {
         return this.Get('AllowUpdateInView');
     }
     set AllowUpdateInView(value: boolean) {
@@ -19467,7 +19468,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
     */
-    get IncludeInUserSearchAPI(): boolean {  
+    get IncludeInUserSearchAPI(): boolean {
         return this.Get('IncludeInUserSearchAPI');
     }
     set IncludeInUserSearchAPI(value: boolean) {
@@ -19481,7 +19482,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
     */
-    get FullTextSearchEnabled(): boolean {  
+    get FullTextSearchEnabled(): boolean {
         return this.Get('FullTextSearchEnabled');
     }
     set FullTextSearchEnabled(value: boolean) {
@@ -19494,7 +19495,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(500)
     * * Description: NULL
     */
-    get UserSearchParamFormatAPI(): string | null {  
+    get UserSearchParamFormatAPI(): string | null {
         return this.Get('UserSearchParamFormatAPI');
     }
     set UserSearchParamFormatAPI(value: string | null) {
@@ -19508,7 +19509,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
     */
-    get IncludeInGeneratedForm(): boolean {  
+    get IncludeInGeneratedForm(): boolean {
         return this.Get('IncludeInGeneratedForm');
     }
     set IncludeInGeneratedForm(value: boolean) {
@@ -19527,7 +19528,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     *   * Details
     * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
     */
-    get GeneratedFormSection(): 'Top' | 'Category' | 'Details' {  
+    get GeneratedFormSection(): 'Top' | 'Category' | 'Details' {
         return this.Get('GeneratedFormSection');
     }
     set GeneratedFormSection(value: 'Top' | 'Category' | 'Details') {
@@ -19541,7 +19542,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: NULL
     */
-    get IsVirtual(): boolean {  
+    get IsVirtual(): boolean {
         return this.Get('IsVirtual');
     }
 
@@ -19552,7 +19553,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
     */
-    get IsNameField(): boolean {  
+    get IsNameField(): boolean {
         return this.Get('IsNameField');
     }
     set IsNameField(value: boolean) {
@@ -19565,7 +19566,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get RelatedEntityID(): string | null {  
+    get RelatedEntityID(): string | null {
         return this.Get('RelatedEntityID');
     }
     set RelatedEntityID(value: string | null) {
@@ -19578,7 +19579,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
     */
-    get RelatedEntityFieldName(): string | null {  
+    get RelatedEntityFieldName(): string | null {
         return this.Get('RelatedEntityFieldName');
     }
     set RelatedEntityFieldName(value: string | null) {
@@ -19592,7 +19593,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: 1
     * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
     */
-    get IncludeRelatedEntityNameFieldInBaseView(): boolean {  
+    get IncludeRelatedEntityNameFieldInBaseView(): boolean {
         return this.Get('IncludeRelatedEntityNameFieldInBaseView');
     }
     set IncludeRelatedEntityNameFieldInBaseView(value: boolean) {
@@ -19604,7 +19605,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Name Field Map
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityNameFieldMap(): string | null {  
+    get RelatedEntityNameFieldMap(): string | null {
         return this.Get('RelatedEntityNameFieldMap');
     }
     set RelatedEntityNameFieldMap(value: string | null) {
@@ -19618,7 +19619,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: Search
     * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown
     */
-    get RelatedEntityDisplayType(): string {  
+    get RelatedEntityDisplayType(): string {
         return this.Get('RelatedEntityDisplayType');
     }
     set RelatedEntityDisplayType(value: string) {
@@ -19631,7 +19632,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.
     */
-    get EntityIDFieldName(): string | null {  
+    get EntityIDFieldName(): string | null {
         return this.Get('EntityIDFieldName');
     }
     set EntityIDFieldName(value: string | null) {
@@ -19644,7 +19645,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -19654,7 +19655,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -19662,7 +19663,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -19671,7 +19672,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Schema Name
     * * SQL Data Type: nvarchar(255)
     */
-    get SchemaName(): string {  
+    get SchemaName(): string {
         return this.Get('SchemaName');
     }
 
@@ -19680,7 +19681,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get BaseTable(): string {  
+    get BaseTable(): string {
         return this.Get('BaseTable');
     }
 
@@ -19689,7 +19690,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get BaseView(): string {  
+    get BaseView(): string {
         return this.Get('BaseView');
     }
 
@@ -19698,7 +19699,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Entity Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityCodeName(): string | null {  
+    get EntityCodeName(): string | null {
         return this.Get('EntityCodeName');
     }
 
@@ -19707,7 +19708,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Entity Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get EntityClassName(): string | null {  
+    get EntityClassName(): string | null {
         return this.Get('EntityClassName');
     }
 
@@ -19716,7 +19717,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntity(): string | null {  
+    get RelatedEntity(): string | null {
         return this.Get('RelatedEntity');
     }
 
@@ -19725,7 +19726,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Schema Name
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntitySchemaName(): string | null {  
+    get RelatedEntitySchemaName(): string | null {
         return this.Get('RelatedEntitySchemaName');
     }
 
@@ -19734,7 +19735,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityBaseTable(): string | null {  
+    get RelatedEntityBaseTable(): string | null {
         return this.Get('RelatedEntityBaseTable');
     }
 
@@ -19743,7 +19744,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityBaseView(): string | null {  
+    get RelatedEntityBaseView(): string | null {
         return this.Get('RelatedEntityBaseView');
     }
 
@@ -19752,7 +19753,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get RelatedEntityCodeName(): string | null {  
+    get RelatedEntityCodeName(): string | null {
         return this.Get('RelatedEntityCodeName');
     }
 
@@ -19761,12 +19762,12 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Display Name: Related Entity Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get RelatedEntityClassName(): string | null {  
+    get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
     }
 }
 
-            
+
 /**
  * Entity Permissions - strongly typed entity sub-class
  * * Schema: __mj
@@ -19790,7 +19791,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * @memberof EntityPermissionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -19802,7 +19803,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -19812,7 +19813,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -19825,7 +19826,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
-    get RoleID(): string {  
+    get RoleID(): string {
         return this.Get('RoleID');
     }
     set RoleID(value: string) {
@@ -19838,7 +19839,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CanCreate(): boolean {  
+    get CanCreate(): boolean {
         return this.Get('CanCreate');
     }
     set CanCreate(value: boolean) {
@@ -19851,7 +19852,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CanRead(): boolean {  
+    get CanRead(): boolean {
         return this.Get('CanRead');
     }
     set CanRead(value: boolean) {
@@ -19864,7 +19865,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CanUpdate(): boolean {  
+    get CanUpdate(): boolean {
         return this.Get('CanUpdate');
     }
     set CanUpdate(value: boolean) {
@@ -19877,7 +19878,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CanDelete(): boolean {  
+    get CanDelete(): boolean {
         return this.Get('CanDelete');
     }
     set CanDelete(value: boolean) {
@@ -19890,7 +19891,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
-    get ReadRLSFilterID(): string | null {  
+    get ReadRLSFilterID(): string | null {
         return this.Get('ReadRLSFilterID');
     }
     set ReadRLSFilterID(value: string | null) {
@@ -19903,7 +19904,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
-    get CreateRLSFilterID(): string | null {  
+    get CreateRLSFilterID(): string | null {
         return this.Get('CreateRLSFilterID');
     }
     set CreateRLSFilterID(value: string | null) {
@@ -19916,7 +19917,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
-    get UpdateRLSFilterID(): string | null {  
+    get UpdateRLSFilterID(): string | null {
         return this.Get('UpdateRLSFilterID');
     }
     set UpdateRLSFilterID(value: string | null) {
@@ -19929,7 +19930,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
     */
-    get DeleteRLSFilterID(): string | null {  
+    get DeleteRLSFilterID(): string | null {
         return this.Get('DeleteRLSFilterID');
     }
     set DeleteRLSFilterID(value: string | null) {
@@ -19942,7 +19943,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -19952,7 +19953,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -19961,7 +19962,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -19970,7 +19971,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Role Name
     * * SQL Data Type: nvarchar(50)
     */
-    get RoleName(): string {  
+    get RoleName(): string {
         return this.Get('RoleName');
     }
 
@@ -19979,7 +19980,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Role SQLName
     * * SQL Data Type: nvarchar(250)
     */
-    get RoleSQLName(): string | null {  
+    get RoleSQLName(): string | null {
         return this.Get('RoleSQLName');
     }
 
@@ -19988,7 +19989,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Create RLSFilter
     * * SQL Data Type: nvarchar(100)
     */
-    get CreateRLSFilter(): string | null {  
+    get CreateRLSFilter(): string | null {
         return this.Get('CreateRLSFilter');
     }
 
@@ -19997,7 +19998,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Read RLSFilter
     * * SQL Data Type: nvarchar(100)
     */
-    get ReadRLSFilter(): string | null {  
+    get ReadRLSFilter(): string | null {
         return this.Get('ReadRLSFilter');
     }
 
@@ -20006,7 +20007,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Update RLSFilter
     * * SQL Data Type: nvarchar(100)
     */
-    get UpdateRLSFilter(): string | null {  
+    get UpdateRLSFilter(): string | null {
         return this.Get('UpdateRLSFilter');
     }
 
@@ -20015,12 +20016,12 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * * Display Name: Delete RLSFilter
     * * SQL Data Type: nvarchar(100)
     */
-    get DeleteRLSFilter(): string | null {  
+    get DeleteRLSFilter(): string | null {
         return this.Get('DeleteRLSFilter');
     }
 }
 
-            
+
 /**
  * Entity Record Documents - strongly typed entity sub-class
  * * Schema: __mj
@@ -20043,7 +20044,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * @memberof EntityRecordDocumentEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -20068,7 +20069,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -20078,7 +20079,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -20090,7 +20091,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Record ID
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -20103,7 +20104,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
     */
-    get EntityDocumentID(): string {  
+    get EntityDocumentID(): string {
         return this.Get('EntityDocumentID');
     }
     set EntityDocumentID(value: string) {
@@ -20115,7 +20116,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Document Text
     * * SQL Data Type: nvarchar(MAX)
     */
-    get DocumentText(): string | null {  
+    get DocumentText(): string | null {
         return this.Get('DocumentText');
     }
     set DocumentText(value: string | null) {
@@ -20128,7 +20129,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Vector Indexes (vwVectorIndexes.ID)
     */
-    get VectorIndexID(): string {  
+    get VectorIndexID(): string {
         return this.Get('VectorIndexID');
     }
     set VectorIndexID(value: string) {
@@ -20140,7 +20141,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Vector ID
     * * SQL Data Type: nvarchar(50)
     */
-    get VectorID(): string | null {  
+    get VectorID(): string | null {
         return this.Get('VectorID');
     }
     set VectorID(value: string | null) {
@@ -20152,7 +20153,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Vector JSON
     * * SQL Data Type: nvarchar(MAX)
     */
-    get VectorJSON(): string | null {  
+    get VectorJSON(): string | null {
         return this.Get('VectorJSON');
     }
     set VectorJSON(value: string | null) {
@@ -20164,7 +20165,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Entity Record Updated At
     * * SQL Data Type: datetime
     */
-    get EntityRecordUpdatedAt(): Date {  
+    get EntityRecordUpdatedAt(): Date {
         return this.Get('EntityRecordUpdatedAt');
     }
     set EntityRecordUpdatedAt(value: Date) {
@@ -20177,7 +20178,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -20187,7 +20188,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -20196,7 +20197,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -20205,7 +20206,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
     */
-    get EntityDocument(): string {  
+    get EntityDocument(): string {
         return this.Get('EntityDocument');
     }
 
@@ -20214,12 +20215,12 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Display Name: Vector Index
     * * SQL Data Type: nvarchar(255)
     */
-    get VectorIndex(): string {  
+    get VectorIndex(): string {
         return this.Get('VectorIndex');
     }
 }
 
-            
+
 /**
  * Entity Relationship Display Components - strongly typed entity sub-class
  * * Schema: __mj
@@ -20243,7 +20244,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * @memberof EntityRelationshipDisplayComponentEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -20268,7 +20269,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -20277,7 +20278,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -20289,7 +20290,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -20307,7 +20308,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     *   * Both
     * * Description: The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".
     */
-    get RelationshipType(): 'One to Many' | 'Many to Many' | 'Both' {  
+    get RelationshipType(): 'One to Many' | 'Many to Many' | 'Both' {
         return this.Get('RelationshipType');
     }
     set RelationshipType(value: 'One to Many' | 'Many to Many' | 'Both') {
@@ -20320,7 +20321,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -20330,12 +20331,12 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Entity Relationships - strongly typed entity sub-class
  * * Schema: __mj
@@ -20359,7 +20360,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * @memberof EntityRelationshipEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -20371,7 +20372,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -20381,7 +20382,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -20395,7 +20396,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Default Value: 0
     * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -20408,7 +20409,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get RelatedEntityID(): string {  
+    get RelatedEntityID(): string {
         return this.Get('RelatedEntityID');
     }
     set RelatedEntityID(value: string) {
@@ -20421,7 +20422,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get BundleInAPI(): boolean {  
+    get BundleInAPI(): boolean {
         return this.Get('BundleInAPI');
     }
     set BundleInAPI(value: boolean) {
@@ -20434,7 +20435,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IncludeInParentAllQuery(): boolean {  
+    get IncludeInParentAllQuery(): boolean {
         return this.Get('IncludeInParentAllQuery');
     }
     set IncludeInParentAllQuery(value: boolean) {
@@ -20450,7 +20451,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     *   * One To Many
     *   * Many To Many
     */
-    get Type(): 'One To Many' | 'Many To Many' {  
+    get Type(): 'One To Many' | 'Many To Many' {
         return this.Get('Type');
     }
     set Type(value: 'One To Many' | 'Many To Many') {
@@ -20462,7 +20463,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Entity Key Field
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityKeyField(): string | null {  
+    get EntityKeyField(): string | null {
         return this.Get('EntityKeyField');
     }
     set EntityKeyField(value: string | null) {
@@ -20474,7 +20475,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Join Field
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityJoinField(): string {  
+    get RelatedEntityJoinField(): string {
         return this.Get('RelatedEntityJoinField');
     }
     set RelatedEntityJoinField(value: string) {
@@ -20486,7 +20487,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Join View
     * * SQL Data Type: nvarchar(255)
     */
-    get JoinView(): string | null {  
+    get JoinView(): string | null {
         return this.Get('JoinView');
     }
     set JoinView(value: string | null) {
@@ -20498,7 +20499,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Join Entity Join Field
     * * SQL Data Type: nvarchar(255)
     */
-    get JoinEntityJoinField(): string | null {  
+    get JoinEntityJoinField(): string | null {
         return this.Get('JoinEntityJoinField');
     }
     set JoinEntityJoinField(value: string | null) {
@@ -20510,7 +20511,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Join Entity Inverse Join Field
     * * SQL Data Type: nvarchar(255)
     */
-    get JoinEntityInverseJoinField(): string | null {  
+    get JoinEntityInverseJoinField(): string | null {
         return this.Get('JoinEntityInverseJoinField');
     }
     set JoinEntityInverseJoinField(value: string | null) {
@@ -20524,7 +20525,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Default Value: 1
     * * Description: When unchecked the relationship will NOT be displayed on the generated form
     */
-    get DisplayInForm(): boolean {  
+    get DisplayInForm(): boolean {
         return this.Get('DisplayInForm');
     }
     set DisplayInForm(value: boolean) {
@@ -20541,7 +20542,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     *   * After Field Tabs
     *   * Before Field Tabs
     */
-    get DisplayLocation(): 'After Field Tabs' | 'Before Field Tabs' {  
+    get DisplayLocation(): 'After Field Tabs' | 'Before Field Tabs' {
         return this.Get('DisplayLocation');
     }
     set DisplayLocation(value: 'After Field Tabs' | 'Before Field Tabs') {
@@ -20554,7 +20555,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: nvarchar(255)
     * * Description: Optional, when specified this value overrides the related entity name for the label on the tab
     */
-    get DisplayName(): string | null {  
+    get DisplayName(): string | null {
         return this.Get('DisplayName');
     }
     set DisplayName(value: string | null) {
@@ -20573,7 +20574,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     *   * None
     * * Description: When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed
     */
-    get DisplayIconType(): 'Related Entity Icon' | 'Custom' | 'None' {  
+    get DisplayIconType(): 'Related Entity Icon' | 'Custom' | 'None' {
         return this.Get('DisplayIconType');
     }
     set DisplayIconType(value: 'Related Entity Icon' | 'Custom' | 'None') {
@@ -20586,7 +20587,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: nvarchar(255)
     * * Description: If specified, the icon 
     */
-    get DisplayIcon(): string | null {  
+    get DisplayIcon(): string | null {
         return this.Get('DisplayIcon');
     }
     set DisplayIcon(value: string | null) {
@@ -20599,7 +20600,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
     */
-    get DisplayUserViewID(): string | null {  
+    get DisplayUserViewID(): string | null {
         return this.Get('DisplayUserViewID');
     }
 
@@ -20609,7 +20610,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
     */
-    get DisplayComponentID(): string | null {  
+    get DisplayComponentID(): string | null {
         return this.Get('DisplayComponentID');
     }
     set DisplayComponentID(value: string | null) {
@@ -20622,7 +20623,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.
     */
-    get DisplayComponentConfiguration(): string | null {  
+    get DisplayComponentConfiguration(): string | null {
         return this.Get('DisplayComponentConfiguration');
     }
     set DisplayComponentConfiguration(value: string | null) {
@@ -20635,7 +20636,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -20645,7 +20646,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -20653,7 +20654,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -20662,7 +20663,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseTable(): string {  
+    get EntityBaseTable(): string {
         return this.Get('EntityBaseTable');
     }
 
@@ -20671,7 +20672,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseView(): string {  
+    get EntityBaseView(): string {
         return this.Get('EntityBaseView');
     }
 
@@ -20680,7 +20681,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntity(): string {  
+    get RelatedEntity(): string {
         return this.Get('RelatedEntity');
     }
 
@@ -20689,7 +20690,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityBaseTable(): string {  
+    get RelatedEntityBaseTable(): string {
         return this.Get('RelatedEntityBaseTable');
     }
 
@@ -20698,7 +20699,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get RelatedEntityBaseView(): string {  
+    get RelatedEntityBaseView(): string {
         return this.Get('RelatedEntityBaseView');
     }
 
@@ -20707,7 +20708,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get RelatedEntityClassName(): string | null {  
+    get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
     }
 
@@ -20716,7 +20717,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get RelatedEntityCodeName(): string | null {  
+    get RelatedEntityCodeName(): string | null {
         return this.Get('RelatedEntityCodeName');
     }
 
@@ -20725,7 +20726,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Related Entity Base Table Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
-    get RelatedEntityBaseTableCodeName(): string | null {  
+    get RelatedEntityBaseTableCodeName(): string | null {
         return this.Get('RelatedEntityBaseTableCodeName');
     }
 
@@ -20734,12 +20735,12 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * * Display Name: Display User View Name
     * * SQL Data Type: nvarchar(100)
     */
-    get DisplayUserViewName(): string | null {  
+    get DisplayUserViewName(): string | null {
         return this.Get('DisplayUserViewName');
     }
 }
 
-            
+
 /**
  * Entity Settings - strongly typed entity sub-class
  * * Schema: __mj
@@ -20762,7 +20763,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * @memberof EntitySettingEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -20787,7 +20788,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -20797,7 +20798,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -20809,7 +20810,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -20821,7 +20822,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * Display Name: Value
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Value(): string {  
+    get Value(): string {
         return this.Get('Value');
     }
     set Value(value: string) {
@@ -20833,7 +20834,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -20846,7 +20847,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -20856,7 +20857,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -20865,12 +20866,12 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Error Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -20893,7 +20894,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * @memberof ErrorLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -20917,7 +20918,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -20927,7 +20928,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
     */
-    get CompanyIntegrationRunID(): string | null {  
+    get CompanyIntegrationRunID(): string | null {
         return this.Get('CompanyIntegrationRunID');
     }
     set CompanyIntegrationRunID(value: string | null) {
@@ -20940,7 +20941,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
     */
-    get CompanyIntegrationRunDetailID(): string | null {  
+    get CompanyIntegrationRunDetailID(): string | null {
         return this.Get('CompanyIntegrationRunDetailID');
     }
     set CompanyIntegrationRunDetailID(value: string | null) {
@@ -20951,7 +20952,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * Field Name: Code
     * * SQL Data Type: nchar(20)
     */
-    get Code(): string | null {  
+    get Code(): string | null {
         return this.Get('Code');
     }
     set Code(value: string | null) {
@@ -20962,7 +20963,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * Field Name: Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Message(): string | null {  
+    get Message(): string | null {
         return this.Get('Message');
     }
     set Message(value: string | null) {
@@ -20975,7 +20976,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Default Value: suser_name()
     */
-    get CreatedBy(): string | null {  
+    get CreatedBy(): string | null {
         return this.Get('CreatedBy');
     }
     set CreatedBy(value: string | null) {
@@ -20986,7 +20987,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * Field Name: Status
     * * SQL Data Type: nvarchar(10)
     */
-    get Status(): string | null {  
+    get Status(): string | null {
         return this.Get('Status');
     }
     set Status(value: string | null) {
@@ -20997,7 +20998,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * Field Name: Category
     * * SQL Data Type: nvarchar(20)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
     set Category(value: string | null) {
@@ -21008,7 +21009,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * Field Name: Details
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Details(): string | null {  
+    get Details(): string | null {
         return this.Get('Details');
     }
     set Details(value: string | null) {
@@ -21021,7 +21022,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21031,12 +21032,12 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Explorer Navigation Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -21060,7 +21061,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * @memberof ExplorerNavigationItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21074,7 +21075,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for each navigation item
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21084,7 +21085,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: int
     * * Description: Sequence number for the navigation item, must be unique and greater than 0
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -21097,7 +21098,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: nvarchar(100)
     * * Description: Unique name of the navigation item displayed to the user
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -21110,7 +21111,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: nvarchar(255)
     * * Description: The route for the navigation item relative to the app main URL, using Angular syntax like "entity/:entityName"
     */
-    get Route(): string {  
+    get Route(): string {
         return this.Get('Route');
     }
     set Route(value: string) {
@@ -21124,7 +21125,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * Default Value: 1
     * * Description: Indicates if the navigation item is active; allows turning off items in the UI without deleting them from the metadata
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -21138,7 +21139,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * Default Value: 0
     * * Description: Controls if the navigation item is shown on the Home screen for MJ Explorer
     */
-    get ShowInHomeScreen(): boolean {  
+    get ShowInHomeScreen(): boolean {
         return this.Get('ShowInHomeScreen');
     }
     set ShowInHomeScreen(value: boolean) {
@@ -21152,7 +21153,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * Default Value: 0
     * * Description: Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.
     */
-    get ShowInNavigationDrawer(): boolean {  
+    get ShowInNavigationDrawer(): boolean {
         return this.Get('ShowInNavigationDrawer');
     }
     set ShowInNavigationDrawer(value: boolean) {
@@ -21165,7 +21166,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, CSS class for an icon to be displayed with the navigation item
     */
-    get IconCSSClass(): string | null {  
+    get IconCSSClass(): string | null {
         return this.Get('IconCSSClass');
     }
     set IconCSSClass(value: string | null) {
@@ -21178,7 +21179,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the navigation item, shown to the user on hover or in larger displays
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -21191,7 +21192,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Administrator comments, not shown to the end user in MJ Explorer app
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -21204,7 +21205,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21214,12 +21215,12 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * File Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -21242,7 +21243,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * @memberof FileCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21255,7 +21256,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21264,7 +21265,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -21277,7 +21278,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -21289,7 +21290,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -21302,7 +21303,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21312,7 +21313,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -21321,12 +21322,12 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * File Entity Record Links - strongly typed entity sub-class
  * * Schema: __mj
@@ -21349,7 +21350,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * @memberof FileEntityRecordLinkEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21374,7 +21375,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21384,7 +21385,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Files (vwFiles.ID)
     */
-    get FileID(): string {  
+    get FileID(): string {
         return this.Get('FileID');
     }
     set FileID(value: string) {
@@ -21397,7 +21398,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -21409,7 +21410,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * Display Name: Record ID
     * * SQL Data Type: nvarchar(750)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -21422,7 +21423,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21432,7 +21433,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -21441,7 +21442,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
-    get File(): string {  
+    get File(): string {
         return this.Get('File');
     }
 
@@ -21450,12 +21451,12 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * File Storage Providers - strongly typed entity sub-class
  * * Schema: __mj
@@ -21478,7 +21479,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * @memberof FileStorageProviderEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21503,7 +21504,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21512,7 +21513,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -21524,7 +21525,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -21536,7 +21537,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * Display Name: Server Driver Key
     * * SQL Data Type: nvarchar(100)
     */
-    get ServerDriverKey(): string {  
+    get ServerDriverKey(): string {
         return this.Get('ServerDriverKey');
     }
     set ServerDriverKey(value: string) {
@@ -21548,7 +21549,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * Display Name: Client Driver Key
     * * SQL Data Type: nvarchar(100)
     */
-    get ClientDriverKey(): string {  
+    get ClientDriverKey(): string {
         return this.Get('ClientDriverKey');
     }
     set ClientDriverKey(value: string) {
@@ -21561,7 +21562,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get Priority(): number {  
+    get Priority(): number {
         return this.Get('Priority');
     }
     set Priority(value: number) {
@@ -21574,7 +21575,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -21587,7 +21588,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21597,12 +21598,12 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Files - strongly typed entity sub-class
  * * Schema: __mj
@@ -21625,7 +21626,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * @memberof FileEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21638,7 +21639,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21647,7 +21648,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(500)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -21659,7 +21660,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -21672,7 +21673,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -21685,7 +21686,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
     */
-    get ProviderID(): string {  
+    get ProviderID(): string {
         return this.Get('ProviderID');
     }
     set ProviderID(value: string) {
@@ -21697,7 +21698,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(50)
     */
-    get ContentType(): string | null {  
+    get ContentType(): string | null {
         return this.Get('ContentType');
     }
     set ContentType(value: string | null) {
@@ -21709,7 +21710,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Provider Key
     * * SQL Data Type: nvarchar(500)
     */
-    get ProviderKey(): string | null {  
+    get ProviderKey(): string | null {
         return this.Get('ProviderKey');
     }
     set ProviderKey(value: string | null) {
@@ -21723,7 +21724,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Default Value: Pending
     * * Description: Pending, Uploading, Uploaded, Deleting, Deleted
     */
-    get Status(): string {  
+    get Status(): string {
         return this.Get('Status');
     }
     set Status(value: string) {
@@ -21736,7 +21737,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21746,7 +21747,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -21755,7 +21756,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -21764,12 +21765,12 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * * Display Name: Provider
     * * SQL Data Type: nvarchar(50)
     */
-    get Provider(): string {  
+    get Provider(): string {
         return this.Get('Provider');
     }
 }
 
-            
+
 /**
  * flyway _schema _histories - strongly typed entity sub-class
  * * Schema: __mj
@@ -21792,7 +21793,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * @memberof flyway_schema_historyEntity
     * @method
     * @override
-    */      
+    */
     public async Load(installed_rank: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
@@ -21804,7 +21805,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: installed _rank
     * * SQL Data Type: int
     */
-    get installed_rank(): number {  
+    get installed_rank(): number {
         return this.Get('installed_rank');
     }
 
@@ -21813,7 +21814,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: version
     * * SQL Data Type: nvarchar(50)
     */
-    get version(): string | null {  
+    get version(): string | null {
         return this.Get('version');
     }
     set version(value: string | null) {
@@ -21825,7 +21826,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: description
     * * SQL Data Type: nvarchar(200)
     */
-    get description(): string | null {  
+    get description(): string | null {
         return this.Get('description');
     }
     set description(value: string | null) {
@@ -21837,7 +21838,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: type
     * * SQL Data Type: nvarchar(20)
     */
-    get type(): string {  
+    get type(): string {
         return this.Get('type');
     }
     set type(value: string) {
@@ -21849,7 +21850,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: script
     * * SQL Data Type: nvarchar(1000)
     */
-    get script(): string {  
+    get script(): string {
         return this.Get('script');
     }
     set script(value: string) {
@@ -21861,7 +21862,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: checksum
     * * SQL Data Type: int
     */
-    get checksum(): number | null {  
+    get checksum(): number | null {
         return this.Get('checksum');
     }
     set checksum(value: number | null) {
@@ -21873,7 +21874,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: installed _by
     * * SQL Data Type: nvarchar(100)
     */
-    get installed_by(): string {  
+    get installed_by(): string {
         return this.Get('installed_by');
     }
     set installed_by(value: string) {
@@ -21886,7 +21887,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get installed_on(): Date {  
+    get installed_on(): Date {
         return this.Get('installed_on');
     }
     set installed_on(value: Date) {
@@ -21898,7 +21899,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: execution _time
     * * SQL Data Type: int
     */
-    get execution_time(): number {  
+    get execution_time(): number {
         return this.Get('execution_time');
     }
     set execution_time(value: number) {
@@ -21910,7 +21911,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * Display Name: success
     * * SQL Data Type: bit
     */
-    get success(): boolean {  
+    get success(): boolean {
         return this.Get('success');
     }
     set success(value: boolean) {
@@ -21923,7 +21924,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -21933,12 +21934,12 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Integration URL Formats - strongly typed entity sub-class
  * * Schema: __mj
@@ -21962,7 +21963,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * @memberof IntegrationURLFormatEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -21986,7 +21987,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -21996,7 +21997,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
     */
-    get IntegrationID(): string {  
+    get IntegrationID(): string {
         return this.Get('IntegrationID');
     }
     set IntegrationID(value: string) {
@@ -22009,7 +22010,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -22021,7 +22022,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: nvarchar(500)
     * * Description: The URL Format for the given integration including the ability to include markup with fields from the integration
     */
-    get URLFormat(): string {  
+    get URLFormat(): string {
         return this.Get('URLFormat');
     }
     set URLFormat(value: string) {
@@ -22033,7 +22034,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -22046,7 +22047,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22056,7 +22057,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22065,7 +22066,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
-    get Integration(): string {  
+    get Integration(): string {
         return this.Get('Integration');
     }
 
@@ -22074,7 +22075,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * Display Name: Navigation Base URL
     * * SQL Data Type: nvarchar(500)
     */
-    get NavigationBaseURL(): string | null {  
+    get NavigationBaseURL(): string | null {
         return this.Get('NavigationBaseURL');
     }
 
@@ -22083,12 +22084,12 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * * Display Name: Full URLFormat
     * * SQL Data Type: nvarchar(1000)
     */
-    get FullURLFormat(): string | null {  
+    get FullURLFormat(): string | null {
         return this.Get('FullURLFormat');
     }
 }
 
-            
+
 /**
  * Integrations - strongly typed entity sub-class
  * * Schema: __mj
@@ -22112,7 +22113,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * @memberof IntegrationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22135,7 +22136,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -22146,7 +22147,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(255)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -22158,7 +22159,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * Display Name: Navigation Base URL
     * * SQL Data Type: nvarchar(500)
     */
-    get NavigationBaseURL(): string | null {  
+    get NavigationBaseURL(): string | null {
         return this.Get('NavigationBaseURL');
     }
     set NavigationBaseURL(value: string | null) {
@@ -22170,7 +22171,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * Display Name: Class Name
     * * SQL Data Type: nvarchar(100)
     */
-    get ClassName(): string | null {  
+    get ClassName(): string | null {
         return this.Get('ClassName');
     }
     set ClassName(value: string | null) {
@@ -22182,7 +22183,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * Display Name: Import Path
     * * SQL Data Type: nvarchar(100)
     */
-    get ImportPath(): string | null {  
+    get ImportPath(): string | null {
         return this.Get('ImportPath');
     }
     set ImportPath(value: string | null) {
@@ -22195,7 +22196,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * SQL Data Type: int
     * * Default Value: -1
     */
-    get BatchMaxRequestCount(): number {  
+    get BatchMaxRequestCount(): number {
         return this.Get('BatchMaxRequestCount');
     }
     set BatchMaxRequestCount(value: number) {
@@ -22208,7 +22209,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * SQL Data Type: int
     * * Default Value: -1
     */
-    get BatchRequestWaitTime(): number {  
+    get BatchRequestWaitTime(): number {
         return this.Get('BatchRequestWaitTime');
     }
     set BatchRequestWaitTime(value: number) {
@@ -22221,7 +22222,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22231,7 +22232,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22240,12 +22241,12 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 }
 
-            
+
 /**
  * Libraries - strongly typed entity sub-class
  * * Schema: __mj
@@ -22269,7 +22270,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * @memberof LibraryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22294,7 +22295,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -22303,7 +22304,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -22315,7 +22316,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -22334,7 +22335,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     *   * Disabled
     * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' {  
+    get Status(): 'Pending' | 'Active' | 'Disabled' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Active' | 'Disabled') {
@@ -22347,7 +22348,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Code showing the types and functions defined in the library to be used for reference by humans and AI
     */
-    get TypeDefinitions(): string | null {  
+    get TypeDefinitions(): string | null {
         return this.Get('TypeDefinitions');
     }
     set TypeDefinitions(value: string | null) {
@@ -22360,7 +22361,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Examples of code use of the classes and/or functions from within the library
     */
-    get SampleCode(): string | null {  
+    get SampleCode(): string | null {
         return this.Get('SampleCode');
     }
     set SampleCode(value: string | null) {
@@ -22373,7 +22374,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22383,12 +22384,12 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Library Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -22412,7 +22413,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * @memberof LibraryItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22437,7 +22438,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -22446,7 +22447,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -22459,7 +22460,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
     */
-    get LibraryID(): string {  
+    get LibraryID(): string {
         return this.Get('LibraryID');
     }
     set LibraryID(value: string) {
@@ -22480,7 +22481,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     *   * Function
     * * Description: Type of the library item for example Class, Interface, etc.
     */
-    get Type(): 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function' {  
+    get Type(): 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function' {
         return this.Get('Type');
     }
     set Type(value: 'Class' | 'Interface' | 'Variable' | 'Type' | 'Module' | 'Function') {
@@ -22493,7 +22494,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22503,7 +22504,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22512,12 +22513,12 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * Display Name: Library
     * * SQL Data Type: nvarchar(255)
     */
-    get Library(): string {  
+    get Library(): string {
         return this.Get('Library');
     }
 }
 
-            
+
 /**
  * List Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -22540,7 +22541,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * @memberof ListCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22565,7 +22566,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -22574,7 +22575,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -22586,7 +22587,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -22599,7 +22600,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: List Categories (vwListCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -22612,7 +22613,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -22625,7 +22626,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22635,7 +22636,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22644,7 +22645,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -22653,12 +22654,12 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * List Details - strongly typed entity sub-class
  * * Schema: __mj
@@ -22682,7 +22683,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * @memberof ListDetailEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22694,7 +22695,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -22704,7 +22705,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Lists (vwLists.ID)
     */
-    get ListID(): string {  
+    get ListID(): string {
         return this.Get('ListID');
     }
     set ListID(value: string) {
@@ -22716,7 +22717,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Display Name: Record
     * * SQL Data Type: nvarchar(445)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -22728,7 +22729,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -22741,7 +22742,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22751,7 +22752,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22771,7 +22772,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {  
+    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other') {
@@ -22784,7 +22785,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional column that allows for tracking any additional data for each ListDetail row
     */
-    get AdditionalData(): string | null {  
+    get AdditionalData(): string | null {
         return this.Get('AdditionalData');
     }
     set AdditionalData(value: string | null) {
@@ -22796,12 +22797,12 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Display Name: List
     * * SQL Data Type: nvarchar(100)
     */
-    get List(): string {  
+    get List(): string {
         return this.Get('List');
     }
 }
 
-            
+
 /**
  * Lists - strongly typed entity sub-class
  * * Schema: __mj
@@ -22825,7 +22826,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * @memberof ListEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -22837,7 +22838,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -22845,7 +22846,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -22856,7 +22857,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -22869,7 +22870,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -22882,7 +22883,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -22895,7 +22896,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: List Categories (vwListCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -22907,7 +22908,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Display Name: External System Record ID
     * * SQL Data Type: nvarchar(100)
     */
-    get ExternalSystemRecordID(): string | null {  
+    get ExternalSystemRecordID(): string | null {
         return this.Get('ExternalSystemRecordID');
     }
     set ExternalSystemRecordID(value: string | null) {
@@ -22920,7 +22921,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
     */
-    get CompanyIntegrationID(): string | null {  
+    get CompanyIntegrationID(): string | null {
         return this.Get('CompanyIntegrationID');
     }
     set CompanyIntegrationID(value: string | null) {
@@ -22933,7 +22934,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -22943,7 +22944,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -22952,7 +22953,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -22961,7 +22962,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -22970,12 +22971,12 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 }
 
-            
+
 /**
  * Output Delivery Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -22998,7 +22999,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * @memberof OutputDeliveryTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23035,7 +23036,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23044,7 +23045,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23056,7 +23057,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23069,7 +23070,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23079,12 +23080,12 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Output Format Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -23107,7 +23108,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * @memberof OutputFormatTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23144,7 +23145,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23153,7 +23154,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23165,7 +23166,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23177,7 +23178,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * Display Name: Display Format
     * * SQL Data Type: nvarchar(MAX)
     */
-    get DisplayFormat(): string | null {  
+    get DisplayFormat(): string | null {
         return this.Get('DisplayFormat');
     }
     set DisplayFormat(value: string | null) {
@@ -23190,7 +23191,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23200,12 +23201,12 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Output Trigger Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -23228,7 +23229,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * @memberof OutputTriggerTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23265,7 +23266,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23274,7 +23275,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23286,7 +23287,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23299,7 +23300,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23309,12 +23310,12 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Queries - strongly typed entity sub-class
  * * Schema: __mj
@@ -23338,7 +23339,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * @memberof QueryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23363,7 +23364,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23372,7 +23373,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23385,7 +23386,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -23397,7 +23398,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: User Question
     * * SQL Data Type: nvarchar(MAX)
     */
-    get UserQuestion(): string | null {  
+    get UserQuestion(): string | null {
         return this.Get('UserQuestion');
     }
     set UserQuestion(value: string | null) {
@@ -23409,7 +23410,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23421,7 +23422,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: SQL
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SQL(): string | null {  
+    get SQL(): string | null {
         return this.Get('SQL');
     }
     set SQL(value: string | null) {
@@ -23433,7 +23434,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Technical Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get TechnicalDescription(): string | null {  
+    get TechnicalDescription(): string | null {
         return this.Get('TechnicalDescription');
     }
     set TechnicalDescription(value: string | null) {
@@ -23445,7 +23446,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Original SQL
     * * SQL Data Type: nvarchar(MAX)
     */
-    get OriginalSQL(): string | null {  
+    get OriginalSQL(): string | null {
         return this.Get('OriginalSQL');
     }
     set OriginalSQL(value: string | null) {
@@ -23457,7 +23458,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Feedback
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Feedback(): string | null {  
+    get Feedback(): string | null {
         return this.Get('Feedback');
     }
     set Feedback(value: string | null) {
@@ -23476,7 +23477,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     *   * Rejected
     *   * Expired
     */
-    get Status(): 'Pending' | 'Approved' | 'Rejected' | 'Expired' {  
+    get Status(): 'Pending' | 'Approved' | 'Rejected' | 'Expired' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Approved' | 'Rejected' | 'Expired') {
@@ -23490,7 +23491,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Default Value: 0
     * * Description: Value indicating the quality of the query, higher values mean a better quality
     */
-    get QualityRank(): number | null {  
+    get QualityRank(): number | null {
         return this.Get('QualityRank');
     }
     set QualityRank(value: number | null) {
@@ -23503,7 +23504,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * SQL Data Type: int
     * * Description: Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.
     */
-    get ExecutionCostRank(): number | null {  
+    get ExecutionCostRank(): number | null {
         return this.Get('ExecutionCostRank');
     }
     set ExecutionCostRank(value: number | null) {
@@ -23516,7 +23517,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23526,7 +23527,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -23535,12 +23536,12 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(50)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 }
 
-            
+
 /**
  * Query Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -23563,7 +23564,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * @memberof QueryCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23576,7 +23577,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23585,7 +23586,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23598,7 +23599,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -23610,7 +23611,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23623,7 +23624,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -23636,7 +23637,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23646,7 +23647,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -23655,7 +23656,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(50)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -23664,12 +23665,12 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Query Fields - strongly typed entity sub-class
  * * Schema: __mj
@@ -23692,7 +23693,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * @memberof QueryFieldEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23717,7 +23718,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23727,7 +23728,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Queries (vwQueries.ID)
     */
-    get QueryID(): string {  
+    get QueryID(): string {
         return this.Get('QueryID');
     }
     set QueryID(value: string) {
@@ -23739,7 +23740,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -23751,7 +23752,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -23763,7 +23764,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Sequence
     * * SQL Data Type: int
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -23776,7 +23777,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Description: The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
     */
-    get SQLBaseType(): string {  
+    get SQLBaseType(): string {
         return this.Get('SQLBaseType');
     }
     set SQLBaseType(value: string) {
@@ -23789,7 +23790,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: nvarchar(100)
     * * Description: The full SQL type for the field, for example datetime or nvarchar(10) etc.
     */
-    get SQLFullType(): string {  
+    get SQLFullType(): string {
         return this.Get('SQLFullType');
     }
     set SQLFullType(value: string) {
@@ -23802,7 +23803,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get SourceEntityID(): string | null {  
+    get SourceEntityID(): string | null {
         return this.Get('SourceEntityID');
     }
     set SourceEntityID(value: string | null) {
@@ -23814,7 +23815,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Source Field Name
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceFieldName(): string | null {  
+    get SourceFieldName(): string | null {
         return this.Get('SourceFieldName');
     }
     set SourceFieldName(value: string | null) {
@@ -23827,7 +23828,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsComputed(): boolean {  
+    get IsComputed(): boolean {
         return this.Get('IsComputed');
     }
     set IsComputed(value: boolean) {
@@ -23839,7 +23840,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Computation Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ComputationDescription(): string | null {  
+    get ComputationDescription(): string | null {
         return this.Get('ComputationDescription');
     }
     set ComputationDescription(value: string | null) {
@@ -23852,7 +23853,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsSummary(): boolean {  
+    get IsSummary(): boolean {
         return this.Get('IsSummary');
     }
     set IsSummary(value: boolean) {
@@ -23864,7 +23865,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Summary Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SummaryDescription(): string | null {  
+    get SummaryDescription(): string | null {
         return this.Get('SummaryDescription');
     }
     set SummaryDescription(value: string | null) {
@@ -23877,7 +23878,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -23887,7 +23888,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -23896,7 +23897,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {  
+    get Query(): string {
         return this.Get('Query');
     }
 
@@ -23905,12 +23906,12 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string | null {  
+    get SourceEntity(): string | null {
         return this.Get('SourceEntity');
     }
 }
 
-            
+
 /**
  * Query Permissions - strongly typed entity sub-class
  * * Schema: __mj
@@ -23933,7 +23934,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * @memberof QueryPermissionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -23958,7 +23959,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -23968,7 +23969,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Queries (vwQueries.ID)
     */
-    get QueryID(): string {  
+    get QueryID(): string {
         return this.Get('QueryID');
     }
     set QueryID(value: string) {
@@ -23981,7 +23982,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
-    get RoleID(): string {  
+    get RoleID(): string {
         return this.Get('RoleID');
     }
     set RoleID(value: string) {
@@ -23994,7 +23995,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24004,7 +24005,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -24013,7 +24014,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
     */
-    get Query(): string {  
+    get Query(): string {
         return this.Get('Query');
     }
 
@@ -24022,12 +24023,12 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {  
+    get Role(): string {
         return this.Get('Role');
     }
 }
 
-            
+
 /**
  * Queue Tasks - strongly typed entity sub-class
  * * Schema: __mj
@@ -24050,7 +24051,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * @memberof QueueTaskEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24075,7 +24076,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24085,7 +24086,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Queues (vwQueues.ID)
     */
-    get QueueID(): string {  
+    get QueueID(): string {
         return this.Get('QueueID');
     }
     set QueueID(value: string) {
@@ -24103,7 +24104,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     *   * Completed
     *   * Failed
     */
-    get Status(): 'In Progress' | 'Completed' | 'Failed' {  
+    get Status(): 'In Progress' | 'Completed' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'In Progress' | 'Completed' | 'Failed') {
@@ -24115,7 +24116,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Started At
     * * SQL Data Type: datetime
     */
-    get StartedAt(): Date | null {  
+    get StartedAt(): Date | null {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date | null) {
@@ -24127,7 +24128,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -24139,7 +24140,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Data
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Data(): string | null {  
+    get Data(): string | null {
         return this.Get('Data');
     }
     set Data(value: string | null) {
@@ -24151,7 +24152,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Options
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Options(): string | null {  
+    get Options(): string | null {
         return this.Get('Options');
     }
     set Options(value: string | null) {
@@ -24163,7 +24164,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Output
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Output(): string | null {  
+    get Output(): string | null {
         return this.Get('Output');
     }
     set Output(value: string | null) {
@@ -24175,7 +24176,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Error Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ErrorMessage(): string | null {  
+    get ErrorMessage(): string | null {
         return this.Get('ErrorMessage');
     }
     set ErrorMessage(value: string | null) {
@@ -24187,7 +24188,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -24200,7 +24201,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24210,7 +24211,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -24219,12 +24220,12 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Display Name: Queue
     * * SQL Data Type: nvarchar(50)
     */
-    get Queue(): string {  
+    get Queue(): string {
         return this.Get('Queue');
     }
 }
 
-            
+
 /**
  * Queue Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -24247,7 +24248,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * @memberof QueueTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24284,7 +24285,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24293,7 +24294,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -24305,7 +24306,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -24317,7 +24318,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
     */
-    get DriverClass(): string {  
+    get DriverClass(): string {
         return this.Get('DriverClass');
     }
     set DriverClass(value: string) {
@@ -24329,7 +24330,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(200)
     */
-    get DriverImportPath(): string | null {  
+    get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
     }
     set DriverImportPath(value: string | null) {
@@ -24342,7 +24343,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -24355,7 +24356,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24365,12 +24366,12 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Queues - strongly typed entity sub-class
  * * Schema: __mj
@@ -24394,7 +24395,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * @memberof QueueEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24419,7 +24420,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24428,7 +24429,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -24440,7 +24441,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -24453,7 +24454,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Queue Types (vwQueueTypes.ID)
     */
-    get QueueTypeID(): string {  
+    get QueueTypeID(): string {
         return this.Get('QueueTypeID');
     }
     set QueueTypeID(value: string) {
@@ -24466,7 +24467,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -24478,7 +24479,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process PID
     * * SQL Data Type: int
     */
-    get ProcessPID(): number | null {  
+    get ProcessPID(): number | null {
         return this.Get('ProcessPID');
     }
     set ProcessPID(value: number | null) {
@@ -24490,7 +24491,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process Platform
     * * SQL Data Type: nvarchar(30)
     */
-    get ProcessPlatform(): string | null {  
+    get ProcessPlatform(): string | null {
         return this.Get('ProcessPlatform');
     }
     set ProcessPlatform(value: string | null) {
@@ -24502,7 +24503,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process Version
     * * SQL Data Type: nvarchar(15)
     */
-    get ProcessVersion(): string | null {  
+    get ProcessVersion(): string | null {
         return this.Get('ProcessVersion');
     }
     set ProcessVersion(value: string | null) {
@@ -24514,7 +24515,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process Cwd
     * * SQL Data Type: nvarchar(100)
     */
-    get ProcessCwd(): string | null {  
+    get ProcessCwd(): string | null {
         return this.Get('ProcessCwd');
     }
     set ProcessCwd(value: string | null) {
@@ -24526,7 +24527,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process IPAddress
     * * SQL Data Type: nvarchar(50)
     */
-    get ProcessIPAddress(): string | null {  
+    get ProcessIPAddress(): string | null {
         return this.Get('ProcessIPAddress');
     }
     set ProcessIPAddress(value: string | null) {
@@ -24538,7 +24539,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process Mac Address
     * * SQL Data Type: nvarchar(50)
     */
-    get ProcessMacAddress(): string | null {  
+    get ProcessMacAddress(): string | null {
         return this.Get('ProcessMacAddress');
     }
     set ProcessMacAddress(value: string | null) {
@@ -24550,7 +24551,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process OSName
     * * SQL Data Type: nvarchar(25)
     */
-    get ProcessOSName(): string | null {  
+    get ProcessOSName(): string | null {
         return this.Get('ProcessOSName');
     }
     set ProcessOSName(value: string | null) {
@@ -24562,7 +24563,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process OSVersion
     * * SQL Data Type: nvarchar(10)
     */
-    get ProcessOSVersion(): string | null {  
+    get ProcessOSVersion(): string | null {
         return this.Get('ProcessOSVersion');
     }
     set ProcessOSVersion(value: string | null) {
@@ -24574,7 +24575,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process Host Name
     * * SQL Data Type: nvarchar(50)
     */
-    get ProcessHostName(): string | null {  
+    get ProcessHostName(): string | null {
         return this.Get('ProcessHostName');
     }
     set ProcessHostName(value: string | null) {
@@ -24586,7 +24587,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process User ID
     * * SQL Data Type: nvarchar(25)
     */
-    get ProcessUserID(): string | null {  
+    get ProcessUserID(): string | null {
         return this.Get('ProcessUserID');
     }
     set ProcessUserID(value: string | null) {
@@ -24598,7 +24599,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Process User Name
     * * SQL Data Type: nvarchar(50)
     */
-    get ProcessUserName(): string | null {  
+    get ProcessUserName(): string | null {
         return this.Get('ProcessUserName');
     }
     set ProcessUserName(value: string | null) {
@@ -24611,7 +24612,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get LastHeartbeat(): Date {  
+    get LastHeartbeat(): Date {
         return this.Get('LastHeartbeat');
     }
     set LastHeartbeat(value: Date) {
@@ -24624,7 +24625,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24634,7 +24635,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -24643,12 +24644,12 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * * Display Name: Queue Type
     * * SQL Data Type: nvarchar(50)
     */
-    get QueueType(): string {  
+    get QueueType(): string {
         return this.Get('QueueType');
     }
 }
 
-            
+
 /**
  * Recommendation Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -24672,7 +24673,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * @memberof RecommendationItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24697,7 +24698,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24707,7 +24708,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendations (vwRecommendations.ID)
     */
-    get RecommendationID(): string {  
+    get RecommendationID(): string {
         return this.Get('RecommendationID');
     }
     set RecommendationID(value: string) {
@@ -24720,7 +24721,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get DestinationEntityID(): string {  
+    get DestinationEntityID(): string {
         return this.Get('DestinationEntityID');
     }
     set DestinationEntityID(value: string) {
@@ -24733,7 +24734,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: nvarchar(450)
     * * Description: The record ID of the destination entity
     */
-    get DestinationEntityRecordID(): string {  
+    get DestinationEntityRecordID(): string {
         return this.Get('DestinationEntityRecordID');
     }
     set DestinationEntityRecordID(value: string) {
@@ -24746,7 +24747,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: decimal(18, 15)
     * * Description: A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.
     */
-    get MatchProbability(): number | null {  
+    get MatchProbability(): number | null {
         return this.Get('MatchProbability');
     }
     set MatchProbability(value: number | null) {
@@ -24759,7 +24760,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24769,7 +24770,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -24778,12 +24779,12 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * Display Name: Destination Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get DestinationEntity(): string {  
+    get DestinationEntity(): string {
         return this.Get('DestinationEntity');
     }
 }
 
-            
+
 /**
  * Recommendation Providers - strongly typed entity sub-class
  * * Schema: __mj
@@ -24807,7 +24808,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * @memberof RecommendationProviderEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24832,7 +24833,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24841,7 +24842,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -24853,7 +24854,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -24866,7 +24867,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -24876,12 +24877,12 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Recommendation Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -24905,7 +24906,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * @memberof RecommendationRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -24930,7 +24931,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -24940,7 +24941,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Providers (vwRecommendationProviders.ID)
     */
-    get RecommendationProviderID(): string {  
+    get RecommendationProviderID(): string {
         return this.Get('RecommendationProviderID');
     }
     set RecommendationProviderID(value: string) {
@@ -24953,7 +24954,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: datetime
     * * Description: The start date of the recommendation run
     */
-    get StartDate(): Date {  
+    get StartDate(): Date {
         return this.Get('StartDate');
     }
     set StartDate(value: Date) {
@@ -24966,7 +24967,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: datetime
     * * Description: The end date of the recommendation run
     */
-    get EndDate(): Date | null {  
+    get EndDate(): Date | null {
         return this.Get('EndDate');
     }
     set EndDate(value: Date | null) {
@@ -24986,7 +24987,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     *   * Error
     * * Description: The status of the recommendation run
     */
-    get Status(): 'Pending' | 'In Progress' | 'Completed' | 'Canceled' | 'Error' {  
+    get Status(): 'Pending' | 'In Progress' | 'Completed' | 'Canceled' | 'Error' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In Progress' | 'Completed' | 'Canceled' | 'Error') {
@@ -24998,7 +24999,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -25011,7 +25012,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get RunByUserID(): string {  
+    get RunByUserID(): string {
         return this.Get('RunByUserID');
     }
     set RunByUserID(value: string) {
@@ -25024,7 +25025,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -25034,7 +25035,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -25043,7 +25044,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * Display Name: Recommendation Provider
     * * SQL Data Type: nvarchar(255)
     */
-    get RecommendationProvider(): string {  
+    get RecommendationProvider(): string {
         return this.Get('RecommendationProvider');
     }
 
@@ -25052,12 +25053,12 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {  
+    get RunByUser(): string {
         return this.Get('RunByUser');
     }
 }
 
-            
+
 /**
  * Recommendations - strongly typed entity sub-class
  * * Schema: __mj
@@ -25081,7 +25082,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * @memberof RecommendationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -25106,7 +25107,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -25116,7 +25117,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Recommendation Runs (vwRecommendationRuns.ID)
     */
-    get RecommendationRunID(): string {  
+    get RecommendationRunID(): string {
         return this.Get('RecommendationRunID');
     }
     set RecommendationRunID(value: string) {
@@ -25129,7 +25130,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get SourceEntityID(): string {  
+    get SourceEntityID(): string {
         return this.Get('SourceEntityID');
     }
     set SourceEntityID(value: string) {
@@ -25142,7 +25143,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The record ID of the source entity
     */
-    get SourceEntityRecordID(): string {  
+    get SourceEntityRecordID(): string {
         return this.Get('SourceEntityRecordID');
     }
     set SourceEntityRecordID(value: string) {
@@ -25155,7 +25156,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -25165,7 +25166,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -25174,12 +25175,12 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string {  
+    get SourceEntity(): string {
         return this.Get('SourceEntity');
     }
 }
 
-            
+
 /**
  * Record Change Replay Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -25203,7 +25204,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * @memberof RecordChangeReplayRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -25228,7 +25229,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -25238,7 +25239,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: datetime
     * * Description: Timestamp when the replay run started
     */
-    get StartedAt(): Date {  
+    get StartedAt(): Date {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date) {
@@ -25251,7 +25252,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: datetime
     * * Description: Timestamp when the replay run ended
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -25270,7 +25271,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     *   * Error
     * * Description: Status of the replay run (Pending, In Progress, Complete, Error)
     */
-    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Error' {  
+    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Error' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Error') {
@@ -25283,7 +25284,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -25296,7 +25297,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -25306,7 +25307,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -25315,12 +25316,12 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Record Changes - strongly typed entity sub-class
  * * Schema: __mj
@@ -25344,7 +25345,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * @memberof RecordChangeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -25368,7 +25369,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -25378,7 +25379,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -25390,7 +25391,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Display Name: Record
     * * SQL Data Type: nvarchar(750)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -25403,7 +25404,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -25422,7 +25423,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     *   * Delete
     * * Description: Create, Update, or Delete
     */
-    get Type(): 'Create' | 'Update' | 'Delete' {  
+    get Type(): 'Create' | 'Update' | 'Delete' {
         return this.Get('Type');
     }
     set Type(value: 'Create' | 'Update' | 'Delete') {
@@ -25440,7 +25441,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     *   * External
     * * Description: Internal or External
     */
-    get Source(): 'Internal' | 'External' {  
+    get Source(): 'Internal' | 'External' {
         return this.Get('Source');
     }
     set Source(value: 'Internal' | 'External') {
@@ -25454,7 +25455,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Default Value: getutcdate()
     * * Description: The date/time that the change occured.
     */
-    get ChangedAt(): Date {  
+    get ChangedAt(): Date {
         return this.Get('ChangedAt');
     }
     set ChangedAt(value: Date) {
@@ -25467,7 +25468,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON structure that describes what was changed in a structured format.
     */
-    get ChangesJSON(): string {  
+    get ChangesJSON(): string {
         return this.Get('ChangesJSON');
     }
     set ChangesJSON(value: string) {
@@ -25480,7 +25481,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A generated, human-readable description of what was changed.
     */
-    get ChangesDescription(): string {  
+    get ChangesDescription(): string {
         return this.Get('ChangesDescription');
     }
     set ChangesDescription(value: string) {
@@ -25493,7 +25494,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.
     */
-    get FullRecordJSON(): string {  
+    get FullRecordJSON(): string {
         return this.Get('FullRecordJSON');
     }
     set FullRecordJSON(value: string) {
@@ -25511,7 +25512,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     *   * Error
     * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error
     */
-    get Status(): 'Pending' | 'Complete' | 'Error' {  
+    get Status(): 'Pending' | 'Complete' | 'Error' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Complete' | 'Error') {
@@ -25523,7 +25524,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Display Name: Error Log
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ErrorLog(): string | null {  
+    get ErrorLog(): string | null {
         return this.Get('ErrorLog');
     }
     set ErrorLog(value: string | null) {
@@ -25536,7 +25537,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)
     */
-    get ReplayRunID(): string | null {  
+    get ReplayRunID(): string | null {
         return this.Get('ReplayRunID');
     }
     set ReplayRunID(value: string | null) {
@@ -25549,7 +25550,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)
     */
-    get IntegrationID(): string | null {  
+    get IntegrationID(): string | null {
         return this.Get('IntegrationID');
     }
     set IntegrationID(value: string | null) {
@@ -25560,7 +25561,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Field Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -25573,7 +25574,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get CreatedAt(): Date {  
+    get CreatedAt(): Date {
         return this.Get('CreatedAt');
     }
 
@@ -25583,7 +25584,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get UpdatedAt(): Date {  
+    get UpdatedAt(): Date {
         return this.Get('UpdatedAt');
     }
 
@@ -25592,7 +25593,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -25601,7 +25602,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -25610,12 +25611,12 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
-    get Integration(): string | null {  
+    get Integration(): string | null {
         return this.Get('Integration');
     }
 }
 
-            
+
 /**
  * Record Merge Deletion Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -25638,7 +25639,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * @memberof RecordMergeDeletionLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -25663,7 +25664,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -25673,7 +25674,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
     */
-    get RecordMergeLogID(): string {  
+    get RecordMergeLogID(): string {
         return this.Get('RecordMergeLogID');
     }
     set RecordMergeLogID(value: string) {
@@ -25685,7 +25686,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * Display Name: Deleted Record ID
     * * SQL Data Type: nvarchar(750)
     */
-    get DeletedRecordID(): string {  
+    get DeletedRecordID(): string {
         return this.Get('DeletedRecordID');
     }
     set DeletedRecordID(value: string) {
@@ -25703,7 +25704,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     *   * Complete
     *   * Error
     */
-    get Status(): 'Pending' | 'Complete' | 'Error' {  
+    get Status(): 'Pending' | 'Complete' | 'Error' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Complete' | 'Error') {
@@ -25715,7 +25716,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * Display Name: Processing Log
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ProcessingLog(): string | null {  
+    get ProcessingLog(): string | null {
         return this.Get('ProcessingLog');
     }
     set ProcessingLog(value: string | null) {
@@ -25728,7 +25729,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -25738,12 +25739,12 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Record Merge Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -25766,7 +25767,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * @memberof RecordMergeLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -25791,7 +25792,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -25801,7 +25802,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -25813,7 +25814,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Surviving Record ID
     * * SQL Data Type: nvarchar(450)
     */
-    get SurvivingRecordID(): string {  
+    get SurvivingRecordID(): string {
         return this.Get('SurvivingRecordID');
     }
     set SurvivingRecordID(value: string) {
@@ -25826,7 +25827,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get InitiatedByUserID(): string {  
+    get InitiatedByUserID(): string {
         return this.Get('InitiatedByUserID');
     }
     set InitiatedByUserID(value: string) {
@@ -25844,7 +25845,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     *   * Approved
     *   * Rejected
     */
-    get ApprovalStatus(): 'Pending' | 'Approved' | 'Rejected' {  
+    get ApprovalStatus(): 'Pending' | 'Approved' | 'Rejected' {
         return this.Get('ApprovalStatus');
     }
     set ApprovalStatus(value: 'Pending' | 'Approved' | 'Rejected') {
@@ -25857,7 +25858,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get ApprovedByUserID(): string | null {  
+    get ApprovedByUserID(): string | null {
         return this.Get('ApprovedByUserID');
     }
     set ApprovedByUserID(value: string | null) {
@@ -25875,7 +25876,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     *   * Complete
     *   * Error
     */
-    get ProcessingStatus(): 'Started' | 'Complete' | 'Error' {  
+    get ProcessingStatus(): 'Started' | 'Complete' | 'Error' {
         return this.Get('ProcessingStatus');
     }
     set ProcessingStatus(value: 'Started' | 'Complete' | 'Error') {
@@ -25888,7 +25889,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get ProcessingStartedAt(): Date {  
+    get ProcessingStartedAt(): Date {
         return this.Get('ProcessingStartedAt');
     }
     set ProcessingStartedAt(value: Date) {
@@ -25900,7 +25901,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Processing Ended At
     * * SQL Data Type: datetime
     */
-    get ProcessingEndedAt(): Date | null {  
+    get ProcessingEndedAt(): Date | null {
         return this.Get('ProcessingEndedAt');
     }
     set ProcessingEndedAt(value: Date | null) {
@@ -25912,7 +25913,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Processing Log
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ProcessingLog(): string | null {  
+    get ProcessingLog(): string | null {
         return this.Get('ProcessingLog');
     }
     set ProcessingLog(value: string | null) {
@@ -25924,7 +25925,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -25937,7 +25938,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -25947,7 +25948,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -25956,7 +25957,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -25965,7 +25966,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Initiated By User
     * * SQL Data Type: nvarchar(100)
     */
-    get InitiatedByUser(): string {  
+    get InitiatedByUser(): string {
         return this.Get('InitiatedByUser');
     }
 
@@ -25974,12 +25975,12 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
     */
-    get ApprovedByUser(): string | null {  
+    get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
     }
 }
 
-            
+
 /**
  * Report Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -26002,7 +26003,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * @memberof ReportCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26015,7 +26016,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26024,7 +26025,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -26036,7 +26037,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -26049,7 +26050,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -26062,7 +26063,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -26075,7 +26076,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26085,7 +26086,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -26094,7 +26095,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -26103,12 +26104,12 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Report Snapshots - strongly typed entity sub-class
  * * Schema: __mj
@@ -26131,7 +26132,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * @memberof ReportSnapshotEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26144,7 +26145,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26154,7 +26155,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Reports (vwReports.ID)
     */
-    get ReportID(): string {  
+    get ReportID(): string {
         return this.Get('ReportID');
     }
     set ReportID(value: string) {
@@ -26166,7 +26167,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * Display Name: Result Set
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ResultSet(): string {  
+    get ResultSet(): string {
         return this.Get('ResultSet');
     }
     set ResultSet(value: string) {
@@ -26179,7 +26180,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -26192,7 +26193,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26202,7 +26203,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -26211,7 +26212,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
     */
-    get Report(): string {  
+    get Report(): string {
         return this.Get('Report');
     }
 
@@ -26220,12 +26221,12 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Reports - strongly typed entity sub-class
  * * Schema: __mj
@@ -26248,7 +26249,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * @memberof ReportEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26261,7 +26262,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26270,7 +26271,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -26282,7 +26283,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -26295,7 +26296,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -26308,7 +26309,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -26326,7 +26327,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     *   * Specific
     *   * Everyone
     */
-    get SharingScope(): 'None' | 'Specific' | 'Everyone' {  
+    get SharingScope(): 'None' | 'Specific' | 'Everyone' {
         return this.Get('SharingScope');
     }
     set SharingScope(value: 'None' | 'Specific' | 'Everyone') {
@@ -26339,7 +26340,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
     */
-    get ConversationID(): string | null {  
+    get ConversationID(): string | null {
         return this.Get('ConversationID');
     }
     set ConversationID(value: string | null) {
@@ -26352,7 +26353,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
     */
-    get ConversationDetailID(): string | null {  
+    get ConversationDetailID(): string | null {
         return this.Get('ConversationDetailID');
     }
     set ConversationDetailID(value: string | null) {
@@ -26365,7 +26366,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
     */
-    get DataContextID(): string | null {  
+    get DataContextID(): string | null {
         return this.Get('DataContextID');
     }
     set DataContextID(value: string | null) {
@@ -26377,7 +26378,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Configuration(): string | null {  
+    get Configuration(): string | null {
         return this.Get('Configuration');
     }
     set Configuration(value: string | null) {
@@ -26390,7 +26391,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)
     */
-    get OutputTriggerTypeID(): string | null {  
+    get OutputTriggerTypeID(): string | null {
         return this.Get('OutputTriggerTypeID');
     }
     set OutputTriggerTypeID(value: string | null) {
@@ -26403,7 +26404,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)
     */
-    get OutputFormatTypeID(): string | null {  
+    get OutputFormatTypeID(): string | null {
         return this.Get('OutputFormatTypeID');
     }
     set OutputFormatTypeID(value: string | null) {
@@ -26416,7 +26417,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
     */
-    get OutputDeliveryTypeID(): string | null {  
+    get OutputDeliveryTypeID(): string | null {
         return this.Get('OutputDeliveryTypeID');
     }
     set OutputDeliveryTypeID(value: string | null) {
@@ -26428,7 +26429,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Frequency
     * * SQL Data Type: nvarchar(50)
     */
-    get OutputFrequency(): string | null {  
+    get OutputFrequency(): string | null {
         return this.Get('OutputFrequency');
     }
     set OutputFrequency(value: string | null) {
@@ -26440,7 +26441,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Target Email
     * * SQL Data Type: nvarchar(255)
     */
-    get OutputTargetEmail(): string | null {  
+    get OutputTargetEmail(): string | null {
         return this.Get('OutputTargetEmail');
     }
     set OutputTargetEmail(value: string | null) {
@@ -26453,7 +26454,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
     */
-    get OutputWorkflowID(): string | null {  
+    get OutputWorkflowID(): string | null {
         return this.Get('OutputWorkflowID');
     }
     set OutputWorkflowID(value: string | null) {
@@ -26466,7 +26467,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26476,7 +26477,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -26485,7 +26486,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -26494,7 +26495,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -26503,7 +26504,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
-    get Conversation(): string | null {  
+    get Conversation(): string | null {
         return this.Get('Conversation');
     }
 
@@ -26512,7 +26513,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
-    get DataContext(): string | null {  
+    get DataContext(): string | null {
         return this.Get('DataContext');
     }
 
@@ -26521,7 +26522,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Trigger Type
     * * SQL Data Type: nvarchar(255)
     */
-    get OutputTriggerType(): string | null {  
+    get OutputTriggerType(): string | null {
         return this.Get('OutputTriggerType');
     }
 
@@ -26530,7 +26531,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Format Type
     * * SQL Data Type: nvarchar(255)
     */
-    get OutputFormatType(): string | null {  
+    get OutputFormatType(): string | null {
         return this.Get('OutputFormatType');
     }
 
@@ -26539,7 +26540,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Delivery Type
     * * SQL Data Type: nvarchar(255)
     */
-    get OutputDeliveryType(): string | null {  
+    get OutputDeliveryType(): string | null {
         return this.Get('OutputDeliveryType');
     }
 
@@ -26548,12 +26549,12 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Display Name: Output Workflow
     * * SQL Data Type: nvarchar(100)
     */
-    get OutputWorkflow(): string | null {  
+    get OutputWorkflow(): string | null {
         return this.Get('OutputWorkflow');
     }
 }
 
-            
+
 /**
  * Resource Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -26576,7 +26577,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * @memberof ResourceTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26613,7 +26614,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26622,7 +26623,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -26634,7 +26635,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * Display Name: Display Name
     * * SQL Data Type: nvarchar(255)
     */
-    get DisplayName(): string {  
+    get DisplayName(): string {
         return this.Get('DisplayName');
     }
     set DisplayName(value: string) {
@@ -26646,7 +26647,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -26658,7 +26659,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * Display Name: Icon
     * * SQL Data Type: nvarchar(100)
     */
-    get Icon(): string | null {  
+    get Icon(): string | null {
         return this.Get('Icon');
     }
     set Icon(value: string | null) {
@@ -26671,7 +26672,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string | null {  
+    get EntityID(): string | null {
         return this.Get('EntityID');
     }
     set EntityID(value: string | null) {
@@ -26684,7 +26685,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26694,7 +26695,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -26703,12 +26704,12 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string | null {  
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Roles - strongly typed entity sub-class
  * * Schema: __mj
@@ -26732,7 +26733,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * @memberof RoleEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26744,7 +26745,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26752,7 +26753,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -26764,7 +26765,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the role
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -26777,7 +26778,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: nvarchar(250)
     * * Description: The unique ID of the role in the directory being used for authentication, for example an ID in Azure.
     */
-    get DirectoryID(): string | null {  
+    get DirectoryID(): string | null {
         return this.Get('DirectoryID');
     }
     set DirectoryID(value: string | null) {
@@ -26789,7 +26790,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: nvarchar(250)
     * * Description: The name of the role in the database, this is used for auto-generating permission statements by CodeGen
     */
-    get SQLName(): string | null {  
+    get SQLName(): string | null {
         return this.Get('SQLName');
     }
     set SQLName(value: string | null) {
@@ -26802,7 +26803,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26812,12 +26813,12 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Row Level Security Filters - strongly typed entity sub-class
  * * Schema: __mj
@@ -26840,7 +26841,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * @memberof RowLevelSecurityFilterEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26877,7 +26878,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26886,7 +26887,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -26898,7 +26899,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -26910,7 +26911,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * Display Name: Filter Text
     * * SQL Data Type: nvarchar(MAX)
     */
-    get FilterText(): string | null {  
+    get FilterText(): string | null {
         return this.Get('FilterText');
     }
     set FilterText(value: string | null) {
@@ -26923,7 +26924,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -26933,12 +26934,12 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Scheduled Action Params - strongly typed entity sub-class
  * * Schema: __mj
@@ -26961,7 +26962,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * @memberof ScheduledActionParamEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -26974,7 +26975,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -26984,7 +26985,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Scheduled Actions (vwScheduledActions.ID)
     */
-    get ScheduledActionID(): string {  
+    get ScheduledActionID(): string {
         return this.Get('ScheduledActionID');
     }
     set ScheduledActionID(value: string) {
@@ -26997,7 +26998,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Action Params (vwActionParams.ID)
     */
-    get ActionParamID(): string {  
+    get ActionParamID(): string {
         return this.Get('ActionParamID');
     }
     set ActionParamID(value: string) {
@@ -27013,7 +27014,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     *   * Static
     *   * SQL Statement
     */
-    get ValueType(): 'Static' | 'SQL Statement' {  
+    get ValueType(): 'Static' | 'SQL Statement' {
         return this.Get('ValueType');
     }
     set ValueType(value: 'Static' | 'SQL Statement') {
@@ -27025,7 +27026,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Display Name: Value
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Value(): string | null {  
+    get Value(): string | null {
         return this.Get('Value');
     }
     set Value(value: string | null) {
@@ -27037,7 +27038,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -27050,7 +27051,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27060,7 +27061,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27069,7 +27070,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Display Name: Scheduled Action
     * * SQL Data Type: nvarchar(255)
     */
-    get ScheduledAction(): string {  
+    get ScheduledAction(): string {
         return this.Get('ScheduledAction');
     }
 
@@ -27078,12 +27079,12 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
     */
-    get ActionParam(): string {  
+    get ActionParam(): string {
         return this.Get('ActionParam');
     }
 }
 
-            
+
 /**
  * Scheduled Actions - strongly typed entity sub-class
  * * Schema: __mj
@@ -27107,7 +27108,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * @memberof ScheduledActionEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27120,7 +27121,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27129,7 +27130,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -27141,7 +27142,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -27154,7 +27155,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get CreatedByUserID(): string {  
+    get CreatedByUserID(): string {
         return this.Get('CreatedByUserID');
     }
     set CreatedByUserID(value: string) {
@@ -27167,7 +27168,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Actions (vwActions.ID)
     */
-    get ActionID(): string {  
+    get ActionID(): string {
         return this.Get('ActionID');
     }
     set ActionID(value: string) {
@@ -27187,7 +27188,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     *   * Custom
     * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)
     */
-    get Type(): 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom' {  
+    get Type(): 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom' {
         return this.Get('Type');
     }
     set Type(value: 'Daily' | 'Weekly' | 'Monthly' | 'Yearly' | 'Custom') {
@@ -27200,7 +27201,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: nvarchar(100)
     * * Description: Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this
     */
-    get CronExpression(): string | null {  
+    get CronExpression(): string | null {
         return this.Get('CronExpression');
     }
     set CronExpression(value: string | null) {
@@ -27213,7 +27214,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: nvarchar(100)
     * * Description: Timezone for the scheduled action, if not specified defaults to UTC/Z
     */
-    get Timezone(): string {  
+    get Timezone(): string {
         return this.Get('Timezone');
     }
     set Timezone(value: string) {
@@ -27233,7 +27234,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     *   * Expired
     * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Expired' {  
+    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Expired' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Expired') {
@@ -27246,7 +27247,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: int
     * * Description: Interval in days for the scheduled action
     */
-    get IntervalDays(): number | null {  
+    get IntervalDays(): number | null {
         return this.Get('IntervalDays');
     }
     set IntervalDays(value: number | null) {
@@ -27259,7 +27260,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: nvarchar(20)
     * * Description: Day of the week for the scheduled action
     */
-    get DayOfWeek(): string | null {  
+    get DayOfWeek(): string | null {
         return this.Get('DayOfWeek');
     }
     set DayOfWeek(value: string | null) {
@@ -27272,7 +27273,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: int
     * * Description: Day of the month for the scheduled action
     */
-    get DayOfMonth(): number | null {  
+    get DayOfMonth(): number | null {
         return this.Get('DayOfMonth');
     }
     set DayOfMonth(value: number | null) {
@@ -27285,7 +27286,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: nvarchar(20)
     * * Description: Month for the scheduled action
     */
-    get Month(): string | null {  
+    get Month(): string | null {
         return this.Get('Month');
     }
     set Month(value: string | null) {
@@ -27297,7 +27298,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Display Name: Custom Cron Expression
     * * SQL Data Type: nvarchar(255)
     */
-    get CustomCronExpression(): string | null {  
+    get CustomCronExpression(): string | null {
         return this.Get('CustomCronExpression');
     }
     set CustomCronExpression(value: string | null) {
@@ -27310,7 +27311,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27320,7 +27321,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27329,7 +27330,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {  
+    get CreatedByUser(): string {
         return this.Get('CreatedByUser');
     }
 
@@ -27338,12 +27339,12 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
     */
-    get Action(): string {  
+    get Action(): string {
         return this.Get('Action');
     }
 }
 
-            
+
 /**
  * Schema Info - strongly typed entity sub-class
  * * Schema: __mj
@@ -27367,7 +27368,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * @memberof SchemaInfoEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27392,7 +27393,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27401,7 +27402,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * Display Name: Schema Name
     * * SQL Data Type: nvarchar(50)
     */
-    get SchemaName(): string {  
+    get SchemaName(): string {
         return this.Get('SchemaName');
     }
     set SchemaName(value: string) {
@@ -27413,7 +27414,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * Display Name: Entity IDMin
     * * SQL Data Type: int
     */
-    get EntityIDMin(): number {  
+    get EntityIDMin(): number {
         return this.Get('EntityIDMin');
     }
     set EntityIDMin(value: number) {
@@ -27425,7 +27426,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * Display Name: Entity IDMax
     * * SQL Data Type: int
     */
-    get EntityIDMax(): number {  
+    get EntityIDMax(): number {
         return this.Get('EntityIDMax');
     }
     set EntityIDMax(value: number) {
@@ -27437,7 +27438,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -27450,7 +27451,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27460,12 +27461,12 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Skills - strongly typed entity sub-class
  * * Schema: __mj
@@ -27489,7 +27490,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * @memberof SkillEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27525,7 +27526,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27533,7 +27534,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(50)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -27546,7 +27547,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Skills (vwSkills.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -27559,7 +27560,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27569,7 +27570,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27578,12 +27579,12 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(50)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * Tagged Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -27607,7 +27608,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * @memberof TaggedItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27632,7 +27633,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27642,7 +27643,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Tags (vwTags.ID)
     */
-    get TagID(): string {  
+    get TagID(): string {
         return this.Get('TagID');
     }
     set TagID(value: string) {
@@ -27655,7 +27656,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -27667,7 +27668,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * Display Name: Record ID
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -27680,7 +27681,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27690,7 +27691,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27699,7 +27700,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * Display Name: Tag
     * * SQL Data Type: nvarchar(255)
     */
-    get Tag(): string {  
+    get Tag(): string {
         return this.Get('Tag');
     }
 
@@ -27708,12 +27709,12 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Tags - strongly typed entity sub-class
  * * Schema: __mj
@@ -27737,7 +27738,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * @memberof TagEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27774,7 +27775,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27783,7 +27784,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -27796,7 +27797,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Tags (vwTags.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -27808,7 +27809,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * Display Name: Display Name
     * * SQL Data Type: nvarchar(255)
     */
-    get DisplayName(): string {  
+    get DisplayName(): string {
         return this.Get('DisplayName');
     }
     set DisplayName(value: string) {
@@ -27820,7 +27821,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -27833,7 +27834,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27843,7 +27844,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27852,12 +27853,12 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 }
 
-            
+
 /**
  * Template Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -27881,7 +27882,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * @memberof TemplateCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -27906,7 +27907,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -27916,7 +27917,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template category
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -27929,7 +27930,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template category
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -27942,7 +27943,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -27955,7 +27956,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -27968,7 +27969,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -27978,7 +27979,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -27987,7 +27988,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -27996,12 +27997,12 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * Template Content Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -28025,7 +28026,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * @memberof TemplateContentTypeEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28050,7 +28051,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28060,7 +28061,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template content type
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -28073,7 +28074,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template content type
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -28096,7 +28097,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     *   * Other
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other' {  
+    get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other' {
         return this.Get('CodeType');
     }
     set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other') {
@@ -28109,7 +28110,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28119,12 +28120,12 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Template Contents - strongly typed entity sub-class
  * * Schema: __mj
@@ -28148,7 +28149,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * @memberof TemplateContentEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28173,7 +28174,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28183,7 +28184,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
-    get TemplateID(): string {  
+    get TemplateID(): string {
         return this.Get('TemplateID');
     }
     set TemplateID(value: string) {
@@ -28196,7 +28197,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Content Types (vwTemplateContentTypes.ID)
     */
-    get TypeID(): string {  
+    get TypeID(): string {
         return this.Get('TypeID');
     }
     set TypeID(value: string) {
@@ -28209,7 +28210,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The actual text content for the template
     */
-    get TemplateText(): string | null {  
+    get TemplateText(): string | null {
         return this.Get('TemplateText');
     }
     set TemplateText(value: string | null) {
@@ -28222,7 +28223,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: int
     * * Description: Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type
     */
-    get Priority(): number {  
+    get Priority(): number {
         return this.Get('Priority');
     }
     set Priority(value: number) {
@@ -28236,7 +28237,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * Default Value: 1
     * * Description: Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -28249,7 +28250,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28259,7 +28260,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -28268,7 +28269,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {  
+    get Template(): string {
         return this.Get('Template');
     }
 
@@ -28277,12 +28278,12 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
-    get Type(): string {  
+    get Type(): string {
         return this.Get('Type');
     }
 }
 
-            
+
 /**
  * Template Params - strongly typed entity sub-class
  * * Schema: __mj
@@ -28306,7 +28307,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * @memberof TemplateParamEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28331,7 +28332,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28341,7 +28342,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     */
-    get TemplateID(): string {  
+    get TemplateID(): string {
         return this.Get('TemplateID');
     }
     set TemplateID(value: string) {
@@ -28354,7 +28355,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the parameter
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -28367,7 +28368,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the parameter
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -28388,7 +28389,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     *   * Entity
     * * Description: Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.
     */
-    get Type(): 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity' {  
+    get Type(): 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity' {
         return this.Get('Type');
     }
     set Type(value: 'Scalar' | 'Array' | 'Object' | 'Record' | 'Entity') {
@@ -28401,7 +28402,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Default value of the parameter
     */
-    get DefaultValue(): string | null {  
+    get DefaultValue(): string | null {
         return this.Get('DefaultValue');
     }
     set DefaultValue(value: string | null) {
@@ -28414,7 +28415,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsRequired(): boolean {  
+    get IsRequired(): boolean {
         return this.Get('IsRequired');
     }
     set IsRequired(value: boolean) {
@@ -28427,7 +28428,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.
     */
-    get LinkedParameterName(): string | null {  
+    get LinkedParameterName(): string | null {
         return this.Get('LinkedParameterName');
     }
     set LinkedParameterName(value: string | null) {
@@ -28440,7 +28441,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(500)
     * * Description: If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.
     */
-    get LinkedParameterField(): string | null {  
+    get LinkedParameterField(): string | null {
         return this.Get('LinkedParameterField');
     }
     set LinkedParameterField(value: string | null) {
@@ -28453,7 +28454,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.
     */
-    get ExtraFilter(): string | null {  
+    get ExtraFilter(): string | null {
         return this.Get('ExtraFilter');
     }
     set ExtraFilter(value: string | null) {
@@ -28466,7 +28467,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string | null {  
+    get EntityID(): string | null {
         return this.Get('EntityID');
     }
     set EntityID(value: string | null) {
@@ -28479,7 +28480,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: nvarchar(2000)
     * * Description: Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.
     */
-    get RecordID(): string | null {  
+    get RecordID(): string | null {
         return this.Get('RecordID');
     }
     set RecordID(value: string | null) {
@@ -28492,7 +28493,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28502,7 +28503,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -28511,7 +28512,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
     */
-    get Template(): string {  
+    get Template(): string {
         return this.Get('Template');
     }
 
@@ -28520,12 +28521,12 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string | null {  
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * Templates - strongly typed entity sub-class
  * * Schema: __mj
@@ -28549,7 +28550,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * @memberof TemplateEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28574,7 +28575,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28584,7 +28585,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -28597,7 +28598,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -28610,7 +28611,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -28623,7 +28624,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: This prompt will be used by the AI to generate template content as requested by the user.
     */
-    get UserPrompt(): string | null {  
+    get UserPrompt(): string | null {
         return this.Get('UserPrompt');
     }
     set UserPrompt(value: string | null) {
@@ -28636,7 +28637,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -28649,7 +28650,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: datetime
     * * Description: Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1
     */
-    get ActiveAt(): Date | null {  
+    get ActiveAt(): Date | null {
         return this.Get('ActiveAt');
     }
     set ActiveAt(value: Date | null) {
@@ -28662,7 +28663,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: datetime
     * * Description: Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.
     */
-    get DisabledAt(): Date | null {  
+    get DisabledAt(): Date | null {
         return this.Get('DisabledAt');
     }
     set DisabledAt(value: Date | null) {
@@ -28676,7 +28677,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * Default Value: 1
     * * Description: If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. 
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -28689,7 +28690,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28699,7 +28700,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -28708,7 +28709,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
     */
-    get Category(): string | null {  
+    get Category(): string | null {
         return this.Get('Category');
     }
 
@@ -28717,12 +28718,12 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * User Application Entities - strongly typed entity sub-class
  * * Schema: __mj
@@ -28745,7 +28746,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * @memberof UserApplicationEntityEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28757,7 +28758,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28767,7 +28768,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User Applications (vwUserApplications.ID)
     */
-    get UserApplicationID(): string {  
+    get UserApplicationID(): string {
         return this.Get('UserApplicationID');
     }
     set UserApplicationID(value: string) {
@@ -28780,7 +28781,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -28792,7 +28793,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -28805,7 +28806,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28815,7 +28816,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -28824,7 +28825,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {  
+    get Application(): string {
         return this.Get('Application');
     }
 
@@ -28833,7 +28834,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -28842,12 +28843,12 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 }
 
-            
+
 /**
  * User Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -28870,7 +28871,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * @memberof UserApplicationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -28882,7 +28883,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -28892,7 +28893,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -28905,7 +28906,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     */
-    get ApplicationID(): string {  
+    get ApplicationID(): string {
         return this.Get('ApplicationID');
     }
     set ApplicationID(value: string) {
@@ -28917,7 +28918,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -28930,7 +28931,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -28943,7 +28944,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -28953,7 +28954,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -28962,7 +28963,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -28971,12 +28972,12 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
-    get Application(): string {  
+    get Application(): string {
         return this.Get('Application');
     }
 }
 
-            
+
 /**
  * User Favorites - strongly typed entity sub-class
  * * Schema: __mj
@@ -29000,7 +29001,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * @memberof UserFavoriteEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29012,7 +29013,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29022,7 +29023,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -29035,7 +29036,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -29047,7 +29048,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * Display Name: Record
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -29060,7 +29061,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29070,7 +29071,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29078,7 +29079,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -29087,7 +29088,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * Display Name: Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseTable(): string {  
+    get EntityBaseTable(): string {
         return this.Get('EntityBaseTable');
     }
 
@@ -29096,12 +29097,12 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * * Display Name: Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseView(): string {  
+    get EntityBaseView(): string {
         return this.Get('EntityBaseView');
     }
 }
 
-            
+
 /**
  * User Notifications - strongly typed entity sub-class
  * * Schema: __mj
@@ -29124,7 +29125,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * @memberof UserNotificationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29137,7 +29138,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29147,7 +29148,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -29159,7 +29160,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Title
     * * SQL Data Type: nvarchar(255)
     */
-    get Title(): string | null {  
+    get Title(): string | null {
         return this.Get('Title');
     }
     set Title(value: string | null) {
@@ -29171,7 +29172,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Message(): string | null {  
+    get Message(): string | null {
         return this.Get('Message');
     }
     set Message(value: string | null) {
@@ -29184,7 +29185,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
     */
-    get ResourceTypeID(): string | null {  
+    get ResourceTypeID(): string | null {
         return this.Get('ResourceTypeID');
     }
     set ResourceTypeID(value: string | null) {
@@ -29196,7 +29197,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Resource Configuration
     * * SQL Data Type: nvarchar(MAX)
     */
-    get ResourceConfiguration(): string | null {  
+    get ResourceConfiguration(): string | null {
         return this.Get('ResourceConfiguration');
     }
     set ResourceConfiguration(value: string | null) {
@@ -29209,7 +29210,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: bit
     * * Default Value: 1
     */
-    get Unread(): boolean {  
+    get Unread(): boolean {
         return this.Get('Unread');
     }
     set Unread(value: boolean) {
@@ -29221,7 +29222,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Read At
     * * SQL Data Type: datetime
     */
-    get ReadAt(): Date | null {  
+    get ReadAt(): Date | null {
         return this.Get('ReadAt');
     }
     set ReadAt(value: Date | null) {
@@ -29234,7 +29235,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29244,7 +29245,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29253,7 +29254,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Resource Record ID
     * * SQL Data Type: uniqueidentifier
     */
-    get ResourceRecordID(): string | null {  
+    get ResourceRecordID(): string | null {
         return this.Get('ResourceRecordID');
     }
     set ResourceRecordID(value: string | null) {
@@ -29265,7 +29266,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -29274,12 +29275,12 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ResourceType(): string | null {  
+    get ResourceType(): string | null {
         return this.Get('ResourceType');
     }
 }
 
-            
+
 /**
  * User Record Logs - strongly typed entity sub-class
  * * Schema: __mj
@@ -29302,7 +29303,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * @memberof UserRecordLogEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29326,7 +29327,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29336,7 +29337,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -29349,7 +29350,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -29361,7 +29362,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: Record
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -29374,7 +29375,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get EarliestAt(): Date {  
+    get EarliestAt(): Date {
         return this.Get('EarliestAt');
     }
     set EarliestAt(value: Date) {
@@ -29387,7 +29388,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: datetime
     * * Default Value: getdate()
     */
-    get LatestAt(): Date {  
+    get LatestAt(): Date {
         return this.Get('LatestAt');
     }
     set LatestAt(value: Date) {
@@ -29400,7 +29401,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: int
     * * Default Value: 0
     */
-    get TotalCount(): number {  
+    get TotalCount(): number {
         return this.Get('TotalCount');
     }
     set TotalCount(value: number) {
@@ -29413,7 +29414,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29423,7 +29424,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29432,7 +29433,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -29441,7 +29442,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get UserName(): string {  
+    get UserName(): string {
         return this.Get('UserName');
     }
 
@@ -29450,7 +29451,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: User First Last
     * * SQL Data Type: nvarchar(101)
     */
-    get UserFirstLast(): string | null {  
+    get UserFirstLast(): string | null {
         return this.Get('UserFirstLast');
     }
 
@@ -29459,7 +29460,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: User Email
     * * SQL Data Type: nvarchar(100)
     */
-    get UserEmail(): string {  
+    get UserEmail(): string {
         return this.Get('UserEmail');
     }
 
@@ -29468,7 +29469,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: User Supervisor
     * * SQL Data Type: nvarchar(81)
     */
-    get UserSupervisor(): string | null {  
+    get UserSupervisor(): string | null {
         return this.Get('UserSupervisor');
     }
 
@@ -29477,12 +29478,12 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * * Display Name: User Supervisor Email
     * * SQL Data Type: nvarchar(100)
     */
-    get UserSupervisorEmail(): string | null {  
+    get UserSupervisorEmail(): string | null {
         return this.Get('UserSupervisorEmail');
     }
 }
 
-            
+
 /**
  * User Roles - strongly typed entity sub-class
  * * Schema: __mj
@@ -29505,7 +29506,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * @memberof UserRoleEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29518,7 +29519,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29528,7 +29529,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -29541,7 +29542,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Roles (vwRoles.ID)
     */
-    get RoleID(): string {  
+    get RoleID(): string {
         return this.Get('RoleID');
     }
     set RoleID(value: string) {
@@ -29554,7 +29555,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29564,7 +29565,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29573,7 +29574,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 
@@ -29582,12 +29583,12 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
-    get Role(): string {  
+    get Role(): string {
         return this.Get('Role');
     }
 }
 
-            
+
 /**
  * User View Categories - strongly typed entity sub-class
  * * Schema: __mj
@@ -29610,7 +29611,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * @memberof UserViewCategoryEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29623,7 +29624,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29632,7 +29633,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -29644,7 +29645,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -29657,7 +29658,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
     */
-    get ParentID(): string | null {  
+    get ParentID(): string | null {
         return this.Get('ParentID');
     }
     set ParentID(value: string | null) {
@@ -29670,7 +29671,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -29683,7 +29684,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -29696,7 +29697,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29706,7 +29707,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29715,7 +29716,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
-    get Parent(): string | null {  
+    get Parent(): string | null {
         return this.Get('Parent');
     }
 
@@ -29724,7 +29725,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -29733,12 +29734,12 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }
 
-            
+
 /**
  * User View Run Details - strongly typed entity sub-class
  * * Schema: __mj
@@ -29762,7 +29763,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * @memberof UserViewRunDetailEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29786,7 +29787,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29796,7 +29797,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User View Runs (vwUserViewRuns.ID)
     */
-    get UserViewRunID(): string {  
+    get UserViewRunID(): string {
         return this.Get('UserViewRunID');
     }
     set UserViewRunID(value: string) {
@@ -29808,7 +29809,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * Display Name: Record
     * * SQL Data Type: nvarchar(450)
     */
-    get RecordID(): string {  
+    get RecordID(): string {
         return this.Get('RecordID');
     }
     set RecordID(value: string) {
@@ -29821,7 +29822,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29831,7 +29832,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29840,7 +29841,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * Display Name: User View
     * * SQL Data Type: uniqueidentifier
     */
-    get UserViewID(): string {  
+    get UserViewID(): string {
         return this.Get('UserViewID');
     }
 
@@ -29849,12 +29850,12 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
 }
 
-            
+
 /**
  * User View Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -29878,7 +29879,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * @memberof UserViewRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -29902,7 +29903,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -29912,7 +29913,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
     */
-    get UserViewID(): string {  
+    get UserViewID(): string {
         return this.Get('UserViewID');
     }
     set UserViewID(value: string) {
@@ -29924,7 +29925,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * Display Name: Run At
     * * SQL Data Type: datetime
     */
-    get RunAt(): Date {  
+    get RunAt(): Date {
         return this.Get('RunAt');
     }
     set RunAt(value: Date) {
@@ -29937,7 +29938,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get RunByUserID(): string {  
+    get RunByUserID(): string {
         return this.Get('RunByUserID');
     }
     set RunByUserID(value: string) {
@@ -29950,7 +29951,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -29960,7 +29961,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -29969,7 +29970,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * Display Name: User View
     * * SQL Data Type: nvarchar(100)
     */
-    get UserView(): string {  
+    get UserView(): string {
         return this.Get('UserView');
     }
 
@@ -29978,12 +29979,12 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
     */
-    get RunByUser(): string {  
+    get RunByUser(): string {
         return this.Get('RunByUser');
     }
 }
 
-            
+
 /**
  * User Views - strongly typed entity sub-class
  * * Schema: __mj
@@ -30007,7 +30008,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * @memberof UserViewEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -30019,7 +30020,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -30029,7 +30030,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -30042,7 +30043,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get EntityID(): string {  
+    get EntityID(): string {
         return this.Get('EntityID');
     }
     set EntityID(value: string) {
@@ -30053,7 +30054,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -30064,7 +30065,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -30077,7 +30078,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
     */
-    get CategoryID(): string | null {  
+    get CategoryID(): string | null {
         return this.Get('CategoryID');
     }
     set CategoryID(value: string | null) {
@@ -30090,7 +30091,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsShared(): boolean {  
+    get IsShared(): boolean {
         return this.Get('IsShared');
     }
     set IsShared(value: boolean) {
@@ -30103,7 +30104,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsDefault(): boolean {  
+    get IsDefault(): boolean {
         return this.Get('IsDefault');
     }
     set IsDefault(value: boolean) {
@@ -30115,7 +30116,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Grid State
     * * SQL Data Type: nvarchar(MAX)
     */
-    get GridState(): string | null {  
+    get GridState(): string | null {
         return this.Get('GridState');
     }
     set GridState(value: string | null) {
@@ -30127,7 +30128,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Filter State
     * * SQL Data Type: nvarchar(MAX)
     */
-    get FilterState(): string | null {  
+    get FilterState(): string | null {
         return this.Get('FilterState');
     }
     set FilterState(value: string | null) {
@@ -30140,7 +30141,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CustomFilterState(): boolean {  
+    get CustomFilterState(): boolean {
         return this.Get('CustomFilterState');
     }
     set CustomFilterState(value: boolean) {
@@ -30153,7 +30154,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get SmartFilterEnabled(): boolean {  
+    get SmartFilterEnabled(): boolean {
         return this.Get('SmartFilterEnabled');
     }
     set SmartFilterEnabled(value: boolean) {
@@ -30165,7 +30166,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Smart Filter Prompt
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SmartFilterPrompt(): string | null {  
+    get SmartFilterPrompt(): string | null {
         return this.Get('SmartFilterPrompt');
     }
     set SmartFilterPrompt(value: string | null) {
@@ -30177,7 +30178,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Smart Filter Where Clause
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SmartFilterWhereClause(): string | null {  
+    get SmartFilterWhereClause(): string | null {
         return this.Get('SmartFilterWhereClause');
     }
     set SmartFilterWhereClause(value: string | null) {
@@ -30189,7 +30190,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Smart Filter Explanation
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SmartFilterExplanation(): string | null {  
+    get SmartFilterExplanation(): string | null {
         return this.Get('SmartFilterExplanation');
     }
     set SmartFilterExplanation(value: string | null) {
@@ -30201,7 +30202,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Where Clause
     * * SQL Data Type: nvarchar(MAX)
     */
-    get WhereClause(): string | null {  
+    get WhereClause(): string | null {
         return this.Get('WhereClause');
     }
     set WhereClause(value: string | null) {
@@ -30214,7 +30215,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get CustomWhereClause(): boolean {  
+    get CustomWhereClause(): boolean {
         return this.Get('CustomWhereClause');
     }
     set CustomWhereClause(value: boolean) {
@@ -30226,7 +30227,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Sort State
     * * SQL Data Type: nvarchar(MAX)
     */
-    get SortState(): string | null {  
+    get SortState(): string | null {
         return this.Get('SortState');
     }
     set SortState(value: string | null) {
@@ -30239,7 +30240,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -30249,7 +30250,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -30258,7 +30259,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get UserName(): string {  
+    get UserName(): string {
         return this.Get('UserName');
     }
 
@@ -30267,7 +30268,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: User First Last
     * * SQL Data Type: nvarchar(101)
     */
-    get UserFirstLast(): string | null {  
+    get UserFirstLast(): string | null {
         return this.Get('UserFirstLast');
     }
 
@@ -30276,7 +30277,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: User Email
     * * SQL Data Type: nvarchar(100)
     */
-    get UserEmail(): string {  
+    get UserEmail(): string {
         return this.Get('UserEmail');
     }
 
@@ -30285,7 +30286,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: User Type
     * * SQL Data Type: nchar(15)
     */
-    get UserType(): string {  
+    get UserType(): string {
         return this.Get('UserType');
     }
 
@@ -30294,7 +30295,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {  
+    get Entity(): string {
         return this.Get('Entity');
     }
 
@@ -30303,12 +30304,12 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * * Display Name: Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
-    get EntityBaseView(): string {  
+    get EntityBaseView(): string {
         return this.Get('EntityBaseView');
     }
 }
 
-            
+
 /**
  * Users - strongly typed entity sub-class
  * * Schema: __mj
@@ -30332,7 +30333,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * @memberof UserEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -30344,7 +30345,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -30352,7 +30353,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -30364,7 +30365,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: First Name
     * * SQL Data Type: nvarchar(50)
     */
-    get FirstName(): string | null {  
+    get FirstName(): string | null {
         return this.Get('FirstName');
     }
     set FirstName(value: string | null) {
@@ -30376,7 +30377,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Last Name
     * * SQL Data Type: nvarchar(50)
     */
-    get LastName(): string | null {  
+    get LastName(): string | null {
         return this.Get('LastName');
     }
     set LastName(value: string | null) {
@@ -30388,7 +30389,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Title
     * * SQL Data Type: nvarchar(50)
     */
-    get Title(): string | null {  
+    get Title(): string | null {
         return this.Get('Title');
     }
     set Title(value: string | null) {
@@ -30399,7 +30400,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Field Name: Email
     * * SQL Data Type: nvarchar(100)
     */
-    get Email(): string {  
+    get Email(): string {
         return this.Get('Email');
     }
     set Email(value: string) {
@@ -30414,7 +30415,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     *   * User
     *   * Owner
     */
-    get Type(): 'User' | 'Owner' {  
+    get Type(): 'User' | 'Owner' {
         return this.Get('Type');
     }
     set Type(value: 'User' | 'Owner') {
@@ -30427,7 +30428,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: bit
     * * Default Value: 0
     */
-    get IsActive(): boolean {  
+    get IsActive(): boolean {
         return this.Get('IsActive');
     }
     set IsActive(value: boolean) {
@@ -30440,7 +30441,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: nchar(10)
     * * Default Value: None
     */
-    get LinkedRecordType(): string {  
+    get LinkedRecordType(): string {
         return this.Get('LinkedRecordType');
     }
     set LinkedRecordType(value: string) {
@@ -30453,7 +30454,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     */
-    get LinkedEntityID(): string | null {  
+    get LinkedEntityID(): string | null {
         return this.Get('LinkedEntityID');
     }
     set LinkedEntityID(value: string | null) {
@@ -30465,7 +30466,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Linked Entity Record ID
     * * SQL Data Type: nvarchar(450)
     */
-    get LinkedEntityRecordID(): string | null {  
+    get LinkedEntityRecordID(): string | null {
         return this.Get('LinkedEntityRecordID');
     }
     set LinkedEntityRecordID(value: string | null) {
@@ -30478,7 +30479,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
     */
-    get EmployeeID(): string | null {  
+    get EmployeeID(): string | null {
         return this.Get('EmployeeID');
     }
     set EmployeeID(value: string | null) {
@@ -30491,7 +30492,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -30501,7 +30502,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -30510,7 +30511,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: First Last
     * * SQL Data Type: nvarchar(101)
     */
-    get FirstLast(): string | null {  
+    get FirstLast(): string | null {
         return this.Get('FirstLast');
     }
 
@@ -30519,7 +30520,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Employee First Last
     * * SQL Data Type: nvarchar(81)
     */
-    get EmployeeFirstLast(): string | null {  
+    get EmployeeFirstLast(): string | null {
         return this.Get('EmployeeFirstLast');
     }
 
@@ -30528,7 +30529,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Employee Email
     * * SQL Data Type: nvarchar(100)
     */
-    get EmployeeEmail(): string | null {  
+    get EmployeeEmail(): string | null {
         return this.Get('EmployeeEmail');
     }
 
@@ -30537,7 +30538,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Employee Title
     * * SQL Data Type: nvarchar(50)
     */
-    get EmployeeTitle(): string | null {  
+    get EmployeeTitle(): string | null {
         return this.Get('EmployeeTitle');
     }
 
@@ -30546,7 +30547,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Employee Supervisor
     * * SQL Data Type: nvarchar(81)
     */
-    get EmployeeSupervisor(): string | null {  
+    get EmployeeSupervisor(): string | null {
         return this.Get('EmployeeSupervisor');
     }
 
@@ -30555,12 +30556,12 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * * Display Name: Employee Supervisor Email
     * * SQL Data Type: nvarchar(100)
     */
-    get EmployeeSupervisorEmail(): string | null {  
+    get EmployeeSupervisorEmail(): string | null {
         return this.Get('EmployeeSupervisorEmail');
     }
 }
 
-            
+
 /**
  * Vector Databases - strongly typed entity sub-class
  * * Schema: __mj
@@ -30583,7 +30584,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * @memberof VectorDatabaseEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -30608,7 +30609,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -30617,7 +30618,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -30629,7 +30630,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -30641,7 +30642,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * Display Name: Default URL
     * * SQL Data Type: nvarchar(255)
     */
-    get DefaultURL(): string | null {  
+    get DefaultURL(): string | null {
         return this.Get('DefaultURL');
     }
     set DefaultURL(value: string | null) {
@@ -30653,7 +30654,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * Display Name: Class Key
     * * SQL Data Type: nvarchar(100)
     */
-    get ClassKey(): string | null {  
+    get ClassKey(): string | null {
         return this.Get('ClassKey');
     }
     set ClassKey(value: string | null) {
@@ -30666,7 +30667,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -30676,12 +30677,12 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Vector Indexes - strongly typed entity sub-class
  * * Schema: __mj
@@ -30704,7 +30705,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * @memberof VectorIndexEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -30729,7 +30730,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -30738,7 +30739,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -30750,7 +30751,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -30763,7 +30764,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
     */
-    get VectorDatabaseID(): string {  
+    get VectorDatabaseID(): string {
         return this.Get('VectorDatabaseID');
     }
     set VectorDatabaseID(value: string) {
@@ -30776,7 +30777,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     */
-    get EmbeddingModelID(): string {  
+    get EmbeddingModelID(): string {
         return this.Get('EmbeddingModelID');
     }
     set EmbeddingModelID(value: string) {
@@ -30789,7 +30790,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -30799,7 +30800,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -30808,7 +30809,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * Display Name: Vector Database
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {  
+    get VectorDatabase(): string {
         return this.Get('VectorDatabase');
     }
 
@@ -30817,12 +30818,12 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * * Display Name: Embedding Model
     * * SQL Data Type: nvarchar(50)
     */
-    get EmbeddingModel(): string {  
+    get EmbeddingModel(): string {
         return this.Get('EmbeddingModel');
     }
 }
 
-            
+
 /**
  * Version Installations - strongly typed entity sub-class
  * * Schema: __mj
@@ -30845,7 +30846,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * @memberof VersionInstallationEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -30870,7 +30871,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -30879,7 +30880,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Display Name: Major Version
     * * SQL Data Type: int
     */
-    get MajorVersion(): number {  
+    get MajorVersion(): number {
         return this.Get('MajorVersion');
     }
     set MajorVersion(value: number) {
@@ -30891,7 +30892,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Display Name: Minor Version
     * * SQL Data Type: int
     */
-    get MinorVersion(): number {  
+    get MinorVersion(): number {
         return this.Get('MinorVersion');
     }
     set MinorVersion(value: number) {
@@ -30903,7 +30904,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Display Name: Patch Version
     * * SQL Data Type: int
     */
-    get PatchVersion(): number {  
+    get PatchVersion(): number {
         return this.Get('PatchVersion');
     }
     set PatchVersion(value: number) {
@@ -30921,7 +30922,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     *   * Upgrade
     * * Description: What type of installation was applied
     */
-    get Type(): 'New' | 'Upgrade' | null {  
+    get Type(): 'New' | 'Upgrade' | null {
         return this.Get('Type');
     }
     set Type(value: 'New' | 'Upgrade' | null) {
@@ -30933,7 +30934,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Display Name: Installed At
     * * SQL Data Type: datetime
     */
-    get InstalledAt(): Date {  
+    get InstalledAt(): Date {
         return this.Get('InstalledAt');
     }
     set InstalledAt(value: Date) {
@@ -30953,7 +30954,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     *   * Failed
     * * Description: Pending, Complete, Failed
     */
-    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {  
+    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Failed') {
@@ -30966,7 +30967,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Any logging that was saved from the installation process
     */
-    get InstallLog(): string | null {  
+    get InstallLog(): string | null {
         return this.Get('InstallLog');
     }
     set InstallLog(value: string | null) {
@@ -30979,7 +30980,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional, comments the administrator wants to save for each installed version
     */
-    get Comments(): string | null {  
+    get Comments(): string | null {
         return this.Get('Comments');
     }
     set Comments(value: string | null) {
@@ -30992,7 +30993,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31002,7 +31003,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -31011,12 +31012,12 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Display Name: Complete Version
     * * SQL Data Type: nvarchar(302)
     */
-    get CompleteVersion(): string | null {  
+    get CompleteVersion(): string | null {
         return this.Get('CompleteVersion');
     }
 }
 
-            
+
 /**
  * Workflow Engines - strongly typed entity sub-class
  * * Schema: __mj
@@ -31039,7 +31040,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * @memberof WorkflowEngineEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -31063,7 +31064,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -31071,7 +31072,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -31082,7 +31083,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -31094,7 +31095,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * Display Name: Driver Path
     * * SQL Data Type: nvarchar(500)
     */
-    get DriverPath(): string {  
+    get DriverPath(): string {
         return this.Get('DriverPath');
     }
     set DriverPath(value: string) {
@@ -31106,7 +31107,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
     */
-    get DriverClass(): string {  
+    get DriverClass(): string {
         return this.Get('DriverClass');
     }
     set DriverClass(value: string) {
@@ -31119,7 +31120,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31129,12 +31130,12 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 }
 
-            
+
 /**
  * Workflow Runs - strongly typed entity sub-class
  * * Schema: __mj
@@ -31157,7 +31158,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * @memberof WorkflowRunEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -31181,7 +31182,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -31191,7 +31192,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
     */
-    get WorkflowID(): string {  
+    get WorkflowID(): string {
         return this.Get('WorkflowID');
     }
     set WorkflowID(value: string) {
@@ -31203,7 +31204,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Display Name: External System Record
     * * SQL Data Type: nvarchar(500)
     */
-    get ExternalSystemRecordID(): string {  
+    get ExternalSystemRecordID(): string {
         return this.Get('ExternalSystemRecordID');
     }
     set ExternalSystemRecordID(value: string) {
@@ -31215,7 +31216,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Display Name: Started At
     * * SQL Data Type: datetime
     */
-    get StartedAt(): Date {  
+    get StartedAt(): Date {
         return this.Get('StartedAt');
     }
     set StartedAt(value: Date) {
@@ -31227,7 +31228,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Display Name: Ended At
     * * SQL Data Type: datetime
     */
-    get EndedAt(): Date | null {  
+    get EndedAt(): Date | null {
         return this.Get('EndedAt');
     }
     set EndedAt(value: Date | null) {
@@ -31245,7 +31246,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     *   * Complete
     *   * Failed
     */
-    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {  
+    get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {
         return this.Get('Status');
     }
     set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Failed') {
@@ -31256,7 +31257,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Field Name: Results
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Results(): string | null {  
+    get Results(): string | null {
         return this.Get('Results');
     }
     set Results(value: string | null) {
@@ -31269,7 +31270,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31279,7 +31280,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -31288,7 +31289,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Display Name: Workflow
     * * SQL Data Type: nvarchar(100)
     */
-    get Workflow(): string {  
+    get Workflow(): string {
         return this.Get('Workflow');
     }
 
@@ -31297,12 +31298,12 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * * Display Name: Workflow Engine Name
     * * SQL Data Type: nvarchar(100)
     */
-    get WorkflowEngineName(): string {  
+    get WorkflowEngineName(): string {
         return this.Get('WorkflowEngineName');
     }
 }
 
-            
+
 /**
  * Workflows - strongly typed entity sub-class
  * * Schema: __mj
@@ -31325,7 +31326,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * @memberof WorkflowEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -31349,7 +31350,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -31357,7 +31358,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * Field Name: Name
     * * SQL Data Type: nvarchar(100)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -31368,7 +31369,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * Field Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -31381,7 +31382,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workflow Engines (vwWorkflowEngines.ID)
     */
-    get WorkflowEngineID(): string {  
+    get WorkflowEngineID(): string {
         return this.Get('WorkflowEngineID');
     }
     set WorkflowEngineID(value: string) {
@@ -31393,7 +31394,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * Display Name: External System Record
     * * SQL Data Type: nvarchar(100)
     */
-    get ExternalSystemRecordID(): string {  
+    get ExternalSystemRecordID(): string {
         return this.Get('ExternalSystemRecordID');
     }
     set ExternalSystemRecordID(value: string) {
@@ -31407,7 +31408,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * Default Value: 0
     * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
     */
-    get AutoRunEnabled(): boolean {  
+    get AutoRunEnabled(): boolean {
         return this.Get('AutoRunEnabled');
     }
     set AutoRunEnabled(value: boolean) {
@@ -31428,7 +31429,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     *   * Minutes
     * * Description: Minutes, Hours, Days, Weeks, Months, Years
     */
-    get AutoRunIntervalUnits(): 'Years' | 'Months' | 'Weeks' | 'Days' | 'Hours' | 'Minutes' | null {  
+    get AutoRunIntervalUnits(): 'Years' | 'Months' | 'Weeks' | 'Days' | 'Hours' | 'Minutes' | null {
         return this.Get('AutoRunIntervalUnits');
     }
     set AutoRunIntervalUnits(value: 'Years' | 'Months' | 'Weeks' | 'Days' | 'Hours' | 'Minutes' | null) {
@@ -31441,7 +31442,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: int
     * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
     */
-    get AutoRunInterval(): number | null {  
+    get AutoRunInterval(): number | null {
         return this.Get('AutoRunInterval');
     }
     set AutoRunInterval(value: number | null) {
@@ -31454,7 +31455,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: nvarchar(200)
     * * Description: If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.
     */
-    get SubclassName(): string | null {  
+    get SubclassName(): string | null {
         return this.Get('SubclassName');
     }
     set SubclassName(value: string | null) {
@@ -31467,7 +31468,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31477,7 +31478,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -31486,12 +31487,12 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * Display Name: Auto Run Interval Minutes
     * * SQL Data Type: int
     */
-    get AutoRunIntervalMinutes(): number | null {  
+    get AutoRunIntervalMinutes(): number | null {
         return this.Get('AutoRunIntervalMinutes');
     }
 }
 
-            
+
 /**
  * Workspace Items - strongly typed entity sub-class
  * * Schema: __mj
@@ -31515,7 +31516,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * @memberof WorkspaceItemEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -31528,7 +31529,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -31537,7 +31538,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -31549,7 +31550,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -31562,7 +31563,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Workspaces (vwWorkspaces.ID)
     */
-    get WorkspaceID(): string {  
+    get WorkspaceID(): string {
         return this.Get('WorkspaceID');
     }
     set WorkspaceID(value: string) {
@@ -31575,7 +31576,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
     */
-    get ResourceTypeID(): string {  
+    get ResourceTypeID(): string {
         return this.Get('ResourceTypeID');
     }
     set ResourceTypeID(value: string) {
@@ -31587,7 +31588,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Resource Record ID
     * * SQL Data Type: nvarchar(2000)
     */
-    get ResourceRecordID(): string | null {  
+    get ResourceRecordID(): string | null {
         return this.Get('ResourceRecordID');
     }
     set ResourceRecordID(value: string | null) {
@@ -31599,7 +31600,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Sequence
     * * SQL Data Type: int
     */
-    get Sequence(): number {  
+    get Sequence(): number {
         return this.Get('Sequence');
     }
     set Sequence(value: number) {
@@ -31611,7 +31612,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Configuration(): string | null {  
+    get Configuration(): string | null {
         return this.Get('Configuration');
     }
     set Configuration(value: string | null) {
@@ -31624,7 +31625,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31634,7 +31635,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -31643,7 +31644,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Workspace
     * * SQL Data Type: nvarchar(255)
     */
-    get Workspace(): string {  
+    get Workspace(): string {
         return this.Get('Workspace');
     }
 
@@ -31652,12 +31653,12 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
     */
-    get ResourceType(): string {  
+    get ResourceType(): string {
         return this.Get('ResourceType');
     }
 }
 
-            
+
 /**
  * Workspaces - strongly typed entity sub-class
  * * Schema: __mj
@@ -31681,7 +31682,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * @memberof WorkspaceEntity
     * @method
     * @override
-    */      
+    */
     public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
@@ -31694,7 +31695,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
-    get ID(): string {  
+    get ID(): string {
         return this.Get('ID');
     }
 
@@ -31703,7 +31704,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     */
-    get Name(): string {  
+    get Name(): string {
         return this.Get('Name');
     }
     set Name(value: string) {
@@ -31715,7 +31716,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
-    get Description(): string | null {  
+    get Description(): string | null {
         return this.Get('Description');
     }
     set Description(value: string | null) {
@@ -31728,7 +31729,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
     */
-    get UserID(): string {  
+    get UserID(): string {
         return this.Get('UserID');
     }
     set UserID(value: string) {
@@ -31741,7 +31742,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_CreatedAt(): Date {  
+    get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
     }
 
@@ -31751,7 +31752,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
-    get __mj_UpdatedAt(): Date {  
+    get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
 
@@ -31760,7 +31761,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
-    get User(): string {  
+    get User(): string {
         return this.Get('User');
     }
 }

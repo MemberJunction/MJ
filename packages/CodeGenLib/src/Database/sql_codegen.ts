@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata } from '@memberjunction/core';
-import { logError, logStatus } from '../Misc/logging';
+import { logError, logMessage, logStatus, logWarning } from '../Misc/logging';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -19,9 +19,9 @@ export const SPType = {
     Update: 'Update',
     Delete: 'Delete',
   } as const;
-  
+
 export type SPType = typeof SPType[keyof typeof SPType];
-  
+
 
 /**
  * This class is responsible for generating database level objects like views, stored procedures, permissions, etc. You can sub-class this class to create your own SQL generation logic or implement support for other
@@ -37,31 +37,31 @@ export class SQLCodeGenBase {
 
     public async manageSQLScriptsAndExecution(ds: DataSource, entities: EntityInfo[], directory: string): Promise<boolean> {
         try {
-            // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if 
-            //          we have custom base views, need to have them defined before we do 
-            //          the rest as the generated stuff might use custom base views in compiled 
+            // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
+            //          we have custom base views, need to have them defined before we do
+            //          the rest as the generated stuff might use custom base views in compiled
             //          objects like spCreate for a given entity might reference the vw for that entity
             const startTime: Date = new Date();
             if (! await this.runCustomSQLScripts(ds, 'before-sql'))
                 return false;
             logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - startTime.getTime())/1000} seconds`);
-    
+
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
-    
+
             // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
             this.deleteGeneratedEntityFiles(directory, baselineEntities);
 
             // STEP 2(b) - generate all the SQL files and execute them
             const step2StartTime: Date = new Date();
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, includedEntities, directory, false, true);
-            if (!genResult.Success) {  
+            if (!genResult.Success) {
                 logError('Error generating all entities SQL to separate files');
                 return false;
             }
-    
+
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, excludedEntities, directory, true, true);
             if (!genResult2.Success) {
@@ -69,7 +69,7 @@ export class SQLCodeGenBase {
                 return false;
             }
             logStatus(`   Time to generate entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
-    
+
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
             const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
             // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
@@ -80,7 +80,7 @@ export class SQLCodeGenBase {
             }
             const step2eEndTime: Date = new Date();
             logStatus(`   Time to Execute Combined Entity SQL: ${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000} seconds`);
-                    
+
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
@@ -88,20 +88,29 @@ export class SQLCodeGenBase {
                 logError('Error managing entity fields');
                 return false;
             }
-    
+            // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
+
+            // STEP 4- Apply permissions, executing all .permissions files
+            const step4StartTime: Date = new Date();
+            if (! await this.applyPermissions(ds, directory, baselineEntities)) {
+                logError('Error applying permissions');
+                return false;
+            }
+            logStatus(`   Time to Apply Permissions: ${(new Date().getTime() - step4StartTime.getTime())/1000} seconds`);
+            
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(ds, 'after-sql'))
                 return false;
-    
+
             logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - step5StartTime.getTime())/1000} seconds`);
-    
+
             logStatus('   Total time to run generate and execute SQL scripts: ' + ((new Date().getTime() - startTime.getTime())/1000) + ' seconds');
-    
+
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata();
             await md.Refresh();
-            
+
             return true;
         }
         catch (err) {
@@ -109,12 +118,12 @@ export class SQLCodeGenBase {
             return false;
         }
     }
-    
+
     public async runCustomSQLScripts(ds: DataSource, when: string): Promise<boolean> {
         try {
             const scripts = customSqlScripts(when);
             let bSuccess: boolean = true;
-    
+
             if (scripts) {
                 for (let i = 0; i < scripts.length; ++i) {
                     const s = scripts[i];
@@ -124,7 +133,7 @@ export class SQLCodeGenBase {
                     }
                 }
             }
-    
+
             return bSuccess;
         }
         catch (e) {
@@ -132,12 +141,12 @@ export class SQLCodeGenBase {
             return false;
         }
     }
-    
-    
+
+
     public async applyPermissions(ds: DataSource, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
-    
+
             for (let i = 0; i < entities.length; i += batchSize) {
                 const batch = entities.slice(i, i + batchSize);
                 const promises = batch.map(async (e) => {
@@ -151,21 +160,21 @@ export class SQLCodeGenBase {
                                 innerSuccess = false; // we keep going, just note that something failed
                         }
                         else {
-                            // we don't have the file, so we can't execute it, but we should log it as an error 
+                            // we don't have the file, so we can't execute it, but we should log it as an error
                             // and then keep going
                             logError(`Permissions file ${fullPath} does not exist for entity ${e.Name}`);
                         }
                     }
                     return innerSuccess;
                 });
-    
+
                 const results = await Promise.all(promises);
                 if (results.includes(false)) {
                     logError(`Error executing one or more permissions files in batch starting from index ${i}`);
                     bSuccess = false; // keep going, but will return false at the end
                 }
             }
-    
+
             return bSuccess;
         }
         catch (err) {
@@ -173,8 +182,8 @@ export class SQLCodeGenBase {
             return false;
         }
     }
-    
-    
+
+
     /**
      * This function will handle the process of creating all of the generated objects like base view, stored procedures, etc. for all entities in the entities array. It will generate the SQL for each entity and then execute it.
      * @param ds The DataSource object to use to execute the SQL
@@ -187,7 +196,7 @@ export class SQLCodeGenBase {
         try {
             let bFail: boolean = false;
             const totalEntities = entities.length;
-    
+
             for (let i = 0; i < totalEntities; i += batchSize) {
                 const batch = entities.slice(i, i + batchSize);
                 const promises = batch.map(async (e) => {
@@ -198,7 +207,7 @@ export class SQLCodeGenBase {
                     }
                     return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, skipExecution, writeFiles);
                 });
-    
+
                 const results = await Promise.all(promises);
                 results.forEach(r => {
                     if (!r.Success)
@@ -206,7 +215,7 @@ export class SQLCodeGenBase {
                     files.push(...r.Files); // add the files to the main files array
                 });
             }
-    
+
             return {Success: !bFail, Files: files};
         }
         catch (err) {
@@ -214,7 +223,7 @@ export class SQLCodeGenBase {
             return {Success: false, Files: files};
         }
     }
-    
+
     public deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
         try {
             // for the schemas associated with the specified entities, clean out all the generated files
@@ -223,7 +232,13 @@ export class SQLCodeGenBase {
                 const fullPath = path.join(directory, s);
                 // now, within each schema directory, clean out all the generated files
                 // the generated files map this pattern: *.generated.sql or *.permissions.generated.sql
-                if (fs.statSync(fullPath).isDirectory()) {
+                let stats: fs.Stats | undefined;
+                try {
+                  stats = fs.statSync(fullPath)
+                } catch (e) {
+                    logMessage(`Directory '${fullPath}' does not exist so no need to delete previously generated SQL`, 'Info');
+                }
+                if (stats?.isDirectory()) {
                     const files = fs.readdirSync(fullPath).filter(f => f.endsWith('.generated.sql') || f.endsWith('.permissions.generated.sql'));
                     for (const f of files) {
                         const filePath = path.join(fullPath, f);
@@ -233,7 +248,7 @@ export class SQLCodeGenBase {
             }
         }
         catch (e) {
-            logError(e as string);            
+            logError(e as string);
         }
     }
 
@@ -253,9 +268,9 @@ export class SQLCodeGenBase {
         }
         return files;
     }
-    
-    
-    
+
+
+
     public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{Success: boolean, Files: string[]}> {
         try {
             const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, skipExecution, writeFiles); // this creates the files and returns a single string with all the SQL we can then execute
@@ -265,7 +280,7 @@ export class SQLCodeGenBase {
                     Files: files
                 }
             }
-            else 
+            else
                 return {Success: true, Files: files};
         }
         catch (err) {
@@ -273,22 +288,22 @@ export class SQLCodeGenBase {
             return {Success: false, Files: []};
         }
     }
-    
+
     public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
         const files: string[] = [];
         try {
             // create the directory if it doesn't exist
             if (writeFiles && !fs.existsSync(directory))
-                fs.mkdirSync(directory, { recursive: true }); 
-    
+                fs.mkdirSync(directory, { recursive: true });
+
             // now do the same thing for the /schema directory within the provided directory
             const schemaDirectory = path.join(directory, entity.SchemaName);
             if (writeFiles && !fs.existsSync(schemaDirectory))
                 fs.mkdirSync(schemaDirectory, { recursive: true }); // create the directory if it doesn't exist
-    
+
             let sRet: string = ''
             let permissionsSQL: string = ''
-            // BASE VIEW  
+            // BASE VIEW
             if (!onlyPermissions && entity.BaseViewGenerated && !entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(entity,entity.BaseView) + await this.generateBaseView(ds, entity)
@@ -301,19 +316,19 @@ export class SQLCodeGenBase {
             }
             // always generate permissions for the base view
             const s = this.generateSingleEntitySQLFileHeader(entity, 'Permissions for ' + entity.BaseView) + this.generateViewPermissions(entity)
-            if (s.length > 0) 
-                permissionsSQL += s + '\nGO\n'; 
+            if (s.length > 0)
+                permissionsSQL += s + '\nGO\n';
             if (writeFiles) {
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true));
                 fs.writeFileSync(filePath, s)
                 files.push(filePath);
             }
-    
+
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
             if (!entity.BaseViewGenerated)
                 sRet += s + '\nGO\n';
-    
+
             // CREATE SP
             if (entity.AllowCreateAPI && !entity.VirtualEntity) {
                 const spName: string = this.getSPName(entity, SPType.Create);
@@ -327,21 +342,21 @@ export class SQLCodeGenBase {
                     }
                     sRet += s + '\nGO\n';
                 }
-                const s = this.generateSPPermissions(entity, spName, SPType.Create) + '\n\n';           
-                if (s.length > 0) 
-                    permissionsSQL += s + '\nGO\n'; 
+                const s = this.generateSPPermissions(entity, spName, SPType.Create) + '\n\n';
+                if (s.length > 0)
+                    permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true))
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
-    
+
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
                 if (!entity.spCreateGenerated)
                     sRet += s + '\nGO\n';
             }
-    
+
             // UPDATE SP
             if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
                 const spName: string = this.getSPName(entity, SPType.Update);
@@ -351,25 +366,25 @@ export class SQLCodeGenBase {
                     if (writeFiles) {
                         const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
                         fs.writeFileSync(filePath, s);
-                        files.push(filePath);    
+                        files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Update) + '\n\n';
-                if (s.length > 0) 
-                    permissionsSQL += s + '\nGO\n';     
+                if (s.length > 0)
+                    permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
-    
+
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
                 if (!entity.spUpdateGenerated)
                     sRet += s + '\nGO\n';
             }
-    
+
             // DELETE SP
             if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
                 const spName: string = this.getSPName(entity, SPType.Delete);
@@ -384,20 +399,20 @@ export class SQLCodeGenBase {
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Delete) + '\n\n';
-                if (s.length > 0) 
-                    permissionsSQL += s + '\nGO\n';     
+                if (s.length > 0)
+                    permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
-    
+
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
                 if (!entity.spDeleteGenerated)
                     sRet += s + '\nGO\n';
             }
-    
+
             // check to see if the entity supports full text search or not
             if (entity.FullTextSearchEnabled) {
                 // always generate the code so we can get the function name from the below function call
@@ -411,23 +426,23 @@ export class SQLCodeGenBase {
                     }
                     sRet += ft.sql + '\nGO\n';
                 }
-    
+
                 const sP = this.generateFullTextSearchFunctionPermissions(entity, ft.functionName) + '\n\n';
-                if (sP.length > 0) 
-                    permissionsSQL += sP + '\nGO\n'; 
-    
+                if (sP.length > 0)
+                    permissionsSQL += sP + '\nGO\n';
+
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
                 if (writeFiles) {
                     fs.writeFileSync(filePath, sP)
                     files.push(filePath);
                 }
-                
+
                 // now, append the permissions to the return string IF we did NOT generate the function - because if we generated the function, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
                 if (!entity.FullTextSearchFunctionGenerated)
                     sRet += sP + '\nGO\n';
             }
-    
+
             return {sql: sRet, permissionsSQL: permissionsSQL, files: files};
         }
         catch (err) {
@@ -435,7 +450,7 @@ export class SQLCodeGenBase {
             return null!;
         }
     }
-    
+
     public getSPName(entity: EntityInfo, type: SPType): string {
         switch (type) {
             case SPType.Create:
@@ -446,12 +461,12 @@ export class SQLCodeGenBase {
                 return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
         }
     }
-    
+
     public getEntityPermissionFileNames(entity: EntityInfo): string[] {
         const files = [];
         // all entities have a base view - and we always generate permissions for the base view even if not generated base view
         files.push(this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true));
-    
+
         // only add the SP files if the entity is not a virtual entity
         if (!entity.VirtualEntity) {
             // only add each SP file if the Allow flags are set to true, doesn't matter if the SPs are generated or not, we always generate permissions
@@ -464,71 +479,71 @@ export class SQLCodeGenBase {
         }
         if (entity.FullTextSearchEnabled)
             files.push(this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
-    
-        return files;   
+
+        return files;
     }
-    
-    
+
+
     public async generateEntitySQL(ds: DataSource, entity: EntityInfo): Promise<string> {
         let sOutput: string = ''
-        if (entity.BaseViewGenerated && !entity.VirtualEntity) 
+        if (entity.BaseViewGenerated && !entity.VirtualEntity)
             // generated the base view (will include permissions)
             sOutput += await this.generateBaseView(ds, entity) + '\n\n';
-        else 
+        else
             // still generate the permissions for the view even if a custom view
             sOutput += this.generateViewPermissions(entity) + '\n\n';
-    
+
         if (entity.AllowCreateAPI && !entity.VirtualEntity) {
-            if (entity.spCreateGenerated) 
+            if (entity.spCreateGenerated)
                 // generated SP, will include permissions
                 sOutput += this.generateSPCreate(entity) + '\n\n';
             else
                 // custom SP, still generate the permissions
-                sOutput += this.generateSPPermissions(entity, entity.spCreate, SPType.Create) + '\n\n';           
+                sOutput += this.generateSPPermissions(entity, entity.spCreate, SPType.Create) + '\n\n';
         }
-    
+
         if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
             if (entity.spUpdateGenerated)
                 // generated SP, will include permissions
                 sOutput += this.generateSPUpdate(entity) + '\n\n';
             else
                 // custom SP, still generate the permissions
-                sOutput += this.generateSPPermissions(entity, entity.spUpdate, SPType.Update) + '\n\n';           
+                sOutput += this.generateSPPermissions(entity, entity.spUpdate, SPType.Update) + '\n\n';
         }
-    
+
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             if (entity.spDeleteGenerated)
                 // generated SP, will include permissions
                 sOutput += this.generateSPDelete(entity) + '\n\n';
             else
                 // custom SP, still generate the permissions
-                sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';   
+                sOutput += this.generateSPPermissions(entity, entity.spDelete, SPType.Delete) + '\n\n';
         }
-    
+
         // check to see if the entity supports full text search or not
         if (entity.FullTextSearchEnabled) {
             sOutput += await this.generateEntityFullTextSearchSQL(ds, entity) + '\n\n';
         }
         return sOutput
     }
-    
+
     async generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInfo): Promise<{sql: string, functionName: string}> {
         let sql = '';
-        
+
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0 ? entity.FullTextCatalog : dbDatabase + '_FullTextCatalog';
         if (entity.FullTextCatalogGenerated) {
             // this situation means we have a generated catalog and the user has provided a name specific to THIS entity
             sql += `                -- CREATE THE FULL TEXT CATALOG FOR THE ENTITY, IF NOT ALREADY CREATED
                 IF NOT EXISTS (
-                    SELECT * 
-                    FROM sys.fulltext_catalogs 
+                    SELECT *
+                    FROM sys.fulltext_catalogs
                     WHERE name = '${catalogName}'
                 )
                     CREATE FULLTEXT CATALOG ${catalogName};
                 GO
     `
         }
-    
+
         if (entity.FullTextIndexGenerated) {
             const fullTextFields = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => `${f.Name} LANGUAGE 'English'`).join(', ');
             if (fullTextFields.length === 0)
@@ -537,18 +552,18 @@ export class SQLCodeGenBase {
             const entity_pk_name = await this.getEntityPrimaryKeyIndexName(ds, entity);
             sql += `                -- DROP AND RECREATE THE FULL TEXT INDEX
                 IF EXISTS (
-                    SELECT * 
-                    FROM sys.fulltext_indexes 
+                    SELECT *
+                    FROM sys.fulltext_indexes
                     WHERE object_id = OBJECT_ID('${entity.SchemaName}.${entity.BaseTable}')
                 )
                 BEGIN
                     DROP FULLTEXT INDEX ON [${entity.SchemaName}].[${entity.BaseTable}];
                 END
                 GO
-                
+
                 IF NOT EXISTS (
-                    SELECT * 
-                    FROM sys.fulltext_indexes 
+                    SELECT *
+                    FROM sys.fulltext_indexes
                     WHERE object_id = OBJECT_ID('${entity.SchemaName}.${entity.BaseTable}')
                 )
                 BEGIN
@@ -556,13 +571,13 @@ export class SQLCodeGenBase {
                     (
                         ${fullTextFields}
                     )
-                    KEY INDEX ${entity_pk_name} 
+                    KEY INDEX ${entity_pk_name}
                     ON ${catalogName};
                 END
                 GO
-    `        
+    `
         }
-    
+
         const functionName: string = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0 ? entity.FullTextSearchFunction : `fnSearch${entity.CodeName}`;
         if (entity.FullTextSearchFunctionGenerated) {
             const fullTextFieldsSimple = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => '[' + f.Name + ']').join(', ');
@@ -574,7 +589,7 @@ export class SQLCodeGenBase {
                 const u = UserCache.Instance.Users[0];
                 if (!u)
                     throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
-    
+
                 const e = <EntityEntity>await md.GetEntityObject('Entities', u);
                 await e.Load(entity.ID);
                 e.FullTextSearchFunction = functionName;
@@ -601,23 +616,23 @@ export class SQLCodeGenBase {
     `
             sql += this.generateFullTextSearchFunctionPermissions(entity, functionName) + '\n\nGO\n';
         }
-    
+
         return {sql,functionName};
     }
-    
+
     async getEntityPrimaryKeyIndexName(ds: DataSource, entity: EntityInfo): Promise<string> {
-        const sSQL = `  SELECT 
+        const sSQL = `  SELECT
         i.name AS IndexName
-    FROM 
+    FROM
         sys.indexes i
-    INNER JOIN 
+    INNER JOIN
         sys.objects o ON i.object_id = o.object_id
-    INNER JOIN 
-        sys.key_constraints kc ON i.object_id = kc.parent_object_id AND 
+    INNER JOIN
+        sys.key_constraints kc ON i.object_id = kc.parent_object_id AND
         i.index_id = kc.unique_index_id
-    WHERE 
-        o.name = '${entity.BaseTable}' AND 
-        o.schema_id = SCHEMA_ID('${entity.SchemaName}') AND 
+    WHERE
+        o.name = '${entity.BaseTable}' AND
+        o.schema_id = SCHEMA_ID('${entity.SchemaName}') AND
         kc.type = 'PK';
         `
         const result = await ds.query(sSQL);
@@ -626,14 +641,14 @@ export class SQLCodeGenBase {
         else
             throw new Error(`Could not find primary key index for entity ${entity.Name}`);
     }
-    
+
     public generateAllEntitiesSQLFileHeader(): string {
         return `-----------------------------------------------------------------
 -- SQL Code Generation for Entities
 -- Generated: ${new Date().toLocaleString()}
 --
--- This file contains the SQL code for the entities in the database 
--- that are included in the API and have generated SQL elements like views and 
+-- This file contains the SQL code for the entities in the database
+-- that are included in the API and have generated SQL elements like views and
 -- stored procedures.
 --
 -- It is generated by the MemberJunction CodeGen tool.
@@ -641,7 +656,7 @@ export class SQLCodeGenBase {
 -----------------------------------------------------------------
 `
     }
-    
+
     public generateSingleEntitySQLFileHeader(entity: EntityInfo, itemName: string): string {
         return `-----------------------------------------------------------------
 -- SQL Code Generation
@@ -654,14 +669,14 @@ export class SQLCodeGenBase {
 -----------------------------------------------------------------
 `
     }
-    
+
     async generateBaseView(ds: DataSource, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const baseTableFirstChar: string = entity.BaseTable.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
-        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE 
+        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
     ${baseTableFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
         return `
@@ -676,14 +691,14 @@ GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
-SELECT 
+SELECT
     ${baseTableFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${baseTableFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
 ${whereClause}GO${permissions}
     `
     }
-    
+
     protected generateViewPermissions(entity: EntityInfo): string {
         let sOutput: string = '';
         for (let i: number = 0; i < entity.Permissions.length; i++) {
@@ -692,10 +707,10 @@ ${whereClause}GO${permissions}
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
-    
+
     protected generateBaseViewJoins(entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
-        for (let i: number = 0; i < entityFields.length; i++) { 
+        for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
             if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
@@ -704,7 +719,7 @@ ${whereClause}GO${permissions}
         }
         return sOutput;
     }
-    
+
     async generateBaseViewRelatedFieldsString(ds: DataSource, entityFields: EntityFieldInfo[]): Promise<string> {
         let sOutput: string = '';
         let fieldCount: number = 0;
@@ -721,7 +736,7 @@ ${whereClause}GO${permissions}
 
                 // This next section generates a field name for the new virtual field and makes sure it doesn't collide with a field in the base table
                 const candidateName = this.stripID(ef.Name);
-                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating) 
+                // check to make sure candidateName is not already a field name in the base table (other than a virtual field of course, as that is what we're creating)
                 // because if it is, we need to change it to something else
                 const bFound = entityFields.find(f => f.IsVirtual === false && f.Name.trim().toLowerCase() === candidateName.trim().toLowerCase()) !== undefined;
                 if (bFound)
@@ -733,8 +748,8 @@ ${whereClause}GO${permissions}
                 sOutput += `${fieldCount === 0 ? '' : ','}\n    ${ef._RelatedEntityTableAlias}.[${nameField}] AS [${ef._RelatedEntityNameFieldMap}]`;
 
                 // check to see if the database already knows about the RelatedEntityNameFieldMap or not
-                if (ef.RelatedEntityNameFieldMap === null || 
-                    ef.RelatedEntityNameFieldMap === undefined || 
+                if (ef.RelatedEntityNameFieldMap === null ||
+                    ef.RelatedEntityNameFieldMap === undefined ||
                     ef.RelatedEntityNameFieldMap.trim().length === 0) {
                     // the database doesn't yet know about this RelatedEntityNameFieldMap, so we need to update it
                     // first update the actul field in the metadata object so it can be used from this point forward
@@ -748,34 +763,34 @@ ${whereClause}GO${permissions}
         }
         return sOutput;
     }
-    
+
     protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean} {
         const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive
         const e: EntityInfo = md.Entities.find(e => e.Name === entityName)!;
         if (e) {
             const ef: EntityFieldInfo = e.NameField!;
-            if (e.NameField) 
-                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual};   
+            if (e.NameField)
+                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual};
         }
         else
             logStatus(`ERROR: Could not find entity with name ${entityName}`);
-    
+
         return {nameField: '', nameFieldIsVirtual: false}
     }
-    
+
     protected stripID(name: string): string {
         if (name.endsWith('ID'))
             return name.substring(0, name.length - 2);
-        else    
+        else
             return name;
     }
-    
-    
+
+
     protected generateSPPermissions(entity: EntityInfo, spName: string, type: SPType): string {
         let sOutput: string = '';
         for (let i: number = 0; i < entity.Permissions.length; i++) {
             const ep: EntityPermissionInfo = entity.Permissions[i];
-            if (    
+            if (
                     (type == SPType.Create && ep.CanCreate) ||
                     (type == SPType.Update && ep.CanUpdate) ||
                     (type == SPType.Delete && ep.CanDelete)
@@ -784,7 +799,7 @@ ${whereClause}GO${permissions}
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
-    
+
     protected generateFullTextSearchFunctionPermissions(entity: EntityInfo, functionName: string): string {
         let sOutput: string = '';
         for (let i: number = 0; i < entity.Permissions.length; i++) {
@@ -794,17 +809,17 @@ ${whereClause}GO${permissions}
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
-    
-    
+
+
     protected generateSPCreate(entity: EntityInfo): string {
         const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
         const firstKey = entity.FirstPrimaryKey;
-        
+
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
         const primaryKeyAutomatic: boolean = firstKey.AutoIncrement || (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier') && (!!firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0);
         const efString: string = this.createEntityFieldsParamString(entity.Fields, !primaryKeyAutomatic);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Create);
-    
+
         let preInsertCode = '';
         let outputCode = '';
         let selectInsertedRecord = '';
@@ -814,7 +829,7 @@ ${whereClause}GO${permissions}
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = SCOPE_IDENTITY()`;
         } else if (entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
             // our primary key is a uniqueidentifier. Two scenarios exist for this:
-            // 1) The default value is specified in the database (usually either NEWID() or NEWSEQUENTIALID()). 
+            // 1) The default value is specified in the database (usually either NEWID() or NEWSEQUENTIALID()).
             // 2) No default value is specified, so we need to generate a new GUID in the stored procedure using NEWID() --- NewSequentialID() is not allowed in a stored procedure, only usable as a default value.
 
             // so, first check to see if there is a default value for the field or not
@@ -827,7 +842,7 @@ ${whereClause}GO${permissions}
                 preInsertCode = `DECLARE @InsertedRow TABLE ([${entity.FirstPrimaryKey.Name}] UNIQUEIDENTIFIER)`;
                 outputCode = `OUTPUT INSERTED.[${entity.FirstPrimaryKey.Name}] INTO @InsertedRow
     `
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;    
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = (SELECT [${entity.FirstPrimaryKey.Name}] FROM @InsertedRow)`;
             }
             else {
                 // we have no default value, so we use NEWID() to generate a new GUID and we manually insert it into the table
@@ -836,20 +851,20 @@ ${whereClause}GO${permissions}
 
                 additionalFieldList = ',\n            [' + entity.FirstPrimaryKey.Name + ']';
                 additionalValueList = ',\n            @newId';
-        
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;    
+
+                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.FirstPrimaryKey.Name}] = @newId`;
             }
         } else {
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
             for (let k of entity.PrimaryKeys) {
-                if (!isFirst) 
+                if (!isFirst)
                     selectInsertedRecord += ' AND ';
-                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;            
+                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
                 isFirst = false;
             }
         }
-    
+
         return `
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
@@ -863,7 +878,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     ${preInsertCode}
-    INSERT INTO 
+    INSERT INTO
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
             ${this.createEntityFieldsInsertString(entity, entity.Fields, '')}${additionalFieldList}
@@ -897,37 +912,37 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
+    UPDATE
         [${entity.SchemaName}].[${entity.BaseTable}]
-    SET 
+    SET
         ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
-    FROM 
+    FROM
         [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
-    INNER JOIN 
-        INSERTED AS I ON 
+    INNER JOIN
+        INSERTED AS I ON
         ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
 END;
 GO`;
-        return triggerStatement;    
+        return triggerStatement;
     }
-    
+
     protected generateSPUpdate(entity: EntityInfo): string {
         const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger: string = hasUpdatedAtField ? this.generateUpdatedAtTrigger(entity) : '';
-        let selectInsertedRecord = `SELECT 
-                                        * 
-                                    FROM 
-                                        [${entity.SchemaName}].[${entity.BaseView}] 
+        let selectInsertedRecord = `SELECT
+                                        *
+                                    FROM
+                                        [${entity.SchemaName}].[${entity.BaseView}]
                                     WHERE
                                         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
                                     `;
-    
+
         return `
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR ${entity.BaseTable}  
+----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
 DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
 GO
@@ -937,9 +952,9 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
+    UPDATE
         [${entity.SchemaName}].[${entity.BaseTable}]
-    SET 
+    SET
         ${this.createEntityFieldsUpdateString(entity.Fields)}
     WHERE
         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
@@ -955,7 +970,7 @@ ${updatedAtTrigger}
     }
 
     private __specialUUIDValue = '00000000-0000-0000-0000-000000000000';
-    
+
     protected createEntityFieldsParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
@@ -965,7 +980,7 @@ ${updatedAtTrigger}
                 (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate)) &&
                     !ef.IsVirtual &&
                 (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey || isUpdate) &&
-                    !ef.IsSpecialDateField 
+                    !ef.IsSpecialDateField
               ) {
                 // if we get here, then we need to include this field in the parameter list, unless we are dealing with a uniqueidentifer column
                 // that is NOT a primary key AND also this is an spCreate AND we have NO default value specified for the column
@@ -974,11 +989,11 @@ ${updatedAtTrigger}
                     // just skip it
                 }
                 else {
-                    if (!isFirst) 
+                    if (!isFirst)
                         sOutput += ',\n    ';
-                    else 
+                    else
                         isFirst = false;
-    
+
                     // for unique identifiers, only for spCreate procs, IF there is a default value specified then we append a default parameter value
                     // to the sproc param with '00000000-0000-0000-0000-000000000000' so that the sproc can be called without passing in a value
                     // within the sproc body for spCreate, we will look for this special value and substitute it with the actual default value for the column (typically newid() or newsequentialid())
@@ -986,27 +1001,27 @@ ${updatedAtTrigger}
                     if (!isUpdate && ef.Type.toLowerCase().trim() === 'uniqueidentifier' && ef.DefaultValue && ef.DefaultValue.trim().length > 0) {
                         defaultParamValue = ` = '${this.__specialUUIDValue}'`;
                     }
-                    sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;    
+                    sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
                 }
             }
         }
         return sOutput;
     }
-    
+
     protected createEntityFieldsInsertString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string): string {
         const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement || entity.FirstPrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier';
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
-            if ((!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) && 
-                ef.IsVirtual === false && 
-                ef.AllowUpdateAPI && 
+            if ((!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) &&
+                ef.IsVirtual === false &&
+                ef.AllowUpdateAPI &&
                 ef.AutoIncrement === false) {
-                if (!isFirst) 
+                if (!isFirst)
                     sOutput += ',\n            '
                 else
                     isFirst = false;
-    
+
                 if (prefix !== '' && ef.IsSpecialDateField) {
                     if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
                         sOutput += `GETUTCDATE()`; // we set the inserted row value to the current date for created and updated at fields
@@ -1032,29 +1047,29 @@ ${updatedAtTrigger}
         }
         return sOutput;
     }
-    
-    
+
+
     protected createEntityFieldsUpdateString(entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
-            if (!ef.IsPrimaryKey && 
-                !ef.IsVirtual && 
-                ef.AllowUpdateAPI && 
-                !ef.AutoIncrement && 
+            if (!ef.IsPrimaryKey &&
+                !ef.IsVirtual &&
+                ef.AllowUpdateAPI &&
+                !ef.AutoIncrement &&
                 !ef.IsSpecialDateField) {
-                if (!isFirst) 
+                if (!isFirst)
                     sOutput += ',\n        '
                 else
                     isFirst = false;
-    
+
                 sOutput += `[${ef.Name}] = @${ef.CodeName}`; // always put field names in brackets for field names that have spaces or use reserved words. Also, we use CodeName for the param name, which is the field name unless it has spaces
             }
         }
         return sOutput;
     }
-    
-    
+
+
     protected generateSPDelete(entity: EntityInfo): string {
         const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.ClassName}`;
         const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
@@ -1065,19 +1080,19 @@ ${updatedAtTrigger}
             if (sVariables !== '')
                 sVariables += ', ';
             sVariables += `@${k.CodeName} ${k.SQLFullType}`;
-    
+
             if (sSelect !== '')
                 sSelect += ', ';
-            sSelect += `@${k.CodeName} AS [${k.Name}]`;        
+            sSelect += `@${k.CodeName} AS [${k.Name}]`;
         }
 
         // next up, create the delete code which is based on the type of delete the entity is set to
         // start off by creating the where clause first and then prepend the delete or update statement to it
-        let deleteCode: string = `    WHERE 
+        let deleteCode: string = `    WHERE
         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
 `
         if (entity.DeleteType === 'Hard') {
-            deleteCode =`    DELETE FROM 
+            deleteCode =`    DELETE FROM
         [${entity.SchemaName}].[${entity.BaseTable}]
 ${deleteCode}`
         }
@@ -1088,7 +1103,7 @@ ${deleteCode}`
         ${EntityInfo.DeletedAtFieldName} = GETUTCDATE()
 ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't update the record if it's already been deleted via a soft delete`
         }
-    
+
         return `
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
@@ -1098,7 +1113,7 @@ GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
     ${sVariables}
-AS  
+AS
 BEGIN
     SET NOCOUNT ON;${sCascadeDeletes}
 
@@ -1109,12 +1124,12 @@ END
 GO${permissions}
     `
     }
-    
+
     protected generateCascadeDeletes(entity: EntityInfo): string {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
             const md = new Metadata();
-        
+
             // we need to find all of the fields in other entities that are foreign keys to this entity
             // and generate DELETE statements for those tables
             for (let i: number = 0; i < md.Entities.length; ++i) {
@@ -1125,13 +1140,13 @@ GO${permissions}
                         let sql: string = '';
                         if (ef.AllowsNull === false) {
                             // we have a non-virtual field that is a foreign key to this entity
-                            // and only those that are non-null. If they allow null we want to UPDATE those rows to be null 
+                            // and only those that are non-null. If they allow null we want to UPDATE those rows to be null
                             // so we need to generate a DELETE statement for that table
                             sql = `
     -- Cascade delete from ${e.BaseTable}
-    DELETE FROM 
-        [${e.SchemaName}].[${e.BaseTable}] 
-    WHERE 
+    DELETE FROM
+        [${e.SchemaName}].[${e.BaseTable}]
+    WHERE
         [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
                         }
                         else {
@@ -1140,11 +1155,11 @@ GO${permissions}
                             // so they don't have an orphaned foreign key
                             sql = `
     -- Cascade update on ${e.BaseTable} - set FK to null before deleting rows in ${entity.BaseTable}
-    UPDATE 
-        [${e.SchemaName}].[${e.BaseTable}] 
-    SET 
-        [${ef.CodeName}] = NULL 
-    WHERE 
+    UPDATE
+        [${e.SchemaName}].[${e.BaseTable}]
+    SET
+        [${ef.CodeName}] = NULL
+    WHERE
         [${ef.CodeName}] = @${entity.FirstPrimaryKey.CodeName}`;
                         }
                         if (sOutput !== '')

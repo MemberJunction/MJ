@@ -128,7 +128,7 @@ ${
 }
 
 
-import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';
+${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';` : `export {}`}
     `;
     return sRet;
   }
@@ -240,8 +240,7 @@ export class ${serverGraphQLTypeName} {`;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
-
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
     if (r.Type.toLowerCase().trim() == 'one to many') {
       return `
@@ -540,8 +539,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
-
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
     return `
     @FieldResolver(() => [${serverClassName}])
@@ -587,7 +585,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
     return `
     @FieldResolver(() => [${serverClassName}])
