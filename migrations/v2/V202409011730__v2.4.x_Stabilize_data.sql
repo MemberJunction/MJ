@@ -104,7 +104,9 @@ VALUES
 ('e2570602-7a7a-4a04-b394-5dd870c38a4e', 'f1a70b3e-8b56-ef11-991a-6045bdeba539', 'dfafccec-6a37-ef11-86d4-000d3a4e707e', 0, 1, 0, 0);
 
 GO
--- Add missing view for AI Prompt
+-- Ensure view exists for AI Prompt
+IF OBJECT_ID(N'${flyway:defaultSchema}.vwAIPrompts', 'V') IS NOT NULL DROP VIEW ${flyway:defaultSchema}.vwAIPrompts;
+GO
 CREATE VIEW [${flyway:defaultSchema}].[vwAIPrompts] AS
 SELECT
     a.*,
@@ -117,7 +119,9 @@ LEFT OUTER JOIN [${flyway:defaultSchema}].[AIPromptCategory] AS AIPromptCategory
 INNER JOIN [${flyway:defaultSchema}].[AIPromptType] AS AIPromptType_TypeID ON [a].[TypeID] = AIPromptType_TypeID.[ID];
 GO
 
--- Add missing view for AI Result Cache
+-- Ensure view exists for AI Result Cache
+IF OBJECT_ID(N'${flyway:defaultSchema}.vwAIResultCaches', 'V') IS NOT NULL DROP VIEW ${flyway:defaultSchema}.vwAIResultCaches;
+GO
 CREATE VIEW [${flyway:defaultSchema}].[vwAIResultCaches] AS
 SELECT
     a.*,
@@ -128,7 +132,9 @@ INNER JOIN [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_AIPromptID ON [a].[A
 INNER JOIN [${flyway:defaultSchema}].[AIModel] AS AIModel_AIModelID ON [a].[AIModelID] = AIModel_AIModelID.[ID];
 GO
 
--- Add missing view for AI Prompt Categories
+-- Ensure view exists for AI Prompt Categories
+IF OBJECT_ID(N'${flyway:defaultSchema}.vwAIPromptCategories', 'V') IS NOT NULL DROP VIEW ${flyway:defaultSchema}.vwAIPromptCategories;
+GO
 CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptCategories] AS
 SELECT
     a.*,
@@ -138,7 +144,9 @@ LEFT OUTER JOIN [${flyway:defaultSchema}].[AIPromptCategory] AS AIPromptCategory
 GO
 
 
--- Add missing view for AI Prompt Types
+-- Ensure view exists for AI Prompt Types
+IF OBJECT_ID(N'${flyway:defaultSchema}.vwAIPromptTypes', 'V') IS NOT NULL DROP VIEW ${flyway:defaultSchema}.vwAIPromptTypes;
+GO
 CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptTypes] AS
 SELECT  a.*
 FROM [${flyway:defaultSchema}].[AIPromptType] AS a;
