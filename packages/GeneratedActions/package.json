@@ -20,12 +20,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/actions": "2.3.3",
-    "@memberjunction/global": "2.3.3",
-    "@memberjunction/core": "2.3.3",
-    "@memberjunction/core-entities": "2.3.3",
-    "@memberjunction/ai": "2.3.3",
-    "@memberjunction/aiengine": "2.3.3",
+    "@memberjunction/actions": "2.4.0",
+    "@memberjunction/global": "2.4.0",
+    "@memberjunction/core": "2.4.0",
+    "@memberjunction/core-entities": "2.4.0",
+    "@memberjunction/ai": "2.4.0",
+    "@memberjunction/aiengine": "2.4.0",
     "zod": "^3.23.8"
   }
 }

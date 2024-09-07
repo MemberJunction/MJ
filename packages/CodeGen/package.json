@@ -20,7 +20,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/codegen-lib": "2.3.3",
+    "@memberjunction/codegen-lib": "2.4.0",
     "dotenv": "^16.4.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"

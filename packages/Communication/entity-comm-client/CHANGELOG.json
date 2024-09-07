@@ -2,6 +2,51 @@
   "name": "@memberjunction/entity-communications-client",
   "entries": [
     {
+      "date": "Sat, 07 Sep 2024 18:07:40 GMT",
+      "version": "2.4.0",
+      "tag": "@memberjunction/entity-communications-client_v2.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/entity-communications-client",
+            "commit": "2d1ad5c385b234f999a0a34f06d94f7fa3e1cbe4",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/global to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/core to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/core-entities to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/entity-communications-base to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/entity-communications-client",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v2.4.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 07 Sep 2024 17:28:16 GMT",
       "version": "2.3.3",
       "tag": "@memberjunction/entity-communications-client_v2.3.3",

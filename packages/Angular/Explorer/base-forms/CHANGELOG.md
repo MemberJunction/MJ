@@ -1,8 +1,25 @@
 # Change Log - @memberjunction/ng-base-forms
 
-This log was last generated on Sat, 07 Sep 2024 17:28:16 GMT and should not be manually modified.
+This log was last generated on Sat, 07 Sep 2024 18:07:40 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.4.0
+
+Sat, 07 Sep 2024 18:07:40 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/global to v2.4.0
+- Bump @memberjunction/core to v2.4.0
+- Bump @memberjunction/ng-code-editor to v2.4.0
+- Bump @memberjunction/ng-shared to v2.4.0
+- Bump @memberjunction/ng-tabstrip to v2.4.0
+- Bump @memberjunction/ng-link-directives to v2.4.0
+- Bump @memberjunction/ng-container-directives to v2.4.0
+- Bump @memberjunction/ng-record-changes to v2.4.0
+- Bump @memberjunction/ng-base-types to v2.4.0
 
 ## 2.3.3
 

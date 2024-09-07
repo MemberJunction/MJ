@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-treelist",
   "entries": [
     {
+      "date": "Sat, 07 Sep 2024 18:07:40 GMT",
+      "version": "2.4.0",
+      "tag": "@memberjunction/ng-treelist_v2.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-treelist",
+            "commit": "2d1ad5c385b234f999a0a34f06d94f7fa3e1cbe4",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/core-entities to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/global to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/core to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-treelist",
+            "comment": "Bump @memberjunction/ng-shared to v2.4.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 07 Sep 2024 17:28:16 GMT",
       "version": "2.3.3",
       "tag": "@memberjunction/ng-treelist_v2.3.3",
