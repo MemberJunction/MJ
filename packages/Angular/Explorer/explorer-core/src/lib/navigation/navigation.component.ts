@@ -11,6 +11,9 @@ import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
 import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+import { CommunicationEngineBase } from '@memberjunction/communication-types';
+import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 
 export interface Tab {
   id?: string;
@@ -991,6 +994,10 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       });
       return item;
     });
+
+    await TemplateEngineBase.Instance.Config(false);
+    await EntityCommunicationsEngineClient.Instance.Config(false);
+    await CommunicationEngineBase.Instance.Config(false);
 
     await this.LoadDrawer();
 
