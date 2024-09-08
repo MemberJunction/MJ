@@ -22,7 +22,6 @@ import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingComplet
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
-import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 
 
 export type GridRowClickedEvent = {

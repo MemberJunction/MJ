@@ -67,6 +67,20 @@ export class EntityField {
     }
 
     /**
+     * Returns true if the field is a uniqueidentifier in the database.
+     */
+    get IsUniqueIdentifier(): boolean {
+        return this._entityFieldInfo.IsUniqueIdentifier;
+    }
+
+    /**
+     * Returns true if the field has a default value set
+     */
+    get HasDefaultValue(): boolean {
+        return this._entityFieldInfo.HasDefaultValue;
+    }
+
+    /**
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
