@@ -28,6 +28,9 @@
   "dependencies": {
     "@memberjunction/global": "2.4.0",
     "@memberjunction/core": "2.4.0",
+    "@memberjunction/entity-communications-client": "2.4.0",
+    "@memberjunction/communication-types": "2.4.0",
+    "@memberjunction/templates-base-types": "2.4.0",
     "@memberjunction/ng-compare-records": "2.4.0",
     "@memberjunction/ng-file-storage": "2.4.0",
     "@memberjunction/ng-record-changes": "2.4.0",

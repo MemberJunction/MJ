@@ -33,6 +33,8 @@
     "@memberjunction/ng-compare-records": "2.4.0",
     "@memberjunction/ng-container-directives": "2.4.0",
     "@memberjunction/entity-communications-client": "2.4.0",
+    "@memberjunction/communication-types": "2.4.0",
+    "@memberjunction/templates-base-types": "2.4.0",
     "@memberjunction/ng-entity-communications": "2.4.0",
     "@memberjunction/ng-base-types": "2.4.0",
     "@progress/kendo-angular-grid": "16.2.0",
