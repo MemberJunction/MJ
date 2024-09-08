@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
-This log was last generated on Sat, 07 Sep 2024 18:07:40 GMT and should not be manually modified.
+This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.4.1
+
+Sun, 08 Sep 2024 19:33:23 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.4.1
+- Bump @memberjunction/global to v2.4.1
 
 ## 2.4.0
 

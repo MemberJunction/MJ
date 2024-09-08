@@ -2,6 +2,39 @@
   "name": "@memberjunction/communication-types",
   "entries": [
     {
+      "date": "Sun, 08 Sep 2024 19:33:23 GMT",
+      "version": "2.4.1",
+      "tag": "@memberjunction/communication-types_v2.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-types",
+            "comment": "Bump @memberjunction/global to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-types",
+            "comment": "Bump @memberjunction/core to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-types",
+            "comment": "Bump @memberjunction/templates-base-types to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-types",
+            "comment": "Bump @memberjunction/core-entities to v2.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 07 Sep 2024 18:07:40 GMT",
       "version": "2.4.0",
       "tag": "@memberjunction/communication-types_v2.4.0",

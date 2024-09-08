@@ -2,6 +2,27 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Sun, 08 Sep 2024 19:33:23 GMT",
+      "version": "2.4.1",
+      "tag": "@memberjunction/core_v2.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core",
+            "commit": "691deee5684938f8fdbf6133773ab5886b5c91d6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v2.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 07 Sep 2024 18:07:40 GMT",
       "version": "2.4.0",
       "tag": "@memberjunction/core_v2.4.0",

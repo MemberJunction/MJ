@@ -2,6 +2,51 @@
   "name": "@memberjunction/ng-list-detail-grid",
   "entries": [
     {
+      "date": "Sun, 08 Sep 2024 19:33:23 GMT",
+      "version": "2.4.1",
+      "tag": "@memberjunction/ng-list-detail-grid_v2.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/core-entities to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/global to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/core to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-shared to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 07 Sep 2024 18:07:40 GMT",
       "version": "2.4.0",
       "tag": "@memberjunction/ng-list-detail-grid_v2.4.0",
