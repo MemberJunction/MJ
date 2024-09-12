@@ -8,12 +8,21 @@ import { RecommendationProviderBase } from './ProviderBase';
  */
 export class RecommendationRequest {
   /**
-   * Array of the requested recommendations
+   * The ID of the RecommendationRun record that will be created by the caller of a given provider. This must be created before a provider is called.
+   * This is done automatically by the Recommendation Engine and can be populated manually if for some reason you want to call a provider directly outside
+   * of the engine. This is a required field.
+   */
+  RunID: string;
+
+  /**
+   * Array of the requested recommendations. When preparing a batch of recommendations to request, do NOT set the RecommendationRunID or attempt
+   * to save the Recommendation records. This will be done as the batch is processed. You cannot save a Recommendation record until a Run is created
+   * which is done by the RecommendationEngineBase.Recommend() method.
    */
   Recommendations: RecommendationEntity[] = [];
 
   /**
-   * The specific provider to use for the request. Leave this undefined if you want to use the default recommendation.
+   * The specific provider to use for the request. Leave this undefined if you want to use the default provider.
    */
   Provider?: RecommendationProviderEntity;
 }
@@ -81,6 +90,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     if (!(await run.Save())) {
       throw new Error(`Error saving In Progress RecommendationRun with ID: ${runID}`);
     }
+
+    request.RunID = run.ID;
 
     const result = await driver.Recommend(request);
 
