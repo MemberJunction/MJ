@@ -91,7 +91,10 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
       this._enqueue(() =>
         this._processBatchInWorker(batch)
           .then(() => callback())
-          .catch(callback)
+          .catch((error) => {
+            console.log('Error processing batch:', error);
+            callback();
+          })
       );
     } else {
       callback();
@@ -105,7 +108,10 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
 
     Promise.all(this._queue)
       .then(() => callback())
-      .catch(callback);
+      .catch((error) => {
+        console.log('Error flushing:', error);
+        callback();
+      })
   }
 
   _processBatchInWorker(batch: Array<TRecord>): Promise<void> {
@@ -121,6 +127,7 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
         resolve();
       });
       worker.on('error', (error) => {
+        console.log('Error processing batch in worker:', error);
         // Decrement _running and reject on error
         this._running--;
         reject(error);
