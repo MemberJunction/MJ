@@ -209,11 +209,14 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const filter = `${relatedField} in (${recipients.map(r => `${quotes}${r[recipientPrimaryKeyFieldName]}${quotes}`).join(',')})`;
             const finalFilter = p.ExtraFilter ? `(${filter}) AND (${p.ExtraFilter})` : filter;
             const rv = new RunView();
-            const result = await rv.RunView({
+            const params: any = {
                 EntityName: relatedEntity,
                 ExtraFilter: finalFilter,
-                OrderBy: p.OrderBy,
-            }, this.ContextUser);
+            }
+            if (p.OrderBy) {
+                params.OrderBy = p.OrderBy; // add the order by if it exists, otherwise it is undefined
+            }
+            const result = await rv.RunView(params, this.ContextUser);
             if (result && result.Success) {
                 data.push({
                     paramName: p.Name,
