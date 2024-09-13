@@ -3,7 +3,7 @@ import type { WorkerData } from '../BatchWorker';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { ArchiveWorkerContext, EmbeddingData } from '../../generic/vectorSync.types';
 
 LoadPineconeVectorDB();
@@ -14,8 +14,10 @@ export async function UpsertVectorRecords() {
   const { batch, context } = workerData as WorkerData<ArchiveWorkerContext>;
 
   const embeddingsBatch: EmbeddingData[] = batch as any;
-  if(!embeddingsBatch){
-    throw new Error('Embeddings are required for the ArchiveWorker');
+  if(!embeddingsBatch || embeddingsBatch.length === 0){
+    LogStatus("No embeddings to upsert");
+    parentPort.postMessage({ ...workerData, ...batch });
+    return;
   }
   
   const entityDocument = context.entityDocument;

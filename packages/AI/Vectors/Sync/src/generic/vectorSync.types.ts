@@ -8,6 +8,12 @@ export type VectorizeEntityParams = {
     entityID: string;
     entityDocumentID?: string;
     /**
+     * If defined, all records within the given list will be vectorized
+     * instead of all records within the entity. Note that the list's
+     * EntityID field must equal the entityID parameter.
+     */
+    listID?: string;
+    /**
      * The number of records to be vectorized and inserted
      * into the vector database at a time
      */
@@ -69,3 +75,21 @@ export type AnnotateWorkerContext = {
     ParamName: string;
     Data: unknown[];
   };
+
+  export type CreateEntityDocumentParams = {
+    EntityID: string,
+    VectorDatabaseID: string,
+    TemplateID?: string,
+    AIModelID: string,
+    VectorDatabaseDetails?: {
+      Name: string,
+      Description: string | null,
+      DefaultURL: string,
+      ClassKey: string,
+    },
+    TemplateDetails?: {
+      Name: string,
+      Description: string | null,
+      TemplateContent: string,
+    }
+  }

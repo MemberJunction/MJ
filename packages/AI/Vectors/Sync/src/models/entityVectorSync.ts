@@ -56,8 +56,11 @@ export class EntityVectorSyncer extends VectorBase {
 
     const md = new Metadata();
     const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === params.entityID);
-    if (!entity) throw new Error(`Entity with ID ${params.entityID} not found.`);
+    if (!entity) {
+      throw new Error(`Entity with ID ${params.entityID} not found.`);
+    }
 
+    LogStatus(`Vectorizing entity ${entity.Name} using Entity Document ${entityDocument.Name}`);
 
     const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
     if(!template){
@@ -126,12 +129,19 @@ export class EntityVectorSyncer extends VectorBase {
           EntityID: params.entityID,
           PageNumber: pageNumber,
           PageSize: pageSize,
-          ResultType: 'simple'
+          ResultType: 'simple',
         };
+
+        if(params.listID){
+          const coreSchema: string = md.ConfigData.MJCoreSchemaName;
+          pageRecordRequest.Filter = `ID IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
+        }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
-        const items: {}[] = [];
+        const items: Record<string, any>[] = [];
+
+        LogStatus(`Fetched page ${pageNumber + 1} with ${recordsPage.length} records to process`);
         
         for(const record of recordsPage){
           const templateData: { [key: string]: unknown } = await this.GetTemplateData(entity, record, template, relatedData);
@@ -291,6 +301,10 @@ export class EntityVectorSyncer extends VectorBase {
     } else {
       throw new Error(`Failed to save Entity Document for ${EntityID}`);
     }
+  }
+
+  public async CreateEntityDocumentAndDependencies(): Promise<EntityDocumentEntity> {
+    return null;  
   }
 
   protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID( entityDocumentID: string, createDocumentIfNotFound?: boolean ): Promise<VectorEmeddingData> {

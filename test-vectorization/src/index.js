@@ -10,7 +10,7 @@ import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 
-const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
+const SYSTEM_USER_ID = "860AFD90-F76A-EF11-BDFD-00224877C022";
 
 const config = new SQLServerProviderConfigData(AppDataSource, '', '__mj', 5000);
 
@@ -23,8 +23,8 @@ LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
 const params = {
-  EntityID: "5F248F34-2837-EF11-86D4-6045BDEE16E6", // Accounts
-  EntityDocumentID: "A4AECCEC-6A37-EF11-86D4-000D3A4E707E",
+  EntityID: "D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893",
+  EntityDocumentID: "002B5E3E-1E71-EF11-BDFD-000D3AF6A893",
 };
 
 const md = new Metadata();
@@ -55,7 +55,8 @@ if (!entityDocument) {
 const request = {
   entityID: entityDocument.EntityID,
   entityDocumentID: entityDocument.ID,
-  batchCount: 20,
+  listID: 'D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893',
+  batchCount: 25,
   options: {},
 };
 

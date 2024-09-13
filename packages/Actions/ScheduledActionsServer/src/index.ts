@@ -152,7 +152,6 @@ async function executeRunOption(option: runOption, initServer: boolean): Promise
         return false;
     }
 }
- 
 
 export async function runScheduledActions(): Promise<boolean> {
     try {

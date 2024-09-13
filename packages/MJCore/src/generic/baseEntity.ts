@@ -482,7 +482,11 @@ export abstract class BaseEntity<T = unknown> {
      * @param fieldName 
      * @returns 
      */
-    public GetFieldByName(fieldName: string): EntityField {
+    public GetFieldByName(fieldName: string): EntityField | null {
+        if(!fieldName){
+            return null;
+        }
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
         return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
     }

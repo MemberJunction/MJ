@@ -3,7 +3,7 @@ import type { WorkerData } from '../BatchWorker';
 import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateContentEntity } from '@memberjunction/core-entities';
-import { LogError, ValidationResult } from '@memberjunction/core';
+import { LogError, LogStatus, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Embeddings, EmbedTextsResult } from '@memberjunction/ai';
 
@@ -43,24 +43,31 @@ export async function VectorizeEntity(): Promise<void> {
       processedBatch.push(result.Output);
     }
     else{
-      LogError(`Error rendering template for record ${entityData.ID}`, undefined, result.Message);
+      LogError(`Error rendering template ${template.ID}: `, undefined, result.Message);
     }
   }
 
+  let embeddingBatch: EmbeddingData[] = [];
   const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedBatch, model: null });
-  const embeddingBatch: EmbeddingData[] = embeddings.vectors.map((vector: number[], index: number) => {
-    return {
-      ID: index,
-      Vector: vector,
-      EntityData: batch[index],
-      __mj_recordID: batch[index].__mj_recordID,
-      __mj_compositeKey: batch[index].__mj_compositeKey,
-      EntityDocument: context.entityDocument,
-      VectorID: batch[index].VectorID,
-      VectorIndexID: batch[index].VectorIndexID,
-      TemplateContent: templateContent.TemplateText
-    };
-  });
+  if(embeddings){
+    embeddingBatch = embeddings.vectors.map((vector: number[], index: number) => {
+      return {
+        ID: index,
+        Vector: vector,
+        EntityData: batch[index],
+        __mj_recordID: batch[index].__mj_recordID,
+        __mj_compositeKey: batch[index].__mj_compositeKey,
+        EntityDocument: context.entityDocument,
+        VectorID: batch[index].VectorID,
+        VectorIndexID: batch[index].VectorIndexID,
+        TemplateContent: templateContent.TemplateText
+      };
+    });
+  }
+  else{
+    LogStatus("Bad batch:")
+    console.log(processedBatch);
+  }
 
   const runTime = Date.now() - startTime;
   const elapsed = Date.now() - context.executionId;
