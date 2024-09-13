@@ -882,7 +882,6 @@ GO
 
 
 
-
 DROP PROC IF EXISTS [__mj].[spDeleteUnneededEntityFields]
 GO
 CREATE PROC [__mj].[spDeleteUnneededEntityFields]
@@ -913,6 +912,7 @@ LEFT JOIN
 ON
     e.SchemaName = excludedSchemas.value
 WHERE
+    e.VirtualEntity = 0 AND -- exclude virtual entities from this always
     excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 
 
@@ -955,6 +955,7 @@ DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 
+
 DROP PROCEDURE IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema];
 GO
 
@@ -979,6 +980,7 @@ BEGIN
     ON
         fromSQL.SchemaName = excludedSchemas.value
     WHERE
+        e.VirtualEntity = 0 AND
         excludedSchemas.value IS NULL; -- This ensures rows with matching SchemaName are excluded
 END;
 GO
@@ -987,6 +989,8 @@ GO
 
 
 
+
+-- update this proc to EXCLUDE virtual entities always
 DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
 GO
 CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
@@ -996,7 +1000,7 @@ BEGIN
     -- Update Statement
     UPDATE [__mj].EntityField
     SET
-		Description = IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
+		    Description = IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
         Type = fromSQL.Type,
         Length = fromSQL.Length,
         Precision = fromSQL.Precision,
@@ -1037,20 +1041,20 @@ BEGIN
     ON
         ef.Name = fk.[column] AND
         e.BaseTable = fk.[table] AND
-		e.SchemaName = fk.[schema_name]
+		    e.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN 
         [__mj].Entity re -- Related Entity
     ON
         re.BaseTable = fk.referenced_table AND
-		re.SchemaName = fk.[referenced_schema]
+		    re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN 
-		[__mj].vwTablePrimaryKeys pk
+		    [__mj].vwTablePrimaryKeys pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN 
-		[__mj].vwTableUniqueKeys uk
+		    [__mj].vwTableUniqueKeys uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -1061,7 +1065,9 @@ BEGIN
     ON
         e.SchemaName = excludedSchemas.value
 	WHERE
-		fromSQL.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+    e.VirtualEntity = 0
+    AND
+		    fromSQL.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
 		AND
         excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 END
