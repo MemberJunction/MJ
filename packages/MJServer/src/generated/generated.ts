@@ -24427,6 +24427,9 @@ export class TemplateParam_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: 'This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.'}) 
+    OrderBy?: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;

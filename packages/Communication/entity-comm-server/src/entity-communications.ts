@@ -212,6 +212,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const result = await rv.RunView({
                 EntityName: relatedEntity,
                 ExtraFilter: finalFilter,
+                OrderBy: p.OrderBy,
             }, this.ContextUser);
             if (result && result.Success) {
                 data.push({
