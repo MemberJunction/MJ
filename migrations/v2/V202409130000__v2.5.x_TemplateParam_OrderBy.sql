@@ -1,5 +1,5 @@
 -- Add OrderBy to the __mj.TemplateParam table
-ALTER TABLE __mj.TemplateParam ADD OrderBy NVARCHAR(MAX) NULL;
+ALTER TABLE [${flyway:defaultSchema}].TemplateParam ADD OrderBy NVARCHAR(MAX) NULL;
 
 -- Add MS_Description for the new OrderBy column
 EXEC sp_addextendedproperty 
