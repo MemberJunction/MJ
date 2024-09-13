@@ -1961,7 +1961,8 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
@@ -7395,6 +7396,12 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OrderBy: z.string().nullish().describe(`
+        * * Field Name: OrderBy
+        * * Display Name: Order By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
+    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -13805,6 +13812,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
     */
     get RunByUser(): string {
         return this.Get('RunByUser');
@@ -28505,6 +28513,20 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: OrderBy
+    * * Display Name: Order By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.
+    */
+    get OrderBy(): string | null {
+        return this.Get('OrderBy');
+    }
+    set OrderBy(value: string | null) {
+        this.Set('OrderBy', value);
     }
 
     /**
