@@ -9,6 +9,8 @@ import { AppDataSource } from './db.js';
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
+import { RecommendationEngineBase } from "@memberjunction/ai-recommendations";
+import { LoadRexRecommendationsProvider } from "@memberjunction/ai-recommendations-rex"
 
 const SYSTEM_USER_ID = "860AFD90-F76A-EF11-BDFD-00224877C022";
 
@@ -21,6 +23,7 @@ LoadGeneratedEntities();
 LoadOpenAILLM();
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
+LoadRexRecommendationsProvider();
 
 const params = {
   EntityID: "D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893",
@@ -63,9 +66,9 @@ const request = {
 console.log(request);
 
 console.log('vectorizing entity...');
-await vectorizer.VectorizeEntity(request, systemUser);
+//await vectorizer.VectorizeEntity(request, systemUser);
 //await vectorizer.CreateTemplateForEntityDocument(entityDocument);
+await vectorizer.GetRecommendations();
 
 console.log('Done');
 process.exit('0');
-

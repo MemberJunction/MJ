@@ -20,6 +20,8 @@
     "@memberjunction/ai-vectors": "2.4.1",
     "@memberjunction/ai-vectors-pinecone": "2.4.1",
     "@memberjunction/ai-mistral": "2.4.1",
+    "@memberjunction/ai-recommendations": "2.4.1",
+    "@memberjunction/ai-recommendations-rex": "2.4.1",
     "@memberjunction/aiengine": "2.4.1",
     "@memberjunction/core": "2.4.1",
     "@memberjunction/global": "2.4.1",

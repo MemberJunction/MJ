@@ -14,6 +14,8 @@
     "@memberjunction/ai-vectors": "1.7.1",
     "@memberjunction/ai-vectors-pinecone": "1.7.1",
     "@memberjunction/ai-vector-sync": "1.7.1",
+    "@memberjunction/ai-recommendations": "1.7.1",
+    "@memberjunction/ai-recommendations-rex": "1.7.1",
     "@memberjunction/aiengine": "1.7.1",
     "@memberjunction/core": "1.7.1",
     "@memberjunction/global": "1.7.1",
