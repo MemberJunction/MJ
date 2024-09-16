@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType } from "@memberjunction/core";
 import { UserViewEntity } from "../generated/entity_subclasses";
 
 
@@ -325,57 +325,42 @@ export class UserViewEntityExtended extends UserViewEntity  {
         entity: EntityInfo
     ): string {
         let op: string = '';
-        let bNeedsQuotes: boolean = false;
+
         const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === field.trim().toLowerCase());
         if (!f)
             throw new Error('Unable to find field ' + field + ' in entity ' + entity.Name);
 
-        switch (f.Type.toLowerCase().trim()) {
-            case 'nvarchar':
-            case 'char':
-            case 'varchar':
-            case 'text':
-            case 'ntext':
-            case 'date':
-            case 'datetime':
-            case 'datetimeoffset':
-            case 'time':
-            case 'guid':
-            case 'uniqueidentifier':
-                bNeedsQuotes = true;
-                break;
-            // all other cases do not need quotes
-        }
+        const newValue = f.TSType === EntityFieldTSType.Boolean ? (value.trim().toLowerCase() === 'true' ? '1' : '0') : value; // for boolean fields, convert true to 1 and false to 0, for all other fields, just use the value as is
         switch (operator) {
             case 'eq':
-                op = '= ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'neq':
-                op = '<> ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '<> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'gt':
-                op = '> ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'gte':
-                op = '>= ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '>= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'lt':
-                op = '< ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '< ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'lte':
-                op = '<= ' + this.wrapQuotes(value, bNeedsQuotes);
+                op = '<= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
                 break;
             case 'startswith':
-                op = `LIKE '${value}%'`;
+                op = `LIKE '${newValue}%'`;
                 break;
             case 'endswith':
-                op = `LIKE '%${value}'`;
+                op = `LIKE '%${newValue}'`;
                 break;
             case 'contains':
-                op = `LIKE '%${value}%'`;
+                op = `LIKE '%${newValue}%'`;
                 break;
             case 'doesnotcontain':
-                op = `NOT LIKE '%${value}%'`;
+                op = `NOT LIKE '%${newValue}%'`;
                 break;
             case 'isnull':
             case 'isempty':

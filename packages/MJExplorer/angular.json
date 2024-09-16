@@ -26,11 +26,6 @@
                 "glob": "**/*",
                 "input": "../../node_modules/@progress/kendo-theme-default/dist",
                 "output": "/assets/kendo-theme-default/dist"
-              },
-              {
-                "glob": "**/*",
-                "input": "../../node_modules/monaco-editor/min/vs",
-                "output": "/assets/monaco-editor/vs"
               }
             ],
             "styles": [
@@ -77,6 +72,30 @@
                   "with": "src/environments/environment.development.ts"
                 }
               ]
+            },
+            "local_modules": {
+              "buildOptimizer": false,
+              "optimization": false,
+              "vendorChunk": true,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "namedChunks": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.development.ts"
+                }
+              ],
+              "assets": [
+                "src/favicon.ico",
+                "src/assets",
+                "src/staticwebapp.config.json",
+                {
+                  "glob": "**/*",
+                  "input": "node_modules/@progress/kendo-theme-default/dist",
+                  "output": "/assets/kendo-theme-default/dist"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -89,6 +108,9 @@
             },
             "development": {
               "buildTarget": "MJExplorer:build:development"
+            },
+            "local_modules": {
+              "buildTarget": "MJExplorer:build:local_modules"
             }
           },
           "defaultConfiguration": "development"

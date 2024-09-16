@@ -1,8 +1,123 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
+This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.4.1
+
+Sun, 08 Sep 2024 19:33:23 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.4.1
+- Bump @memberjunction/ai to v2.4.1
+- Bump @memberjunction/ai-mistral to v2.4.1
+- Bump @memberjunction/ai-openai to v2.4.1
+- Bump @memberjunction/ai-vectors-pinecone to v2.4.1
+- Bump @memberjunction/aiengine to v2.4.1
+- Bump @memberjunction/core to v2.4.1
+- Bump @memberjunction/core-actions to v2.4.1
+- Bump @memberjunction/core-entities to v2.4.1
+- Bump @memberjunction/data-context to v2.4.1
+- Bump @memberjunction/data-context-server to v2.4.1
+- Bump @memberjunction/doc-utils to v2.4.1
+- Bump @memberjunction/entity-communications-server to v2.4.1
+- Bump @memberjunction/external-change-detection to v2.4.1
+- Bump @memberjunction/global to v2.4.1
+- Bump @memberjunction/queue to v2.4.1
+- Bump @memberjunction/skip-types to v2.4.1
+- Bump @memberjunction/sqlserver-dataprovider to v2.4.1
+- Bump @memberjunction/graphql-dataprovider to v2.4.1
+- Bump @memberjunction/storage to v2.4.1
+- Bump @memberjunction/templates to v2.4.1
+
+## 2.4.0
+
+Sat, 07 Sep 2024 18:07:40 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/actions to v2.4.0
+- Bump @memberjunction/ai to v2.4.0
+- Bump @memberjunction/ai-mistral to v2.4.0
+- Bump @memberjunction/ai-openai to v2.4.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.4.0
+- Bump @memberjunction/aiengine to v2.4.0
+- Bump @memberjunction/core to v2.4.0
+- Bump @memberjunction/core-actions to v2.4.0
+- Bump @memberjunction/core-entities to v2.4.0
+- Bump @memberjunction/data-context to v2.4.0
+- Bump @memberjunction/data-context-server to v2.4.0
+- Bump @memberjunction/doc-utils to v2.4.0
+- Bump @memberjunction/entity-communications-server to v2.4.0
+- Bump @memberjunction/external-change-detection to v2.4.0
+- Bump @memberjunction/global to v2.4.0
+- Bump @memberjunction/queue to v2.4.0
+- Bump @memberjunction/skip-types to v2.4.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.4.0
+- Bump @memberjunction/graphql-dataprovider to v2.4.0
+- Bump @memberjunction/storage to v2.4.0
+- Bump @memberjunction/templates to v2.4.0
+
+## 2.3.3
+
+Sat, 07 Sep 2024 17:28:16 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.3.3
+- Bump @memberjunction/ai to v2.3.3
+- Bump @memberjunction/ai-mistral to v2.3.3
+- Bump @memberjunction/ai-openai to v2.3.3
+- Bump @memberjunction/ai-vectors-pinecone to v2.3.3
+- Bump @memberjunction/aiengine to v2.3.3
+- Bump @memberjunction/core to v2.3.3
+- Bump @memberjunction/core-actions to v2.3.3
+- Bump @memberjunction/core-entities to v2.3.3
+- Bump @memberjunction/data-context to v2.3.3
+- Bump @memberjunction/data-context-server to v2.3.3
+- Bump @memberjunction/doc-utils to v2.3.3
+- Bump @memberjunction/entity-communications-server to v2.3.3
+- Bump @memberjunction/external-change-detection to v2.3.3
+- Bump @memberjunction/global to v2.3.3
+- Bump @memberjunction/queue to v2.3.3
+- Bump @memberjunction/skip-types to v2.3.3
+- Bump @memberjunction/sqlserver-dataprovider to v2.3.3
+- Bump @memberjunction/graphql-dataprovider to v2.3.3
+- Bump @memberjunction/storage to v2.3.3
+- Bump @memberjunction/templates to v2.3.3
+
+## 2.3.2
+
+Fri, 30 Aug 2024 18:25:54 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/actions to v2.3.2
+- Bump @memberjunction/ai to v2.3.2
+- Bump @memberjunction/ai-mistral to v2.3.2
+- Bump @memberjunction/ai-openai to v2.3.2
+- Bump @memberjunction/ai-vectors-pinecone to v2.3.2
+- Bump @memberjunction/aiengine to v2.3.2
+- Bump @memberjunction/core to v2.3.2
+- Bump @memberjunction/core-actions to v2.3.2
+- Bump @memberjunction/core-entities to v2.3.2
+- Bump @memberjunction/data-context to v2.3.2
+- Bump @memberjunction/data-context-server to v2.3.2
+- Bump @memberjunction/doc-utils to v2.3.2
+- Bump @memberjunction/entity-communications-server to v2.3.2
+- Bump @memberjunction/external-change-detection to v2.3.2
+- Bump @memberjunction/global to v2.3.2
+- Bump @memberjunction/queue to v2.3.2
+- Bump @memberjunction/skip-types to v2.3.2
+- Bump @memberjunction/sqlserver-dataprovider to v2.3.2
+- Bump @memberjunction/graphql-dataprovider to v2.3.2
+- Bump @memberjunction/storage to v2.3.2
+- Bump @memberjunction/templates to v2.3.2
 
 ## 2.3.1
 

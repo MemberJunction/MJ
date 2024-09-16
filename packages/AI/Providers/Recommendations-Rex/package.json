@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-recommendations-rex",
-  "version": "2.3.1",
+  "version": "2.4.1",
   "description": "MemberJunction Recommendations Provider for rasa.io Rex engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.3.1",
-    "@memberjunction/global": "2.3.1",
+    "@memberjunction/ai": "2.4.1",
+    "@memberjunction/global": "2.4.1",
+    "@memberjunction/ai-recommendations": "2.4.1",
     "openai": "^4.28.4"
   }
 }

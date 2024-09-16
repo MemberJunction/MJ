@@ -1,8 +1,57 @@
 # Change Log - @memberjunction/ng-entity-permissions
 
-This log was last generated on Fri, 16 Aug 2024 03:57:15 GMT and should not be manually modified.
+This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.4.1
+
+Sun, 08 Sep 2024 19:33:23 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.4.1
+- Bump @memberjunction/global to v2.4.1
+- Bump @memberjunction/core to v2.4.1
+- Bump @memberjunction/ng-container-directives to v2.4.1
+- Bump @memberjunction/ng-shared to v2.4.1
+
+## 2.4.0
+
+Sat, 07 Sep 2024 18:07:40 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/core-entities to v2.4.0
+- Bump @memberjunction/global to v2.4.0
+- Bump @memberjunction/core to v2.4.0
+- Bump @memberjunction/ng-container-directives to v2.4.0
+- Bump @memberjunction/ng-shared to v2.4.0
+
+## 2.3.3
+
+Sat, 07 Sep 2024 17:28:16 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.3.3
+- Bump @memberjunction/global to v2.3.3
+- Bump @memberjunction/core to v2.3.3
+- Bump @memberjunction/ng-container-directives to v2.3.3
+- Bump @memberjunction/ng-shared to v2.3.3
+
+## 2.3.2
+
+Fri, 30 Aug 2024 18:25:54 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.3.2
+- Bump @memberjunction/global to v2.3.2
+- Bump @memberjunction/core to v2.3.2
+- Bump @memberjunction/ng-container-directives to v2.3.2
+- Bump @memberjunction/ng-shared to v2.3.2
 
 ## 2.3.1
 

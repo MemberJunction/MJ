@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/21/2024, 9:21:49 AM
+* GENERATED: 8/29/2024, 12:18:08 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -98,7 +98,7 @@ export class ScheduledAction_ {
     Action: string;
         
     @Field(() => [ScheduledActionParam_])
-    ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
+    ScheduledActionParams_ScheduledActionIDArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
     
 }
 
@@ -921,7 +921,7 @@ export class AIPrompt_ {
     Type: string;
         
     @Field(() => [AIResultCache_])
-    AIResultCacheArray: AIResultCache_[]; // Link to AIResultCache
+    AIResultCache_AIPromptIDArray: AIResultCache_[]; // Link to AIResultCache
     
 }
 
@@ -1303,10 +1303,10 @@ export class AIPromptCategory_ {
     Parent?: string;
         
     @Field(() => [AIPrompt_])
-    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    AIPrompts_CategoryIDArray: AIPrompt_[]; // Link to AIPrompts
     
     @Field(() => [AIPromptCategory_])
-    AIPromptCategoriesArray: AIPromptCategory_[]; // Link to AIPromptCategories
+    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
 }
 
@@ -1466,7 +1466,7 @@ export class AIPromptType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [AIPrompt_])
-    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    AIPrompts_TypeIDArray: AIPrompt_[]; // Link to AIPrompts
     
 }
 
@@ -1625,13 +1625,13 @@ export class Company_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Workflow_])
-    WorkflowsArray: Workflow_[]; // Link to Workflows
+    Workflows_CompanyNameArray: Workflow_[]; // Link to Workflows
     
     @Field(() => [CompanyIntegration_])
-    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+    CompanyIntegrations_CompanyNameArray: CompanyIntegration_[]; // Link to CompanyIntegrations
     
     @Field(() => [Employee_])
-    EmployeesArray: Employee_[]; // Link to Employees
+    Employees_CompanyIDArray: Employee_[]; // Link to Employees
     
 }
 
@@ -1867,19 +1867,19 @@ export class Employee_ {
     SupervisorEmail?: string;
         
     @Field(() => [User_])
-    UsersArray: User_[]; // Link to Users
+    Users_EmployeeIDArray: User_[]; // Link to Users
     
     @Field(() => [EmployeeSkill_])
-    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+    EmployeeSkills_EmployeeIDArray: EmployeeSkill_[]; // Link to EmployeeSkills
     
     @Field(() => [EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+    EmployeeCompanyIntegrations_EmployeeIDArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
     
     @Field(() => [Employee_])
-    EmployeesArray: Employee_[]; // Link to Employees
+    Employees_SupervisorIDArray: Employee_[]; // Link to Employees
     
     @Field(() => [EmployeeRole_])
-    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+    EmployeeRoles_EmployeeIDArray: EmployeeRole_[]; // Link to EmployeeRoles
     
 }
 
@@ -2612,19 +2612,19 @@ export class Role_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [UserRole_])
-    UserRolesArray: UserRole_[]; // Link to UserRoles
+    UserRoles_RoleNameArray: UserRole_[]; // Link to UserRoles
     
     @Field(() => [AuthorizationRole_])
-    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+    AuthorizationRoles_RoleNameArray: AuthorizationRole_[]; // Link to AuthorizationRoles
     
     @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    EntityPermissions_RoleNameArray: EntityPermission_[]; // Link to EntityPermissions
     
     @Field(() => [QueryPermission_])
-    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+    QueryPermissions_RoleNameArray: QueryPermission_[]; // Link to QueryPermissions
     
     @Field(() => [EmployeeRole_])
-    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+    EmployeeRoles_RoleIDArray: EmployeeRole_[]; // Link to EmployeeRoles
     
 }
 
@@ -2827,10 +2827,10 @@ export class Skill_ {
     Parent?: string;
         
     @Field(() => [EmployeeSkill_])
-    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+    EmployeeSkills_SkillIDArray: EmployeeSkill_[]; // Link to EmployeeSkills
     
     @Field(() => [Skill_])
-    SkillsArray: Skill_[]; // Link to Skills
+    Skills_ParentIDArray: Skill_[]; // Link to Skills
     
 }
 //****************************************************************************
@@ -3096,13 +3096,13 @@ export class Integration_ {
     ID: string;
         
     @Field(() => [IntegrationURLFormat_])
-    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+    IntegrationURLFormats_IntegrationIDArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
     
     @Field(() => [CompanyIntegration_])
-    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+    CompanyIntegrations_IntegrationNameArray: CompanyIntegration_[]; // Link to CompanyIntegrations
     
     @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    RecordChanges_IntegrationIDArray: RecordChange_[]; // Link to RecordChanges
     
 }
 
@@ -3326,16 +3326,16 @@ export class CompanyIntegration_ {
     LastRunEndedAt?: Date;
         
     @Field(() => [CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+    CompanyIntegrationRecordMaps_CompanyIntegrationIDArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
     
     @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    Lists_CompanyIntegrationIDArray: List_[]; // Link to Lists
     
     @Field(() => [CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+    CompanyIntegrationRuns_CompanyIntegrationIDArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
     
     @Field(() => [EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+    EmployeeCompanyIntegrations_CompanyIntegrationIDArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
     
 }
 
@@ -3671,7 +3671,7 @@ export class EntityField_ {
     RelatedEntityClassName?: string;
         
     @Field(() => [EntityFieldValue_])
-    EntityFieldValuesArray: EntityFieldValue_[]; // Link to EntityFieldValues
+    EntityFieldValues_EntityFieldIDArray: EntityFieldValue_[]; // Link to EntityFieldValues
     
 }
 
@@ -4134,109 +4134,109 @@ export class Entity_ {
     ParentBaseView?: string;
         
     @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    AuditLogs_EntityIDArray: AuditLog_[]; // Link to AuditLogs
     
     @Field(() => [TemplateParam_])
-    TemplateParamsArray: TemplateParam_[]; // Link to TemplateParams
+    TemplateParams_EntityIDArray: TemplateParam_[]; // Link to TemplateParams
     
     @Field(() => [DatasetItem_])
-    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+    DatasetItems_EntityIDArray: DatasetItem_[]; // Link to DatasetItems
     
     @Field(() => [User_])
-    UsersArray: User_[]; // Link to Users
+    Users_LinkedEntityIDArray: User_[]; // Link to Users
     
     @Field(() => [CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+    CompanyIntegrationRecordMaps_EntityIDArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
     
     @Field(() => [Entity_])
-    EntitiesArray: Entity_[]; // Link to Entities
+    Entities_ParentIDArray: Entity_[]; // Link to Entities
     
     @Field(() => [UserViewCategory_])
-    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+    UserViewCategories_EntityIDArray: UserViewCategory_[]; // Link to UserViewCategories
     
     @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    EntityAIActions_EntityIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
     @Field(() => [EntityAction_])
-    EntityActionsArray: EntityAction_[]; // Link to EntityActions
+    EntityActions_EntityIDArray: EntityAction_[]; // Link to EntityActions
     
     @Field(() => [Conversation_])
-    ConversationsArray: Conversation_[]; // Link to Conversations
+    Conversations_LinkedEntityIDArray: Conversation_[]; // Link to Conversations
     
     @Field(() => [DuplicateRun_])
-    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+    DuplicateRuns_EntityIDArray: DuplicateRun_[]; // Link to DuplicateRuns
     
     @Field(() => [TaggedItem_])
-    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+    TaggedItems_EntityIDArray: TaggedItem_[]; // Link to TaggedItems
     
     @Field(() => [RecordMergeLog_])
-    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+    RecordMergeLogs_EntityIDArray: RecordMergeLog_[]; // Link to RecordMergeLogs
     
     @Field(() => [UserApplicationEntity_])
-    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+    UserApplicationEntities_EntityIDArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
     
     @Field(() => [QueryField_])
-    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+    QueryFields_SourceEntityIDArray: QueryField_[]; // Link to QueryFields
     
     @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    UserViews_EntityIDArray: UserView_[]; // Link to UserViews
     
     @Field(() => [RecommendationItem_])
-    RecommendationItemsArray: RecommendationItem_[]; // Link to RecommendationItems
+    RecommendationItems_DestinationEntityIDArray: RecommendationItem_[]; // Link to RecommendationItems
     
     @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    EntityPermissions_EntityIDArray: EntityPermission_[]; // Link to EntityPermissions
     
     @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    Lists_EntityIDArray: List_[]; // Link to Lists
     
     @Field(() => [UserRecordLog_])
-    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+    UserRecordLogs_EntityIDArray: UserRecordLog_[]; // Link to UserRecordLogs
     
     @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    EntityDocuments_EntityIDArray: EntityDocument_[]; // Link to EntityDocuments
     
     @Field(() => [Recommendation_])
-    RecommendationsArray: Recommendation_[]; // Link to Recommendations
+    Recommendations_SourceEntityIDArray: Recommendation_[]; // Link to Recommendations
     
     @Field(() => [FileEntityRecordLink_])
-    FileEntityRecordLinksArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+    FileEntityRecordLinks_EntityIDArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
     
     @Field(() => [EntitySetting_])
-    EntitySettingsArray: EntitySetting_[]; // Link to EntitySettings
+    EntitySettings_EntityIDArray: EntitySetting_[]; // Link to EntitySettings
     
     @Field(() => [EntityRelationship_])
-    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+    EntityRelationships_EntityIDArray: EntityRelationship_[]; // Link to EntityRelationships
     
     @Field(() => [CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+    CompanyIntegrationRunDetails_EntityIDArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
     
     @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    DataContextItems_EntityIDArray: DataContextItem_[]; // Link to DataContextItems
     
     @Field(() => [IntegrationURLFormat_])
-    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+    IntegrationURLFormats_EntityIDArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
     
     @Field(() => [EntityField_])
-    EntityFieldsArray: EntityField_[]; // Link to EntityFields
+    EntityFields_EntityIDArray: EntityField_[]; // Link to EntityFields
     
     @Field(() => [UserFavorite_])
-    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+    UserFavorites_EntityIDArray: UserFavorite_[]; // Link to UserFavorites
     
     @Field(() => [EntityCommunicationMessageType_])
-    EntityCommunicationMessageTypesArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+    EntityCommunicationMessageTypes_EntityIDArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
     
     @Field(() => [EntityRecordDocument_])
-    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+    EntityRecordDocuments_EntityIDArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
     
     @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    RecordChanges_EntityIDArray: RecordChange_[]; // Link to RecordChanges
     
     @Field(() => [ApplicationEntity_])
-    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+    ApplicationEntities_EntityIDArray: ApplicationEntity_[]; // Link to ApplicationEntities
     
     @Field(() => [ResourceType_])
-    ResourceTypesArray: ResourceType_[]; // Link to ResourceTypes
+    ResourceTypes_EntityIDArray: ResourceType_[]; // Link to ResourceTypes
     
 }
 
@@ -4962,100 +4962,100 @@ export class User_ {
     EmployeeSupervisorEmail?: string;
         
     @Field(() => [RecommendationRun_])
-    RecommendationRunsArray: RecommendationRun_[]; // Link to RecommendationRuns
+    RecommendationRuns_RunByUserIDArray: RecommendationRun_[]; // Link to RecommendationRuns
     
     @Field(() => [UserApplication_])
-    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+    UserApplications_UserIDArray: UserApplication_[]; // Link to UserApplications
     
     @Field(() => [Dashboard_])
-    DashboardsArray: Dashboard_[]; // Link to Dashboards
+    Dashboards_UserIDArray: Dashboard_[]; // Link to Dashboards
     
     @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    RecordChanges_UserIDArray: RecordChange_[]; // Link to RecordChanges
     
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_UserIDArray: Report_[]; // Link to Reports
     
     @Field(() => [DashboardCategory_])
-    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+    DashboardCategories_UserIDArray: DashboardCategory_[]; // Link to DashboardCategories
     
     @Field(() => [Action_])
-    ActionsArray: Action_[]; // Link to Actions
+    Actions_CodeApprovedByUserIDArray: Action_[]; // Link to Actions
     
     @Field(() => [QueryCategory_])
-    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+    QueryCategories_UserIDArray: QueryCategory_[]; // Link to QueryCategories
     
     @Field(() => [UserViewCategory_])
-    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+    UserViewCategories_UserIDArray: UserViewCategory_[]; // Link to UserViewCategories
     
     @Field(() => [DataContext_])
-    DataContextsArray: DataContext_[]; // Link to DataContexts
+    DataContexts_UserIDArray: DataContext_[]; // Link to DataContexts
     
     @Field(() => [RecordMergeLog_])
-    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+    RecordMergeLogs_InitiatedByUserIDArray: RecordMergeLog_[]; // Link to RecordMergeLogs
     
     @Field(() => [CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+    CompanyIntegrationRuns_RunByUserIDArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
     
     @Field(() => [ReportCategory_])
-    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+    ReportCategories_UserIDArray: ReportCategory_[]; // Link to ReportCategories
     
     @Field(() => [RecordChangeReplayRun_])
-    RecordChangeReplayRunsArray: RecordChangeReplayRun_[]; // Link to RecordChangeReplayRuns
+    RecordChangeReplayRuns_UserIDArray: RecordChangeReplayRun_[]; // Link to RecordChangeReplayRuns
     
     @Field(() => [UserRole_])
-    UserRolesArray: UserRole_[]; // Link to UserRoles
+    UserRoles_UserIDArray: UserRole_[]; // Link to UserRoles
     
     @Field(() => [UserViewRun_])
-    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+    UserViewRuns_RunByUserIDArray: UserViewRun_[]; // Link to UserViewRuns
     
     @Field(() => [Workspace_])
-    WorkspacesArray: Workspace_[]; // Link to Workspaces
+    Workspaces_UserIDArray: Workspace_[]; // Link to Workspaces
     
     @Field(() => [Conversation_])
-    ConversationsArray: Conversation_[]; // Link to Conversations
+    Conversations_UserIDArray: Conversation_[]; // Link to Conversations
     
     @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    Lists_UserIDArray: List_[]; // Link to Lists
     
     @Field(() => [CommunicationRun_])
-    CommunicationRunsArray: CommunicationRun_[]; // Link to CommunicationRuns
+    CommunicationRuns_UserIDArray: CommunicationRun_[]; // Link to CommunicationRuns
     
     @Field(() => [ActionExecutionLog_])
-    ActionExecutionLogsArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    ActionExecutionLogs_UserIDArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
     @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    AuditLogs_UserIDArray: AuditLog_[]; // Link to AuditLogs
     
     @Field(() => [ReportSnapshot_])
-    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+    ReportSnapshots_UserIDArray: ReportSnapshot_[]; // Link to ReportSnapshots
     
     @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    UserViews_UserIDArray: UserView_[]; // Link to UserViews
     
     @Field(() => [TemplateCategory_])
-    TemplateCategoriesArray: TemplateCategory_[]; // Link to TemplateCategories
+    TemplateCategories_UserIDArray: TemplateCategory_[]; // Link to TemplateCategories
     
     @Field(() => [DuplicateRun_])
-    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+    DuplicateRuns_StartedByUserIDArray: DuplicateRun_[]; // Link to DuplicateRuns
     
     @Field(() => [UserRecordLog_])
-    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+    UserRecordLogs_UserIDArray: UserRecordLog_[]; // Link to UserRecordLogs
     
     @Field(() => [UserNotification_])
-    UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
+    UserNotifications_UserIDArray: UserNotification_[]; // Link to UserNotifications
     
     @Field(() => [Template_])
-    TemplatesArray: Template_[]; // Link to Templates
+    Templates_UserIDArray: Template_[]; // Link to Templates
     
     @Field(() => [UserFavorite_])
-    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+    UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
     @Field(() => [ListCategory_])
-    ListCategoriesArray: ListCategory_[]; // Link to ListCategories
+    ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
-    ScheduledActionsArray: ScheduledAction_[]; // Link to ScheduledActions
+    ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
     
 }
 
@@ -6082,13 +6082,13 @@ export class UserView_ {
     EntityBaseView: string;
         
     @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    DataContextItems_ViewIDArray: DataContextItem_[]; // Link to DataContextItems
     
     @Field(() => [UserViewRun_])
-    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+    UserViewRuns_UserViewIDArray: UserViewRun_[]; // Link to UserViewRuns
     
     @Field(() => [EntityRelationship_])
-    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+    EntityRelationships_DisplayUserViewGUIDArray: EntityRelationship_[]; // Link to EntityRelationships
     
 }
 
@@ -6367,13 +6367,13 @@ export class CompanyIntegrationRun_ {
     RunByUser: string;
         
     @Field(() => [ErrorLog_])
-    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+    ErrorLogs_CompanyIntegrationRunIDArray: ErrorLog_[]; // Link to ErrorLogs
     
     @Field(() => [CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+    CompanyIntegrationRunDetails_CompanyIntegrationRunIDArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
     
     @Field(() => [CompanyIntegrationRunAPILog_])
-    CompanyIntegrationRunAPILogsArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
+    CompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
     
 }
 
@@ -6581,7 +6581,7 @@ export class CompanyIntegrationRunDetail_ {
     RunEndedAt?: Date;
         
     @Field(() => [ErrorLog_])
-    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+    ErrorLogs_CompanyIntegrationRunDetailIDArray: ErrorLog_[]; // Link to ErrorLogs
     
 }
 
@@ -6940,13 +6940,13 @@ export class Application_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [ApplicationSetting_])
-    ApplicationSettingsArray: ApplicationSetting_[]; // Link to ApplicationSettings
+    ApplicationSettings_ApplicationIDArray: ApplicationSetting_[]; // Link to ApplicationSettings
     
     @Field(() => [UserApplication_])
-    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+    UserApplications_ApplicationIDArray: UserApplication_[]; // Link to UserApplications
     
     @Field(() => [ApplicationEntity_])
-    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+    ApplicationEntities_ApplicationIDArray: ApplicationEntity_[]; // Link to ApplicationEntities
     
 }
 
@@ -7723,7 +7723,7 @@ export class UserApplication_ {
     Application: string;
         
     @Field(() => [UserApplicationEntity_])
-    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+    UserApplicationEntities_UserApplicationIDArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
     
 }
 
@@ -8080,10 +8080,10 @@ export class List_ {
     Category?: string;
         
     @Field(() => [ListDetail_])
-    ListDetailsArray: ListDetail_[]; // Link to ListDetails
+    ListDetails_ListIDArray: ListDetail_[]; // Link to ListDetails
     
     @Field(() => [DuplicateRun_])
-    DuplicateRunsArray: DuplicateRun_[]; // Link to DuplicateRuns
+    DuplicateRuns_SourceListIDArray: DuplicateRun_[]; // Link to DuplicateRuns
     
 }
 
@@ -8448,7 +8448,7 @@ export class UserViewRun_ {
     RunByUser: string;
         
     @Field(() => [UserViewRunDetail_])
-    UserViewRunDetailsArray: UserViewRunDetail_[]; // Link to UserViewRunDetails
+    UserViewRunDetails_UserViewRunIDArray: UserViewRunDetail_[]; // Link to UserViewRunDetails
     
 }
 
@@ -8900,10 +8900,10 @@ export class Workflow_ {
     AutoRunIntervalMinutes?: number;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_OutputWorkflowIDArray: Report_[]; // Link to Reports
     
     @Field(() => [WorkflowRun_])
-    WorkflowRunsArray: WorkflowRun_[]; // Link to WorkflowRuns
+    WorkflowRuns_WorkflowNameArray: WorkflowRun_[]; // Link to WorkflowRuns
     
 }
 
@@ -9055,7 +9055,7 @@ export class WorkflowEngine_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Workflow_])
-    WorkflowsArray: Workflow_[]; // Link to Workflows
+    Workflows_WorkflowEngineNameArray: Workflow_[]; // Link to Workflows
     
 }
 
@@ -9563,7 +9563,7 @@ export class RowLevelSecurityFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    EntityPermissions_ReadRLSFilterIDArray: EntityPermission_[]; // Link to EntityPermissions
     
 }
 //****************************************************************************
@@ -9879,19 +9879,19 @@ export class Authorization_ {
     Parent?: string;
         
     @Field(() => [AuthorizationRole_])
-    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+    AuthorizationRoles_AuthorizationIDArray: AuthorizationRole_[]; // Link to AuthorizationRoles
     
     @Field(() => [ActionAuthorization_])
-    ActionAuthorizationsArray: ActionAuthorization_[]; // Link to ActionAuthorizations
+    ActionAuthorizations_AuthorizationIDArray: ActionAuthorization_[]; // Link to ActionAuthorizations
     
     @Field(() => [Authorization_])
-    AuthorizationsArray: Authorization_[]; // Link to Authorizations
+    Authorizations_ParentIDArray: Authorization_[]; // Link to Authorizations
     
     @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    AuditLogs_AuthorizationNameArray: AuditLog_[]; // Link to AuditLogs
     
     @Field(() => [AuditLogType_])
-    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+    AuditLogTypes_AuthorizationNameArray: AuditLogType_[]; // Link to AuditLogTypes
     
 }
 //****************************************************************************
@@ -10137,10 +10137,10 @@ export class AuditLogType_ {
     Authorization?: string;
         
     @Field(() => [AuditLogType_])
-    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+    AuditLogTypes_ParentIDArray: AuditLogType_[]; // Link to AuditLogTypes
     
     @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    AuditLogs_AuditLogTypeNameArray: AuditLog_[]; // Link to AuditLogs
     
 }
 //****************************************************************************
@@ -10432,22 +10432,22 @@ export class AIModel_ {
     AIModelType: string;
         
     @Field(() => [AIAction_])
-    AIActionsArray: AIAction_[]; // Link to AIActions
+    AIActions_DefaultModelIDArray: AIAction_[]; // Link to AIActions
     
     @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    EntityDocuments_AIModelIDArray: EntityDocument_[]; // Link to EntityDocuments
     
     @Field(() => [AIModelAction_])
-    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+    AIModelActions_AIModelIDArray: AIModelAction_[]; // Link to AIModelActions
     
     @Field(() => [VectorIndex_])
-    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    VectorIndexes_EmbeddingModelIDArray: VectorIndex_[]; // Link to VectorIndexes
     
     @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
     @Field(() => [AIResultCache_])
-    AIResultCacheArray: AIResultCache_[]; // Link to AIResultCache
+    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
     
 }
 
@@ -10715,10 +10715,10 @@ export class AIAction_ {
     DefaultModel?: string;
         
     @Field(() => [AIModelAction_])
-    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+    AIModelActions_AIActionIDArray: AIModelAction_[]; // Link to AIModelActions
     
     @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    EntityAIActions_AIActionIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
 }
 
@@ -11315,7 +11315,7 @@ export class AIModelType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [AIModel_])
-    AIModelsArray: AIModel_[]; // Link to AIModels
+    AIModels_AIModelTypeIDArray: AIModel_[]; // Link to AIModels
     
 }
 
@@ -11480,7 +11480,7 @@ export class QueueType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Queue_])
-    QueuesArray: Queue_[]; // Link to Queues
+    Queues_QueueTypeIDArray: Queue_[]; // Link to Queues
     
 }
 //****************************************************************************
@@ -11628,7 +11628,7 @@ export class Queue_ {
     QueueType: string;
         
     @Field(() => [QueueTask_])
-    QueueTasksArray: QueueTask_[]; // Link to QueueTasks
+    QueueTasks_QueueIDArray: QueueTask_[]; // Link to QueueTasks
     
 }
 
@@ -12223,7 +12223,7 @@ export class OutputTriggerType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_OutputTriggerTypeIDArray: Report_[]; // Link to Reports
     
 }
 //****************************************************************************
@@ -12316,7 +12316,7 @@ export class OutputFormatType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_OutputFormatTypeIDArray: Report_[]; // Link to Reports
     
 }
 //****************************************************************************
@@ -12406,7 +12406,7 @@ export class OutputDeliveryType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_OutputDeliveryTypeIDArray: Report_[]; // Link to Reports
     
 }
 //****************************************************************************
@@ -12579,7 +12579,7 @@ export class Report_ {
     OutputWorkflow?: string;
         
     @Field(() => [ReportSnapshot_])
-    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+    ReportSnapshots_ReportIDArray: ReportSnapshot_[]; // Link to ReportSnapshots
     
 }
 
@@ -12972,10 +12972,10 @@ export class ResourceType_ {
     Entity?: string;
         
     @Field(() => [WorkspaceItem_])
-    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+    WorkspaceItems_ResourceTypeIDArray: WorkspaceItem_[]; // Link to WorkspaceItems
     
     @Field(() => [UserNotification_])
-    UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
+    UserNotifications_ResourceTypeIDArray: UserNotification_[]; // Link to UserNotifications
     
 }
 //****************************************************************************
@@ -13085,10 +13085,10 @@ export class Tag_ {
     Parent?: string;
         
     @Field(() => [Tag_])
-    TagsArray: Tag_[]; // Link to Tags
+    Tags_ParentIDArray: Tag_[]; // Link to Tags
     
     @Field(() => [TaggedItem_])
-    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+    TaggedItems_TagIDArray: TaggedItem_[]; // Link to TaggedItems
     
 }
 //****************************************************************************
@@ -13286,7 +13286,7 @@ export class Workspace_ {
     User: string;
         
     @Field(() => [WorkspaceItem_])
-    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+    WorkspaceItems_WorkSpaceIDArray: WorkspaceItem_[]; // Link to WorkspaceItems
     
 }
 
@@ -13629,7 +13629,7 @@ export class Dataset_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [DatasetItem_])
-    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+    DatasetItems_DatasetNameArray: DatasetItem_[]; // Link to DatasetItems
     
 }
 //****************************************************************************
@@ -13842,7 +13842,7 @@ export class ConversationDetail_ {
     Conversation?: string;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_ConversationDetailIDArray: Report_[]; // Link to Reports
     
 }
 
@@ -14051,10 +14051,10 @@ export class Conversation_ {
     DataContext?: string;
         
     @Field(() => [ConversationDetail_])
-    ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
+    ConversationDetails_ConversationIDArray: ConversationDetail_[]; // Link to ConversationDetails
     
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_ConversationIDArray: Report_[]; // Link to Reports
     
 }
 
@@ -14795,10 +14795,10 @@ export class RecordMergeLog_ {
     ApprovedByUser?: string;
         
     @Field(() => [RecordMergeDeletionLog_])
-    RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
+    RecordMergeDeletionLogs_RecordMergeLogIDArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
     
     @Field(() => [DuplicateRunDetailMatch_])
-    DuplicateRunDetailMatchesArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+    DuplicateRunDetailMatches_RecordMergeLogIDArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
 }
 
@@ -15391,10 +15391,10 @@ export class QueryCategory_ {
     User: string;
         
     @Field(() => [QueryCategory_])
-    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+    QueryCategories_ParentIDArray: QueryCategory_[]; // Link to QueryCategories
     
     @Field(() => [Query_])
-    QueriesArray: Query_[]; // Link to Queries
+    Queries_CategoryIDArray: Query_[]; // Link to Queries
     
 }
 
@@ -15593,13 +15593,13 @@ export class Query_ {
     Category?: string;
         
     @Field(() => [QueryField_])
-    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+    QueryFields_QueryIDArray: QueryField_[]; // Link to QueryFields
     
     @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    DataContextItems_QueryIDArray: DataContextItem_[]; // Link to DataContextItems
     
     @Field(() => [QueryPermission_])
-    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+    QueryPermissions_QueryIDArray: QueryPermission_[]; // Link to QueryPermissions
     
 }
 
@@ -15963,7 +15963,7 @@ export class VectorIndex_ {
     EmbeddingModel: string;
         
     @Field(() => [EntityRecordDocument_])
-    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+    EntityRecordDocuments_VectorIndexIDArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
     
 }
 
@@ -16115,7 +16115,7 @@ export class EntityDocumentType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    EntityDocuments_TypeIDArray: EntityDocument_[]; // Link to EntityDocuments
     
 }
 
@@ -16417,10 +16417,10 @@ export class VectorDatabase_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    EntityDocuments_IDArray: EntityDocument_[]; // Link to EntityDocuments
     
     @Field(() => [VectorIndex_])
-    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    VectorIndexes_VectorDatabaseIDArray: VectorIndex_[]; // Link to VectorIndexes
     
 }
 
@@ -16827,13 +16827,13 @@ export class EntityDocument_ {
     AIModel: string;
         
     @Field(() => [EntityDocumentSetting_])
-    EntityDocumentSettingsArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
+    EntityDocumentSettings_EntityDocumentIDArray: EntityDocumentSetting_[]; // Link to EntityDocumentSettings
     
     @Field(() => [EntityDocumentRun_])
-    EntityDocumentRunsArray: EntityDocumentRun_[]; // Link to EntityDocumentRuns
+    EntityDocumentRuns_EntityDocumentIDArray: EntityDocumentRun_[]; // Link to EntityDocumentRuns
     
     @Field(() => [EntityRecordDocument_])
-    EntityRecordDocumentsArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
+    EntityRecordDocuments_EntityDocumentIDArray: EntityRecordDocument_[]; // Link to EntityRecordDocuments
     
 }
 
@@ -17263,13 +17263,13 @@ export class DataContext_ {
     User: string;
         
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_DataContextIDArray: Report_[]; // Link to Reports
     
     @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    DataContextItems_DataContextIDArray: DataContextItem_[]; // Link to DataContextItems
     
     @Field(() => [Conversation_])
-    ConversationsArray: Conversation_[]; // Link to Conversations
+    Conversations_DataContextIDArray: Conversation_[]; // Link to Conversations
     
 }
 
@@ -17467,10 +17467,10 @@ export class UserViewCategory_ {
     User: string;
         
     @Field(() => [UserViewCategory_])
-    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+    UserViewCategories_ParentIDArray: UserViewCategory_[]; // Link to UserViewCategories
     
     @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    UserViews_CategoryIDArray: UserView_[]; // Link to UserViews
     
 }
 
@@ -17658,10 +17658,10 @@ export class DashboardCategory_ {
     User: string;
         
     @Field(() => [DashboardCategory_])
-    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+    DashboardCategories_ParentIDArray: DashboardCategory_[]; // Link to DashboardCategories
     
     @Field(() => [Dashboard_])
-    DashboardsArray: Dashboard_[]; // Link to Dashboards
+    Dashboards_CategoryIDArray: Dashboard_[]; // Link to Dashboards
     
 }
 
@@ -17843,10 +17843,10 @@ export class ReportCategory_ {
     User: string;
         
     @Field(() => [ReportCategory_])
-    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+    ReportCategories_ParentIDArray: ReportCategory_[]; // Link to ReportCategories
     
     @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    Reports_CategoryIDArray: Report_[]; // Link to Reports
     
 }
 
@@ -18026,7 +18026,7 @@ export class FileStorageProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [File_])
-    FilesArray: File_[]; // Link to Files
+    Files_ProviderIDArray: File_[]; // Link to Files
     
 }
 
@@ -18218,7 +18218,7 @@ export class File_ {
     Provider: string;
         
     @Field(() => [FileEntityRecordLink_])
-    FileEntityRecordLinksArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+    FileEntityRecordLinks_FileIDArray: FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
     
 }
 
@@ -18402,10 +18402,10 @@ export class FileCategory_ {
     Parent?: string;
         
     @Field(() => [File_])
-    FilesArray: File_[]; // Link to Files
+    Files_CategoryIDArray: File_[]; // Link to Files
     
     @Field(() => [FileCategory_])
-    FileCategoriesArray: FileCategory_[]; // Link to FileCategories
+    FileCategories_ParentIDArray: FileCategory_[]; // Link to FileCategories
     
 }
 
@@ -19462,7 +19462,7 @@ export class DuplicateRun_ {
     ApprovedByUser?: string;
         
     @Field(() => [DuplicateRunDetail_])
-    DuplicateRunDetailsArray: DuplicateRunDetail_[]; // Link to DuplicateRunDetails
+    DuplicateRunDetails_DuplicateRunIDArray: DuplicateRunDetail_[]; // Link to DuplicateRunDetails
     
 }
 
@@ -19668,7 +19668,7 @@ export class DuplicateRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [DuplicateRunDetailMatch_])
-    DuplicateRunDetailMatchesArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+    DuplicateRunDetailMatches_DuplicateRunDetailIDArray: DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
     
 }
 
@@ -20008,10 +20008,10 @@ export class ActionCategory_ {
     Parent?: string;
         
     @Field(() => [ActionCategory_])
-    ActionCategoriesArray: ActionCategory_[]; // Link to ActionCategories
+    ActionCategories_ParentIDArray: ActionCategory_[]; // Link to ActionCategories
     
     @Field(() => [Action_])
-    ActionsArray: Action_[]; // Link to Actions
+    Actions_CategoryIDArray: Action_[]; // Link to Actions
     
 }
 
@@ -20190,13 +20190,13 @@ export class EntityAction_ {
     Action: string;
         
     @Field(() => [EntityActionInvocation_])
-    EntityActionInvocationsArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
+    EntityActionInvocations_EntityActionIDArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
     
     @Field(() => [EntityActionFilter_])
-    EntityActionFiltersArray: EntityActionFilter_[]; // Link to EntityActionFilters
+    EntityActionFilters_EntityActionIDArray: EntityActionFilter_[]; // Link to EntityActionFilters
     
     @Field(() => [EntityActionParam_])
-    EntityActionParamsArray: EntityActionParam_[]; // Link to EntityActionParams
+    EntityActionParams_EntityActionIDArray: EntityActionParam_[]; // Link to EntityActionParams
     
 }
 
@@ -20670,7 +20670,7 @@ export class EntityActionInvocationType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityActionInvocation_])
-    EntityActionInvocationsArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
+    EntityActionInvocations_InvocationTypeIDArray: EntityActionInvocation_[]; // Link to EntityActionInvocations
     
 }
 
@@ -20878,28 +20878,28 @@ export class Action_ {
     CodeApprovedByUser?: string;
         
     @Field(() => [ActionParam_])
-    ActionParamsArray: ActionParam_[]; // Link to ActionParams
+    ActionParams_ActionIDArray: ActionParam_[]; // Link to ActionParams
     
     @Field(() => [ActionLibrary_])
-    ActionLibrariesArray: ActionLibrary_[]; // Link to ActionLibraries
+    ActionLibraries_ActionIDArray: ActionLibrary_[]; // Link to ActionLibraries
     
     @Field(() => [ScheduledAction_])
-    ScheduledActionsArray: ScheduledAction_[]; // Link to ScheduledActions
+    ScheduledActions_ActionIDArray: ScheduledAction_[]; // Link to ScheduledActions
     
     @Field(() => [ActionResultCode_])
-    ActionResultCodesArray: ActionResultCode_[]; // Link to ActionResultCodes
+    ActionResultCodes_ActionIDArray: ActionResultCode_[]; // Link to ActionResultCodes
     
     @Field(() => [ActionContext_])
-    ActionContextsArray: ActionContext_[]; // Link to ActionContexts
+    ActionContexts_ActionIDArray: ActionContext_[]; // Link to ActionContexts
     
     @Field(() => [EntityAction_])
-    EntityActionsArray: EntityAction_[]; // Link to EntityActions
+    EntityActions_ActionIDArray: EntityAction_[]; // Link to EntityActions
     
     @Field(() => [ActionExecutionLog_])
-    ActionExecutionLogsArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    ActionExecutionLogs_ActionIDArray: ActionExecutionLog_[]; // Link to ActionExecutionLogs
     
     @Field(() => [ActionAuthorization_])
-    ActionAuthorizationsArray: ActionAuthorization_[]; // Link to ActionAuthorizations
+    ActionAuthorizations_ActionIDArray: ActionAuthorization_[]; // Link to ActionAuthorizations
     
 }
 
@@ -21345,7 +21345,7 @@ export class ActionFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityActionFilter_])
-    EntityActionFiltersArray: EntityActionFilter_[]; // Link to EntityActionFilters
+    EntityActionFilters_ActionFilterIDArray: EntityActionFilter_[]; // Link to EntityActionFilters
     
 }
 
@@ -21503,7 +21503,7 @@ export class ActionContextType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [ActionContext_])
-    ActionContextsArray: ActionContext_[]; // Link to ActionContexts
+    ActionContexts_ContextTypeIDArray: ActionContext_[]; // Link to ActionContexts
     
 }
 
@@ -22178,10 +22178,10 @@ export class ActionParam_ {
     Action: string;
         
     @Field(() => [EntityActionParam_])
-    EntityActionParamsArray: EntityActionParam_[]; // Link to EntityActionParams
+    EntityActionParams_ActionParamIDArray: EntityActionParam_[]; // Link to EntityActionParams
     
     @Field(() => [ScheduledActionParam_])
-    ScheduledActionParamsArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
+    ScheduledActionParams_ActionParamIDArray: ScheduledActionParam_[]; // Link to ScheduledActionParams
     
 }
 
@@ -22534,10 +22534,10 @@ export class Library_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [ActionLibrary_])
-    ActionLibrariesArray: ActionLibrary_[]; // Link to ActionLibraries
+    ActionLibraries_LibraryIDArray: ActionLibrary_[]; // Link to ActionLibraries
     
     @Field(() => [LibraryItem_])
-    LibraryItemsArray: LibraryItem_[]; // Link to LibraryItems
+    LibraryItems_LibraryIDArray: LibraryItem_[]; // Link to LibraryItems
     
 }
 
@@ -22719,10 +22719,10 @@ export class ListCategory_ {
     User: string;
         
     @Field(() => [ListCategory_])
-    ListCategoriesArray: ListCategory_[]; // Link to ListCategories
+    ListCategories_ParentIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    Lists_CategoryIDArray: List_[]; // Link to Lists
     
 }
 
@@ -22892,10 +22892,10 @@ export class CommunicationProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [CommunicationLog_])
-    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+    CommunicationLogs_CommunicationProviderIDArray: CommunicationLog_[]; // Link to CommunicationLogs
     
     @Field(() => [CommunicationProviderMessageType_])
-    CommunicationProviderMessageTypesArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    CommunicationProviderMessageTypes_CommunicationProviderIDArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
 }
 
@@ -23084,7 +23084,7 @@ export class CommunicationRun_ {
     User: string;
         
     @Field(() => [CommunicationLog_])
-    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+    CommunicationLogs_CommunicationRunIDArray: CommunicationLog_[]; // Link to CommunicationLogs
     
 }
 
@@ -23274,7 +23274,7 @@ export class CommunicationProviderMessageType_ {
     CommunicationBaseMessageType: string;
         
     @Field(() => [CommunicationLog_])
-    CommunicationLogsArray: CommunicationLog_[]; // Link to CommunicationLogs
+    CommunicationLogs_CommunicationProviderMessageTypeIDArray: CommunicationLog_[]; // Link to CommunicationLogs
     
 }
 
@@ -23643,10 +23643,10 @@ export class CommunicationBaseMessageType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [CommunicationProviderMessageType_])
-    CommunicationProviderMessageTypesArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    CommunicationProviderMessageTypes_CommunicationBaseMessageTypeIDArray: CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
     @Field(() => [EntityCommunicationMessageType_])
-    EntityCommunicationMessageTypesArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
+    EntityCommunicationMessageTypes_BaseMessageTypeIDArray: EntityCommunicationMessageType_[]; // Link to EntityCommunicationMessageTypes
     
 }
 
@@ -23842,16 +23842,16 @@ export class Template_ {
     User: string;
         
     @Field(() => [TemplateContent_])
-    TemplateContentsArray: TemplateContent_[]; // Link to TemplateContents
+    TemplateContents_TemplateIDArray: TemplateContent_[]; // Link to TemplateContents
     
     @Field(() => [TemplateParam_])
-    TemplateParamsArray: TemplateParam_[]; // Link to TemplateParams
+    TemplateParams_TemplateIDArray: TemplateParam_[]; // Link to TemplateParams
     
     @Field(() => [AIPrompt_])
-    AIPromptsArray: AIPrompt_[]; // Link to AIPrompts
+    AIPrompts_TemplateIDArray: AIPrompt_[]; // Link to AIPrompts
     
     @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    EntityDocuments_TemplateIDArray: EntityDocument_[]; // Link to EntityDocuments
     
 }
 
@@ -24067,10 +24067,10 @@ export class TemplateCategory_ {
     User: string;
         
     @Field(() => [Template_])
-    TemplatesArray: Template_[]; // Link to Templates
+    Templates_CategoryIDArray: Template_[]; // Link to Templates
     
     @Field(() => [TemplateCategory_])
-    TemplateCategoriesArray: TemplateCategory_[]; // Link to TemplateCategories
+    TemplateCategories_ParentIDArray: TemplateCategory_[]; // Link to TemplateCategories
     
 }
 
@@ -24427,6 +24427,9 @@ export class TemplateParam_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: 'This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.'}) 
+    OrderBy?: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -24623,7 +24626,7 @@ export class TemplateContentType_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [TemplateContent_])
-    TemplateContentsArray: TemplateContent_[]; // Link to TemplateContents
+    TemplateContents_TypeIDArray: TemplateContent_[]; // Link to TemplateContents
     
 }
 
@@ -24777,7 +24780,7 @@ export class Recommendation_ {
     SourceEntity: string;
         
     @Field(() => [RecommendationItem_])
-    RecommendationItemsArray: RecommendationItem_[]; // Link to RecommendationItems
+    RecommendationItems_RecommendationIDArray: RecommendationItem_[]; // Link to RecommendationItems
     
 }
 
@@ -24923,7 +24926,7 @@ export class RecommendationProvider_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [RecommendationRun_])
-    RecommendationRunsArray: RecommendationRun_[]; // Link to RecommendationRuns
+    RecommendationRuns_RecommendationProviderIDArray: RecommendationRun_[]; // Link to RecommendationRuns
     
 }
 
@@ -25087,7 +25090,7 @@ export class RecommendationRun_ {
     RunByUser: string;
         
     @Field(() => [Recommendation_])
-    RecommendationsArray: Recommendation_[]; // Link to Recommendations
+    Recommendations_RecommendationRunIDArray: Recommendation_[]; // Link to Recommendations
     
 }
 
@@ -25416,7 +25419,7 @@ export class EntityCommunicationMessageType_ {
     BaseMessageType: string;
         
     @Field(() => [EntityCommunicationField_])
-    EntityCommunicationFieldsArray: EntityCommunicationField_[]; // Link to EntityCommunicationFields
+    EntityCommunicationFields_EntityCommunicationMessageTypeIDArray: EntityCommunicationField_[]; // Link to EntityCommunicationFields
     
 }
 
@@ -25714,7 +25717,7 @@ export class RecordChangeReplayRun_ {
     User: string;
         
     @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    RecordChanges_ReplayRunIDArray: RecordChange_[]; // Link to RecordChanges
     
 }
 
@@ -26014,7 +26017,7 @@ export class EntityRelationshipDisplayComponent_ {
     _mj__UpdatedAt: Date;
         
     @Field(() => [EntityRelationship_])
-    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+    EntityRelationships_DisplayComponentIDArray: EntityRelationship_[]; // Link to EntityRelationships
     
 }
 

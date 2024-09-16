@@ -1,8 +1,32 @@
 # Change Log - @memberjunction/cli
 
-This log was last generated on Fri, 16 Aug 2024 03:10:41 GMT and should not be manually modified.
+This log was last generated on Sat, 07 Sep 2024 18:07:40 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.4.0
+
+Sat, 07 Sep 2024 18:07:40 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+
+## 2.3.3
+
+Sat, 07 Sep 2024 17:28:16 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+
+## 2.3.2
+
+Fri, 30 Aug 2024 18:25:54 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
 
 ## 2.3.0
 

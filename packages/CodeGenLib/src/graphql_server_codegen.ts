@@ -128,7 +128,7 @@ ${
 }
 
 
-import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';
+${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';` : `export {}`}
     `;
     return sRet;
   }
@@ -238,16 +238,20 @@ export class ${serverGraphQLTypeName} {`;
     const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedClassName = classPackagePrefix + r.RelatedEntityBaseTableCodeName;
 
+    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
+    // and replace all special characters with an underscore
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
+
     if (r.Type.toLowerCase().trim() == 'one to many') {
       return `
     @Field(() => [${relatedClassName + this.GraphQLTypeSuffix}])
-    ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntityCodeName}
+    ${uniqueCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntityCodeName}
     `;
     } else {
       // many to many
       return `
     @Field(() => [${relatedClassName + this.GraphQLTypeSuffix}])
-    ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntity}
+    ${uniqueCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntity}
     `;
     }
   }
@@ -535,8 +539,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
-
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
     return `
     @FieldResolver(() => [${serverClassName}])
@@ -582,7 +585,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g,'_');
+    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
 
     return `
     @FieldResolver(() => [${serverClassName}])
