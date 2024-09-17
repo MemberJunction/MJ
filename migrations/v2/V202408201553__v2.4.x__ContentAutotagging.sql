@@ -64,13 +64,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentType]  WITH CHECK ADD  CONSTRAINT 
 /****************************************************************************************
 AI Models Table Additions
 ****************************************************************************************/
-INSERT INTO [${flyway:defaultSchema}].[AIModel] ([Name], [Description], [Vendor], [AIModelTypeID], [PowerRank], [IsActive], [DriverClass], [DriverImportPath], [APIName], [SpeedRank], [CostRank]) VALUES ('Llama 3.1 405b', 'Llama 3.1 405 billion parameters', 'Groq', 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 5, 1, 'GroqLLM', NULL, 'llama-3.1-405b-reasoning', NULL, NULL);
-INSERT INTO [${flyway:defaultSchema}].[AIModel] ([Name], [Description], [Vendor], [AIModelTypeID], [PowerRank], [IsActive], [DriverClass], [DriverImportPath], [APIName], [SpeedRank], [CostRank]) VALUES ('Llama 3.1 70b', 'Llama 3.1 70 billion parameters', 'Groq', 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 4, 1, 'GroqLLM', NULL, 'llama-3.1-70b-versatile', NULL, NULL);
-INSERT INTO [${flyway:defaultSchema}].[AIModel] ([Name], [Description], [Vendor], [AIModelTypeID], [PowerRank], [IsActive], [DriverClass], [DriverImportPath], [APIName], [SpeedRank], [CostRank]) VALUES ('Llama 3.1 8b', 'Llama 3.1 8 billion parameters', 'Groq', 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 2, 1, 'GroqLLM', NULL, 'llama-3.1-8b-instant', NULL, NULL);
-INSERT INTO [${flyway:defaultSchema}].[AIModel] ([Name], [Description], [Vendor], [AIModelTypeID], [PowerRank], [IsActive], [DriverClass], [DriverImportPath], [APIName], [SpeedRank], [CostRank]) VALUES ('Claude 3.5 Sonnet', 'First model of the Claude 3.5 model family', 'Anthropic', 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 5, 1, 'AnthropicLLM', NULL, 'claude-3-5-sonnet-20240620', NULL, NULL);
-INSERT INTO [${flyway:defaultSchema}].[AIModel] ([Name], [Description], [Vendor], [AIModelTypeID], [PowerRank], [IsActive], [DriverClass], [DriverImportPath], [APIName], [SpeedRank], [CostRank]) VALUES ('GPT 4o Mini', 'Affordable and intelligent small model for fast, lightweight tasks. GPT-4o mini is cheaper and more capable than GPT-3.5 Turbo', 'OpenAI', 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 4, 1, 'OpenAILLM', NULL, 'gpt-4o-mini', NULL, NULL);
-UPDATE [${flyway:defaultSchema}].[AIModel] SET APIName='open-mistral-8x7b' WHERE ID='E2A5CCEC-6A37-EF11-86D4-000D3A4E707E'
-
+ALTER TABLE [${flyway:defaultSchema}].[AIModel] ADD [TokenLimit] INT NULL;
 
 /****************************************************************************************
 Generated SQL From CodeGen for New Entities
