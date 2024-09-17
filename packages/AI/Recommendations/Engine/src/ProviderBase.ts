@@ -45,7 +45,7 @@ export abstract class RecommendationProviderBase {
       item.RecommendationID = recommendation.ID;
       const saveResult: boolean = await item.Save();
       if(!saveResult) {
-        LogError(`Error saving recommendation item for ${item.ID}`, undefined, item.LatestResult);
+        LogError(`Error saving recommendation item for recommendation ${recommendation.ID}`, undefined, item.LatestResult);
         allSaved = false;
       }
     }

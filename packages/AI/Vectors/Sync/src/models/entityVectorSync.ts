@@ -15,7 +15,7 @@ import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
-import { RecommendationEngineBase, RecommendationRequest } from '@memberjunction/ai-recommendations';
+import { RecommendationEngineBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -710,12 +710,14 @@ export class EntityVectorSyncer extends VectorBase {
     await RecommendationEngineBase.Instance.Config(false, super.CurrentUser);
 
     const recommendationParams: RecommendationRequest = {
-        Recommendations: [],
-        RunID: "4C04EEF4-7970-EF11-BDFD-00224879D6C4",
-        CurrentUser: super.CurrentUser
+        ListID: "4C04EEF4-7970-EF11-BDFD-00224879D6C4",
+        CurrentUser: super.CurrentUser,
+        Options: {
+          EntityDocumentID: '002B5E3E-1E71-EF11-BDFD-000D3AF6A893'
+        }
     };
 
-    const result = await RecommendationEngineBase.Instance.Recommend(recommendationParams);
-    console.log("Done, results:", result);
+    const result: RecommendationResult = await RecommendationEngineBase.Instance.Recommend(recommendationParams);
+    console.log("Done");
   }
 }

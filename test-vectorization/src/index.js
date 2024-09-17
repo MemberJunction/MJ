@@ -26,7 +26,7 @@ LoadPineconeVectorDB();
 LoadRexRecommendationsProvider();
 
 const params = {
-  EntityID: "D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893",
+  EntityID: "88723AD2-6D70-EF11-BDFD-00224877C022",
   EntityDocumentID: "002B5E3E-1E71-EF11-BDFD-000D3AF6A893",
 };
 

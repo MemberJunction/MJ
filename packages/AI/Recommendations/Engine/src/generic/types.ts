@@ -1,5 +1,5 @@
 import { UserInfo } from "@memberjunction/core";
-import { RecommendationEntity, RecommendationItemEntity, RecommendationProviderEntity } from "@memberjunction/core-entities";
+import { RecommendationEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity } from "@memberjunction/core-entities";
 
 /**
  * Used to make requests to Recommendation providers
@@ -10,7 +10,7 @@ export class RecommendationRequest {
      * This is done automatically by the Recommendation Engine and can be populated manually if for some reason you want to call a provider directly outside
      * of the engine. This is a required field.
      */
-    RunID: string;
+    RunID?: string;
   
     /**
      * Array of the requested recommendations. When preparing a batch of recommendations to request, do NOT set the RecommendationRunID or attempt
@@ -24,15 +24,15 @@ export class RecommendationRequest {
      * the Recommendations field will be populated with Recommendation Entities whose Primary key value matches any of the RecordIDs passed in.
      */
     EntityAndRecordsInfo?: {
-      /**
-       * The name of the entity that the RecordIDs belong to
-      */
-      EntityName: string,
-      /**
-       * The RecordIDs to fetch recommendations for. Note that if the record IDs
-       * 
-       */
-      RecordIDs: Array<string | number>,
+        /**
+         * The name of the entity that the RecordIDs belong to
+         */
+        EntityName: string,
+        /**
+         * The RecordIDs to fetch recommendations for. Note that if the record IDs
+         * 
+         */
+        RecordIDs: Array<string | number>
     }
   
     ListID?: string;
@@ -46,18 +46,60 @@ export class RecommendationRequest {
      * UserInfo object to use when applicable.
      */
     CurrentUser?: UserInfo;
-  }
+
+    /**
+     * Additional options to pass to the provider
+     */
+    Options?: Record<string, any>;
+}
   
-  /**
-   * This response is generated for each Recommend() request
-   */
-  export class RecommendationResult {
-    Success: boolean;
+/**
+ * This response is generated for each Recommend() request
+ */
+export class RecommendationResult {
     Request: RecommendationRequest;
+    /**
+     * The Recommendation Run entity that was created by the recommendation engine
+     */
+    RecommendationRun?: RecommendationRunEntity;
+    /**
+     * The Recommendation Item Entities that were created by the recommendation provider
+     */
+    RecommendationItems?: RecommendationItemEntity[] = [];
+    Success: boolean;
     ErrorMessage: string;
-    RecommendationItems: RecommendationItemEntity[] = [];
-  
+
     constructor(request: RecommendationRequest) {
-      this.Request = request;
+        this.Request = request;
+        this.Success = true;
+        this.ErrorMessage = "";
     }
-  }
+
+    /**
+     * Appends the provided warningMessage param to the ErrorMessage property,
+     * with "Warning: " prepended to the message and a newline character appended to the end.
+     * The value of the Success property is not changed.
+     */
+    AppendWarning(warningMessage: string) {
+        this.ErrorMessage += `Warning: ${warningMessage} \n`;
+    }
+
+    /**
+     * Appends the provided errorMessage param to the ErrorMessage property,
+     * with "Error: " prepended to the message and a newline character appended to the end.
+     * Also sets the Success property to false.
+     */
+    AppendError(errorMessage: string) {
+        this.Success = false;
+        this.ErrorMessage += `Error: ${errorMessage} \n`;
+    }
+
+    /**
+     * Returns the ErrorMessage property as an array of strings.
+     * Useful in the event multiple errors or warnings were produced
+     * during the recommendation run.
+     */
+    GetErrorMessages(): string[] {
+        return this.ErrorMessage.split('\n');
+    }
+}

@@ -1,4 +1,4 @@
-import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo } from '@memberjunction/core';
+import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError } from '@memberjunction/core';
 import { ListDetailEntityType, ListEntityType, RecommendationEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
@@ -39,7 +39,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     let provider: RecommendationProviderEntity = request.Provider;
     if (!provider){
       if(this.RecommendationProviders.length == 0) {
-        throw new console.error('No recommendation provider provider and no provider found in metadata');
+        throw new Error('No recommendation provider provider and no provider found in metadata');
       }
       else{
         provider = this.RecommendationProviders[0];
@@ -56,6 +56,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     const recommendations: RecommendationEntity[] = await this.GetRecommendationEntities(request);
+    LogStatus(`Processing ${recommendations.length} recommendations`);
+    request.Recommendations = recommendations;
 
     // load the run
     const recommendationRunEntity = await new Metadata().GetEntityObject<RecommendationRunEntity>('Recommendation Runs', request.CurrentUser);
@@ -66,7 +68,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     recommendationRunEntity.RecommendationProviderID = provider.ID;
     recommendationRunEntity.StartDate = new Date();
     recommendationRunEntity.RunByUserID = request.CurrentUser ? request.CurrentUser.ID : super.ContextUser.ID;
-    
+
     const saveResult: boolean = await recommendationRunEntity.Save();
     if(!saveResult) {
       LogStatus(`Error saving RecommendationRun entity: `, undefined, recommendationRunEntity.LatestResult);
@@ -76,7 +78,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     request.RunID = recommendationRunEntity.ID;
     const recommendResult: RecommendationResult = await driver.Recommend(request);
     recommendationRunEntity.Status = recommendResult.Success ? 'Completed' : 'Error';
-    recommendationRunEntity.Description = recommendResult.Success ? "" : recommendResult.ErrorMessage;
+    recommendationRunEntity.Description = recommendResult.ErrorMessage;
 
     const postRunSaveResult: boolean = await recommendationRunEntity.Save();
     if(!postRunSaveResult) {
@@ -128,7 +130,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       { /* Getting the List Details to get the record IDs */
         EntityName: 'List Details',
         ExtraFilter: `ListID = '${listID}'`,
-        ResultType: 'simple'
+        ResultType: 'simple',
+        IgnoreMaxRows: true,
       }
     ], currentUser);
 
@@ -142,10 +145,12 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     const list: ListEntityType = listViewResult.Results[0];
+    const entityName: string = list.Entity;
+    LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
+
     const entityID: string = list.EntityID;
     const entity: EntityInfo = md.Entities.find((e) => e.ID == entityID);
-    const needsQuotes: boolean = entity.FirstPrimaryKey.NeedsQuotes;
-    const entityName: string = list.Entity;
+    const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
 
     const listDetailsResult = rvListDetailsResult[1];
     if(!listDetailsResult.Success) {
@@ -160,7 +165,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     const recordIDs: string = listDetailsResult.Results.map((ld: ListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
     const rvEntityResult = await rv.RunView({
       EntityName: entityName,
-      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`
+      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
+      IgnoreMaxRows: true,
     }, currentUser);
 
     if(!rvEntityResult.Success) {
@@ -188,11 +194,13 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       throw new Error(`Unable to get recommendations by entity info: Entity not found with name: ${entityName}`);
     }
 
-    const needsQuotes: boolean = entity.FirstPrimaryKey.NeedsQuotes;
+    LogStatus(`Getting recommendations for entity: ${entityName}`);
+    const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
     const recordIDsFilter: string = recordIDs.map((id) => `${needsQuotes}${id}${needsQuotes}`).join(',');
     const rvEntityResult = await rv.RunView({
       EntityName: entityName,
-      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDsFilter})`
+      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDsFilter})`,
+      IgnoreMaxRows: true,
     }, currentUser);
 
     if(!rvEntityResult.Success) {
