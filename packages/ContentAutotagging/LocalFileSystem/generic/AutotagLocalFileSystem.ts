@@ -51,30 +51,9 @@ export class AutotagLocalFileSystem extends AutotagBase {
         const contentItemsToProcess: ContentItemEntity[] = []
 
         for (const contentSource of contentSources) {
-
             // First check that the directory exists
             if (fs.existsSync(contentSource.URL)) {
-
-                // If content source parameters were provided, set them. Otherwise, use the default values.
-                const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
-                if (contentSourceParamsMap) {
-                    // Override defaults with content source specific params
-                    contentSourceParamsMap.forEach((value, key) => {
-                        if (key in this) {
-                            (this as any)[key] = value;
-                        }
-                    })
-                }
-
-                const contentSourceParams: ContentSourceParams = {
-                    contentSourceID: contentSource.ID,
-                    name: contentSource.Name,
-                    ContentTypeID: contentSource.ContentTypeID,
-                    ContentSourceTypeID: contentSource.ContentSourceTypeID,
-                    ContentFileTypeID: contentSource.ContentFileTypeID,
-                    URL: contentSource.URL
-                }
-                
+                const contentSourceParams = await this.setContentSourceParams(contentSource);
                 const lastRunDate: Date = await this.engine.getContentSourceLastRunDate(contentSourceParams.contentSourceID, this.contextUser)
 
                 // Traverse through all the files in the directory
@@ -83,7 +62,6 @@ export class AutotagLocalFileSystem extends AutotagBase {
                     if (contentItems && contentItems.length > 0) {
                         contentItemsToProcess.push(...contentItems);
                     }
-                    
                     else {
                         // No content items found to process
                         console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
@@ -98,6 +76,30 @@ export class AutotagLocalFileSystem extends AutotagBase {
         }
 
         return contentItemsToProcess;
+    }
+
+    public async setContentSourceParams(contentSource: ContentSourceEntity) { 
+        // If content source parameters were provided, set them. Otherwise, use the default values.
+        const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
+        if (contentSourceParamsMap) {
+            // Override defaults with content source specific params
+            contentSourceParamsMap.forEach((value, key) => {
+                if (key in this) {
+                    (this as any)[key] = value;
+                }
+            })
+        }
+
+        const contentSourceParams: ContentSourceParams = {
+            contentSourceID: contentSource.ID,
+            name: contentSource.Name,
+            ContentTypeID: contentSource.ContentTypeID,
+            ContentSourceTypeID: contentSource.ContentSourceTypeID,
+            ContentFileTypeID: contentSource.ContentFileTypeID,
+            URL: contentSource.URL
+        }
+
+        return contentSourceParams;
     }
 
     /**
@@ -126,36 +128,56 @@ export class AutotagLocalFileSystem extends AutotagBase {
                 const changedDate = new Date(stats.ctime.toUTCString())
                 if (changedDate > lastRunDate) {
                     // The file has been added, create a new record for this file
-                    const md = new Metadata();
-                    const text = await this.engine.parseFileFromPath(filePath);
-                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
-                    contentItem.NewRecord();
-                    contentItem.ContentSourceID = contentSourceParams.contentSourceID
-                    contentItem.Name = contentSourceParams.name
-                    contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
-                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID
-                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
-                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
-                    contentItem.Checksum = await this.engine.getChecksumFromText(text)
-                    contentItem.URL = contentSourceParams.URL
-                    contentItem.Text = text
-
-                    await contentItem.Save();
+                    const contentItem = await this.setAddedContentItem(filePath, contentSourceParams);
                     contentItems.push(contentItem); // Content item was added, add to list
                 }
                 else if (modifiedDate > lastRunDate) {
                     // The file's contents has been, update the record for this file 
-                    const md = new Metadata();
-                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
-                    const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
-                    await contentItem.Load(contentItemID);
-                    const text = await this.engine.parseFileFromPath(filePath);
-                    contentItem.Text = text
-                    contentItem.Checksum = await this.engine.getChecksumFromText(text)
-                    await contentItem.Save();
+                    const contentItem = await this.setModifiedContentItem(filePath, contentSourceParams);
+                    contentItems.push(contentItem);
                 }
             }
         }
         return contentItems;
+    }
+
+    public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> { 
+        const md = new Metadata();
+        const text = await this.engine.parseFileFromPath(filePath);
+        const contentItem = await md.GetEntityObject<any>('Content Items', this.contextUser);
+        contentItem.NewRecord();
+        contentItem.ContentSourceID = contentSourceParams.contentSourceID
+        contentItem.Name = contentSourceParams.name
+        contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+        contentItem.ContentTypeID = contentSourceParams.ContentTypeID
+        contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
+        contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
+        contentItem.Checksum = await this.engine.getChecksumFromText(text)
+        contentItem.URL = contentSourceParams.URL
+        contentItem.Text = text
+
+        if(await contentItem.Save()){
+            return contentItem;
+        }
+        else {
+            throw new Error('Failed to save content item');
+        }
+    }
+
+    public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> {
+        const md = new Metadata();
+        const contentItem = await md.GetEntityObject<any>('Content Items', this.contextUser);
+        const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
+        await contentItem.Load(contentItemID);
+        const text = await this.engine.parseFileFromPath(filePath);
+        contentItem.Text = text
+        contentItem.Checksum = await this.engine.getChecksumFromText(text)
+
+        if(await contentItem.Save()){
+            return contentItem;
+        }
+        else {
+            throw new Error('Failed to save content item');
+        }
     }
 }
