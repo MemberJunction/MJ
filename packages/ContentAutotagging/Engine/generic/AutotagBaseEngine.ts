@@ -1,29 +1,20 @@
-import { BaseEngine, Metadata, RunView, UserInfo } from '@memberjunction/core'
-import { RegisterClass } from '@memberjunction/global'
-import { ContentSourceEntity, ContentItemEntity, ContentItemTagEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentItemAttributeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity, ContentSourceParamEntity } from '@memberjunction/core-entities'
+import { Metadata, RunView, UserInfo } from '@memberjunction/core'
+import { RegisterClass, MJGlobal } from '@memberjunction/global'
+import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity, ContentProcessRunEntity, ContentTypeEntity, ContentSourceTypeEntity, ContentTypeAttributeEntity, ContentSourceParamEntity } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import * as officeparser from 'officeparser'
 import * as fs from 'fs'
-import { ProcessRunParams, JsonObject, ContentItemProcessParams, ModelTokenLimits } from './process.types'
+import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
-import { BaseLLM } from '@memberjunction/ai'
-import { OpenAILLM } from '@memberjunction/ai-openai'
-import { AnthropicLLM } from '@memberjunction/ai-anthropic'
-import { MistralLLM } from '@memberjunction/ai-mistral'
-import { GroqLLM } from '@memberjunction/ai-groq'
-import { AIModelEntity } from '@memberjunction/core-entities'
+import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
+import { AIEngine } from '@memberjunction/aiengine'
 
-@RegisterClass(BaseEngine, 'AutotagBaseEngine')
-export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
-    static _openai: OpenAILLM;
-    static _anthropic: AnthropicLLM;
-    static _mistral: MistralLLM;
-    static _groq: GroqLLM;
-
+@RegisterClass(AIEngine, 'AutotagBaseEngine')
+export class AutotagBaseEngine extends AIEngine {
     constructor() {
         super();
 
@@ -31,34 +22,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     public static get Instance(): AutotagBaseEngine {
         return super.getInstance<AutotagBaseEngine>();
-    }
-    
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
-        const config = [
-            {
-                EntityName: 'Content Sources',
-            }, 
-            {
-                EntityName: 'Content Items'
-            }, 
-            {
-                EntityName: 'Content Item Tags'
-            }, 
-            { 
-                EntityName: 'Content File Types'
-            }, 
-            { 
-                EntityName: 'Content Process Runs'
-            },
-            { 
-                EntityName: 'Content Types'
-            },
-            {
-                EntityName: 'Content Item Attributes'
-            }
-        ]
-
-        return await this.Load(config, forceRefresh, contextUser)
     }
 
     /**
@@ -120,68 +83,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
-        const LLM = await this.getLLMClient(params.modelID, contextUser)
-        const model = await this.getModelAPINameFromID(params.modelID, contextUser)
-        const text = this.chunkExtractedText(params.text, model)
-        const contentType = await this.getContentTypeName(params.contentTypeID, contextUser)
-        const contentSourceType = await this.getContentSourceTypeName(params.contentSourceTypeID, contextUser)
-        const additionalContentTypePrompts = await this.getAdditionalContentTypePrompt(params.contentTypeID, contextUser)
-        const minTags = params.minTags
-        const maxTags = params.maxTags
-        const LLMResults: JsonObject = {}
+        const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID)
+        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
+        const text = this.chunkExtractedText(params.text, model.TokenLimit)
+        let LLMResults: JsonObject = {}
         const startTime = new Date()
 
         for (const chunk of text) {
-
-            const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext. 
-            Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}. 
-            The text MUST be of the type ${contentType} for the subsequent processing.`
-            const userPrompt = `
-            If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
-            Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text and between ${minTags} and ${maxTags} topical key words that are most relevant to the text.
-            If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
-            Please provide the keywords in a list format.
-            Make sure the response is just the json file without and formatting or code blocks, and strictly following the format below. Please don't include a greeting in the response, only output the json file:
-
-            {
-                "title": (title here),
-                "keywords": (list keywords here), 
-                "isValidContent": true (as a boolean)
-            }
-
-            ${additionalContentTypePrompts}
-
-            Please make sure the response in is valid JSON format. 
-
-            The supplied text is: ${chunk}
-            `;
-
-            const response = await LLM.ChatCompletion({
-                messages: [
-                    {
-                        role: 'system',
-                        content: systemPrompt,
-                    },
-                    {
-                        role: 'user',
-                        content: userPrompt,
-                    }
-                ],
-                model: model,
-                temperature:0.0, 
-                response_format: {"type":"json_object"}
-            });
-
-            const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
-            const JSONQueryResponse: JsonObject = JSON.parse(queryResponse);
-
-            // check if the response has info to add to LLMResults
-            for (const key in JSONQueryResponse) {
-                const value = JSONQueryResponse[key]
-                if (value !== null) { 
-                    LLMResults[key] = value
-                }
-            }
+            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, chunk, LLMResults, contextUser)
+            LLMResults = await this.processChunkWithLLM(llm, systemPrompt, userPrompt, LLMResults, model.APIName)
         }   
         
         const endTime = new Date();
@@ -190,6 +100,69 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         LLMResults.contentItemID = params.contentItemID
 
         return LLMResults
+    }
+
+    public async processChunkWithLLM(llm: BaseLLM, systemPrompt: string, userPrompt: string, LLMResults:JsonObject, modelAPIName: string): Promise<JsonObject> {
+
+        const response = await llm.ChatCompletion({
+            messages: [
+                {
+                    role: 'system',
+                    content: systemPrompt,
+                },
+                {
+                    role: 'user',
+                    content: userPrompt,
+                }
+            ],
+            model: modelAPIName,
+            temperature:0.0
+        });
+
+        const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
+        const JSONQueryResponse: JsonObject = JSON.parse(queryResponse);
+
+        // check if the response has info to add to LLMResults
+        for (const key in JSONQueryResponse) {
+            const value = JSONQueryResponse[key]
+            if (value !== null) { 
+                LLMResults[key] = value
+            }
+        }
+
+        return LLMResults
+    }
+
+    public async getLLMPrompts(params: ContentItemProcessParams, chunk: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<{ systemPrompt: string, userPrompt: string }> {
+        const contentType = await this.getContentTypeName(params.contentTypeID, contextUser)
+        const contentSourceType = await this.getContentSourceTypeName(params.contentSourceTypeID, contextUser)
+        const additionalContentTypePrompts = await this.getAdditionalContentTypePrompt(params.contentTypeID, contextUser)
+        
+        const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext. 
+        Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}. 
+        The text MUST be of the type ${contentType} for the subsequent processing.`
+        const userPrompt = `
+        If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
+        Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text and between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
+        If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
+        Please provide the keywords in a list format.
+        Make sure the response is just the json file without and formatting or code blocks, and strictly following the format below. Please don't include a greeting in the response, only output the json file:
+
+        {
+            "title": (title here),
+            "keywords": (list keywords here), 
+            "isValidContent": true (as a boolean)
+        }
+
+        ${additionalContentTypePrompts}
+
+        Please make sure the response in is valid JSON format. 
+
+        You are also provided with the results so far as additional context, please use them to formulate the best results given the provided text: ${JSON.stringify(LLMResults)}
+        The supplied text is: ${chunk}
+        `;
+
+        return { systemPrompt, userPrompt }
     }
 
     public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo) {
@@ -206,14 +179,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo) {
         const md = new Metadata()
-        const contentItem: ContentItemEntity = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+        const contentItem: ContentItemEntity = await md.GetEntityObject<any>('Content Items', contextUser)
         await contentItem.Load(contentItemID)
         await contentItem.Delete()
     }
 
-    public chunkExtractedText(text: string, modelAPIName: string): string[]{
+    public chunkExtractedText(text: string, tokenLimit: number): string[]{
         try {
-            const tokenLimit = ModelTokenLimits[modelAPIName]
             const textLimit = Math.ceil(tokenLimit / 1.5 ) // bit of a conservatice estimate to ensure there is room for the additional prompts
             
             if (text.length <= textLimit) {
@@ -248,7 +220,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const md = new Metadata()
         for (const keyword of LLMResults.keywords) {
 
-            const contentItemTags = await md.GetEntityObject<ContentItemTagEntity>('Content Item Tags', contextUser)
+            const contentItemTags = await md.GetEntityObject<any>('Content Item Tags', contextUser)
             contentItemTags.NewRecord()
             
             contentItemTags.ItemID = contentItemID
@@ -263,13 +235,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Overwrite name of content item with title if it exists
             if (key === 'title') {
                 const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<any>('Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Name = LLMResults.title
                 await contentItem.Save()
             }
             if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
+                const contentItemAttribute = await md.GetEntityObject<any>('Content Item Attributes', contextUser)
                 contentItemAttribute.NewRecord()
                 
                 //Value should be a string, if its a null or undefined value, set it to an empty string
@@ -325,35 +297,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
         else {
             throw new Error(`Subclass with name ${subclass} not found`)
-        }
-    }
-
-    public async getLLMClient(modelID: string, contextUser: UserInfo): Promise<any> {
-        const modelDriverClass = await this.getModelDriverClassFromID(modelID, contextUser)
-        
-        switch (modelDriverClass) {
-            case 'OpenAILLM':
-                if (!AutotagBaseEngine._openai) {
-                    return new OpenAILLM(process.env['AI_VENDOR_API_KEY__OpenAILLM'])
-                }
-                return AutotagBaseEngine._openai
-            case 'AnthropicLLM':
-                if (!AutotagBaseEngine._anthropic) {
-                    return new AnthropicLLM(process.env['AI_VENDOR_API_KEY__ANTHROPIC'])
-                }
-                return AutotagBaseEngine._anthropic
-            case 'MistralLLM':
-                if (!AutotagBaseEngine._mistral) {
-                    return new MistralLLM(process.env['AI_VENDOR_API_KEY__MISTRALLLM'])
-                }
-                return AutotagBaseEngine._mistral
-            case 'GroqLLM': 
-                if (!AutotagBaseEngine._groq) {
-                    return new GroqLLM(process.env['AI_VENDOR_API_KEY__GROQ'])
-                }
-                return AutotagBaseEngine._groq
-            default:
-                throw new Error(`Model vendor name ${modelDriverClass} not found`)
         }
     }
 
@@ -422,52 +365,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     public stringToBoolean(string: string): boolean {
         return string === 'true'
-    }
-
-    /**
-     * Given a model ID, this function retrieves the API model name from the database.
-     * @param modelID 
-     * @param contextUser 
-     * @returns 
-     */
-    public async getModelAPINameFromID(modelID: string, contextUser: UserInfo): Promise<string> {
-        try { 
-            const rv = new RunView()
-            const results = await rv.RunView<AIModelEntity>({
-                EntityName: 'AI Models', 
-                ExtraFilter: `ID='${modelID}'`,
-                ResultType: 'entity_object'
-            }, contextUser)
-
-            if (results.Success && results.Results.length) {
-                const model: AIModelEntity = results.Results[0]
-                return model.APIName
-            }
-            else {
-                throw new Error(`Model with ID ${modelID} not found`)
-            }
-        } catch (e) {
-            console.error(e);
-            throw e;
-        }
-    }
-
-    public async getModelDriverClassFromID(modelID: string, contextUser: UserInfo): Promise<string|void> {
-        try { 
-            const rv = new RunView()
-            const results = await rv.RunView<AIModelEntity>({
-                EntityName: 'AI Models', 
-                ExtraFilter: `ID='${modelID}'`,
-                ResultType: 'entity_object'
-            }, contextUser)
-
-            if (results.Success && results.Results.length) {
-                const model: AIModelEntity = results.Results[0]
-                return model.DriverClass
-            }
-        } catch (e) {
-        throw new Error(`Driver class for model with ID ${modelID} not found`)
-        }
     }
 
     /**
@@ -543,7 +440,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns 
      */
-    public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string|void> {
+    public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentSourceTypeEntity>({
@@ -560,6 +457,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             console.error(e);
             throw e;
         }
+
+        throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found`);
     }
 
     /**
@@ -568,7 +467,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns 
      */
-    public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string|void> {
+    public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentTypeEntity>({
@@ -585,6 +484,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             console.error(e);
             throw e;
         }
+
+        throw new Error(`Content Type with ID ${contentTypeID} not found`);
     }
 
     /**
@@ -593,7 +494,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param contextUser 
      * @returns
      */
-    public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string|void> {
+    public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string> {
         const rv = new RunView();
 
         const contentFileTypeResult = await rv.RunView<ContentFileTypeEntity>({
@@ -610,6 +511,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             console.error(e);
             throw e;
         }
+
+        throw new Error(`Content File Type with ID ${contentFileTypeID} not found`);
     }
 
     public async getAdditionalContentTypePrompt(contentTypeID: string, contextUser: UserInfo): Promise<string> {
@@ -690,7 +593,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo){
         const md = new Metadata()
-        const processRun = await md.GetEntityObject<ContentProcessRunEntity>('Content Process Runs', contextUser)
+        const processRun = await md.GetEntityObject<any>('Content Process Runs', contextUser)
         processRun.NewRecord()
         processRun.SourceID = processRunParams.sourceID
         processRun.StartTime = processRunParams.startTime
