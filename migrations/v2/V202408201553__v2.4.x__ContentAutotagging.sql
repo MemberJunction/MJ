@@ -64,7 +64,16 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentType]  WITH CHECK ADD  CONSTRAINT 
 /****************************************************************************************
 AI Models Table Additions
 ****************************************************************************************/
-ALTER TABLE [${flyway:defaultSchema}].[AIModel] ADD [TokenLimit] INT NULL;
+-- Add InputTokenLimit to AIModel table
+ALTER TABLE [${flyway:defaultSchema}].[AIModel] ADD InputTokenLimit INT NULL;
+
+-- Add MS_Description for the new InputTokenLimit column
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description', 
+    @value = N'Stores the maximum number of tokens that fit in the context window for the model.', 
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'Table',  @level1name = 'AIModel', 
+    @level2type = N'Column', @level2name = 'InputTokenLimit';
 
 /****************************************************************************************
 Generated SQL From CodeGen for New Entities
