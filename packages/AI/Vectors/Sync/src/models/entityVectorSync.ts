@@ -633,7 +633,7 @@ export class EntityVectorSyncer extends VectorBase {
     let existingRecords: BaseEntity[] = [];
     const runViewResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
       EntityName: 'Entity Record Documents',
-      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in (${embeddingData.__mj_recordID})`,
+      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in ('${embeddingData.__mj_recordID}')`,
       ResultType: 'entity_object'
     }, contextUser);
     
