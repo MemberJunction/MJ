@@ -32,7 +32,6 @@ export class AutotagRSSFeed extends AutotagBase {
      */
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
-        await AutotagBaseEngine.Instance.Config(false, this.contextUser);
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
