@@ -104,6 +104,9 @@ export class EntityVectorSyncer extends VectorBase {
       contextUser: super.CurrentUser,
       workerContext,
     });
+    annotator.on('error', (err) => {      
+      LogError('Error in annotator worker', null, err);    
+    });
 
     //archiver worker handles upserting the vectors into the vector database
     const archiver = new BatchWorker({ 
@@ -111,6 +114,9 @@ export class EntityVectorSyncer extends VectorBase {
       batchSize: 4,
       contextUser: super.CurrentUser, 
       workerContext
+    });
+    archiver.on('error', (err) => {      
+      LogError('Error in archiver worker', null, err);    
     });
 
     const upserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
