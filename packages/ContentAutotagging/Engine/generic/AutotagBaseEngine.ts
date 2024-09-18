@@ -12,6 +12,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
+import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
 
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
@@ -116,7 +117,7 @@ export class AutotagBaseEngine extends AIEngine {
                 }
             ],
             model: modelAPIName,
-            temperature:0.0
+            temperature:0.0,
         });
 
         const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
@@ -143,13 +144,14 @@ export class AutotagBaseEngine extends AIEngine {
         The text MUST be of the type ${contentType} for the subsequent processing.`
         const userPrompt = `
         If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
-        Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text and between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
+        Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text, a short summary of the provided documents, as well as between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
         If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
         Please provide the keywords in a list format.
         Make sure the response is just the json file without and formatting or code blocks, and strictly following the format below. Please don't include a greeting in the response, only output the json file:
 
         {
             "title": (title here),
+            "description": (description here),
             "keywords": (list keywords here), 
             "isValidContent": true (as a boolean)
         }
@@ -235,13 +237,20 @@ export class AutotagBaseEngine extends AIEngine {
             // Overwrite name of content item with title if it exists
             if (key === 'title') {
                 const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<any>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Name = LLMResults.title
                 await contentItem.Save()
             }
+            if(key === 'description') {
+                const ID = LLMResults.contentItemID
+                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                await contentItem.Load(ID)
+                contentItem.Description = LLMResults.description
+                await contentItem.Save()
+            }
             if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttribute = await md.GetEntityObject<any>('Content Item Attributes', contextUser)
+                const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
                 contentItemAttribute.NewRecord()
                 
                 //Value should be a string, if its a null or undefined value, set it to an empty string
