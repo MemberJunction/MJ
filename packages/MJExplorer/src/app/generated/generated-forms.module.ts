@@ -26,17 +26,59 @@ import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
-
-
+import { CoursePartFormComponent, LoadCoursePartFormComponent } from "./Entities/CoursePart/coursepart.form.component";
+import { CourseFormComponent, LoadCourseFormComponent } from "./Entities/Course/course.form.component";
+import { PersonEducationHistoryFormComponent, LoadPersonEducationHistoryFormComponent } from "./Entities/PersonEducationHistory/personeducationhistory.form.component";
+import { PersonEmploymentHistoryFormComponent, LoadPersonEmploymentHistoryFormComponent } from "./Entities/PersonEmploymentHistory/personemploymenthistory.form.component";
+import { PersonFormComponent, LoadPersonFormComponent } from "./Entities/Person/person.form.component";
+import { CoursePartDetailsComponent, LoadCoursePartDetailsComponent } from "./Entities/CoursePart/sections/details.component"
+import { CourseDetailsComponent, LoadCourseDetailsComponent } from "./Entities/Course/sections/details.component"
+import { PersonEducationHistoryDetailsComponent, LoadPersonEducationHistoryDetailsComponent } from "./Entities/PersonEducationHistory/sections/details.component"
+import { PersonEmploymentHistoryDetailsComponent, LoadPersonEmploymentHistoryDetailsComponent } from "./Entities/PersonEmploymentHistory/sections/details.component"
+import { PersonDetailsComponent, LoadPersonDetailsComponent } from "./Entities/Person/sections/details.component"
    
 
+@NgModule({
+declarations: [
+    CoursePartFormComponent,
+    CourseFormComponent,
+    PersonEducationHistoryFormComponent,
+    PersonEmploymentHistoryFormComponent,
+    PersonFormComponent,
+    CoursePartDetailsComponent,
+    CourseDetailsComponent,
+    PersonEducationHistoryDetailsComponent,
+    PersonEmploymentHistoryDetailsComponent,
+    PersonDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    UserViewGridModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    FormToolbarModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule,
+    UserViewGridModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
+    
 
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
@@ -47,7 +89,15 @@ export function LoadGeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    
-    
+    LoadCoursePartFormComponent();
+    LoadCourseFormComponent();
+    LoadPersonEducationHistoryFormComponent();
+    LoadPersonEmploymentHistoryFormComponent();
+    LoadPersonFormComponent();
+    LoadCoursePartDetailsComponent();
+    LoadCourseDetailsComponent();
+    LoadPersonEducationHistoryDetailsComponent();
+    LoadPersonEmploymentHistoryDetailsComponent();
+    LoadPersonDetailsComponent();
 }
     

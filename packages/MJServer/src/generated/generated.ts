@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 8/29/2024, 12:18:08 PM
+* GENERATED: 9/17/2024, 1:27:03 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,8 +20,213 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, flyway_schema_historyEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
+import { flyway_schema_historyEntity, ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity } from '@memberjunction/core-entities';
     
+
+//****************************************************************************
+// ENTITY CLASS for flyway _schema _histories
+//****************************************************************************
+@ObjectType()
+export class flyway_schema_history_ {
+    @Field(() => Int) 
+    installed_rank: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    version?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    description?: string;
+        
+    @Field() 
+    @MaxLength(40)
+    type: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    script: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    checksum?: number;
+        
+    @Field() 
+    @MaxLength(200)
+    installed_by: string;
+        
+    @Field() 
+    @MaxLength(8)
+    installed_on: Date;
+        
+    @Field(() => Int) 
+    execution_time: number;
+        
+    @Field(() => Boolean) 
+    success: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for flyway _schema _histories
+//****************************************************************************
+@InputType()
+export class Createflyway_schema_historyInput {
+    @Field(() => Int)
+    installed_rank: number;
+
+    @Field({ nullable: true })
+    version?: string;
+
+    @Field({ nullable: true })
+    description?: string;
+
+    @Field()
+    type: string;
+
+    @Field()
+    script: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum?: number;
+
+    @Field()
+    installed_by: string;
+
+    @Field()
+    installed_on: Date;
+
+    @Field(() => Int)
+    execution_time: number;
+
+    @Field(() => Boolean)
+    success: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for flyway _schema _histories
+//****************************************************************************
+@InputType()
+export class Updateflyway_schema_historyInput {
+    @Field(() => Int)
+    installed_rank: number;
+
+    @Field({ nullable: true })
+    version?: string;
+
+    @Field({ nullable: true })
+    description?: string;
+
+    @Field()
+    type: string;
+
+    @Field()
+    script: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum?: number;
+
+    @Field()
+    installed_by: string;
+
+    @Field()
+    installed_on: Date;
+
+    @Field(() => Int)
+    execution_time: number;
+
+    @Field(() => Boolean)
+    success: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for flyway _schema _histories
+//****************************************************************************
+@ObjectType()
+export class Runflyway_schema_historyViewResult {
+    @Field(() => [flyway_schema_history_])
+    Results: flyway_schema_history_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(flyway_schema_history_)
+export class flyway_schema_historyResolver extends ResolverBase {
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'flyway _schema _histories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => flyway_schema_history_, { nullable: true })
+    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
+        this.CheckUserReadPermissions('flyway _schema _histories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwflyway_schema_histories] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause('flyway _schema _histories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('flyway _schema _histories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => flyway_schema_history_)
+    async Createflyway_schema_history(
+        @Arg('input', () => Createflyway_schema_historyInput) input: Createflyway_schema_historyInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => flyway_schema_history_)
+    async Updateflyway_schema_history(
+        @Arg('input', () => Updateflyway_schema_historyInput) input: Updateflyway_schema_historyInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => flyway_schema_history_)
+    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
+        return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
 
 //****************************************************************************
 // ENTITY CLASS for Scheduled Actions
@@ -653,211 +858,6 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
     async DeleteExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Explorer Navigation Items', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for flyway _schema _histories
-//****************************************************************************
-@ObjectType()
-export class flyway_schema_history_ {
-    @Field(() => Int) 
-    installed_rank: number;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    version?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(400)
-    description?: string;
-        
-    @Field() 
-    @MaxLength(40)
-    type: string;
-        
-    @Field() 
-    @MaxLength(2000)
-    script: string;
-        
-    @Field(() => Int, {nullable: true}) 
-    checksum?: number;
-        
-    @Field() 
-    @MaxLength(200)
-    installed_by: string;
-        
-    @Field() 
-    @MaxLength(8)
-    installed_on: Date;
-        
-    @Field(() => Int) 
-    execution_time: number;
-        
-    @Field(() => Boolean) 
-    success: boolean;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for flyway _schema _histories
-//****************************************************************************
-@InputType()
-export class Createflyway_schema_historyInput {
-    @Field(() => Int)
-    installed_rank: number;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    script: string;
-
-    @Field(() => Int, { nullable: true })
-    checksum?: number;
-
-    @Field()
-    installed_by: string;
-
-    @Field()
-    installed_on: Date;
-
-    @Field(() => Int)
-    execution_time: number;
-
-    @Field(() => Boolean)
-    success: boolean;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for flyway _schema _histories
-//****************************************************************************
-@InputType()
-export class Updateflyway_schema_historyInput {
-    @Field(() => Int)
-    installed_rank: number;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    script: string;
-
-    @Field(() => Int, { nullable: true })
-    checksum?: number;
-
-    @Field()
-    installed_by: string;
-
-    @Field()
-    installed_on: Date;
-
-    @Field(() => Int)
-    execution_time: number;
-
-    @Field(() => Boolean)
-    success: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for flyway _schema _histories
-//****************************************************************************
-@ObjectType()
-export class Runflyway_schema_historyViewResult {
-    @Field(() => [flyway_schema_history_])
-    Results: flyway_schema_history_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(flyway_schema_history_)
-export class flyway_schema_historyResolver extends ResolverBase {
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'flyway _schema _histories';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => flyway_schema_history_, { nullable: true })
-    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
-        this.CheckUserReadPermissions('flyway _schema _histories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwflyway_schema_histories] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause('flyway _schema _histories', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('flyway _schema _histories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => flyway_schema_history_)
-    async Createflyway_schema_history(
-        @Arg('input', () => Createflyway_schema_historyInput) input: Createflyway_schema_historyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => flyway_schema_history_)
-    async Updateflyway_schema_history(
-        @Arg('input', () => Updateflyway_schema_historyInput) input: Updateflyway_schema_historyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => flyway_schema_history_)
-    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
-        return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10443,11 +10443,11 @@ export class AIModel_ {
     @Field(() => [VectorIndex_])
     VectorIndexes_EmbeddingModelIDArray: VectorIndex_[]; // Link to VectorIndexes
     
-    @Field(() => [EntityAIAction_])
-    EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
-    
     @Field(() => [AIResultCache_])
     AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
+    
+    @Field(() => [EntityAIAction_])
+    EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
 }
 
@@ -10634,19 +10634,19 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIResultCache_])
     async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [EntityAIAction_])
+    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -24427,9 +24427,6 @@ export class TemplateParam_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: 'This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.'}) 
-    OrderBy?: string;
-        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -25261,9 +25258,24 @@ export class RecommendationItem_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RecommendedEntityID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(900)
+    RecommendedEntityRecordID?: string;
+        
+    @Field({nullable: true}) 
+    AdditionalData?: string;
+        
     @Field() 
     @MaxLength(510)
     DestinationEntity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    RecommendedEntity?: string;
         
 }
 
@@ -25283,6 +25295,15 @@ export class CreateRecommendationItemInput {
 
     @Field(() => Float, { nullable: true })
     MatchProbability?: number;
+
+    @Field({ nullable: true })
+    RecommendedEntityID?: string;
+
+    @Field({ nullable: true })
+    RecommendedEntityRecordID?: string;
+
+    @Field({ nullable: true })
+    AdditionalData?: string;
 }
     
 
@@ -25305,6 +25326,15 @@ export class UpdateRecommendationItemInput {
 
     @Field(() => Float, { nullable: true })
     MatchProbability?: number;
+
+    @Field({ nullable: true })
+    RecommendedEntityID?: string;
+
+    @Field({ nullable: true })
+    RecommendedEntityRecordID?: string;
+
+    @Field({ nullable: true })
+    AdditionalData?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

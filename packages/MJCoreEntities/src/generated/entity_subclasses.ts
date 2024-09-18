@@ -1961,8 +1961,7 @@ export const CompanyIntegrationRunSchema = z.object({
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type CompanyIntegrationRunEntityType = z.infer<typeof CompanyIntegrationRunSchema>;
@@ -6032,10 +6031,28 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecommendedEntityID: z.string().nullish().describe(`
+        * * Field Name: RecommendedEntityID
+        * * Display Name: Recommended Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    RecommendedEntityRecordID: z.string().nullish().describe(`
+        * * Field Name: RecommendedEntityRecordID
+        * * Display Name: Recommended Entity Record ID
+        * * SQL Data Type: nvarchar(450)`),
+    AdditionalData: z.string().nullish().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
         * * SQL Data Type: nvarchar(255)`),
+    RecommendedEntity: z.string().nullish().describe(`
+        * * Field Name: RecommendedEntity
+        * * Display Name: Recommended Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
 });
 
 export type RecommendationItemEntityType = z.infer<typeof RecommendationItemSchema>;
@@ -7396,12 +7413,6 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    OrderBy: z.string().nullish().describe(`
-        * * Field Name: OrderBy
-        * * Display Name: Order By
-        * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
-    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -13812,7 +13823,6 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get RunByUser(): string {
         return this.Get('RunByUser');
@@ -24783,12 +24793,59 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
+    * * Field Name: RecommendedEntityID
+    * * Display Name: Recommended Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get RecommendedEntityID(): string | null {
+        return this.Get('RecommendedEntityID');
+    }
+    set RecommendedEntityID(value: string | null) {
+        this.Set('RecommendedEntityID', value);
+    }
+
+    /**
+    * * Field Name: RecommendedEntityRecordID
+    * * Display Name: Recommended Entity Record ID
+    * * SQL Data Type: nvarchar(450)
+    */
+    get RecommendedEntityRecordID(): string | null {
+        return this.Get('RecommendedEntityRecordID');
+    }
+    set RecommendedEntityRecordID(value: string | null) {
+        this.Set('RecommendedEntityRecordID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
+    }
+
+    /**
     * * Field Name: DestinationEntity
     * * Display Name: Destination Entity
     * * SQL Data Type: nvarchar(255)
     */
     get DestinationEntity(): string {
         return this.Get('DestinationEntity');
+    }
+
+    /**
+    * * Field Name: RecommendedEntity
+    * * Display Name: Recommended Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get RecommendedEntity(): string | null {
+        return this.Get('RecommendedEntity');
     }
 }
 
@@ -28513,20 +28570,6 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: OrderBy
-    * * Display Name: Order By
-    * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
-    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.
-    */
-    get OrderBy(): string | null {
-        return this.Get('OrderBy');
-    }
-    set OrderBy(value: string | null) {
-        this.Set('OrderBy', value);
     }
 
     /**

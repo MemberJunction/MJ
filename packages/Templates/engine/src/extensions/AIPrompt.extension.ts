@@ -63,7 +63,8 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // then we will create an instance of the LLM class
         AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
-                const model = await AIEngine.Instance.GetHighestPowerModel('Groq','llm', this.ContextUser) 
+                const model = AIEngine.Instance.Models.find(m => m.ID == 'E63F182E-F775-EF11-BDFD-000D3AF6A893');
+                //const model = await AIEngine.Instance.GetHighestPowerModel('Groq','llm', this.ContextUser) 
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
                 const llmResult = await llm.ChatCompletion({
                     messages: [

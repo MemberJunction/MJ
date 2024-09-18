@@ -16,6 +16,35 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Person Education Histories" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '926351EF-7270-EF11-BDFD-00224877C022'}">
+                        Person Education Histories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Education Histories')"  
+                            [NewRecordValues]="NewRecordValues('Person Education Histories')"
+                            [AllowLoad]="IsCurrentTab('Person Education Histories')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Person Employment Histories" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '936351EF-7270-EF11-BDFD-00224877C022'}">
+                        Person Employment Histories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Employment Histories')"  
+                            [NewRecordValues]="NewRecordValues('Person Employment Histories')"
+                            [AllowLoad]="IsCurrentTab('Person Employment Histories')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

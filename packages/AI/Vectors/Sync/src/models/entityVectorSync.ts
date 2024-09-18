@@ -16,6 +16,9 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 import { RecommendationEngineBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
+import { ATDParams, EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
+import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
+import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -719,5 +722,67 @@ export class EntityVectorSyncer extends VectorBase {
 
     const result: RecommendationResult = await RecommendationEngineBase.Instance.Recommend(recommendationParams);
     console.log("Done");
+  }
+
+  public async SendEmails(): Promise<void> {
+    await EntityCommunicationsEngine.Instance.Config(false, super.CurrentUser);
+    await CommunicationEngineBase.Instance.Config(false, super.CurrentUser);
+    await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
+
+    const msg: Message = new Message();
+    msg.From = "test.bluecypress@gmail.com"
+
+    const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
+    if (!sendGrid)
+      throw new Error("SendGrid provider not found");
+
+    const email = sendGrid.MessageTypes.find(mt => mt.Name === "Email");
+    if (!email){
+      throw new Error("Email message type not found");
+    } 
+
+
+    const bodyTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "B4A2FCD1-7274-EF11-BDFD-000D3AF6A893");
+    const subjectTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "6005290C-8674-EF11-BDFD-000D3AF6A893");
+
+    msg.MessageType = email;
+    msg.HTMLBodyTemplate = bodyTemplate;
+    //msg.SubjectTemplate = subjectTemplate;
+    
+    /*
+    const commParams: EntityCommunicationParams = {
+      EntityID: this.entityInfo!.ID, 
+      RunViewParams: this.runViewParams!, 
+      ProviderName: "SendGrid", 
+      ProviderMessageTypeName: "Email", 
+      Message: msg,
+      PreviewOnly: true,
+      IncludeProcessedMessages: true
+    }
+    */
+
+    const params: EntityCommunicationParams = {
+      EntityID: "4C04EEF4-7970-EF11-BDFD-00224879D6C4",
+      ProviderName: "SendGrid",
+      RunViewParams: {
+        EntityName: "Persons",
+        ExtraFilter: `ID in (SELECT RecordID from __mj.vwListDetails WHERE ListID = '4C04EEF4-7970-EF11-BDFD-00224879D6C4')`,
+        IgnoreMaxRows: true
+      },
+      ProviderMessageTypeName: "Email",
+      Message: msg,
+      PreviewOnly: true,
+      IncludeProcessedMessages: true
+    };
+
+    const atdParams: ATDParams = {
+      ListID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',
+      CurrentUser: super.CurrentUser,
+      RecommendedEntityID: "83723AD2-6D70-EF11-BDFD-00224877C022",
+      RecommendationID: "71BB905A-2275-EF11-BDFD-000D3AF6A893",
+      Message: msg
+    }
+
+    const result = await EntityCommunicationsEngine.Instance.ATD(atdParams);
   }
 }

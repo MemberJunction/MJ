@@ -2,6 +2,8 @@ import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } f
 import { RegisterClass } from "@memberjunction/global";
 import sgMail from '@sendgrid/mail';
 import { __API_KEY } from "./config";
+import { LogError, LogStatus } from "@memberjunction/core";
+import fs from 'fs';
 
 /**
  * Implementation of the SendGrid provider for sending and receiving messages
@@ -9,6 +11,14 @@ import { __API_KEY } from "./config";
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
+        message.ProcessedHTMLBody = message.ProcessedHTMLBody.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+        var format = /[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
+        const name = message.Subject.split(",")[0];
+        if(!format.test(name)){
+            fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/${name}Test.html`, message.ProcessedHTMLBody);
+        }
+
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
         const msg = {
@@ -44,6 +54,6 @@ export class SendGridProvider extends BaseCommunicationProvider {
     }
 }
 
-export function LoadProvider() {
+export function LoadSendGridProvider() {
     // do nothing, this prevents tree shaking from removing this class
 }

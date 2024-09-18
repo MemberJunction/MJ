@@ -11,6 +11,7 @@ import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 import { RecommendationEngineBase } from "@memberjunction/ai-recommendations";
 import { LoadRexRecommendationsProvider } from "@memberjunction/ai-recommendations-rex"
+import { LoadSendGridProvider } from "@memberjunction/communication-sendgrid";
 
 const SYSTEM_USER_ID = "860AFD90-F76A-EF11-BDFD-00224877C022";
 
@@ -24,6 +25,7 @@ LoadOpenAILLM();
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
 LoadRexRecommendationsProvider();
+LoadSendGridProvider();
 
 const params = {
   EntityID: "88723AD2-6D70-EF11-BDFD-00224877C022",
@@ -68,7 +70,8 @@ console.log(request);
 console.log('vectorizing entity...');
 //await vectorizer.VectorizeEntity(request, systemUser);
 //await vectorizer.CreateTemplateForEntityDocument(entityDocument);
-await vectorizer.GetRecommendations();
+//await vectorizer.GetRecommendations();
+await vectorizer.SendEmails();
 
 console.log('Done');
 process.exit('0');

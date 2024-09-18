@@ -28,6 +28,7 @@
     "@memberjunction/templates": "2.4.1",
     "@memberjunction/templates-base-types": "2.4.1",
     "@memberjunction/ai-openai": "2.4.1",
+    "@memberjunction/entity-communications-server": "2.4.1",
     "dotenv": "^16.4.1",
     "typeorm": "^0.3.20"
   },

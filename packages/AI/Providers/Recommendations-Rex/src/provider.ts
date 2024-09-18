@@ -1,5 +1,5 @@
 import { RecommendationProviderBase, RecommendationRequest, RecommendationResult } from "@memberjunction/ai-recommendations";
-import { LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { EntityRecordDocumentEntityType, RecommendationEntity, RecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
@@ -14,6 +14,10 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
     MinProbability: number = 0;
     MaxProbability: number = 1;
+
+    PeronsEntityID: string = "";
+    CoursesEntityID: string = "";
+    CoursePartsEntityID: string = "";
 
     public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
 
@@ -226,9 +230,16 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return data.results;
         }
         catch(ex){
-            const rasaError: RasaResponse<any> = ex.request.data;
-            LogError(`Error getting Rex recommendation: ${rasaError.metadata.errors}`);
-            return null;
+            if(isAxiosError(ex)){
+                const axiosError: AxiosError = ex;
+                console.log("Error getting Rex recommendation:", axiosError);
+                return null;
+            }
+            else{
+                const rasaError: RasaResponse<any> = ex.request.data;
+                LogError(`Error getting Rex recommendation: ${rasaError.metadata.errors}`);
+                return null;
+            }
         }
     }
 
@@ -238,17 +249,62 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         for (const recommendation of recommendations) {
             const entity: RecommendationItemEntity = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items", currentUser);
-            
+            let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation);
+
             entity.NewRecord();
             entity.RecommendationID = recommendationEntity.ID;
             entity.DestinationEntityID = recommendationEntity.SourceEntityID;
             entity.DestinationEntityRecordID = recommendationEntity.SourceEntityRecordID;
             entity.MatchProbability = this.ClampScore(recommendation.score, this.MinProbability, this.MaxProbability);
+            entity.RecommendedEntityID = data.entityID;
+            entity.RecommendedEntityRecordID = data.recordID;
+            entity.AdditionalData = JSON.stringify(recommendation);
 
             entities.push(entity);
         }
 
         return entities;
+    }
+
+    private GetEntityIDAndRecordID(data: RecommendationResponse): Record<'entityID' | 'recordID', string> {
+        let entityName: string = "";
+        let entityID: string = "";
+        let recordID: string = "";
+
+        switch(data.type){
+            case "course":
+                entityName = "Courses";
+                break;
+            case "course_part":
+                entityName = "Course Parts";
+                break;
+            case "person":
+                entityName = "Persons";
+                break;
+            default:
+                LogError(`Unknown entity type: ${data.type}`);
+                break;
+        };
+
+        const md: Metadata = new Metadata();
+        const entity: EntityInfo = md.Entities.find(e => e.Name == entityName);
+        entityID = entity.ID;
+        
+        //IDs of external records arent helpful,
+        //as they dont exist in MJ and we have no way
+        //of fetching them
+        if(data.source == "mj.pinecone"){
+            //Taking a shortcut here, the above entities
+            //all have a single primary key named "ID",
+            //so a simple split call grabbing the second
+            //element will get the ID.
+            const IDSplit = data.id.split("|");
+            if(IDSplit.length > 1){
+                recordID = IDSplit[1];
+            }
+        }
+
+        return { entityID, recordID };
     }
 
     /**
