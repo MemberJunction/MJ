@@ -19,7 +19,8 @@ export class MistralLLM extends BaseLLM {
         const startTime = new Date();
         const chatResponse = await this.client.chat({
             model: params.model,
-            messages: params.messages
+            messages: params.messages, 
+            max_tokens: params.maxOutputTokens
         });
         const endTime = new Date();
 
