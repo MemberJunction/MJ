@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { ContentItemEntity } from "@memberjunction/core-entities";
 import { Metadata } from "@memberjunction/core";
 import path from "path";
-import { ContentSourceParams } from "Engine";
+import { ContentSourceParams } from "../../Engine";
 dotenv.config()
 
 export class AutotagAzureBlob extends CloudStorageBase {

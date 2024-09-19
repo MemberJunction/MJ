@@ -86,7 +86,7 @@ export class AutotagBaseEngine extends AIEngine {
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
         const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID)
         const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-        const text = this.chunkExtractedText(params.text, model.TokenLimit)
+        const text = this.chunkExtractedText(params.text, model.InputTokenLimit)
         let LLMResults: JsonObject = {}
         const startTime = new Date()
 
