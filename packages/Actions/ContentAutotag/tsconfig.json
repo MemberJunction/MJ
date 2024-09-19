@@ -9,8 +9,12 @@
       "declarationMap": true,
       "moduleResolution": "node",
       "sourceMap": true,
+      "rootDir": "./src",
       "outDir": "dist",
-      "strict": true,
+      "strict": false,
+      "paths": {
+      "@memberjunction/content-autotagging": ["./node_modules/@memberjunction/content-autotagging"]
+    }
     },
     "include": ["src/**/*"],
     "exclude": ["node_modules", "**/*.spec.ts"]

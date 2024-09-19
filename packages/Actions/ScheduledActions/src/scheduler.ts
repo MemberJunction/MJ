@@ -88,8 +88,10 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
             throw new Error(`Scheduled action ${actionName} not found`);
         }
 
+        //since CronExpresssion is optional, only check if its populated
         const now = new Date();
-        if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
+        const canRun: boolean = scheduledAction.CronExpression ? ScheduledActionEngine.IsActionDue(scheduledAction, now) : true;
+        if (canRun) {
             const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
             const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
             const result = await ActionEngine.Instance.RunAction({

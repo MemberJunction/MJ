@@ -4,6 +4,16 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "Scheduled Actions Server",
+      "envFile": "${workspaceFolder}/packages/Actions/ScheduledActionsServer/.env",
+      "cwd": "${workspaceFolder}/packages/Actions/ScheduledActionsServer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "MJAPI",
       "envFile": "${workspaceFolder}/packages/MJAPI/.env",
       "cwd": "${workspaceFolder}/packages/MJAPI",

@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { VectorizeEntityAction } from "../../../CoreActions/src";
-import { AutotagLocalFileSystem, AutotagRSSFeed, AutotagWebsite } from "../../../../ContentAutotagging/src";
+import { VectorizeEntityAction } from "@memberjunction/core-actions";
+import { AutotagLocalFileSystem, AutotagRSSFeed, AutotagWebsite } from '@memberjunction/content-autotagging';
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 import { EntityDocumentEntity } from "@memberjunction/core-entities";
 import { LogStatus } from "@memberjunction/core";
@@ -23,7 +23,7 @@ export class AutotagAndVectorizeContentAction extends VectorizeEntityAction {
             throw new Error('Autotag and Vectorize params are required.');
         }
 
-        if (autotagParam.Value === 'true') {
+        if (autotagParam.Value === 1) {
             const FileAutotag = new AutotagLocalFileSystem()
             await FileAutotag.Autotag(params.ContextUser)
             const RSSAutotag = new AutotagRSSFeed()
@@ -32,7 +32,7 @@ export class AutotagAndVectorizeContentAction extends VectorizeEntityAction {
             await WebsiteAutotag.Autotag(params.ContextUser)
         }
 
-        if (vectorizeParam.Value === 'true') {
+        if (vectorizeParam.Value === 1) {
             return await super.InternalRunAction(params);
         }
 

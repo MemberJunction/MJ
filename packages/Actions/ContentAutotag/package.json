@@ -23,6 +23,8 @@
     "@memberjunction/core": "2.4.1",
     "@memberjunction/core-entities": "2.4.1",
     "@memberjunction/actions": "2.4.1",
+    "@memberjunction/core-actions": "2.4.1",
+    "@memberjunction/content-autotagging": "2.4.1",
     "axios": "^1.7.2"
   }
 }
