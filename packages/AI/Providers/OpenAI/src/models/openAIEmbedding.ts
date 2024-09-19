@@ -22,13 +22,19 @@ export class OpenAIEmbedding extends Embeddings {
             model: params.model || "text-embedding-3-small"
         }
 
-        let response = await OpenAIEmbedding._openAI.embeddings.create(body);
+        try{
+            let response = await OpenAIEmbedding._openAI.embeddings.create(body);
 
-        return {
-            object: response.object,
-            model: response.model,
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
-            vector: response.data[0].embedding
+            return {
+                object: response.object,
+                model: response.model,
+                ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
+                vector: response.data[0].embedding
+            }
+        }
+        catch(ex){
+            console.log(ex);
+            return null;
         }
     }
 
@@ -38,13 +44,19 @@ export class OpenAIEmbedding extends Embeddings {
             model: params.model || "text-embedding-3-small"
         }
 
-        let response = await OpenAIEmbedding._openAI.embeddings.create(body);
+        try{
+            let response = await OpenAIEmbedding._openAI.embeddings.create(body);
 
-        return {
-            object: response.object,
-            model: response.model,
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
-            vectors: response.data.map((data) => data.embedding)
+            return {
+                object: response.object,
+                model: response.model,
+                ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
+                vectors: response.data.map((data) => data.embedding)
+            }
+        }
+        catch(ex){
+            console.log(ex);
+            return null;
         }
     }
 
