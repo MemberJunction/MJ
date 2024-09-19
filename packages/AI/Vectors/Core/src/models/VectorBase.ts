@@ -51,6 +51,7 @@ export class VectorBase {
             ResultType: params.ResultType,
             MaxRows: params.PageSize,
             StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize),
+            ExtraFilter: params.Filter
         }, this.CurrentUser);
     
         if (!rvResult.Success) {
