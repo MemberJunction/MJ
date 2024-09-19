@@ -19,20 +19,24 @@ export class CommunicationEngine extends CommunicationEngineBase {
       * @returns 
       */
      public GetProvider(providerName: string): BaseCommunicationProvider {
-        if (!this.Loaded)
+        if (!this.Loaded){
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
 
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseCommunicationProvider>(BaseCommunicationProvider, providerName);
         if (instance) {
             // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
             // dont have a registration for the class we are looking for
-            if (instance.constructor.name === 'BaseCommunicationProvider')
+            if (instance.constructor.name === 'BaseCommunicationProvider'){
                 throw new Error(`Provider ${providerName} not found.`);
-            else
+            }
+            else {
                 return instance; // we got a valid instance of the sub-class we were looking for
+            }
         }
-        else
+        else {
             throw new Error(`Provider ${providerName} not found.`);
+        }
      }
 
  
@@ -67,22 +71,27 @@ export class CommunicationEngine extends CommunicationEngineBase {
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       */
      public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message, run?: CommunicationRunEntity, previewOnly?: boolean): Promise<MessageResult> {
-        if (!this.Loaded)
+        if (!this.Loaded){
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        }
 
         const provider = this.GetProvider(providerName);
-        if (!provider)
+        if (!provider){
             throw new Error(`Provider ${providerName} not found.`);
+        }
 
         const providerEntity = this.Providers.find((p) => p.Name === providerName);
-        if (!providerEntity)
+        if (!providerEntity){
             throw new Error(`Provider ${providerName} not found.`);
+        }
 
         if (!message.MessageType) {
             // find the message type
             const providerMessageType = providerEntity.MessageTypes.find((pmt) => pmt.Name.trim().toLowerCase() === providerMessageTypeName.trim().toLowerCase());
-            if (!providerMessageType)
+            if (!providerMessageType){
                 throw new Error(`Provider message type ${providerMessageTypeName} not found.`);
+            }
+
             message.MessageType = providerMessageType;
         }
 
@@ -99,16 +108,20 @@ export class CommunicationEngine extends CommunicationEngineBase {
                     const sendResult = await provider.SendSingleMessage(processedMessage);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
                     log.ErrorMessage = sendResult.Error;
-                    if (!await log.Save())
+                    if (!await log.Save()){
                         throw new Error(`Failed to complete log for message.`);
-                    else
+                    }
+                    else{
                         return sendResult;
+                    }
                 }
-                else
-                    throw new Error(`Failed to start log for message.`);    
+                else{
+                    throw new Error(`Failed to start log for message.`);
+                }    
             }
         }
-        else
+        else{
             throw new Error(`Failed to process message: ${processResult.Message}`);
+        }
      }
 }

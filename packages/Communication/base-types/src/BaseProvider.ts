@@ -46,6 +46,11 @@ export class Message {
     public To: string;
 
     /**
+     * The date and time to send the message, if not provided the message will be sent immediately
+     */
+    public SendAt?: Date;
+
+    /**
      * The body of the message, used if BodyTemplate is not provided.
      */
     public Body?: string;
@@ -84,8 +89,9 @@ export class Message {
 
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message
-        if (copyFrom)
+        if (copyFrom){
             Object.assign(this, copyFrom);
+        }
     }
 }
 
