@@ -1381,8 +1381,7 @@ export const PersonSchema = z.object({
     TestEmail: z.string().nullish().describe(`
         * * Field Name: TestEmail
         * * Display Name: Test Email
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type PersonEntityType = z.infer<typeof PersonSchema>;
@@ -5467,7 +5466,6 @@ export class PersonEntity extends BaseEntity<PersonEntityType> {
     * * Field Name: TestEmail
     * * Display Name: Test Email
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get TestEmail(): string | null {
         return this.Get('TestEmail');

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 9/17/2024, 1:27:03 PM
+* GENERATED: 9/18/2024, 4:33:36 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -22891,6 +22891,9 @@ export class CommunicationProvider_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean) 
+    SupportsScheduledSending: boolean;
+        
     @Field(() => [CommunicationLog_])
     CommunicationLogs_CommunicationProviderIDArray: CommunicationLog_[]; // Link to CommunicationLogs
     
@@ -22918,6 +22921,9 @@ export class CreateCommunicationProviderInput {
 
     @Field(() => Boolean)
     SupportsReceiving: boolean;
+
+    @Field(() => Boolean)
+    SupportsScheduledSending: boolean;
 }
     
 
@@ -22943,6 +22949,9 @@ export class UpdateCommunicationProviderInput {
 
     @Field(() => Boolean)
     SupportsReceiving: boolean;
+
+    @Field(() => Boolean)
+    SupportsScheduledSending: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

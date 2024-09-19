@@ -1,5 +1,5 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { Message, MessageRecipient } from "@memberjunction/communication-types";
+import { CommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { ListDetailEntityType, ListEntityType, TemplateParamEntity } from "@memberjunction/core-entities";
 import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
@@ -33,9 +33,20 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     
             await CommunicationEngine.Instance.Config(false, this.ContextUser);
     
-            const provider = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
-            if (!provider) 
+            const provider: CommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
+            if (!provider) {
                 throw new Error(`Provider ${params.ProviderName} not found`);
+            }
+
+            if(!provider.SupportsSending){
+                throw new Error(`Provider ${params.ProviderName} does not support sending messages`);
+            }
+
+            const message: Message = params.Message;
+            if(message.SendAt && !provider.SupportsScheduledSending){
+                throw new Error(`Provider ${params.ProviderName} does not support scheduled sending`);
+            }
+
             const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
     
             const entityMessageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);

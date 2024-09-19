@@ -1,8 +1,7 @@
 import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
-import sgMail from '@sendgrid/mail';
+import sgMail, { MailDataRequired } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
-import { LogError, LogStatus } from "@memberjunction/core";
 import fs from 'fs';
 
 /**
@@ -21,13 +20,20 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
-        const msg = {
+        const msg: MailDataRequired = {
             to: message.To,
             from: message.From,
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
             html: message.ProcessedHTMLBody
         };
+
+        if(message.SendAt){
+            const time = message.SendAt.getTime();
+            const unitTime = Math.floor(time/1000);
+            msg.sendAt = unitTime;
+        }
+
         try {
             const result = await sgMail.send(msg);
             if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
