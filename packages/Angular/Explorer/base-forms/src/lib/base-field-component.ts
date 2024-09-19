@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
-import { BaseEntity, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 import { MarkdownComponent } from 'ngx-markdown';
 import { languages } from '@codemirror/language-data';
@@ -69,7 +69,12 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   }
 
   public get ExtendedType(): string {
-    return this.record.GetFieldByName(this.FieldName)?.EntityFieldInfo.ExtendedType;
+    const entityField: EntityField | null = this.record.GetFieldByName(this.FieldName);
+    if (!entityField){
+      return '';
+    }
+
+    return entityField.EntityFieldInfo.ExtendedType;
   }
 
   private _possibleValues: string[] | null = null;

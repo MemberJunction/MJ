@@ -22,10 +22,10 @@
                 }
             }
             @case ('Email') {
-                <span mjEmailLink [field]="record.GetFieldByName(FieldName)" >{{FormatValue(FieldName, 0)}}</span>
+                <span mjEmailLink [field]="record.GetFieldByName(FieldName)!" >{{FormatValue(FieldName, 0)}}</span>
             }
             @case ('URL') {
-                <span mjWebLink [field]="record.GetFieldByName(FieldName)" >{{FormatValue(FieldName, 0)}}</span>
+                <span mjWebLink [field]="record.GetFieldByName(FieldName)!" >{{FormatValue(FieldName, 0)}}</span>
             }
             @case ('Record') {
                 <span mjFieldLink [record]="record" [fieldName]="FieldName" >{{FormatValue(FieldName, 0)}}</span>

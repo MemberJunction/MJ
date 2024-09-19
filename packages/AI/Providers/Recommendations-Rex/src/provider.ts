@@ -253,13 +253,10 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
             entity.NewRecord();
             entity.RecommendationID = recommendationEntity.ID;
-            entity.DestinationEntityID = recommendationEntity.SourceEntityID;
-            entity.DestinationEntityRecordID = recommendationEntity.SourceEntityRecordID;
+            entity.DestinationEntityID = data.entityID;
+            entity.DestinationEntityRecordID = data.recordID;
             entity.MatchProbability = this.ClampScore(recommendation.score, this.MinProbability, this.MaxProbability);
-            entity.RecommendedEntityID = data.entityID;
-            entity.RecommendedEntityRecordID = data.recordID;
-            entity.AdditionalData = JSON.stringify(recommendation);
-
+            
             entities.push(entity);
         }
 
