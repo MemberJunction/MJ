@@ -8,6 +8,12 @@ export type VectorizeEntityParams = {
     entityID: string;
     entityDocumentID?: string;
     /**
+     * If defined, all records within the given list will be vectorized
+     * instead of all records within the entity. Note that the list's
+     * EntityID field must equal the entityID parameter.
+    */
+    listID?: string;
+    /**
      * The number of records to be vectorized and inserted
      * into the vector database at a time
      */
