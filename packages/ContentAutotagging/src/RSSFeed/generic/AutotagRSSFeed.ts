@@ -150,7 +150,8 @@ export class AutotagRSSFeed extends AutotagBase {
                     rssItem.pubDate = item.pubDate ?? '';
                     rssItem.guid = item.guid ?? '';
                     rssItem.category = item.category ?? '';
-                    rssItem.content = await this.engine.parseHTML(item['content:encoded']) ?? '';
+                    const content = item['content:encoded'] ?? item['content'] ?? '';
+                    rssItem.content = await this.engine.parseHTML(content);
                     rssItem.author = item.author ?? '';
                     rssItem.comments = item.comments ?? '';
                     rssItem.source = item.source ?? '';

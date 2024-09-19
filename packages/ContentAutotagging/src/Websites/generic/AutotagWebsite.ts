@@ -7,7 +7,6 @@ import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
 import dotenv from 'dotenv';
-import path from 'path';
 dotenv.config()
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')

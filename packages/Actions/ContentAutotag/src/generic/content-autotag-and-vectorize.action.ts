@@ -23,23 +23,37 @@ export class AutotagAndVectorizeContentAction extends VectorizeEntityAction {
             throw new Error('Autotag and Vectorize params are required.');
         }
 
-        if (autotagParam.Value === 1) {
-            const FileAutotag = new AutotagLocalFileSystem()
-            await FileAutotag.Autotag(params.ContextUser)
-            const RSSAutotag = new AutotagRSSFeed()
-            await RSSAutotag.Autotag(params.ContextUser)
-            const WebsiteAutotag = new AutotagWebsite()
-            await WebsiteAutotag.Autotag(params.ContextUser)
-        }
+        try {
 
-        if (vectorizeParam.Value === 1) {
-            return await super.InternalRunAction(params);
-        }
+            if (autotagParam.Value === 1) {
+                const FileAutotag = new AutotagLocalFileSystem()
+                await FileAutotag.Autotag(params.ContextUser)
+                const RSSAutotag = new AutotagRSSFeed()
+                await RSSAutotag.Autotag(params.ContextUser)
+                const WebsiteAutotag = new AutotagWebsite()
+                await WebsiteAutotag.Autotag(params.ContextUser)
 
-        return {
-            Success: true,
-            ResultCode: "SUCCESS"
-        };
+                console.log('Autotagging complete.')
+            }
+
+            if (vectorizeParam.Value === 1) {
+                const vectorize = await super.InternalRunAction(params);
+
+                console.log('Vectorization complete.')
+            }
+
+            return {
+                Success: true,
+                ResultCode: "SUCCESS"
+            };
+        }
+        catch (error) {
+            return {
+                Success: false,
+                Message: error as any,
+                ResultCode: "FAILED"
+            };
+        }
     }
 }
 
