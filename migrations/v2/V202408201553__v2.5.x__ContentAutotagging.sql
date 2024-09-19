@@ -337,6 +337,26 @@ INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (ID, Name, Descript
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (ID, Name, Description, Type, DefaultValue, IsRequired ) VALUES ('5419D4FB-F463-EF11-991A-6045BDFE5B84', 'RootURL', 'Optional parameter to specify what form any scraped links must start with, and defaults to the homepage of the website.', 'String', Null, 0)
 INSERT INTO [${flyway:defaultSchema}].ContentSourceTypeParam (ID, Name, Description, Type, DefaultValue, IsRequired ) VALUES ('27C704A1-F963-EF11-991A-6045BDFE5B84', 'URLPattern', 'Optional parameter for the Webcrawler that defines a regular expression pattern that the URL must match when extracting links on a page. The default is a regular expression that allows for any link.', 'RegExp', '^.*$', 0)
 
+/****************************************************************************************
+Generated SQL From CodeGen for New Entities
+****************************************************************************************/
+
+-- Action
+INSERT INTO [${flyway:defaultSchema}].Action ( ID, CategoryID, Name, Description, Type, UserPrompt, UserComments, Code, CodeComments, CodeApprovalStatus, CodeApprovalComments, CodeApprovedByUserID, CodeApprovedAt, CodeLocked, ForceCodeGeneration, RetentionPeriod, Status) VALUES ('D8781B41-9C76-EF11-9C36-000D3A9EBD44', Null, 'Autotag and Vectorize Content', 'Autotag Content and create vectors of the content items that are created.', 'Custom', Null, Null, Null, Null, 'Pending', Null, Null, Null, 0, 0, Null, 'Active')
+
+-- ActionParam
+INSERT INTO [${flyway:defaultSchema}].ActionParam (ID, ActionID, Name, DefaultValue, Type, ValueType, IsArray, Description, IsRequired) VALUES ('B2A953B5-9C76-EF11-9C36-000D3A9EBD44', 'D8781B41-9C76-EF11-9C36-000D3A9EBD44', 'Autotag', '1', 'Input', 'Scalar', 0, 'A bit to indicate if we autotag or not. 1 indicates we should autotag, 0 we should not', 1)
+INSERT INTO [${flyway:defaultSchema}].ActionParam (ID, ActionID, Name, DefaultValue, Type, ValueType, IsArray, Description, IsRequired) VALUES ('0E7EF5C0-9C76-EF11-9C36-000D3A9EBD44', 'D8781B41-9C76-EF11-9C36-000D3A9EBD44', 'Vectorize', '1', 'Input', 'Scalar', 0, 'A bit to indicate if we vectorize the content items or not. 1 indicates we should vectorize, 0 we should not', 1)
+INSERT INTO [${flyway:defaultSchema}].ActionParam (ID, ActionID, Name, DefaultValue, Type, ValueType, IsArray, Description, IsRequired) VALUES ('3A8EC430-A076-EF11-9C36-000D3A9EBD44', 'D8781B41-9C76-EF11-9C36-000D3A9EBD44', 'EntityNames', 'Content Items', 'Input', 'Scalar', 1, 'Name of the entity to vectorize', 1)
+
+-- ScheduledAction
+INSERT INTO [${flyway:defaultSchema}].ScheduledAction ( ID, Name, Description, CreatedByUserID, ActionID, Type, CronExpression, Timezone, Status, IntervalDays, DayOfWeek, DayOfMonth, Month, CustomCronExpression) VALUES ('5B259747-9D76-EF11-9C36-000D3A9EBD44', 'Autotag And Vectorize Content', 'Scheduled action for content autotagging and vectorizing.', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', 'D8781B41-9C76-EF11-9C36-000D3A9EBD44', 'Monthly', Null, 'EST', 'Active', Null, Null, Null, Null, Null)
+
+-- ScheduledActionParam
+INSERT INTO [${flyway:defaultSchema}].ScheduledActionParam (ID, ScheduledActionID, ActionParamID, ValueType, Value, Comments) VALUES ('F0EDB58A-9D76-EF11-9C36-000D3A9EBD44', '5B259747-9D76-EF11-9C36-000D3A9EBD44', 'B2A953B5-9C76-EF11-9C36-000D3A9EBD44', 'Static', '1', NULL)
+INSERT INTO [${flyway:defaultSchema}].ScheduledActionParam (ID, ScheduledActionID, ActionParamID, ValueType, Value, Comments) VALUES ('CBBFE191-9D76-EF11-9C36-000D3A9EBD44', '5B259747-9D76-EF11-9C36-000D3A9EBD44', '0E7EF5C0-9C76-EF11-9C36-000D3A9EBD44', 'Static', '1', NULL)
+INSERT INTO [${flyway:defaultSchema}].ScheduledActionParam (ID, ScheduledActionID, ActionParamID, ValueType, Value, Comments) VALUES ('45DDB63A-A076-EF11-9C36-000D3A9EBD44', '5B259747-9D76-EF11-9C36-000D3A9EBD44', '3A8EC430-A076-EF11-9C36-000D3A9EBD44', 'Static', 'Content Items', NULL)
+
 DROP PROCEDURE IF EXISTS [__mj].[spCreateContentFileType]
 GO
 
