@@ -1,7 +1,7 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
 
 export type ProcessPersonRecordGroupParams = {
-    Records: any[];
+    Records: Record<string, any>[];
     Startrow: number;
     GroupLength: number;
     Md: Metadata;
@@ -14,6 +14,14 @@ export type ProcessPersonRecordGroupParams = {
     EnrichedAtField: string;
     DomainField?: string;  
     LinkedInField?: string;
+    EmploymentHistoryEntityName?: string;
+    EmploymentHistoryContactIDFieldName?: string;
+    EmploymentHistoryOrganizationFieldName?: string;
+    EmploymentHistoryTitleFieldName?: string;
+    EducationHistoryEntityName?: string;
+    EducationHistoryContactIDFieldName?: string;
+    EducationHistoryInstitutionFieldName?: string;
+    EducationHistoryDegreeFieldName?: string;
 };
 
 export type ApollowBulkPeopleRequest = {
@@ -109,7 +117,7 @@ export type ApollowBulkPeopleResponse = {
     unique_enriched_records: number,
     missing_records: number,
     credits_consumed: number,
-    matches: Record<string, any>[];
+    matches: Array<SearchPeopleResponsePerson | null>;
 };
 
 export type ContactEntityFieldNames = {
