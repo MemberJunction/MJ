@@ -22,6 +22,8 @@
     "@memberjunction/ai": "2.4.1",
     "@memberjunction/global": "2.4.1",
     "@memberjunction/ai-recommendations": "2.4.1",
-    "openai": "^4.28.4"
+    "openai": "^4.28.4",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.1"
   }
 }
