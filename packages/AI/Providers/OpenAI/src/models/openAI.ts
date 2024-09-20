@@ -24,6 +24,7 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
+            max_tokens: params.maxOutputTokens
         });
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();

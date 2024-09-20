@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/codegen-lib",
+  "email": "nico.ortiz@bluecypress.io",
+  "dependentChangeType": "patch"
+}

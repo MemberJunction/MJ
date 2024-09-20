@@ -106,6 +106,9 @@ export class EntityVectorSyncer extends VectorBase {
       contextUser: super.CurrentUser,
       workerContext,
     });
+    annotator.on('error', (err) => {      
+      LogError('Error in annotator worker', null, err);    
+    });
 
     //archiver worker handles upserting the vectors into the vector database
     const archiver = new BatchWorker({ 
@@ -113,6 +116,9 @@ export class EntityVectorSyncer extends VectorBase {
       batchSize: 4,
       contextUser: super.CurrentUser, 
       workerContext
+    });
+    archiver.on('error', (err) => {      
+      LogError('Error in archiver worker', null, err);    
     });
 
     const upserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
@@ -563,7 +569,7 @@ export class EntityVectorSyncer extends VectorBase {
     let existingRecords: BaseEntity[] = [];
     const runViewResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
       EntityName: 'Entity Record Documents',
-      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in (${embeddingData.__mj_recordID})`,
+      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in ('${embeddingData.__mj_recordID}')`,
       ResultType: 'entity_object'
     }, contextUser);
     
