@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Bump minor version",
+  "packageName": "@memberjunction/data-context-server",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
