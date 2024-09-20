@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-and-publish:
     name: Build and publish new versions of NPM packages
-    timeout-minutes: 10
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
