@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/communication-sendgrid
 
-This log was last generated on Fri, 20 Sep 2024 16:17:06 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.1
+
+Fri, 20 Sep 2024 17:51:58 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.5.1
+- Bump @memberjunction/core to v2.5.1
+- Bump @memberjunction/core-entities to v2.5.1
+- Bump @memberjunction/communication-types to v2.5.1
 
 ## 2.5.0
 

@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/scheduled-actions
 
-This log was last generated on Fri, 20 Sep 2024 16:17:06 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.1
+
+Fri, 20 Sep 2024 17:51:58 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.5.1
+- Bump @memberjunction/core to v2.5.1
+- Bump @memberjunction/core-entities to v2.5.1
+- Bump @memberjunction/actions to v2.5.1
+- Bump @memberjunction/sqlserver-dataprovider to v2.5.1
+- Bump @memberjunction/core-actions to v2.5.1
 
 ## 2.5.0
 

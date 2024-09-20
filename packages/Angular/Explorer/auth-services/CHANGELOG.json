@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-auth-services",
   "entries": [
     {
+      "date": "Fri, 20 Sep 2024 17:51:58 GMT",
+      "version": "2.5.1",
+      "tag": "@memberjunction/ng-auth-services_v2.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-auth-services",
+            "comment": "Bump @memberjunction/core to v2.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 20 Sep 2024 16:17:07 GMT",
       "version": "2.5.0",
       "tag": "@memberjunction/ng-auth-services_v2.5.0",

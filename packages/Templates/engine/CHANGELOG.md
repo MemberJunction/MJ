@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/templates
 
-This log was last generated on Fri, 20 Sep 2024 16:17:06 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.1
+
+Fri, 20 Sep 2024 17:51:58 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.5.1
+- Bump @memberjunction/templates-base-types to v2.5.1
+- Bump @memberjunction/ai to v2.5.1
+- Bump @memberjunction/aiengine to v2.5.1
+- Bump @memberjunction/ai-groq to v2.5.1
+- Bump @memberjunction/core-entities to v2.5.1
+- Bump @memberjunction/global to v2.5.1
 
 ## 2.5.0
 
