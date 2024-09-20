@@ -1,6 +1,6 @@
-DROP PROC IF EXISTS __mj.spCreateVirtualEntity
+DROP PROC IF EXISTS [${flyway:defaultSchema}].spCreateVirtualEntity
 GO
-CREATE PROC __mj.spCreateVirtualEntity
+CREATE PROC [${flyway:defaultSchema}].spCreateVirtualEntity
    @Name nvarchar(255),
    @BaseView nvarchar(255),
    @SchemaName nvarchar(255),
@@ -9,14 +9,14 @@ CREATE PROC __mj.spCreateVirtualEntity
 AS
   DECLARE @NewEntityIDTable TABLE (ID uniqueidentifier);
 
-  INSERT INTO 
-	  __mj.Entity 
+  INSERT INTO
+	  [${flyway:defaultSchema}].Entity
   (
-	  Name, 
-	  BaseView, 
-	  BaseTable, 
-	  VirtualEntity, 
-	  SchemaName, 
+	  Name,
+	  BaseView,
+	  BaseTable,
+	  VirtualEntity,
+	  SchemaName,
 	  IncludeInAPI,
 	  AllowCreateAPI,
 	  AllowUpdateAPI,
@@ -27,11 +27,11 @@ AS
   OUTPUT INSERTED.ID INTO @NewEntityIDTable
   VALUES
   (
-	  @Name, 
-	  @BaseView, 
-	  @BaseView, -- use baseview as basetable, don't leave blank as we use this for the Code/Class virtual fields 
-	  1, 
-	  @SchemaName, 
+	  @Name,
+	  @BaseView,
+	  @BaseView, -- use baseview as basetable, don't leave blank as we use this for the Code/Class virtual fields
+	  1,
+	  @SchemaName,
 	  1,
 	  0,
 	  0,
@@ -46,7 +46,7 @@ AS
   SELECT @NewEntityID = ID FROM @NewEntityIDTable;
 
   -- CREATE A SINGLE ROW IN THE EntityField table for the pkey column
-  INSERT INTO __mj.EntityField
+  INSERT INTO [${flyway:defaultSchema}].EntityField
   (
     EntityID,
     Sequence,
