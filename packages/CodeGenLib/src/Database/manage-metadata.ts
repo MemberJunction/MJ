@@ -268,7 +268,6 @@ export class ManageMetadataBase {
             });
             if (batchSQL.length > 0)
                await ds.query(batchSQL);
-               console.log(batchSQL);
          };
 
          // Split entityFields into batches and process each batch
