@@ -39,7 +39,7 @@ export class AnthropicLLM extends BaseLLM {
         try {
             result = await AnthropicLLM._anthropic.messages.create({
                 model: params.model,
-                max_tokens: 4096, // max claude output tokens
+                max_tokens: params.maxOutputTokens, 
                 system: params.messages.find(m => m.role === "system").content,
                 messages: this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"))
             });

@@ -24,7 +24,6 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/codegen-lib": "2.4.1",
     "@memberjunction/ng-container-directives": "2.4.1",
     "@progress/kendo-angular-indicators": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
