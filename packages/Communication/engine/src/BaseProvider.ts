@@ -1,5 +1,5 @@
 import { ProcessedMessage } from "@memberjunction/communication-types";
-import { UserInfo } from "@memberjunction/core";
+import { LogError, UserInfo } from "@memberjunction/core";
 import { TemplateEngineServer } from '@memberjunction/templates';
   
 /**
@@ -24,6 +24,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                 this.ProcessedBody = result.Output;
             }
             else {
+                LogError(`Failed to render template for body: ${result.Message}`);
                 return {
                     Success: false,
                     Message: result.Message                
@@ -38,6 +39,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                         this.ProcessedHTMLBody = result.Output;
                     }
                     else {
+                        LogError(`Failed to render template for html body: ${result.Message}`);
                         return {
                             Success: false,
                             Message: result.Message
@@ -63,6 +65,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                     this.ProcessedHTMLBody = result.Output;
                 }
                 else {
+                    LogError(`Failed to render template for html body 2: ${result.Message}`);
                     return {
                         Success: false,
                         Message: result.Message
@@ -86,6 +89,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                     this.ProcessedSubject = result.Output;
                 }
                 else {
+                    LogError(`Failed to render template for subject: ${result.Message}`);
                     return {
                         Success: false,
                         Message: result.Message
