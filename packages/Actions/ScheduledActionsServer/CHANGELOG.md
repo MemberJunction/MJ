@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
-This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 16:17:06 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.0
+
+Fri, 20 Sep 2024 16:17:06 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Applying package updates [skip ci] (nico.ortiz@bluecypress.io)
+- Bump @memberjunction/core to v2.5.0
+- Bump @memberjunction/core-entities to v2.5.0
+- Bump @memberjunction/actions to v2.5.0
+- Bump @memberjunction/scheduled-actions to v2.5.0
+- Bump @memberjunction/ai to v2.5.0
+- Bump @memberjunction/ai-vector-sync to v2.5.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.5.0
+- Bump @memberjunction/ai-mistral to v2.5.0
+- Bump @memberjunction/ai-openai to v2.5.0
 
 ## 2.4.1
 

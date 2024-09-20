@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ai-recommendations-rex",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}

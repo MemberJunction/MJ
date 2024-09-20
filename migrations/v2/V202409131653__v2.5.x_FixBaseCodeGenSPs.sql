@@ -1,7 +1,7 @@
 -- Update this procedure to exclude virtual entities
-DROP PROC IF EXISTS [__mj].[spDeleteUnneededEntityFields]
+DROP PROC IF EXISTS [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
 GO
-CREATE PROC [__mj].[spDeleteUnneededEntityFields]
+CREATE PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
     @ExcludedSchemaNames NVARCHAR(MAX)
 
 AS
@@ -13,15 +13,15 @@ IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #actual_spDeleteUnneededEntityFields
 
 -- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
-SELECT 
-	ef.* 
-INTO 
-	#ef_spDeleteUnneededEntityFields 
-FROM 
+SELECT
+	ef.*
+INTO
+	#ef_spDeleteUnneededEntityFields
+FROM
 	vwEntityFields ef
 INNER JOIN
 	vwEntities e
-ON 
+ON
 	ef.EntityID = e.ID
 -- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
 LEFT JOIN
@@ -33,38 +33,38 @@ WHERE
     excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 
 
-SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
+SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
-UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
+UPDATE [${flyway:defaultSchema}].Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 (
-	SELECT 
-	  ef.EntityID 
-	FROM 
-	  #ef_spDeleteUnneededEntityFields ef 
+	SELECT
+	  ef.EntityID
+	FROM
+	  #ef_spDeleteUnneededEntityFields ef
 	LEFT JOIN
-	  #actual_spDeleteUnneededEntityFields actual 
+	  #actual_spDeleteUnneededEntityFields actual
 	  ON
 	  ef.EntityID=actual.EntityID AND
 	  ef.Name = actual.EntityFieldName
-	WHERE 
-	  actual.column_id IS NULL  
+	WHERE
+	  actual.column_id IS NULL
 )
 
 -- now delete the entity fields themsevles
-DELETE FROM __mj.EntityField WHERE ID IN
+DELETE FROM [${flyway:defaultSchema}].EntityField WHERE ID IN
 (
-	SELECT 
-	  ef.ID 
-	FROM 
-	  #ef_spDeleteUnneededEntityFields ef 
+	SELECT
+	  ef.ID
+	FROM
+	  #ef_spDeleteUnneededEntityFields ef
 	LEFT JOIN
-	  #actual_spDeleteUnneededEntityFields actual 
+	  #actual_spDeleteUnneededEntityFields actual
 	  ON
 	  ef.EntityID=actual.EntityID AND
 	  ef.Name = actual.EntityFieldName
-	WHERE 
-	  actual.column_id IS NULL  
+	WHERE
+	  actual.column_id IS NULL
 )
 
 -- clean up and get rid of our temp tables now
@@ -77,14 +77,14 @@ GO
 ---------------------------------------------------
 
 -- update this proc to EXCLUDE virtual entities always
-DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
+DROP PROC IF EXISTS [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
 GO
-CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
+CREATE PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
     -- Update Statement
-    UPDATE [__mj].EntityField
+    UPDATE [${flyway:defaultSchema}].EntityField
     SET
 		    Description = IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
         Type = fromSQL.Type,
@@ -98,28 +98,28 @@ BEGIN
         Sequence = fromSQL.Sequence,
         RelatedEntityID = re.ID,
         RelatedEntityFieldName = fk.referenced_column,
-        IsPrimaryKey =	CASE 
-							WHEN pk.ColumnName IS NOT NULL THEN 1 
-							ELSE 0 
+        IsPrimaryKey =	CASE
+							WHEN pk.ColumnName IS NOT NULL THEN 1
+							ELSE 0
 						END,
-        IsUnique =		CASE 
-							WHEN pk.ColumnName IS NOT NULL THEN 1 
-							ELSE 
-								CASE 
-									WHEN uk.ColumnName IS NOT NULL THEN 1 
-									ELSE 0 
-								END 
+        IsUnique =		CASE
+							WHEN pk.ColumnName IS NOT NULL THEN 1
+							ELSE
+								CASE
+									WHEN uk.ColumnName IS NOT NULL THEN 1
+									ELSE 0
+								END
 						END,
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].EntityField ef
+        [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
         vwSQLColumnsAndEntityFields fromSQL
     ON
         ef.EntityID = fromSQL.EntityID AND
         ef.Name = fromSQL.FieldName
     INNER JOIN
-        [__mj].Entity e 
+        [${flyway:defaultSchema}].Entity e
     ON
         ef.EntityID = e.ID
     LEFT OUTER JOIN
@@ -128,19 +128,19 @@ BEGIN
         ef.Name = fk.[column] AND
         e.BaseTable = fk.[table] AND
 		    e.SchemaName = fk.[schema_name]
-    LEFT OUTER JOIN 
-        [__mj].Entity re -- Related Entity
+    LEFT OUTER JOIN
+        [${flyway:defaultSchema}].Entity re -- Related Entity
     ON
         re.BaseTable = fk.referenced_table AND
 		    re.SchemaName = fk.[referenced_schema]
-    LEFT OUTER JOIN 
-		    [__mj].vwTablePrimaryKeys pk
+    LEFT OUTER JOIN
+		    [${flyway:defaultSchema}].vwTablePrimaryKeys pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
-    LEFT OUTER JOIN 
-		    [__mj].vwTableUniqueKeys uk
+    LEFT OUTER JOIN
+		    [${flyway:defaultSchema}].vwTableUniqueKeys uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -162,22 +162,22 @@ GO
 
 -- update this proc to always exclude virtual entities
 
-DROP PROCEDURE IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema];
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateExistingEntitiesFromSchema];
 GO
 
-CREATE PROCEDURE [__mj].spUpdateExistingEntitiesFromSchema
+CREATE PROCEDURE [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
     -- Update statement excluding rows with matching SchemaName
-    UPDATE 
-        [__mj].[Entity]
+    UPDATE
+        [${flyway:defaultSchema}].[Entity]
     SET
         Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
     FROM
-        [__mj].[Entity] e
+        [${flyway:defaultSchema}].[Entity] e
     INNER JOIN
-        [__mj].[vwSQLTablesAndEntities] fromSQL
+        [${flyway:defaultSchema}].[vwSQLTablesAndEntities] fromSQL
     ON
         e.ID = fromSQL.EntityID
     -- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas

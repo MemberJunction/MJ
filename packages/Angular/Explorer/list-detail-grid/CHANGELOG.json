@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-list-detail-grid",
   "entries": [
     {
+      "date": "Fri, 20 Sep 2024 16:17:06 GMT",
+      "version": "2.5.0",
+      "tag": "@memberjunction/ng-list-detail-grid_v2.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "commit": "c687e637b54687b180b1fb1408471cb96a4fe7e9",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/core-entities to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/global to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/core to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-shared to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-list-detail-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 08 Sep 2024 19:33:23 GMT",
       "version": "2.4.1",
       "tag": "@memberjunction/ng-list-detail-grid_v2.4.1",
