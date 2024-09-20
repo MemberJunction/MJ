@@ -1,47 +1,35 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { CommunicationProviderEntity } from '@memberjunction/core-entities';
+import { ContentSourceParamEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Communication Providers.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Content Source Params.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-communicationprovider-form-details',
+    selector: 'gen-contentsourceparam-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="ContentSourceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentSourceTypeParamID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Value"
             Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="dropdownlist"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SupportsSending"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SupportsReceiving"
-            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -61,8 +49,8 @@ import { CommunicationProviderEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SupportsScheduledSending"
-            Type="checkbox"
+            FieldName="ContentSource"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -70,12 +58,12 @@ import { CommunicationProviderEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class CommunicationProviderDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: CommunicationProviderEntity;
+export class ContentSourceParamDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ContentSourceParamEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadCommunicationProviderDetailsComponent() {
+export function LoadContentSourceParamDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
