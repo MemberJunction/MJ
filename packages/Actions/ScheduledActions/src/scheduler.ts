@@ -88,6 +88,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
             throw new Error(`Scheduled action ${actionName} not found`);
         }
 
+        //since CronExpresssion is optional, only check if its populated
         const now = new Date();
         const canRun: boolean = scheduledAction.CronExpression ? ScheduledActionEngine.IsActionDue(scheduledAction, now) : true;
         if (canRun) {

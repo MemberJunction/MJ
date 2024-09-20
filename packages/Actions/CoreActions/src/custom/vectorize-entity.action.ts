@@ -23,11 +23,14 @@ export class VectorizeEntityAction extends BaseAction {
         const entityNamesParam: ActionParam | undefined = params.Params.find(p => p.Name === 'EntityNames');
         let entityNames: string[] = [];
         if(entityNamesParam && entityNamesParam.Value){
-            if(entityNamesParam.Value.includes(',')){
+            if(Array.isArray(entityNamesParam.Value)){
+                entityNames = entityNamesParam.Value;
+            }
+            else if(entityNamesParam.Value.includes(',')){
                 entityNames = entityNamesParam.Value.split(',');
             }
             else{
-                entityNames = entityNamesParam.Value;
+                entityNames = [entityNamesParam.Value];
             }
         }
 
