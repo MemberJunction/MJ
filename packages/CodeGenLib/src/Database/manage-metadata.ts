@@ -87,7 +87,8 @@ export class ManageMetadataBase {
          await this.generateNewEntityDescriptions(ds, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
    
-      if (! await this.manageVirtualEntities(ds)) {
+      const veResult = await this.manageVirtualEntities(ds)
+      if (! veResult.success) {
          logError('   Error managing virtual entities');
          bSuccess = false;
       }
@@ -98,92 +99,147 @@ export class ManageMetadataBase {
       return bSuccess;
    }
    
-   // VIRTUAL ENTITY FUNCTIONALITY IS COMMENTED OUT FOR NOW - FUTURE FUNCTIONALITY...
-   // ------------------------------------------------
-   protected async manageVirtualEntities(ds: DataSource): Promise<boolean> {
-   //    let bSuccess = true;
-   //    // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
-   //    // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
-   //    // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
-   //    const sql = 'SELECT * FROM vwEntities WHERE VirtualEntity = 1';
-   //    const virtualEntities = await ds.query(sql);
-   //    if (virtualEntities && virtualEntities.length > 0) {
-   //       // we have 1+ virtual entities, now loop through them and process each one
-   //       for (const ve of virtualEntities) {
-   //          if (! await manageSingleVirtualEntity(ds, ve)) {
-   //             logError(`Error managing virtual entity ${ve.Name}`);
-   //             bSuccess = false;
-   //          }
-   //       }
-   //    }
-   //    return bSuccess;
-      return true; // temp until the above is implemented
+   protected async manageVirtualEntities(ds: DataSource): Promise<{success: boolean, anyUpdates: boolean}> {
+      let bSuccess = true;
+      // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
+      // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
+      // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
+      const sql = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE VirtualEntity = 1`;
+      const virtualEntities = await ds.query(sql);
+      let anyUpdates: boolean = false;
+      if (virtualEntities && virtualEntities.length > 0) {
+         // we have 1+ virtual entities, now loop through them and process each one
+         for (const ve of virtualEntities) {
+            const {success, updatedEntity} = await this.manageSingleVirtualEntity(ds, ve);
+            anyUpdates = anyUpdates || updatedEntity;
+            if (! success) {
+               logError(`   Error managing virtual entity ${ve.Name}`);
+               bSuccess = false;
+            }            
+         }
+      }
+      return {success: bSuccess, anyUpdates: anyUpdates};
    }
    
-   protected async manageSingleVirtualEntity(ds: DataSource, ve: any): Promise<boolean> {
-   //    try {
-   //       // for a given virtual entity, we need to loop through the fields that exist in the current SQL definition for the view
-   //       // and add/update/delete the entity fields to match what's in the view
-   //       let bSuccess = true;
+   protected async manageSingleVirtualEntity(ds: DataSource, virtualEntity: EntityInfo): Promise<{success: boolean, updatedEntity: boolean}> {
+      let bSuccess = true;
+      let bUpdated = false;
+      try {
+         // for a given virtual entity, we need to loop through the fields that exist in the current SQL definition for the view
+         // and add/update/delete the entity fields to match what's in the view
+         const sql = `  SELECT 
+                           c.name AS FieldName, t.name AS Type, c.max_length AS Length, c.precision Precision, c.scale Scale, c.is_nullable AllowsNull
+                        FROM 
+                           sys.columns c
+                        INNER JOIN 
+                           sys.types t ON c.user_type_id = t.user_type_id
+                        INNER JOIN 
+                           sys.views v ON c.object_id = v.object_id
+                        WHERE 
+                           v.name = '${virtualEntity.BaseView}' AND 
+                           SCHEMA_NAME(v.schema_id) = '${virtualEntity.SchemaName}'
+                        ORDER BY
+                           c.column_id`;
+         const veFields = await ds.query(sql);
+         if (veFields && veFields.length > 0) {
+            // we have 1+ fields, now loop through them and process each one
+            // first though, remove any fields that are no longer in the view
+            const md = new Metadata();
+            const entity = md.EntityByName(virtualEntity.Name) 
+            if (entity) {
+               const removeList = [];
+               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: any) => vf.FieldName === f.Name));
+               for (const f of fieldsToRemove) {
+                  removeList.push(f.ID);
+               }
+               if (removeList.length > 0) {
+                  const sqlRemove = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
+                  await ds.query(sqlRemove); // this removes the fields that shouldn't be there anymore
+                  bUpdated = true;
+               }
+
+               // check to see if any of the fields in the virtual entity have Pkey attribute set. If not, we will default to the first field
+               // as pkey and user can change this.
+               const hasPkey = entity.Fields.find(f => f.IsPrimaryKey) !== undefined;
+
+               // now create/update the fields that are in the view
+               for (let i = 0; i < veFields.length; i++) {
+                  const vef = veFields[i];
+                  const {success, updatedField} = await this.manageSingleVirtualEntityField(ds, virtualEntity, vef, i + 1, !hasPkey && i === 0);
+                  bUpdated = bUpdated || updatedField;
+                  if (!success) {
+                     logError(`Error managing virtual entity field ${vef.FieldName} for virtual entity ${virtualEntity.Name}`);
+                     bSuccess = false;
+                  }
+               }
+            }   
+         }
    
-   //       const sql = `SELECT * FROM vwSQLColumnsAndEntityFields WHERE EntityID = '${ve.ID}'`;
-   //       const veFields = await ds.query(sql);
-   //       if (veFields && veFields.length > 0) {
-   //          // we have 1+ fields, now loop through them and process each one
-   //          // first though, remove any fields that are no longer in the view
-   //          const md = new Metadata();
-   //          const entity = md.Entities.find(e => e.Name === ve.Name);
-   //          if (entity) {
-   //             const removeList = [];
-   //             const fieldsToRemove = entity.Fields.filter(f => !veFields.find(vf => vf.FieldName === f.Name));
-   //             for (const f of fieldsToRemove) {
-   //                removeList.push(f.ID);
-   //             }
-   //             const sqlRemove = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID IN (${removeList.join(',')})`;
-   //             await ds.query(sqlRemove); // this removes the fields that shouldn't be there anymore
-   //          }
+         if (bUpdated) {
+            // finally make sure we update the UpdatedAt field for the entity if we made changes to its fields
+            const sqlUpdate = `UPDATE [${mj_core_schema()}].Entity SET [${EntityInfo.UpdatedAtFieldName}]=GETUTCDATE() WHERE ID='${virtualEntity.ID}'`;
+            await ds.query(sqlUpdate);
+         }
    
-   //          for (const vef of veFields) {
-   //             if (! await manageSingleVirtualEntityField(ds, ve, vef)) {
-   //                logError(`Error managing virtual entity field ${vef.FieldName} for virtual entity ${ve.Name}`);
-   //                bSuccess = false;
-   //             }
-   //          }
-   //       }
-   
-   //       // finally make sure we update the UpdatedAt field for the entity
-   //       const sqlUpdate = `UPDATE [${mj_core_schema()}].Entity SET UpdatedAt=GETDATE() WHERE ID = ${ve.ID}`;
-   //       await ds.query(sqlUpdate);
-   
-   //       return true;
-   //    }
-   //    catch (e) {
-   //       logError(e);
-   //       return false;
-   //    }
-      return true; // temp until the above is implemented
+         return {success: bSuccess, updatedEntity: bUpdated};
+      }
+      catch (e: any) {
+         logError(e);
+         return {success: false, updatedEntity: bUpdated};
+      }
    }
    
-   protected async manageSingleVirtualEntityField(ds: DataSource, ve: any, veField: any): Promise<boolean> {
-   //    // this protected checks to see if the field exists in the entity definition, and if not, adds it
-   //    // if it exist it updates the entity field to match the view's data type and nullability attributes
+   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean}> {
+      // this protected checks to see if the field exists in the entity definition, and if not, adds it
+      // if it exist it updates the entity field to match the view's data type and nullability attributes
    
-   //    // first, get the entity definition
-   //    const md = new Metadata();
-   //    const entity = md.Entities.find(e => e.Name === ve.Name);
-   //    if (entity) {
-   //       const field = entity.Fields.find(f => f.Name === veField.FieldName);
-   //       if (field) {
-   //          // have a match, so the field exists in the entity definition, now check to see if it needs to be updated
-   //          if (field.Type !== veField.Type || field.AllowsNull !== veField.AllowsNull) {
-   //             // the field needs to be updated, so update it
-   //             const sqlUpdate = `UPDATE [${mj_core_schema()}].EntityField SET Type='${veField.Type}', AllowsNull=${veField.AllowsNull ? 1 : 0}, UpdatedAt=GETDATE() WHERE ID = ${field.ID}`;
-   //             await ds.query(sqlUpdate);
-   //          }
-   //       }
-   //    }
-   //    return true;
-      return true; // temp until the above is implemented
+      // first, get the entity definition
+      const md = new Metadata();
+      const entity = md.EntityByName(virtualEntity.Name);
+      let didUpdate: boolean = false;
+      if (entity) {
+         const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
+         if (field) {
+            // have a match, so the field exists in the entity definition, now check to see if it needs to be updated
+            if (makePrimaryKey ||
+                field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() || 
+                field.Length !== veField.Length ||
+                field.AllowsNull !== veField.AllowsNull ||
+                field.Scale !== veField.Scale ||
+                field.Precision !== veField.Precision ||
+                field.Sequence !== fieldSequence) {
+               // the field needs to be updated, so update it
+               const sqlUpdate = `UPDATE 
+                                    [${mj_core_schema()}].EntityField 
+                                  SET 
+                                    Sequence=${fieldSequence},
+                                    Type='${veField.Type}', 
+                                    AllowsNull=${veField.AllowsNull ? 1 : 0},
+                                    ${makePrimaryKey ? 'IsPrimaryKey=1,IsUnique=1,' : ''}
+                                    Length=${veField.Length},
+                                    Precision=${veField.Precision},
+                                    Scale=${veField.Scale}
+                                  WHERE 
+                                    ID = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
+               await ds.query(sqlUpdate);
+               didUpdate = true;
+            }
+         }
+         else {
+            // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
+            const sqlAdd = `INSERT INTO [${mj_core_schema()}].EntityField (
+                                      EntityID, Name, Type, AllowsNull, 
+                                      Length, Precision, Scale, 
+                                      Sequence, IsPrimaryKey, IsUnique ) 
+                            VALUES (  '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0}, 
+                                       ${veField.Length}, ${veField.Precision}, ${veField.Scale},
+                                       ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
+                                    )`;
+            await ds.query(sqlAdd);
+            didUpdate = true;
+         }
+      }
+      return {success: true, updatedField: didUpdate};
    }
    
    
@@ -447,7 +503,14 @@ export class ManageMetadataBase {
     */
    protected async ensureDeletedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sqlEntities = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE DeleteType='Soft' AND SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         const sqlEntities = `SELECT 
+                                 * 
+                              FROM 
+                                 [${mj_core_schema()}].vwEntities 
+                              WHERE 
+                                 VirtualEntity=0 AND 
+                                 DeleteType='Soft' AND 
+                                 SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entities = await ds.query(sqlEntities);
          let overallResult = true;
          if (entities.length > 0) {
@@ -487,7 +550,14 @@ export class ManageMetadataBase {
     */
    protected async ensureCreatedAtUpdatedAtFieldsExist(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sqlEntities = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE TrackRecordChanges = 1 AND SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+         const sqlEntities = `SELECT 
+                                 * 
+                              FROM 
+                                 [${mj_core_schema()}].vwEntities 
+                              WHERE 
+                                 VirtualEntity = 0 AND 
+                                 TrackRecordChanges = 1 AND 
+                                 SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entities = await ds.query(sqlEntities);
          let overallResult = true;
          if (entities.length > 0) {

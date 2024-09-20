@@ -8,8 +8,8 @@
     "/dist"
   ],
   "scripts": {
-    "build:pkgroll": "pkgroll --sourcemap --minify",
     "build": "tsc",
+    "buld:pgk": "pkgroll --sourcemap --minify",
     "watch": "pkgroll --sourcemap --watch"
   },
   "author": "MemberJunction.com",

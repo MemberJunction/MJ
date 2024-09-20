@@ -2,7 +2,7 @@ import { Embeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, EntityRecordDocumentEntity, TemplateContentEntity, 
+import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity, 
   TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
@@ -44,7 +44,6 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('ContextUser is required to vectorize the entity');
     }
 
-    //start row
     const delayTimeMS: number = 250;
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
@@ -56,8 +55,11 @@ export class EntityVectorSyncer extends VectorBase {
 
     const md = new Metadata();
     const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === params.entityID);
-    if (!entity) throw new Error(`Entity with ID ${params.entityID} not found.`);
+    if (!entity) {
+      throw new Error(`Entity with ID ${params.entityID} not found.`);
+    }
 
+    LogStatus(`Vectorizing entity ${entity.Name} using Entity Document ${entityDocument.Name}`);
 
     const template: TemplateEntityExtended | undefined = TemplateEngineServer.Instance.Templates.find((t: TemplateEntityExtended) => t.ID === entityDocument.TemplateID);
     if(!template){
@@ -132,12 +134,19 @@ export class EntityVectorSyncer extends VectorBase {
           EntityID: params.entityID,
           PageNumber: pageNumber,
           PageSize: pageSize,
-          ResultType: 'simple'
+          ResultType: 'simple',
         };
+
+        if(params.listID){
+          const coreSchema: string = md.ConfigData.MJCoreSchemaName;
+          pageRecordRequest.Filter = `ID IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
+        }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
-        const items: {}[] = [];
+        const items: Record<string, any>[] = [];
+
+        LogStatus(`Fetched page ${pageNumber + 1} with ${recordsPage.length} records to process`);
         
         for(const record of recordsPage){
           const templateData: { [key: string]: unknown } = await this.GetTemplateData(entity, record, template, relatedData);
@@ -167,79 +176,6 @@ export class EntityVectorSyncer extends VectorBase {
 
     console.log('Starting pipeline');
     await pipeline(dataStream, annotator, archiver, upserter, new PassThrough({ objectMode: true }));
-
-    // const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
-    // LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
-    // LogStatus(`Processing page ${pageNumber} records of ${pageSize} records each`);
-
-    // Now add the records to the vectorize queue
-    // The vectorize queue consumer calls the embedding service to get the embeddings
-    // Then adds vectors + record metadata to the storage queue
-    // The storage queue consumer adds the vectors to the vector database
-
-    // let count = 0;
-    // for (const batch of chunks) {
-    //   let templates: string[] = [];
-    //   for (const record of batch) {
-    //     let template: string = await parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
-    //     templates.push(template);
-    //   }
-    //   LogStatus(`parsing batch ${count}: done`);
-
-    //   const embeddings: EmbedTextsResult = await obj.embedding.EmbedTexts({ texts: templates, model: null });
-    //   LogStatus(`embedding batch ${count}: done`);
-
-    //   const vectorRecords: VectorRecord[] = embeddings.vectors.map((vector: number[], index: number) => {
-    //     const record: BaseEntity = batch[index];
-    //     const recordID = record.PrimaryKey.Values('|');
-    //     return {
-    //       //The id breaks down to e.g. "Accounts_7_117"
-    //       id: `${entityDocument.Entity}_${entityDocument.ID}_${recordID}`,
-    //       values: vector,
-    //       metadata: {
-    //         EntityID: entityDocument.EntityID,
-    //         EntityName: entityDocument.Entity,
-    //         EntityDocumentID: entityDocument.ID,
-    //         PrimaryKey: record.PrimaryKey.ToString(),
-    //         Template: templates[index],
-    //         Data: this.ConvertEntityFieldsToString(record),
-    //       },
-    //     };
-    //   });
-
-    //   const response: BaseResponse = await obj.vectorDB.createRecords(vectorRecords);
-    //   if (response.success && vectorIndexEntity) {
-    //     LogStatus('Successfully created vector records, creating associated Entity Record Documents...');
-    //     for (const [index, vectorRecord] of vectorRecords.entries()) {
-    //       try {
-    //         let erdEntity: EntityRecordDocumentEntity = await super.Metadata.GetEntityObject('Entity Record Documents');
-    //         erdEntity.NewRecord();
-    //         erdEntity.EntityID = entityDocument.EntityID;
-    //         erdEntity.RecordID = batch[index].PrimaryKey.ToString();
-    //         erdEntity.DocumentText = templates[index];
-    //         erdEntity.VectorID = vectorRecord.id;
-    //         erdEntity.VectorJSON = JSON.stringify(vectorRecord.values);
-    //         erdEntity.VectorIndexID = vectorIndexEntity.ID;
-    //         erdEntity.EntityRecordUpdatedAt = new Date();
-    //         erdEntity.EntityDocumentID = entityDocument.ID;
-    //         let erdEntitySaveResult: boolean = await super.SaveEntity(erdEntity);
-    //         if (!erdEntitySaveResult) {
-    //           LogError('Error saving Entity Record Document Entity');
-    //         }
-    //       } catch (err) {
-    //         LogError('Error saving Entity Record Document Entity');
-    //         LogError(err);
-    //       }
-    //     }
-    //   } else {
-    //     LogError('Unable to successfully save records to vector database', undefined, response.message);
-    //   }
-
-    //   //add a delay to avoid rate limiting
-    //   let delayRes = await this.delay(1000);
-    //   count += 1;
-    //   LogStatus(`Chunk ${count} of out ${chunks.length} processed`);
-    // }
 
     const endTime: number = new Date().getTime();
     LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${endTime - startTime} ms`);
