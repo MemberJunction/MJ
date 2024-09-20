@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ai-openai",
-  "email": "nico.ortiz@bluecypress.io",
-  "dependentChangeType": "patch"
-}

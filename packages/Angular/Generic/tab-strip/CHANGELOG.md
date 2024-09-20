@@ -1,8 +1,18 @@
 # Change Log - @memberjunction/ng-tabstrip
 
-This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 16:17:06 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.0
+
+Fri, 20 Sep 2024 16:17:06 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/ng-container-directives to v2.5.0
+- Bump @memberjunction/ng-shared to v2.5.0
 
 ## 2.4.1
 

@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Sat, 07 Sep 2024 18:07:40 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 16:17:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.0
+
+Fri, 20 Sep 2024 16:17:07 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
 
 ## 2.4.0
 

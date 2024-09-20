@@ -2,6 +2,59 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Fri, 20 Sep 2024 16:17:06 GMT",
+      "version": "2.5.0",
+      "tag": "@memberjunction/core-entities_v2.5.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "nico.ortiz@bluecypress.io",
+            "package": "@memberjunction/core-entities",
+            "commit": "7296d110059eae1a4f16cc7eb8d1a685e87f2482",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "3de94592ec4755a6f700b40283f7aee682a97e7f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "b3b79cb9854601b2ff68cd387637d4b8548cb8f9",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "64d015007296fd9ade8863ff259b88c130d61488",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core-entities",
+            "commit": "c687e637b54687b180b1fb1408471cb96a4fe7e9",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v2.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 08 Sep 2024 19:33:23 GMT",
       "version": "2.4.1",
       "tag": "@memberjunction/core-entities_v2.4.1",
