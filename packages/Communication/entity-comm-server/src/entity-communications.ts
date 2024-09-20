@@ -1,7 +1,7 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
-import { Message, MessageRecipient } from "@memberjunction/communication-types";
-import { EntityInfo, Metadata, RunView, RunViewParams } from "@memberjunction/core";
-import { TemplateParamEntity } from "@memberjunction/core-entities";
+import { CommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
+import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
+import { ListDetailEntityType, ListEntityType, TemplateParamEntity } from "@memberjunction/core-entities";
 import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
 
@@ -10,6 +10,11 @@ import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
  * Server-side implementation of the entity communications engine
  */
 export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
+
+    public static get Instance(): EntityCommunicationsEngine {
+        return super.getInstance<EntityCommunicationsEngine>();
+    }
+
     /**
      * Executes a given message request against a view of records for a given entity
      */
@@ -28,9 +33,20 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
     
             await CommunicationEngine.Instance.Config(false, this.ContextUser);
     
-            const provider = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
-            if (!provider) 
+            const provider: CommunicationProviderEntityExtended = CommunicationEngine.Instance.Providers.find(p => p.Name.trim().toLowerCase() === params.ProviderName.trim().toLowerCase());
+            if (!provider) {
                 throw new Error(`Provider ${params.ProviderName} not found`);
+            }
+
+            if(!provider.SupportsSending){
+                throw new Error(`Provider ${params.ProviderName} does not support sending messages`);
+            }
+
+            const message: Message = params.Message;
+            if(message.SendAt && !provider.SupportsScheduledSending){
+                throw new Error(`Provider ${params.ProviderName} does not support scheduled sending`);
+            }
+
             const providerMessageType = provider.MessageTypes.find(mt => mt.Name.trim().toLowerCase() === params.ProviderMessageTypeName.trim().toLowerCase());
     
             const entityMessageTypes = this.GetEntityCommunicationMessageTypes(params.EntityID);
@@ -209,10 +225,11 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const filter = `${relatedField} in (${recipients.map(r => `${quotes}${r[recipientPrimaryKeyFieldName]}${quotes}`).join(',')})`;
             const finalFilter = p.ExtraFilter ? `(${filter}) AND (${p.ExtraFilter})` : filter;
             const rv = new RunView();
-            const result = await rv.RunView({
+            const params: any = {
                 EntityName: relatedEntity,
                 ExtraFilter: finalFilter,
-            }, this.ContextUser);
+            }
+            const result = await rv.RunView(params, this.ContextUser);
             if (result && result.Success) {
                 data.push({
                     paramName: p.Name,

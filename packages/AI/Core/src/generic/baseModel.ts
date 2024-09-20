@@ -24,6 +24,11 @@ export class BaseParams {
      * Model temperature, optional.
      */
     temperature?: number
+
+    /**
+     * Model max output response tokens, optional.
+     */
+    maxOutputTokens?: number
 }
 
 export class ModelUsage {
