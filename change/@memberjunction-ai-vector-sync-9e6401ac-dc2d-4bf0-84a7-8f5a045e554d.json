@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Bump minor version",
+  "packageName": "@memberjunction/ai-vector-sync",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
