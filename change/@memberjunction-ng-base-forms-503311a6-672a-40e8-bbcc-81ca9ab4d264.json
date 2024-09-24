@@ -1,0 +1,7 @@
+{
+  "type": "none",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/ng-base-forms",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "none"
+}
