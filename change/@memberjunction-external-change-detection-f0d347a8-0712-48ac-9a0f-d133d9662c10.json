@@ -1,0 +1,7 @@
+{
+  "type": "none",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/external-change-detection",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "none"
+}

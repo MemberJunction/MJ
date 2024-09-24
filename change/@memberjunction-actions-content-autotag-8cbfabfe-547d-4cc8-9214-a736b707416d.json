@@ -1,0 +1,7 @@
+{
+  "type": "none",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/actions-content-autotag",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "none"
+}
