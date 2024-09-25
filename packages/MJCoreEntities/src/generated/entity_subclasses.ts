@@ -1646,7 +1646,8 @@ export const CommunicationProviderSchema = z.object({
         * * Field Name: SupportsScheduledSending
         * * Display Name: Supports Scheduled Sending
         * * SQL Data Type: bit
-        * * Default Value: 0`),
+        * * Default Value: 0
+    * * Description: Whether or not the provider supports sending messages at a specific time`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -6056,7 +6057,8 @@ export const RecommendationItemSchema = z.object({
     RecommendedEntity: z.string().nullish().describe(`
         * * Field Name: RecommendedEntity
         * * Display Name: Recommended Entity
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
 });
 
 export type RecommendationItemEntityType = z.infer<typeof RecommendationItemSchema>;
@@ -12925,6 +12927,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * * Display Name: Supports Scheduled Sending
     * * SQL Data Type: bit
     * * Default Value: 0
+    * * Description: Whether or not the provider supports sending messages at a specific time
     */
     get SupportsScheduledSending(): boolean {
         return this.Get('SupportsScheduledSending');
@@ -24859,6 +24862,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * Field Name: RecommendedEntity
     * * Display Name: Recommended Entity
     * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
     */
     get RecommendedEntity(): string | null {
         return this.Get('RecommendedEntity');

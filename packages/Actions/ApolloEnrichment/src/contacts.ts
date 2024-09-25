@@ -246,7 +246,7 @@ export class ApolloContactsEnrichmentAction extends BaseAction {
                                 }
 
                                 contactEntity.SetMany(entityRecord, true);
-                                contactEntity.Set(params.EmailField, match.email);
+                                //contactEntity.Set(params.EmailField, match.email);
                                 contactEntity.Set(params.EnrichedAtField, new Date());
 
                                 if(match.organization){

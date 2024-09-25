@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 9/18/2024, 4:33:36 PM
+* GENERATED: 9/20/2024, 2:46:37 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -22891,7 +22891,7 @@ export class CommunicationProvider_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Whether or not the provider supports sending messages at a specific time'}) 
     SupportsScheduledSending: boolean;
         
     @Field(() => [CommunicationLog_])

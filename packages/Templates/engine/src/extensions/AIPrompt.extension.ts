@@ -15,6 +15,9 @@ type Context = any;
  */
 @RegisterClass(TemplateExtensionBase, 'AIPrompt')
 export class AIPromptExtension extends TemplateExtensionBase {
+
+    AllowFormattingText: string = "Do not use markdown, HTML, or any other special formatting."
+
     constructor(contextUser: UserInfo) {
         super(contextUser);
         this.tags = ['AIPrompt'];
@@ -56,6 +59,22 @@ export class AIPromptExtension extends TemplateExtensionBase {
 
     public run(context: Context, body: any, errorBody: any, params, callBack: NunjucksCallback, a, b, c) {
         const prompt = body();
+        let config: AIPromptConfig = {};
+
+        if(prompt.includes("<!--!!") && prompt.includes("!!-->")) {
+            // we have a config block in the prompt
+            const configBlock = prompt.substring(prompt.indexOf("<!--!!") + 6, prompt.indexOf("!!-->"));
+            try{
+                config = JSON.parse(configBlock);
+            }
+            catch (e) {
+                // try-catch because we don't want to crash if the JSON is invalid
+                LogError(`Unable to parse JSON: ${configBlock}`);
+                LogError(e);
+            }
+        }
+
+
         // we now have the LLM prompt in the prompt variable
         // we can't use async/await here because this is a synchronous function
         // so instead we will use the callback pattern
@@ -63,16 +82,21 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // then we will create an instance of the LLM class
         AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
-                const model = AIEngine.Instance.Models.find(m => m.ID == 'E63F182E-F775-EF11-BDFD-000D3AF6A893');
-                //const model = await AIEngine.Instance.GetHighestPowerModel('Groq','llm', this.ContextUser) 
+                let model: AIModelEntityExtended = null;
+                if(config.AIModel) {
+                    model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() == config.AIModel.toLowerCase());
+                }
+                else{
+                    model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
+                }
+                
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
                 const llmResult = await llm.ChatCompletion({
                     messages: [
                         {
                             role: 'system',
                             content: `Background: The output from this will be DIRECTLY inserted into a messaging template going to a recipient. For this reason whenever
-                                                  you are prompted to provide a result, do not preface it with any text, just provide the result itself. Do not use
-                                                  markdown, HTML, or any other special formatting. Assume that the text you are generating will go directly into a message.
+                                                  you are prompted to provide a result, do not preface it with any text, just provide the result itself. ${config.AllowFormatting ? "" : this.AllowFormattingText }  Assume that the text you are generating will go directly into a message.
                                       <IMPORTANT>ONLY PROVIDE THE RESPONSE REQUESTED FOR THE MESSAGE - **** DO NOT ADD ANYTHING ELSE ****</IMPORTANT>`,
                         },
                         {
@@ -114,6 +138,18 @@ export class AIPromptExtension extends TemplateExtensionBase {
         return models[0];
     }
 }
+
+export type AIPromptConfig = {
+    /**
+     * The AI model to use for the prompt. If not provided, the extension will use the highest power model available.
+     */
+    AIModel?: string;
+    /**
+     * Whether or not to allow the AI Model to return its reponse formatted, HTML, Markdown, JSON, etc.
+     * If false, the AI Model will return the response as plain text
+     */
+    AllowFormatting?: boolean;
+};
 
 // function AIPromptExtension() {
 //     this.tags = ['AIPrompt'];

@@ -288,16 +288,41 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             course.CourseParts = [];
         }
 
-        for(const record of records){
+        let average: number = 0;
+        for(const [index, record] of records.entries()){
 
             if(record.TestEmail !== "test.bluecypress@gmail.com"){
                 throw new Error(`No email address found for ${record.first_name}`);
             }
 
+            const startTime: Date = new Date();
+            params.Message.Subject = `${record.first_name}, we think this course is great for you!`;
 
+            const courseFilter: string = `
+            ID IN 
+            (
+                Select TOP 1 RecommendedEntityRecordID
+                FROM __mj.vwRecommendationItems
+                WHERE RecommendedEntityID = '83723AD2-6D70-EF11-BDFD-00224877C022'
+                AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
+				AND DestinationEntityRecordID = '${record.ID}'
+                ORDER BY MatchProbability DESC
+            )`;
 
-            params.Message.Subject = `${record.first_name}, we think these courses are great for you!`;
+            const rvCourseResults = await rv.RunView({
+                EntityName: "Courses",
+                ExtraFilter: courseFilter
+            }, params.CurrentUser);
 
+            let bestCourse: Record<string, any>;
+            if(rvCourseResults.Success && rvCourseResults.Results.length > 0){
+                bestCourse = rvCourseResults.Results[0];
+            }
+            else{
+                LogStatus(`No best course found for ${record.first_name} (${record.ID}), using default course`);
+                bestCourse = courses[0];
+            }
+            
             const filter: string = `
             ID IN 
             (
@@ -313,10 +338,19 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 ExtraFilter: filter
             }, params.CurrentUser);
 
+            let courseCopy = structuredClone(bestCourse);
+            courseCopy.CourseParts = [];
             const courseCopies = structuredClone(courses);
             const courseParts = rvCoursePartResults.Results;
 
             for(const part of courseParts){
+                if(part.CourseID === bestCourse.ID){
+                    if(!courseCopy.CourseParts){
+                        courseCopy.CourseParts = [];
+                    }
+                    courseCopy.CourseParts.push(part);
+                }
+
                 const course = courseCopies.find(c => c.ID === part.CourseID);
                 if(course){
                     if(!course.CourseParts){
@@ -326,7 +360,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 }
             }
 
-            LogStatus(`Found ${courseParts.length} course parts for ${record.first_name}, emailing ${record.TestEmail}`);
+            LogStatus(`Found ${courseCopy.CourseParts.length} course parts for ${record.first_name}'s best course ${bestCourse.Name}, emailing ${record.TestEmail}`);
 
             //we have the info we need, now send a message 
             const recipient: MessageRecipient = {
@@ -336,12 +370,19 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                     Entity: record,
                     Person: record,
                     Courses: courseCopies,
-                    CourseParts: courseParts
+                    CourseParts: courseParts,
+                    BestCourse: courseCopy,
+                    SubjectLine: params.Message.Subject
                 }
             }
 
             await CommunicationEngine.Instance.Config(false, params.CurrentUser);
             const sendResult = await CommunicationEngine.Instance.SendMessages("SendGrid", "Email", params.Message, [recipient], false);
+            const endTime: Date = new Date();
+            const timeEslapsed: number = (endTime.getTime() - startTime.getTime()) / 1000;
+            LogStatus(`Email sent to ${record.first_name} in ${timeEslapsed} seconds`);
+            average += timeEslapsed;
+            LogStatus(`Average time: ${average / (index + 1)} seconds`);
         }
     }
 
