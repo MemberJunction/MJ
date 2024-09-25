@@ -495,6 +495,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="Company Integration Run ATDs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'F8AE0E58-7B7B-EF11-BDFD-0022487DF168'}">
+                        Company Integration Run ATDs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integration Run ATDs')"  
+                            [NewRecordValues]="NewRecordValues('Company Integration Run ATDs')"
+                            [AllowLoad]="IsCurrentTab('Company Integration Run ATDs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

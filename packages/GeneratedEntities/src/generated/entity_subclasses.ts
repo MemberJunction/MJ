@@ -9,6 +9,61 @@ export const loadModule = () => {
      
  
 /**
+ * zod schema definition for the entity Company Integration Run ATDs
+ */
+export const CompanyIntegrationRunATDSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CompanyIntegrationID: z.string().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
+        * * Default Value: null`),
+    RunByUserID: z.string().describe(`
+        * * Field Name: RunByUserID
+        * * Display Name: Run By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Default Value: null`),
+    StartedAt: z.date().nullish().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Default Value: null`),
+    EndedAt: z.date().nullish().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        * * Default Value: null`),
+    TotalRecords: z.number().describe(`
+        * * Field Name: TotalRecords
+        * * Display Name: Total Records
+        * * SQL Data Type: int
+        * * Default Value: null`),
+    Comments: z.string().nullish().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type CompanyIntegrationRunATDEntityType = z.infer<typeof CompanyIntegrationRunATDSchema>;
+
+/**
  * zod schema definition for the entity Course Parts
  */
 export const CoursePartSchema = z.object({
@@ -1387,6 +1442,147 @@ export const PersonSchema = z.object({
 export type PersonEntityType = z.infer<typeof PersonSchema>;
  
  
+
+/**
+ * Company Integration Run ATDs - strongly typed entity sub-class
+ * * Schema: ATD
+ * * Base Table: CompanyIntegrationRunATD
+ * * Base View: vwCompanyIntegrationRunATDs
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Company Integration Run ATDs')
+export class CompanyIntegrationRunATDEntity extends BaseEntity<CompanyIntegrationRunATDEntityType> {
+    /**
+    * Loads the Company Integration Run ATDs record from the database
+    * @param ID: string - primary key value to load the Company Integration Run ATDs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CompanyIntegrationRunATDEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
+    * * Default Value: null
+    */
+    get CompanyIntegrationID(): string {
+        return this.Get('CompanyIntegrationID');
+    }
+    set CompanyIntegrationID(value: string) {
+        this.Set('CompanyIntegrationID', value);
+    }
+
+    /**
+    * * Field Name: RunByUserID
+    * * Display Name: Run By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Default Value: null
+    */
+    get RunByUserID(): string {
+        return this.Get('RunByUserID');
+    }
+    set RunByUserID(value: string) {
+        this.Set('RunByUserID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
+    * * Default Value: null
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetime
+    * * Default Value: null
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: TotalRecords
+    * * Display Name: Total Records
+    * * SQL Data Type: int
+    * * Default Value: null
+    */
+    get TotalRecords(): number {
+        return this.Get('TotalRecords');
+    }
+    set TotalRecords(value: number) {
+        this.Set('TotalRecords', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
 
 /**
  * Course Parts - strongly typed entity sub-class

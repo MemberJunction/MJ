@@ -60,18 +60,18 @@ if (!entityDocument) {
 const request = {
   entityID: entityDocument.EntityID,
   entityDocumentID: entityDocument.ID,
-  listID: 'D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893',
-  batchCount: 25,
+  listID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',
+  batchCount: 100,
   options: {},
 };
 
 console.log(request);
 
 console.log('vectorizing entity...');
-//await vectorizer.VectorizeEntity(request, systemUser);
+await vectorizer.VectorizeEntity(request, systemUser);
 //await vectorizer.CreateTemplateForEntityDocument(entityDocument);
 //await vectorizer.GetRecommendations();
-await vectorizer.SendEmails();
+//await vectorizer.SendEmails();
 
 console.log('Done');
 process.exit('0');
