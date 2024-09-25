@@ -1,0 +1,1 @@
+export * from './generic/content-autotag-and-vectorize.action';

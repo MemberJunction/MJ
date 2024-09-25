@@ -17,14 +17,14 @@ export class OpenAIEmbedding extends Embeddings {
     }
 
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        let body: OpenAI.Embeddings.EmbeddingCreateParams = {
+            input: params.text,
+            model: params.model || "text-embedding-3-small"
+        }
+
         try{
-            let body: OpenAI.Embeddings.EmbeddingCreateParams = {
-                input: params.text,
-                model: params.model || "text-embedding-3-small"
-            }
-    
             let response = await OpenAIEmbedding._openAI.embeddings.create(body);
-    
+
             return {
                 object: response.object,
                 model: response.model,
@@ -33,20 +33,20 @@ export class OpenAIEmbedding extends Embeddings {
             }
         }
         catch(ex){
-            console.error(ex);
+            console.log(ex);
             return null;
         }
     }
 
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        let body: OpenAI.Embeddings.EmbeddingCreateParams = {
+            input: params.texts,
+            model: params.model || "text-embedding-3-small"
+        }
+
         try{
-            let body: OpenAI.Embeddings.EmbeddingCreateParams = {
-                input: params.texts,
-                model: params.model || "text-embedding-3-small"
-            }
-    
             let response = await OpenAIEmbedding._openAI.embeddings.create(body);
-    
+
             return {
                 object: response.object,
                 model: response.model,

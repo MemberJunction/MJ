@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-list-detail-grid",
-  "version": "2.4.1",
+  "version": "2.5.1",
   "description": "MemberJunction: Angular Grid to display dynamic and saved List Details for any entity in MemberJunction.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.4.1",
-    "@memberjunction/global": "2.4.1",
-    "@memberjunction/core": "2.4.1",
-    "@memberjunction/ng-shared": "2.4.1",
-    "@memberjunction/ng-compare-records": "2.4.1",
-    "@memberjunction/ng-container-directives": "2.4.1",
+    "@memberjunction/core-entities": "2.5.1",
+    "@memberjunction/global": "2.5.1",
+    "@memberjunction/core": "2.5.1",
+    "@memberjunction/ng-shared": "2.5.1",
+    "@memberjunction/ng-compare-records": "2.5.1",
+    "@memberjunction/ng-container-directives": "2.5.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

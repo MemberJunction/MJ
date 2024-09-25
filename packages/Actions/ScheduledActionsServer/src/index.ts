@@ -9,12 +9,14 @@ import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadOpenAIEmbedding} from '@memberjunction/ai-openai';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
 import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
+import { LoadAutotagAndVectorizeContentAction } from '@memberjunction/actions-content-autotag';
 
 LoadMistralEmbedding();
 LoadOpenAIEmbedding();
 LoadPineconeVectorDB();
 LoadApolloAccountsEnrichmentAction();
 LoadApolloContactsEnrichmentAction();
+LoadAutotagAndVectorizeContentAction();
 
 const app = express();
 
@@ -60,6 +62,12 @@ const runOptions: runOption[] = [
         run: enrichContacts,
         maxConcurrency: 1
     }
+    ,{
+        name: "autoTagAndVectorize",
+        description: "Run Autotag and Vectorize Content",
+        run: autotagAndVectorize,
+        maxConcurrency: 1
+    }
     
 ];
 
@@ -80,8 +88,11 @@ app.get('/', async (req: any, res: any) => {
     }
 });
 
-app.listen(serverPort, () =>
-  LogStatus(`Server listening on port ${serverPort}!`)
+app.listen(serverPort, () => 
+  {
+    LogStatus(`Server listening on port ${serverPort}!`),
+    autotagAndVectorize()
+    }
 );
 
 
@@ -177,6 +188,10 @@ export async function enrichAccounts(): Promise<boolean> {
 
 export async function enrichContacts(): Promise<boolean> {
     return await runScheduledAction("Apollo Enrichment - Contacts");
+}
+
+export async function autotagAndVectorize(): Promise<boolean> {
+    return await runScheduledAction("Autotag And Vectorize Content");
 }
 
 export async function runScheduledAction(actionName: string): Promise<boolean> {

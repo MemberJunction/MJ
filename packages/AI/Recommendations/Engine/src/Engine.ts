@@ -1,5 +1,5 @@
-import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError } from '@memberjunction/core';
-import { ListDetailEntityType, ListEntityType, RecommendationEntity, RecommendationItemEntity, RecommendationProviderEntity, RecommendationRunEntity } from '@memberjunction/core-entities';
+import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo } from '@memberjunction/core';
+import { ListDetailEntityType, ListEntityType, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
@@ -29,10 +29,6 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return await this.Load(params, forceRefresh, contextUser);
   }
 
-  /**
-   * Call this method with a provider and a request and a result will be generated
-   * @param request - The Recommendations to request, and an optional provider
-   */
   public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
     super.TryThrowIfNotLoaded();
 

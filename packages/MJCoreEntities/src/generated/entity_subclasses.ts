@@ -791,6 +791,11 @@ export const AIModelSchema = z.object({
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
+    InputTokenLimit: z.number().nullish().describe(`
+        * * Field Name: InputTokenLimit
+        * * Display Name: Input Token Limit
+        * * SQL Data Type: int
+    * * Description: Stores the maximum number of tokens that fit in the context window for the model.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -2069,6 +2074,506 @@ export const CompanyIntegrationSchema = z.object({
 });
 
 export type CompanyIntegrationEntityType = z.infer<typeof CompanyIntegrationSchema>;
+
+/**
+ * zod schema definition for the entity Content File Types
+ */
+export const ContentFileTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    FileExtension: z.string().nullish().describe(`
+        * * Field Name: FileExtension
+        * * Display Name: File Extension
+        * * SQL Data Type: nvarchar(255)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ContentFileTypeEntityType = z.infer<typeof ContentFileTypeSchema>;
+
+/**
+ * zod schema definition for the entity Content Item Attributes
+ */
+export const ContentItemAttributeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentItemID: z.string().describe(`
+        * * Field Name: ContentItemID
+        * * Display Name: Content Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Items (vwContentItems.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Value: z.string().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentItem: z.string().nullish().describe(`
+        * * Field Name: ContentItem
+        * * Display Name: Content Item
+        * * SQL Data Type: nvarchar(250)`),
+});
+
+export type ContentItemAttributeEntityType = z.infer<typeof ContentItemAttributeSchema>;
+
+/**
+ * zod schema definition for the entity Content Item Tags
+ */
+export const ContentItemTagSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ItemID: z.string().describe(`
+        * * Field Name: ItemID
+        * * Display Name: Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Items (vwContentItems.ID)`),
+    Tag: z.string().describe(`
+        * * Field Name: Tag
+        * * Display Name: Tag
+        * * SQL Data Type: nvarchar(200)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Item: z.string().nullish().describe(`
+        * * Field Name: Item
+        * * Display Name: Item
+        * * SQL Data Type: nvarchar(250)`),
+});
+
+export type ContentItemTagEntityType = z.infer<typeof ContentItemTagSchema>;
+
+/**
+ * zod schema definition for the entity Content Items
+ */
+export const ContentItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentSourceID: z.string().describe(`
+        * * Field Name: ContentSourceID
+        * * Display Name: Content Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(250)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    ContentTypeID: z.string().describe(`
+        * * Field Name: ContentTypeID
+        * * Display Name: Content Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Types (vwContentTypes.ID)`),
+    ContentSourceTypeID: z.string().describe(`
+        * * Field Name: ContentSourceTypeID
+        * * Display Name: Content Source Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)`),
+    ContentFileTypeID: z.string().describe(`
+        * * Field Name: ContentFileTypeID
+        * * Display Name: Content File Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content File Types (vwContentFileTypes.ID)`),
+    Checksum: z.string().nullish().describe(`
+        * * Field Name: Checksum
+        * * Display Name: Checksum
+        * * SQL Data Type: nvarchar(100)`),
+    URL: z.string().describe(`
+        * * Field Name: URL
+        * * Display Name: URL
+        * * SQL Data Type: nvarchar(2000)`),
+    Text: z.string().nullish().describe(`
+        * * Field Name: Text
+        * * Display Name: Text
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentSource: z.string().nullish().describe(`
+        * * Field Name: ContentSource
+        * * Display Name: Content Source
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    ContentType: z.string().describe(`
+        * * Field Name: ContentType
+        * * Display Name: Content Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    ContentSourceType: z.string().describe(`
+        * * Field Name: ContentSourceType
+        * * Display Name: Content Source Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    ContentFileType: z.string().describe(`
+        * * Field Name: ContentFileType
+        * * Display Name: Content File Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+});
+
+export type ContentItemEntityType = z.infer<typeof ContentItemSchema>;
+
+/**
+ * zod schema definition for the entity Content Process Runs
+ */
+export const ContentProcessRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SourceID: z.string().describe(`
+        * * Field Name: SourceID
+        * * Display Name: Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)`),
+    StartTime: z.date().nullish().describe(`
+        * * Field Name: StartTime
+        * * Display Name: Start Time
+        * * SQL Data Type: datetime`),
+    EndTime: z.date().nullish().describe(`
+        * * Field Name: EndTime
+        * * Display Name: End Time
+        * * SQL Data Type: datetime`),
+    Status: z.string().nullish().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(100)`),
+    ProcessedItems: z.number().nullish().describe(`
+        * * Field Name: ProcessedItems
+        * * Display Name: Processed Items
+        * * SQL Data Type: int`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Source: z.string().nullish().describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ContentProcessRunEntityType = z.infer<typeof ContentProcessRunSchema>;
+
+/**
+ * zod schema definition for the entity Content Source Params
+ */
+export const ContentSourceParamSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentSourceID: z.string().describe(`
+        * * Field Name: ContentSourceID
+        * * Display Name: Content Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)`),
+    ContentSourceTypeParamID: z.string().describe(`
+        * * Field Name: ContentSourceTypeParamID
+        * * Display Name: Content Source Type Param ID
+        * * SQL Data Type: uniqueidentifier`),
+    Value: z.string().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentSource: z.string().nullish().describe(`
+        * * Field Name: ContentSource
+        * * Display Name: Content Source
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ContentSourceParamEntityType = z.infer<typeof ContentSourceParamSchema>;
+
+/**
+ * zod schema definition for the entity Content Source Type Params
+ */
+export const ContentSourceTypeParamSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    Type: z.string().nullish().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)`),
+    DefaultValue: z.string().nullish().describe(`
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ContentSourceTypeParamEntityType = z.infer<typeof ContentSourceTypeParamSchema>;
+
+/**
+ * zod schema definition for the entity Content Source Types
+ */
+export const ContentSourceTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(1000)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ContentSourceTypeEntityType = z.infer<typeof ContentSourceTypeSchema>;
+
+/**
+ * zod schema definition for the entity Content Sources
+ */
+export const ContentSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    ContentTypeID: z.string().describe(`
+        * * Field Name: ContentTypeID
+        * * Display Name: Content Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Types (vwContentTypes.ID)`),
+    ContentSourceTypeID: z.string().describe(`
+        * * Field Name: ContentSourceTypeID
+        * * Display Name: Content Source Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)`),
+    ContentFileTypeID: z.string().describe(`
+        * * Field Name: ContentFileTypeID
+        * * Display Name: Content File Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Content File Types (vwContentFileTypes.ID)`),
+    URL: z.string().describe(`
+        * * Field Name: URL
+        * * Display Name: URL
+        * * SQL Data Type: nvarchar(2000)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentType: z.string().describe(`
+        * * Field Name: ContentType
+        * * Display Name: Content Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    ContentSourceType: z.string().describe(`
+        * * Field Name: ContentSourceType
+        * * Display Name: Content Source Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    ContentFileType: z.string().describe(`
+        * * Field Name: ContentFileType
+        * * Display Name: Content File Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+});
+
+export type ContentSourceEntityType = z.infer<typeof ContentSourceSchema>;
+
+/**
+ * zod schema definition for the entity Content Type Attributes
+ */
+export const ContentTypeAttributeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentTypeID: z.string().describe(`
+        * * Field Name: ContentTypeID
+        * * Display Name: Content Type ID
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(MAX)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ContentTypeAttributeEntityType = z.infer<typeof ContentTypeAttributeSchema>;
+
+/**
+ * zod schema definition for the entity Content Types
+ */
+export const ContentTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    AIModelID: z.string().describe(`
+        * * Field Name: AIModelID
+        * * Display Name: AIModel ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    MinTags: z.number().describe(`
+        * * Field Name: MinTags
+        * * Display Name: Min Tags
+        * * SQL Data Type: int`),
+    MaxTags: z.number().describe(`
+        * * Field Name: MaxTags
+        * * Display Name: Max Tags
+        * * SQL Data Type: int`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    AIModel: z.string().describe(`
+        * * Field Name: AIModel
+        * * Display Name: AIModel
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type ContentTypeEntityType = z.infer<typeof ContentTypeSchema>;
 
 /**
  * zod schema definition for the entity Conversation Details
@@ -6037,28 +6542,10 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    RecommendedEntityID: z.string().nullish().describe(`
-        * * Field Name: RecommendedEntityID
-        * * Display Name: Recommended Entity ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    RecommendedEntityRecordID: z.string().nullish().describe(`
-        * * Field Name: RecommendedEntityRecordID
-        * * Display Name: Recommended Entity Record ID
-        * * SQL Data Type: nvarchar(450)`),
-    AdditionalData: z.string().nullish().describe(`
-        * * Field Name: AdditionalData
-        * * Display Name: Additional Data
-        * * SQL Data Type: nvarchar(MAX)`),
     DestinationEntity: z.string().describe(`
         * * Field Name: DestinationEntity
         * * Display Name: Destination Entity
         * * SQL Data Type: nvarchar(255)`),
-    RecommendedEntity: z.string().nullish().describe(`
-        * * Field Name: RecommendedEntity
-        * * Display Name: Recommended Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
 });
 
 export type RecommendationItemEntityType = z.infer<typeof RecommendationItemSchema>;
@@ -7419,6 +7906,11 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OrderBy: z.string().nullish().describe(`
+        * * Field Name: OrderBy
+        * * Display Name: Order By
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -10634,6 +11126,19 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set ModelSelectionInsights(value: string | null) {
         this.Set('ModelSelectionInsights', value);
+    }
+
+    /**
+    * * Field Name: InputTokenLimit
+    * * Display Name: Input Token Limit
+    * * SQL Data Type: int
+    * * Description: Stores the maximum number of tokens that fit in the context window for the model.
+    */
+    get InputTokenLimit(): number | null {
+        return this.Get('InputTokenLimit');
+    }
+    set InputTokenLimit(value: number | null) {
+        this.Set('InputTokenLimit', value);
     }
 
     /**
@@ -14126,6 +14631,1344 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     */
     get LastRunEndedAt(): Date | null {
         return this.Get('LastRunEndedAt');
+    }
+}
+
+
+/**
+ * Content File Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentFileType
+ * * Base View: vwContentFileTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content File Types')
+export class ContentFileTypeEntity extends BaseEntity<ContentFileTypeEntityType> {
+    /**
+    * Loads the Content File Types record from the database
+    * @param ID: string - primary key value to load the Content File Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentFileTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: FileExtension
+    * * Display Name: File Extension
+    * * SQL Data Type: nvarchar(255)
+    */
+    get FileExtension(): string | null {
+        return this.Get('FileExtension');
+    }
+    set FileExtension(value: string | null) {
+        this.Set('FileExtension', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Content Item Attributes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentItemAttribute
+ * * Base View: vwContentItemAttributes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Item Attributes')
+export class ContentItemAttributeEntity extends BaseEntity<ContentItemAttributeEntityType> {
+    /**
+    * Loads the Content Item Attributes record from the database
+    * @param ID: string - primary key value to load the Content Item Attributes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentItemAttributeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ContentItemID
+    * * Display Name: Content Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Items (vwContentItems.ID)
+    */
+    get ContentItemID(): string {
+        return this.Get('ContentItemID');
+    }
+    set ContentItemID(value: string) {
+        this.Set('ContentItemID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Value(): string {
+        return this.Get('Value');
+    }
+    set Value(value: string) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentItem
+    * * Display Name: Content Item
+    * * SQL Data Type: nvarchar(250)
+    */
+    get ContentItem(): string | null {
+        return this.Get('ContentItem');
+    }
+}
+
+
+/**
+ * Content Item Tags - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentItemTag
+ * * Base View: vwContentItemTags
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Item Tags')
+export class ContentItemTagEntity extends BaseEntity<ContentItemTagEntityType> {
+    /**
+    * Loads the Content Item Tags record from the database
+    * @param ID: string - primary key value to load the Content Item Tags record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentItemTagEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ItemID
+    * * Display Name: Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Items (vwContentItems.ID)
+    */
+    get ItemID(): string {
+        return this.Get('ItemID');
+    }
+    set ItemID(value: string) {
+        this.Set('ItemID', value);
+    }
+
+    /**
+    * * Field Name: Tag
+    * * Display Name: Tag
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Tag(): string {
+        return this.Get('Tag');
+    }
+    set Tag(value: string) {
+        this.Set('Tag', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Item
+    * * Display Name: Item
+    * * SQL Data Type: nvarchar(250)
+    */
+    get Item(): string | null {
+        return this.Get('Item');
+    }
+}
+
+
+/**
+ * Content Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentItem
+ * * Base View: vwContentItems
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Items')
+export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
+    /**
+    * Loads the Content Items record from the database
+    * @param ID: string - primary key value to load the Content Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ContentSourceID
+    * * Display Name: Content Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)
+    */
+    get ContentSourceID(): string {
+        return this.Get('ContentSourceID');
+    }
+    set ContentSourceID(value: string) {
+        this.Set('ContentSourceID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ContentTypeID
+    * * Display Name: Content Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Types (vwContentTypes.ID)
+    */
+    get ContentTypeID(): string {
+        return this.Get('ContentTypeID');
+    }
+    set ContentTypeID(value: string) {
+        this.Set('ContentTypeID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceTypeID
+    * * Display Name: Content Source Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)
+    */
+    get ContentSourceTypeID(): string {
+        return this.Get('ContentSourceTypeID');
+    }
+    set ContentSourceTypeID(value: string) {
+        this.Set('ContentSourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ContentFileTypeID
+    * * Display Name: Content File Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content File Types (vwContentFileTypes.ID)
+    */
+    get ContentFileTypeID(): string {
+        return this.Get('ContentFileTypeID');
+    }
+    set ContentFileTypeID(value: string) {
+        this.Set('ContentFileTypeID', value);
+    }
+
+    /**
+    * * Field Name: Checksum
+    * * Display Name: Checksum
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Checksum(): string | null {
+        return this.Get('Checksum');
+    }
+    set Checksum(value: string | null) {
+        this.Set('Checksum', value);
+    }
+
+    /**
+    * * Field Name: URL
+    * * Display Name: URL
+    * * SQL Data Type: nvarchar(2000)
+    */
+    get URL(): string {
+        return this.Get('URL');
+    }
+    set URL(value: string) {
+        this.Set('URL', value);
+    }
+
+    /**
+    * * Field Name: Text
+    * * Display Name: Text
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Text(): string | null {
+        return this.Get('Text');
+    }
+    set Text(value: string | null) {
+        this.Set('Text', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentSource
+    * * Display Name: Content Source
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentSource(): string | null {
+        return this.Get('ContentSource');
+    }
+
+    /**
+    * * Field Name: ContentType
+    * * Display Name: Content Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentType(): string {
+        return this.Get('ContentType');
+    }
+
+    /**
+    * * Field Name: ContentSourceType
+    * * Display Name: Content Source Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentSourceType(): string {
+        return this.Get('ContentSourceType');
+    }
+
+    /**
+    * * Field Name: ContentFileType
+    * * Display Name: Content File Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentFileType(): string {
+        return this.Get('ContentFileType');
+    }
+}
+
+
+/**
+ * Content Process Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentProcessRun
+ * * Base View: vwContentProcessRuns
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Process Runs')
+export class ContentProcessRunEntity extends BaseEntity<ContentProcessRunEntityType> {
+    /**
+    * Loads the Content Process Runs record from the database
+    * @param ID: string - primary key value to load the Content Process Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentProcessRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: SourceID
+    * * Display Name: Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)
+    */
+    get SourceID(): string {
+        return this.Get('SourceID');
+    }
+    set SourceID(value: string) {
+        this.Set('SourceID', value);
+    }
+
+    /**
+    * * Field Name: StartTime
+    * * Display Name: Start Time
+    * * SQL Data Type: datetime
+    */
+    get StartTime(): Date | null {
+        return this.Get('StartTime');
+    }
+    set StartTime(value: Date | null) {
+        this.Set('StartTime', value);
+    }
+
+    /**
+    * * Field Name: EndTime
+    * * Display Name: End Time
+    * * SQL Data Type: datetime
+    */
+    get EndTime(): Date | null {
+        return this.Get('EndTime');
+    }
+    set EndTime(value: Date | null) {
+        this.Set('EndTime', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Status(): string | null {
+        return this.Get('Status');
+    }
+    set Status(value: string | null) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ProcessedItems
+    * * Display Name: Processed Items
+    * * SQL Data Type: int
+    */
+    get ProcessedItems(): number | null {
+        return this.Get('ProcessedItems');
+    }
+    set ProcessedItems(value: number | null) {
+        this.Set('ProcessedItems', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Source(): string | null {
+        return this.Get('Source');
+    }
+}
+
+
+/**
+ * Content Source Params - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentSourceParam
+ * * Base View: vwContentSourceParams
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Source Params')
+export class ContentSourceParamEntity extends BaseEntity<ContentSourceParamEntityType> {
+    /**
+    * Loads the Content Source Params record from the database
+    * @param ID: string - primary key value to load the Content Source Params record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceParamEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ContentSourceID
+    * * Display Name: Content Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)
+    */
+    get ContentSourceID(): string {
+        return this.Get('ContentSourceID');
+    }
+    set ContentSourceID(value: string) {
+        this.Set('ContentSourceID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceTypeParamID
+    * * Display Name: Content Source Type Param ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ContentSourceTypeParamID(): string {
+        return this.Get('ContentSourceTypeParamID');
+    }
+    set ContentSourceTypeParamID(value: string) {
+        this.Set('ContentSourceTypeParamID', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Value(): string {
+        return this.Get('Value');
+    }
+    set Value(value: string) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentSource
+    * * Display Name: Content Source
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContentSource(): string | null {
+        return this.Get('ContentSource');
+    }
+}
+
+
+/**
+ * Content Source Type Params - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentSourceTypeParam
+ * * Base View: vwContentSourceTypeParams
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Source Type Params')
+export class ContentSourceTypeParamEntity extends BaseEntity<ContentSourceTypeParamEntityType> {
+    /**
+    * Loads the Content Source Type Params record from the database
+    * @param ID: string - primary key value to load the Content Source Type Params record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceTypeParamEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Type(): string | null {
+        return this.Get('Type');
+    }
+    set Type(value: string | null) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get DefaultValue(): string | null {
+        return this.Get('DefaultValue');
+    }
+    set DefaultValue(value: string | null) {
+        this.Set('DefaultValue', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Content Source Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentSourceType
+ * * Base View: vwContentSourceTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Source Types')
+export class ContentSourceTypeEntity extends BaseEntity<ContentSourceTypeEntityType> {
+    /**
+    * Loads the Content Source Types record from the database
+    * @param ID: string - primary key value to load the Content Source Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(1000)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Content Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentSource
+ * * Base View: vwContentSources
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Sources')
+export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
+    /**
+    * Loads the Content Sources record from the database
+    * @param ID: string - primary key value to load the Content Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ContentTypeID
+    * * Display Name: Content Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Types (vwContentTypes.ID)
+    */
+    get ContentTypeID(): string {
+        return this.Get('ContentTypeID');
+    }
+    set ContentTypeID(value: string) {
+        this.Set('ContentTypeID', value);
+    }
+
+    /**
+    * * Field Name: ContentSourceTypeID
+    * * Display Name: Content Source Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content Source Types (vwContentSourceTypes.ID)
+    */
+    get ContentSourceTypeID(): string {
+        return this.Get('ContentSourceTypeID');
+    }
+    set ContentSourceTypeID(value: string) {
+        this.Set('ContentSourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ContentFileTypeID
+    * * Display Name: Content File Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Content File Types (vwContentFileTypes.ID)
+    */
+    get ContentFileTypeID(): string {
+        return this.Get('ContentFileTypeID');
+    }
+    set ContentFileTypeID(value: string) {
+        this.Set('ContentFileTypeID', value);
+    }
+
+    /**
+    * * Field Name: URL
+    * * Display Name: URL
+    * * SQL Data Type: nvarchar(2000)
+    */
+    get URL(): string {
+        return this.Get('URL');
+    }
+    set URL(value: string) {
+        this.Set('URL', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentType
+    * * Display Name: Content Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentType(): string {
+        return this.Get('ContentType');
+    }
+
+    /**
+    * * Field Name: ContentSourceType
+    * * Display Name: Content Source Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentSourceType(): string {
+        return this.Get('ContentSourceType');
+    }
+
+    /**
+    * * Field Name: ContentFileType
+    * * Display Name: Content File Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ContentFileType(): string {
+        return this.Get('ContentFileType');
+    }
+}
+
+
+/**
+ * Content Type Attributes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentTypeAttribute
+ * * Base View: vwContentTypeAttributes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Type Attributes')
+export class ContentTypeAttributeEntity extends BaseEntity<ContentTypeAttributeEntityType> {
+    /**
+    * Loads the Content Type Attributes record from the database
+    * @param ID: string - primary key value to load the Content Type Attributes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentTypeAttributeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ContentTypeID
+    * * Display Name: Content Type ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ContentTypeID(): string {
+        return this.Get('ContentTypeID');
+    }
+    set ContentTypeID(value: string) {
+        this.Set('ContentTypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+    set Prompt(value: string) {
+        this.Set('Prompt', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Content Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentType
+ * * Base View: vwContentTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Content Types')
+export class ContentTypeEntity extends BaseEntity<ContentTypeEntityType> {
+    /**
+    * Loads the Content Types record from the database
+    * @param ID: string - primary key value to load the Content Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ContentTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AIModel ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get AIModelID(): string {
+        return this.Get('AIModelID');
+    }
+    set AIModelID(value: string) {
+        this.Set('AIModelID', value);
+    }
+
+    /**
+    * * Field Name: MinTags
+    * * Display Name: Min Tags
+    * * SQL Data Type: int
+    */
+    get MinTags(): number {
+        return this.Get('MinTags');
+    }
+    set MinTags(value: number) {
+        this.Set('MinTags', value);
+    }
+
+    /**
+    * * Field Name: MaxTags
+    * * Display Name: Max Tags
+    * * SQL Data Type: int
+    */
+    get MaxTags(): number {
+        return this.Get('MaxTags');
+    }
+    set MaxTags(value: number) {
+        this.Set('MaxTags', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModel(): string {
+        return this.Get('AIModel');
     }
 }
 
@@ -24813,59 +26656,12 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
-    * * Field Name: RecommendedEntityID
-    * * Display Name: Recommended Entity ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-    */
-    get RecommendedEntityID(): string | null {
-        return this.Get('RecommendedEntityID');
-    }
-    set RecommendedEntityID(value: string | null) {
-        this.Set('RecommendedEntityID', value);
-    }
-
-    /**
-    * * Field Name: RecommendedEntityRecordID
-    * * Display Name: Recommended Entity Record ID
-    * * SQL Data Type: nvarchar(450)
-    */
-    get RecommendedEntityRecordID(): string | null {
-        return this.Get('RecommendedEntityRecordID');
-    }
-    set RecommendedEntityRecordID(value: string | null) {
-        this.Set('RecommendedEntityRecordID', value);
-    }
-
-    /**
-    * * Field Name: AdditionalData
-    * * Display Name: Additional Data
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get AdditionalData(): string | null {
-        return this.Get('AdditionalData');
-    }
-    set AdditionalData(value: string | null) {
-        this.Set('AdditionalData', value);
-    }
-
-    /**
     * * Field Name: DestinationEntity
     * * Display Name: Destination Entity
     * * SQL Data Type: nvarchar(255)
     */
     get DestinationEntity(): string {
         return this.Get('DestinationEntity');
-    }
-
-    /**
-    * * Field Name: RecommendedEntity
-    * * Display Name: Recommended Entity
-    * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
-    */
-    get RecommendedEntity(): string | null {
-        return this.Get('RecommendedEntity');
     }
 }
 
@@ -28590,6 +30386,19 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: OrderBy
+    * * Display Name: Order By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.
+    */
+    get OrderBy(): string | null {
+        return this.Get('OrderBy');
+    }
+    set OrderBy(value: string | null) {
+        this.Set('OrderBy', value);
     }
 
     /**

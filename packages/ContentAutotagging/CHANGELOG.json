@@ -1,0 +1,77 @@
+{
+  "name": "@memberjunction/content-autotagging",
+  "entries": [
+    {
+      "date": "Fri, 20 Sep 2024 17:51:58 GMT",
+      "version": "2.5.1",
+      "tag": "@memberjunction/content-autotagging_v2.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/ai to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core-entities to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/global to v2.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 20 Sep 2024 16:17:06 GMT",
+      "version": "2.5.0",
+      "tag": "@memberjunction/content-autotagging_v2.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "nico.ortiz@bluecypress.io",
+            "package": "@memberjunction/content-autotagging",
+            "commit": "e1eb15ddec0332f1071ec7d46ce305343cb8f2d0",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/ai to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core-entities to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/global to v2.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

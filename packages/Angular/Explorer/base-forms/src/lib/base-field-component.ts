@@ -73,7 +73,7 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
     if (!entityField){
       return '';
     }
-    
+
     return entityField.EntityFieldInfo.ExtendedType;
   }
 

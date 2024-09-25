@@ -1,8 +1,39 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
-This log was last generated on Sun, 08 Sep 2024 19:33:23 GMT and should not be manually modified.
+This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.1
+
+Fri, 20 Sep 2024 17:51:58 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.5.1
+- Bump @memberjunction/ai to v2.5.1
+- Bump @memberjunction/ai-vector-dupe to v2.5.1
+- Bump @memberjunction/aiengine to v2.5.1
+- Bump @memberjunction/core to v2.5.1
+- Bump @memberjunction/core-entities to v2.5.1
+- Bump @memberjunction/global to v2.5.1
+- Bump @memberjunction/queue to v2.5.1
+
+## 2.5.0
+
+Fri, 20 Sep 2024 16:17:06 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/actions to v2.5.0
+- Bump @memberjunction/ai to v2.5.0
+- Bump @memberjunction/ai-vector-dupe to v2.5.0
+- Bump @memberjunction/aiengine to v2.5.0
+- Bump @memberjunction/core to v2.5.0
+- Bump @memberjunction/core-entities to v2.5.0
+- Bump @memberjunction/global to v2.5.0
+- Bump @memberjunction/queue to v2.5.0
 
 ## 2.4.1
 

@@ -76,9 +76,24 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Content Types" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '4B77433E-F36B-1410-81E5-00554DDE13D1'}">
+                        Content Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Types')"  
+                            [NewRecordValues]="NewRecordValues('Content Types')"
+                            [AllowLoad]="IsCurrentTab('Content Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AI Result Cache" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '84ACDB09-1975-EF11-BDFD-000D3AF6A893'}">
+                        [Props]="{EntityRelationshipID: '9B78433E-F36B-1410-81E5-00554DDE13D1'}">
                         AI Result Cache
                     </mj-tab>
                     <mj-tab-body>

@@ -1,0 +1,66 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Content Sources" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Content Process Runs" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '4F77433E-F36B-1410-81E5-00554DDE13D1'}">
+                        Content Process Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Process Runs')"  
+                            [NewRecordValues]="NewRecordValues('Content Process Runs')"
+                            [AllowLoad]="IsCurrentTab('Content Process Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Content Source Params" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '5377433E-F36B-1410-81E5-00554DDE13D1'}">
+                        Content Source Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Source Params')"  
+                            [NewRecordValues]="NewRecordValues('Content Source Params')"
+                            [AllowLoad]="IsCurrentTab('Content Source Params')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Content Items" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '5777433E-F36B-1410-81E5-00554DDE13D1'}">
+                        Content Items
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Items')"  
+                            [NewRecordValues]="NewRecordValues('Content Items')"
+                            [AllowLoad]="IsCurrentTab('Content Items')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

@@ -2,6 +2,162 @@
   "name": "@memberjunction/ng-explorer-settings",
   "entries": [
     {
+      "date": "Fri, 20 Sep 2024 17:51:58 GMT",
+      "version": "2.5.1",
+      "tag": "@memberjunction/ng-explorer-settings_v2.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 20 Sep 2024 16:17:06 GMT",
+      "version": "2.5.0",
+      "tag": "@memberjunction/ng-explorer-settings_v2.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "c687e637b54687b180b1fb1408471cb96a4fe7e9",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 08 Sep 2024 19:33:23 GMT",
       "version": "2.4.1",
       "tag": "@memberjunction/ng-explorer-settings_v2.4.1",

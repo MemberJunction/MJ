@@ -2,6 +2,86 @@
   "name": "@memberjunction/ai-recommendations-rex",
   "entries": [
     {
+      "date": "Fri, 20 Sep 2024 17:51:58 GMT",
+      "version": "2.5.1",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.5.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.5.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.5.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 20 Sep 2024 16:17:07 GMT",
+      "version": "2.5.0",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.5.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "51aad8e85c2eed3e1c69514ea6531d957a5fc9d6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "43b605747ceeeeb9cb51ef17e5d9bd621a5026ab",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "a0a951786a2624f1c60fa078b6d4afed6ae8eddd",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "c687e637b54687b180b1fb1408471cb96a4fe7e9",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 08 Sep 2024 19:33:23 GMT",
       "version": "2.4.1",
       "tag": "@memberjunction/ai-recommendations-rex_v2.4.1",
