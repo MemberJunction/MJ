@@ -68,10 +68,10 @@ const request = {
 console.log(request);
 
 console.log('vectorizing entity...');
-await vectorizer.VectorizeEntity(request, systemUser);
+//await vectorizer.VectorizeEntity(request, systemUser);
 //await vectorizer.CreateTemplateForEntityDocument(entityDocument);
 //await vectorizer.GetRecommendations();
-//await vectorizer.SendEmails();
+await vectorizer.SendEmails();
 
 console.log('Done');
 process.exit('0');

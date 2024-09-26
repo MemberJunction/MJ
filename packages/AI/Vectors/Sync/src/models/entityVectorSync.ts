@@ -713,7 +713,7 @@ export class EntityVectorSyncer extends VectorBase {
     await RecommendationEngineBase.Instance.Config(false, super.CurrentUser);
 
     const recommendationParams: RecommendationRequest = {
-        ListID: "4C04EEF4-7970-EF11-BDFD-00224879D6C4",
+        ListID: "D8A2B7F5-FB71-EF11-BDFD-000D3AF6A893",
         CurrentUser: super.CurrentUser,
         Options: {
           EntityDocumentID: '002B5E3E-1E71-EF11-BDFD-000D3AF6A893'
@@ -730,7 +730,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
 
     const msg: Message = new Message();
-    msg.From = "test.bluecypress@gmail.com"
+    msg.From = "e-mail.td.org"
 
     const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
     if (!sendGrid)
@@ -747,7 +747,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     msg.MessageType = email;
     msg.HTMLBodyTemplate = bodyTemplate;
-    //msg.SubjectTemplate = subjectTemplate;
+    msg.SubjectTemplate = subjectTemplate;
     
     /*
     const commParams: EntityCommunicationParams = {
@@ -760,20 +760,6 @@ export class EntityVectorSyncer extends VectorBase {
       IncludeProcessedMessages: true
     }
     */
-
-    const params: EntityCommunicationParams = {
-      EntityID: "4C04EEF4-7970-EF11-BDFD-00224879D6C4",
-      ProviderName: "SendGrid",
-      RunViewParams: {
-        EntityName: "Persons",
-        ExtraFilter: `ID in (SELECT RecordID from __mj.vwListDetails WHERE ListID = '4C04EEF4-7970-EF11-BDFD-00224879D6C4')`,
-        IgnoreMaxRows: true
-      },
-      ProviderMessageTypeName: "Email",
-      Message: msg,
-      PreviewOnly: true,
-      IncludeProcessedMessages: true
-    };
 
     const atdParams: ATDParams = {
       ListID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',

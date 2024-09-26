@@ -107,7 +107,10 @@ export class AIPromptExtension extends TemplateExtensionBase {
                     model: model.APINameOrName
                 })
                 if (llmResult && llmResult.success) {
-                    callBack(null, llmResult.data.choices[0].message.content);
+                    let response = llmResult.data.choices[0].message.content;
+                    response = response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+                    callBack(null, response);
                 }
             }
             catch (e) {

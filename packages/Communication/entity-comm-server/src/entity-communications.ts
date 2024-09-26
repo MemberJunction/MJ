@@ -278,4 +278,175 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         // if we get here, we are good, otherwise we will have thrown an exception
         return true;
     }
+
+    public async ATD(params: ATDParams): Promise<void> {
+        const courses = await this.GetRecommendedCourses(params.CurrentUser);
+        const records = await this.GetRecordsByListID<Record<string, any>>(params.ListID, params.CurrentUser);
+        const rv: RunView = new RunView();
+
+        for(let course of courses){
+            course.CourseParts = [];
+        }
+
+        const startTime: Date = new Date();
+        const recipients: MessageRecipient[] = await Promise.all(records.map(async (record: Record<string, any>, index: number) => {
+            if(record.TestEmail !== "devtest@bluecypress.io"){
+                throw new Error(`Bad test email for ${record.first_name}`);
+            }
+
+            const courseFilter: string = `
+            ID IN 
+            (
+                Select TOP 1 RecommendedEntityRecordID
+                FROM __mj.vwRecommendationItems
+                WHERE RecommendedEntityID = 'E08DE4C9-6D70-EF11-BDFD-00224877C022'
+                AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
+				AND DestinationEntityRecordID = '${record.ID}'
+                ORDER BY MatchProbability DESC
+            )`;
+
+            const rvCourseResults = await rv.RunView({
+                EntityName: "Courses",
+                ExtraFilter: courseFilter
+            }, params.CurrentUser);
+
+            let bestCourse: Record<string, any>;
+            if(rvCourseResults.Success && rvCourseResults.Results.length > 0){
+                bestCourse = rvCourseResults.Results[0];
+            }
+            else{
+                LogStatus(`No best course found for ${record.first_name} (${record.ID}), using default course`);
+                bestCourse = courses[0];
+            }
+            
+            const filter: string = `
+            ID IN 
+            (
+                Select RecommendedEntityRecordID
+                FROM __mj.vwRecommendationItems
+                WHERE RecommendedEntityID = '83723AD2-6D70-EF11-BDFD-00224877C022'
+                AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
+                AND DestinationEntityRecordID = '${record.ID}'
+            )
+            AND CourseID = '${bestCourse.ID}'
+            `;
+            const rvCoursePartResults = await rv.RunView({
+                EntityName: "Course Parts",
+                ExtraFilter: filter
+            }, params.CurrentUser);
+
+            let courseCopy = structuredClone(bestCourse);
+            courseCopy.CourseParts = [];
+            courseCopy.CourseParts = rvCoursePartResults.Results;
+            const courseCopies = structuredClone(courses);
+            const courseParts = rvCoursePartResults.Results;
+
+
+            LogStatus(`Found ${courseCopy.CourseParts.length} course parts for ${record.first_name}'s best course ${bestCourse.Name}, emailing ${record.TestEmail}`);
+
+            //we have the info we need
+            const recipient: MessageRecipient = {
+                To: "jonathan.stfelix@bluecypress.io",
+                FullName: record.first_name,
+                ContextData: {
+                    Entity: record,
+                    Person: record,
+                    Courses: courseCopies,
+                    CourseParts: courseParts,
+                    BestCourse: courseCopy
+                }
+            };
+
+            return recipient;
+        }));
+
+        const endTime: Date = new Date();
+        const timeEslapsed: number = (endTime.getTime() - startTime.getTime()) / 1000;
+        LogStatus(`${recipients.length} Recipients generated in ${timeEslapsed} seconds`);
+
+        await CommunicationEngine.Instance.Config(false, params.CurrentUser);
+
+        const sendStartTime: Date = new Date();
+        await CommunicationEngine.Instance.SendMessages("SendGrid", "Email", params.Message, recipients, false);
+
+        const sendEndTime: Date = new Date();
+        const sendTimeEslapsed: number = (sendEndTime.getTime() - sendStartTime.getTime()) / 1000;
+        LogStatus(`Messages sent in ${sendTimeEslapsed} seconds`);
+    }
+
+    private async GetRecordsByListID<T>(listID: string, currentUser?: UserInfo): Promise<T[]> {
+        const rv: RunView = new RunView();
+        const md: Metadata = new Metadata();
+    
+        const rvListDetailsResult = await rv.RunViews([
+            { /* Getting the List to get the entity name */
+                EntityName: 'Lists',
+                ExtraFilter: `ID = '${listID}'`,
+                ResultType: 'simple'
+            },
+            { /* Getting the List Details to get the record IDs */
+                EntityName: 'List Details',
+                ExtraFilter: `ListID = '${listID}'`,
+                ResultType: 'simple',
+                IgnoreMaxRows: true,
+            }
+        ], currentUser);
+    
+        const listViewResult = rvListDetailsResult[0];
+        if(!listViewResult.Success) {
+          throw new Error(`Error getting list with ID: ${listID}: ${listViewResult.ErrorMessage}`);
+        }
+    
+        if(listViewResult.Results.length == 0) {
+          throw new Error(`No list found with ID: ${listID}`);
+        }
+    
+        const list: ListEntityType = listViewResult.Results[0];
+        const entityName: string = list.Entity;
+        LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
+    
+        const entityID: string = list.EntityID;
+        const entity: EntityInfo = md.Entities.find((e) => e.ID == entityID);
+        const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
+    
+        const listDetailsResult = rvListDetailsResult[1];
+        if(!listDetailsResult.Success) {
+          throw new Error(`Error getting list details for listID: ${listID}: ${listDetailsResult.ErrorMessage}`);
+        }
+    
+        //list is empty, just exit early
+        if(listDetailsResult.Results.length == 0) {
+          return [];
+        }
+    
+        const recordIDs: string = listDetailsResult.Results.map((ld: ListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
+        const rvEntityResult: RunViewResult<T> = await rv.RunView<T>({
+          EntityName: entityName,
+          ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
+          MaxRows: 100
+        }, currentUser);
+    
+        if(!rvEntityResult.Success) {
+          throw new Error(`Error getting entity records for listID: ${listID}: ${rvEntityResult.ErrorMessage}`);
+        }
+
+        return rvEntityResult.Results;
+    }
+
+    private async GetRecommendedCourses(currentUser: UserInfo): Promise<Record<string, any>[]> {
+        const rv = new RunView();
+        const rvResult = await rv.RunView({
+            EntityName: "Courses"
+        }, currentUser);
+
+        return rvResult.Results;
+    }
+}
+
+export type ATDParams = {
+    ListID: string,
+    CurrentUser?: UserInfo,
+    RecommendedEntityID: string | "83723AD2-6D70-EF11-BDFD-00224877C022",
+    RecommendationID: string | "71BB905A-2275-EF11-BDFD-000D3AF6A893",
+    Message: Message
 }

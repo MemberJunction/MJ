@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
 import fs from 'fs';
+import { LogStatus } from "@memberjunction/core";
 
 /**
  * Implementation of the SendGrid provider for sending and receiving messages
@@ -12,11 +13,9 @@ export class SendGridProvider extends BaseCommunicationProvider {
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
         message.ProcessedHTMLBody = message.ProcessedHTMLBody.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
-        var format = /[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/;
-        const name = message.Subject.split(",")[0];
-        if(!format.test(name)){
-            fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/${name}Test.html`, message.ProcessedHTMLBody);
-        }
+        const date = new Date();
+        fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailBodyTest${date.getUTCMilliseconds()}.html`, message.ProcessedHTMLBody);
+        fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailSubjectTest${date.getUTCMilliseconds()}.html`, message.ProcessedSubject);
 
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
@@ -36,6 +35,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
         try {
             const result = await sgMail.send(msg);
+            console.log("result:", result);
             if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
                 return {
                     Message: message,
