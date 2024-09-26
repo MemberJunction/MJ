@@ -114,8 +114,11 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
                 const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
                 logStatus('Managing Metadata...')
-                if (! await manageMD.manageMetadata(AppDataSource))
+                manageMD.enableMetaDataLogging(configInfo.metadataLogging);
+                const metadataSuccess = await manageMD.manageMetadata(AppDataSource); 
+                if (!metadataSuccess){
                     logError('ERROR managing metadata');
+                }
     
                 /****************************************************************************************
                 // STEP 2 - SQL Script Generation
@@ -123,8 +126,10 @@ export class RunCodeGenBase {
                 const sqlOutputDir = outputDir('SQL', true);
                 if (sqlOutputDir) {
                     logStatus('Managing SQL Scripts and Execution...')
-                    if (! await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir))
+                    const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir); 
+                    if (!sqlSuccess){
                         logError('Error managing SQL scripts and execution');
+                    }
                 }
                 else
                     logStatus('SQL output directory NOT found in config file, skipping...');

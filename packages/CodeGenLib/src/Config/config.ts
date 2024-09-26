@@ -113,7 +113,33 @@ export type ConfigInfo = {
     newSchemaDefaults: NewSchemaDefaults;
     dbSchemaJSONOutput: DBSchemaJSONOutput;
     newEntityRelationshipDefaults: NewEntityRelationshipDefaults;
+    metadataLogging: MetadataLoggingConfig;
 }
+
+export type MetadataLoggingConfig = {
+    /**
+     * Whether or not sql statements generated while managing metadata should be written to a file
+     */
+    enabled: boolean;
+    /**
+     * The path of the folder to use when logging is enabled.
+     * If provided, a file will be created with the format "CodeGenRun yyy-mm-dd_hh-mm-ss.txt"
+     */
+    folderPath: string;
+    /**
+     * The path of the specific file to use when logging is enabled.
+     */
+    filePath?: string,
+    /**
+     * Whether or not to append or overwrite the generated sql to the file provided in the filePath.
+     */
+    overwriteFile?: boolean;
+
+    /**
+     * If true, the generated file will be converted into a usable migration file.
+     */
+    convertToMigrationFile: boolean;
+};
 
 export type NewEntityDefaults = {
     TrackRecordChanges : boolean;
