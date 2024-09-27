@@ -100,7 +100,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected convertToMigrationFile(): void {
+   protected convertCoreSchemaToFlywaySchema(): void {
       if(!this.FilePath){
          return;
       }
@@ -112,7 +112,7 @@ export class ManageMetadataBase {
       const replacedData: string = data.replace(regex, "${flyway:defaultSchema}");
 
       fs.writeFileSync(`${this.FilePath}`, replacedData);
-      logStatus(`Metadata logging file converted to migration file`);
+      logStatus(`Replaced all instances of ${coreSchema} with \${flyway:defaultSchema} in the metadata log file`);
    }
 
    /**
@@ -186,8 +186,8 @@ export class ManageMetadataBase {
       // now - we need to tell our metadata object to refresh itself
       await md.Refresh();
 
-      if(this.Config && this.Config.convertToMigrationFile){
-         this.convertToMigrationFile();
+      if(this.Config && this.Config.convertCoreSchemaToFlywaySchema){
+         this.convertCoreSchemaToFlywaySchema();
       }
    
       return bSuccess;
@@ -250,7 +250,7 @@ export class ManageMetadataBase {
                if (removeList.length > 0) {
                   const sqlRemove = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
                   // this removes the fields that shouldn't be there anymore
-                  this.executeSQLQuery(ds, sqlRemove, true, `SQL text to remove fields from entity ${virtualEntity.Name}`);
+                  this.executeAndLogMetadataSQL(ds, sqlRemove, true, `SQL text to remove fields from entity ${virtualEntity.Name}`);
                   bUpdated = true;
                }
 
@@ -318,7 +318,7 @@ export class ManageMetadataBase {
                                   WHERE 
                                     ID = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
                
-               await this.executeSQLQuery(ds, sqlUpdate, true, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+               await this.executeAndLogMetadataSQL(ds, sqlUpdate, true, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
                didUpdate = true;
             }
          }
@@ -332,7 +332,7 @@ export class ManageMetadataBase {
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
                                        ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
                                     )`;
-            await this.executeSQLQuery(ds, sqlAdd, true, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+            await this.executeAndLogMetadataSQL(ds, sqlAdd, true, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
             didUpdate = true;
          }
       }
@@ -421,7 +421,7 @@ export class ManageMetadataBase {
             });
 
             if (batchSQL.length > 0){
-               await this.executeSQLQuery(ds, batchSQL, true, `SQL text to create Entitiy Relationships`);
+               await this.executeAndLogMetadataSQL(ds, batchSQL, true, `SQL text to create Entitiy Relationships`);
             }
          };
 
@@ -702,7 +702,7 @@ export class ManageMetadataBase {
          if (!currentFieldData) {
             // field doesn't exist, let's create it
             const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL DEFAULT GETUTCDATE()'}`;
-            await this.executeSQLQuery(ds, sql, true, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            await this.executeAndLogMetadataSQL(ds, sql, true, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
          }
          else {
             // field does exist, let's first check the data type/nullability
@@ -714,7 +714,7 @@ export class ManageMetadataBase {
                await this.dropExistingDefaultConstraint(ds, entity, fieldName);
    
                const sql = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ALTER COLUMN ${fieldName} DATETIMEOFFSET ${allowNull ? 'NULL' : 'NOT NULL'}`;
-               await this.executeSQLQuery(ds, sql, true, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+               await this.executeAndLogMetadataSQL(ds, sql, true, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
    
                if (!allowNull)
                   await this.createDefaultConstraintForSpecialDateField(ds, entity, fieldName);
@@ -746,7 +746,7 @@ export class ManageMetadataBase {
    protected async createDefaultConstraintForSpecialDateField(ds: DataSource, entity: any, fieldName: string) {
       try {
          const sqlAddDefaultConstraint = `ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] ADD CONSTRAINT DF_${entity.SchemaName}_${CodeNameFromString(entity.BaseTable)}_${fieldName} DEFAULT GETUTCDATE() FOR [${fieldName}]`;  
-         await this.executeSQLQuery(ds, sqlAddDefaultConstraint, true, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         await this.executeAndLogMetadataSQL(ds, sqlAddDefaultConstraint, true, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
          logError(e as string);
@@ -792,7 +792,7 @@ export class ManageMetadataBase {
             EXEC('ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] DROP CONSTRAINT ' + @constraintName);
          END
          `;  
-         this.executeSQLQuery(ds, sqlDropDefaultConstraint, true, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);   
+         this.executeAndLogMetadataSQL(ds, sqlDropDefaultConstraint, true, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);   
       }
       catch (e) {
          logError(e as string);
@@ -843,7 +843,7 @@ export class ManageMetadataBase {
                   const structuredResult: EntityDescriptionResult = JSON.parse(resultText);
                   if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
                      const ssql = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
-                     await this.executeSQLQuery(ds, ssql, true, `SQL text to update entity description for entity ${e}`);
+                     await this.executeAndLogMetadataSQL(ds, ssql, true, `SQL text to update entity description for entity ${e}`);
                   }
                   else {
                      console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
@@ -890,7 +890,7 @@ export class ManageMetadataBase {
                const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
-                  await this.executeSQLQuery(ds, sSQL, true, `SQL text to update display name for field ${field.Name}`);
+                  await this.executeAndLogMetadataSQL(ds, sSQL, true, `SQL text to update display name for field ${field.Name}`);
                }
             }
          
@@ -1123,7 +1123,7 @@ export class ManageMetadataBase {
                   // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities 
                   // that would have been created violate rules - such as not having an ID column, etc.
                   const sSQLInsert = this.getPendingEntityFieldINSERTSQL(n);
-                  await this.executeSQLQuery(ds, sSQLInsert, true, `SQL text to insert new entity field`);
+                  await this.executeAndLogMetadataSQL(ds, sSQLInsert, true, `SQL text to insert new entity field`);
                   // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction   
                }
             }
@@ -1215,7 +1215,7 @@ export class ManageMetadataBase {
                   
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                   const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'` 
-                  await this.executeSQLQuery(ds, sSQL, true, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                  await this.executeAndLogMetadataSQL(ds, sSQL, true, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
                }
             }
          }
@@ -1242,7 +1242,7 @@ export class ManageMetadataBase {
                if (!possibleValues.find(v => v === ev.Value)) {
                   // delete the value from the database
                   const sSQLDelete = `DELETE FROM [${mj_core_schema()}].EntityFieldValue WHERE ID='${ev.ID}'`;
-                  await this.executeSQLQuery(ds, sSQLDelete, true, `SQL text to delete entity field value ID ${ev.ID}`);
+                  await this.executeAndLogMetadataSQL(ds, sSQLDelete, true, `SQL text to delete entity field value ID ${ev.ID}`);
                   numRemoved++;
                }
             }
@@ -1256,7 +1256,7 @@ export class ManageMetadataBase {
                                        (EntityFieldID, Sequence, Value, Code) 
                                     VALUES 
                                        ('${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
-                  await this.executeSQLQuery(ds, sSQLInsert, true, `SQL text to insert entity field values`);
+                  await this.executeAndLogMetadataSQL(ds, sSQLInsert, true, `SQL text to insert entity field values`);
                   numAdded++;
                }
             }
@@ -1268,7 +1268,7 @@ export class ManageMetadataBase {
                if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
-                  await this.executeSQLQuery(ds, sSQLUpdate, true, `SQL text to update entity field value sequence`);
+                  await this.executeAndLogMetadataSQL(ds, sSQLUpdate, true, `SQL text to update entity field value sequence`);
                   numUpdated++;
                }
             }
@@ -1463,7 +1463,7 @@ export class ManageMetadataBase {
    
             const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityName, newEntity, suffix);
-            const newEntityResult = await this.executeSQLQuery(ds, sSQLInsert, true, `SQL generated to create new entity ${newEntityName}`);
+            const newEntityResult = await this.executeAndLogMetadataSQL(ds, sSQLInsert, true, `SQL generated to create new entity ${newEntityName}`);
             const newEntityID = newEntityResult && newEntityResult.length > 0 ? newEntityResult[0].ID : null;
             if (!newEntityID){
                throw new Error(`Failed to create new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`);
@@ -1498,7 +1498,7 @@ export class ManageMetadataBase {
                   const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
                                                             (ApplicationID, EntityID, Sequence) VALUES 
                                                             ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${app.ID}'))`;
-                  this.executeSQLQuery(ds, sSQLInsertApplicationEntity, true, `SQL generated to add new entity ${newEntityName} to application ${appName}`);
+                  this.executeAndLogMetadataSQL(ds, sSQLInsertApplicationEntity, true, `SQL generated to add new entity ${newEntityName} to application ${appName}`);
                }
                else
                   LogError(`   >>>> ERROR: Unable to find Application ID for application ${appName} to add new entity ${newEntityName} to it`);
@@ -1514,7 +1514,7 @@ export class ManageMetadataBase {
                      const sSQLInsertPermission = `INSERT INTO ${mj_core_schema()}.EntityPermission 
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
                                                    ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0})`;
-                     await this.executeSQLQuery(ds, sSQLInsertPermission, true, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
+                     await this.executeAndLogMetadataSQL(ds, sSQLInsertPermission, true, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else 
                      LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for new entity ${newEntityName}`);
@@ -1542,7 +1542,7 @@ export class ManageMetadataBase {
    
    protected async createNewApplication(ds: DataSource, appName: string): Promise<number>{
       const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (Name, Description) VALUES ('" + appName + "', 'Generated for Schema'); SELECT @@IDENTITY AS ID";
-      const result = await this.executeSQLQuery(ds, sSQL, true, `SQL generated to create new application ${appName}`);
+      const result = await this.executeAndLogMetadataSQL(ds, sSQL, true, `SQL generated to create new application ${appName}`);
       return result && result.length > 0 ? result[0].ID : null;
    }
    
@@ -1668,13 +1668,14 @@ export class ManageMetadataBase {
    /**
     * Executes the given SQL query using the given DataSource object.
     * If the appendToLogFile parameter is true, the query will also be appended to the log file. 
+    * Note that in order to append to the log file, ManageMetadataBase.manageMetaDataLogging must be called first.
     * @param ds - The DataSource object to use to execute the query. 
     * @param query - The SQL query to execute.
     * @param appendToLogFile - If true, the query will be appended to the log file. 
     * @param description - A description of the query to append to the log file.
     * @returns - The result of the query execution.
     */
-   private async executeSQLQuery(ds: DataSource, query: string, appendToLogFile?: boolean, description?: string): Promise<any> {
+   private async executeAndLogMetadataSQL(ds: DataSource, query: string, appendToLogFile?: boolean, description?: string): Promise<any> {
       if (appendToLogFile) {
          this.appendToFile(query, description);
       }

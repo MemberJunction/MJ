@@ -123,7 +123,7 @@ export type MetadataSQLOutputConfig  = {
     enabled: boolean;
     /**
      * The path of the folder to use when logging is enabled.
-     * If provided, a file will be created with the format "CodeGenRun yyy-mm-dd_hh-mm-ss.txt"
+     * If provided, a file will be created with the format "CodeGen_Run_yyyy-mm-dd_hh-mm-ss.sql"
      */
     folderPath: string;
     /**
@@ -136,9 +136,10 @@ export type MetadataSQLOutputConfig  = {
     overwriteFile?: boolean;
 
     /**
-     * If true, the generated file will be converted into a usable migration file.
+     * If true, all mention of the core schema within the log file will be replaced with the flyway schema,
+     *  ${flyway:defaultSchema}
      */
-    convertToMigrationFile: boolean;
+    convertCoreSchemaToFlywaySchema: boolean;
 };
 
 export type NewEntityDefaults = {
