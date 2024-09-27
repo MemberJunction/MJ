@@ -262,7 +262,7 @@
             "when": "after"
         }
     ],
-    "metadataLogging" :{
+    "metadataSQLOutput" :{
         "enabled": true,
         "folderPath": "./MetadataOutput",
         "filePath": "",

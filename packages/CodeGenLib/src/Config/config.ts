@@ -113,10 +113,10 @@ export type ConfigInfo = {
     newSchemaDefaults: NewSchemaDefaults;
     dbSchemaJSONOutput: DBSchemaJSONOutput;
     newEntityRelationshipDefaults: NewEntityRelationshipDefaults;
-    metadataLogging: MetadataLoggingConfig;
+    metadataConfig: MetadataSQLOutputConfig;
 }
 
-export type MetadataLoggingConfig = {
+export type MetadataSQLOutputConfig  = {
     /**
      * Whether or not sql statements generated while managing metadata should be written to a file
      */
