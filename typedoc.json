@@ -12,6 +12,7 @@
     "packages/Angular/Generic/*",
     "packages/Actions/*",
     "packages/Communication/*",
+    "packages/Communication/providers/*",
     "packages/Templates/*"
   ],
   "entryPointStrategy": "packages",
