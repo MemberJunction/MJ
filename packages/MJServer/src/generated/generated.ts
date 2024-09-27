@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 9/20/2024, 11:11:39 AM
+* GENERATED: 9/27/2024, 4:14:06 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -6361,6 +6361,14 @@ export class CompanyIntegrationRun_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    Integration: string;
+        
+    @Field() 
+    @MaxLength(100)
+    Company: string;
         
     @Field() 
     @MaxLength(200)
