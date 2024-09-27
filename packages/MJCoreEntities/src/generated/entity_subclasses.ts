@@ -1969,6 +1969,14 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Integration: z.string().describe(`
+        * * Field Name: Integration
+        * * Display Name: Integration
+        * * SQL Data Type: nvarchar(100)`),
+    Company: z.string().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
     RunByUser: z.string().describe(`
         * * Field Name: RunByUser
         * * Display Name: Run By User
@@ -2244,23 +2252,19 @@ export const ContentItemSchema = z.object({
     ContentSource: z.string().nullish().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ContentItemEntityType = z.infer<typeof ContentItemSchema>;
@@ -2472,18 +2476,15 @@ export const ContentSourceSchema = z.object({
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ContentSourceEntityType = z.infer<typeof ContentSourceSchema>;
@@ -14345,6 +14346,24 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     }
 
     /**
+    * * Field Name: Integration
+    * * Display Name: Integration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Integration(): string {
+        return this.Get('Integration');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string {
+        return this.Get('Company');
+    }
+
+    /**
     * * Field Name: RunByUser
     * * Display Name: Run By User
     * * SQL Data Type: nvarchar(100)
@@ -15097,7 +15116,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentSource
     * * Display Name: Content Source
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSource(): string | null {
         return this.Get('ContentSource');
@@ -15107,7 +15125,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentType(): string {
         return this.Get('ContentType');
@@ -15117,7 +15134,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentSourceType
     * * Display Name: Content Source Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSourceType(): string {
         return this.Get('ContentSourceType');
@@ -15127,7 +15143,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentFileType
     * * Display Name: Content File Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
@@ -15705,7 +15720,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentType(): string {
         return this.Get('ContentType');
@@ -15715,7 +15729,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentSourceType
     * * Display Name: Content Source Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSourceType(): string {
         return this.Get('ContentSourceType');
@@ -15725,7 +15738,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentFileType
     * * Display Name: Content File Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');

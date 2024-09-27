@@ -1,12 +1,27 @@
 {
   // Comments are supported
   "name": "Member Junction",
-  "entryPoints": ["packages/*", "packages/Angular/*", "packages/AI/*"],
+  "entryPoints": [
+    "packages/*",
+    "packages/AI/*",
+    "packages/AI/Providers/*",
+    "packages/AI/Recommendations/*",
+    "packages/AI/Vectors/*",
+    "packages/Angular/*",
+    "packages/Angular/Explorer/*",
+    "packages/Angular/Generic/*",
+    "packages/Actions/*",
+    "packages/Communication/*",
+    "packages/Communication/providers/*",
+    "packages/Templates/*"
+  ],
   "entryPointStrategy": "packages",
   "out": "docs",
   "exclude": [
+    "packages/MJCLI/",
     "packages/CodeGen/",
     "packages/GeneratedEntities/",
+    "packages/GeneratedActions/",
     "packages/MJAPI/",
     "packages/MJExplorer/",
     "**/*.spec.ts",

@@ -261,5 +261,12 @@
             "timeout": 30000,
             "when": "after"
         }
-    ]
+    ],
+    "metadataSQLOutput" :{
+        "enabled": true,
+        "folderPath": "./MetadataOutput",
+        "filePath": "",
+        "appendToFile": false,
+        "convertToMigrationFile": true
+    }
 }

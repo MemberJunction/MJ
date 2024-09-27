@@ -1,5 +1,5 @@
-const { readyFileSync } = require('node:fs');
-const { execSync, exec } = require('node:child_process');
+const { readFileSync } = require('node:fs');
+const { execSync } = require('node:child_process');
 
 /**
  * See https://microsoft.github.io/beachball/overview/configuration.html#options
@@ -14,7 +14,16 @@ module.exports = {
   groups: [
     {
       name: 'MJ',
-      include: ['packages/*', 'packages/Actions/**', 'packages/AI/**', 'packages/Angular/**', 'packages/Communication/**', 'packages/Templates/**','packages/AngularElements/*'],
+      include: [
+        'packages/*',
+        'packages/Actions/**',
+        'packages/AI/**',
+        'packages/Angular/**',
+        'packages/Actions/**',
+        'packages/Communication/**',
+        'packages/Templates/**',
+        'packages/AngularElements/*',
+      ],
     },
   ],
   precommit: (cwd) => {
