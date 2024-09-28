@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/codegen-lib",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "Library used by the CodeGen executable to generate code for the MemberJunction platform. Contains a reusable object model that can be called by any other server-side application/library.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.5.2",
-    "@memberjunction/core": "2.5.2",
-    "@memberjunction/actions": "2.5.2",
-    "@memberjunction/core-entities": "2.5.2",
-    "@memberjunction/global": "2.5.2",
-    "@memberjunction/sqlserver-dataprovider": "2.5.2",
+    "@memberjunction/ai": "2.6.0",
+    "@memberjunction/core": "2.6.0",
+    "@memberjunction/actions": "2.6.0",
+    "@memberjunction/core-entities": "2.6.0",
+    "@memberjunction/global": "2.6.0",
+    "@memberjunction/sqlserver-dataprovider": "2.6.0",
     "env-var": "^7.4.1",
     "mssql": "^11.0.1",
     "fs-extra": "^11.2.0",

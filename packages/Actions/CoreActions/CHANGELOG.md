@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/core-actions
 
-This log was last generated on Sat, 28 Sep 2024 00:06:03 GMT and should not be manually modified.
+This log was last generated on Sat, 28 Sep 2024 00:19:40 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.6.0
+
+Sat, 28 Sep 2024 00:19:40 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/global to v2.6.0
+- Bump @memberjunction/core to v2.6.0
+- Bump @memberjunction/core-entities to v2.6.0
+- Bump @memberjunction/actions to v2.6.0
+- Bump @memberjunction/communication-engine to v2.6.0
+- Bump @memberjunction/external-change-detection to v2.6.0
+- Bump @memberjunction/ai-vector-sync to v2.6.0
+- Bump @memberjunction/content-autotagging to v2.6.0
 
 ## 2.5.2
 

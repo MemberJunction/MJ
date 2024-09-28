@@ -2,6 +2,27 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Sat, 28 Sep 2024 00:19:40 GMT",
+      "version": "2.6.0",
+      "tag": "@memberjunction/core_v2.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core",
+            "commit": "eee051825e691a8b9ed5f52a82e41ef4f388b574",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v2.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 28 Sep 2024 00:06:03 GMT",
       "version": "2.5.2",
       "tag": "@memberjunction/core_v2.5.2",
