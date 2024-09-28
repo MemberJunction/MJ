@@ -3,6 +3,7 @@ name: Update package documentation
 on:
   workflow_run:
     workflows: [Build and publish new package versions]
+    branches: [main]
     types:
       - completed
 
