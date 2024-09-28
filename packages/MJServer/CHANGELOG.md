@@ -1,8 +1,41 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
+This log was last generated on Sat, 28 Sep 2024 00:06:02 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.2
+
+Sat, 28 Sep 2024 00:06:02 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/actions to v2.5.2
+- Bump @memberjunction/ai to v2.5.2
+- Bump @memberjunction/ai-mistral to v2.5.2
+- Bump @memberjunction/ai-openai to v2.5.2
+- Bump @memberjunction/ai-vectors-pinecone to v2.5.2
+- Bump @memberjunction/aiengine to v2.5.2
+- Bump @memberjunction/core to v2.5.2
+- Bump @memberjunction/core-actions to v2.5.2
+- Bump @memberjunction/core-entities to v2.5.2
+- Bump @memberjunction/data-context to v2.5.2
+- Bump @memberjunction/data-context-server to v2.5.2
+- Bump @memberjunction/doc-utils to v2.5.2
+- Bump @memberjunction/entity-communications-server to v2.5.2
+- Bump @memberjunction/external-change-detection to v2.5.2
+- Bump @memberjunction/global to v2.5.2
+- Bump @memberjunction/queue to v2.5.2
+- Bump @memberjunction/skip-types to v2.5.2
+- Bump @memberjunction/sqlserver-dataprovider to v2.5.2
+- Bump @memberjunction/graphql-dataprovider to v2.5.2
+- Bump @memberjunction/storage to v2.5.2
+- Bump @memberjunction/templates to v2.5.2
 
 ## 2.5.1
 

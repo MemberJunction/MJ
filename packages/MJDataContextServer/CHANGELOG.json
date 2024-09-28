@@ -2,6 +2,35 @@
   "name": "@memberjunction/data-context-server",
   "entries": [
     {
+      "date": "Sat, 28 Sep 2024 00:06:02 GMT",
+      "version": "2.5.2",
+      "tag": "@memberjunction/data-context-server_v2.5.2",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/data-context-server",
+            "commit": "1eae7a80c243225b317b38f3a274254df50e2aa4",
+            "comment": "Bump minor version"
+          }
+        ],
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/data-context to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/global to v2.5.2",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 20 Sep 2024 17:51:58 GMT",
       "version": "2.5.1",
       "tag": "@memberjunction/data-context-server_v2.5.1",

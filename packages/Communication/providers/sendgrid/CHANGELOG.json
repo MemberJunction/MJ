@@ -2,6 +2,61 @@
   "name": "@memberjunction/communication-sendgrid",
   "entries": [
     {
+      "date": "Sat, 28 Sep 2024 00:06:03 GMT",
+      "version": "2.5.2",
+      "tag": "@memberjunction/communication-sendgrid_v2.5.2",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/communication-sendgrid",
+            "commit": "5a049be0fbca3d063e7d06f92f7601e6eb571c8f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/global to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core-entities to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/communication-types to v2.5.2",
+            "commit": "not available"
+          }
+        ],
+        "none": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/communication-sendgrid",
+            "commit": "e867ead8a9a4b66c8a450c9ff4997710bccdeff0",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/communication-sendgrid",
+            "commit": "1eae7a80c243225b317b38f3a274254df50e2aa4",
+            "comment": "Bump minor version"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 20 Sep 2024 17:51:58 GMT",
       "version": "2.5.1",
       "tag": "@memberjunction/communication-sendgrid_v2.5.1",

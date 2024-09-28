@@ -2,6 +2,21 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Sat, 28 Sep 2024 00:06:03 GMT",
+      "version": "2.5.2",
+      "tag": "@memberjunction/cli_v2.5.2",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "1eae7a80c243225b317b38f3a274254df50e2aa4",
+            "comment": "Bump minor version"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 20 Sep 2024 16:17:07 GMT",
       "version": "2.5.0",
       "tag": "@memberjunction/cli_v2.5.0",

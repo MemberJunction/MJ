@@ -1,8 +1,25 @@
 # Change Log - @memberjunction/ng-entity-form-dialog
 
-This log was last generated on Fri, 20 Sep 2024 17:51:58 GMT and should not be manually modified.
+This log was last generated on Sat, 28 Sep 2024 00:06:02 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.5.2
+
+Sat, 28 Sep 2024 00:06:02 GMT
+
+### Minor changes
+
+- Bump minor version (craig.adam@bluecypress.io)
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.5.2
+- Bump @memberjunction/global to v2.5.2
+- Bump @memberjunction/core to v2.5.2
+- Bump @memberjunction/ng-container-directives to v2.5.2
+- Bump @memberjunction/ng-shared to v2.5.2
+- Bump @memberjunction/ng-base-forms to v2.5.2
 
 ## 2.5.1
 

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/queue",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "MemberJunction: Queue Library for managing server side queues",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,11 +19,11 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.5.1",
-    "@memberjunction/aiengine": "2.5.1",
-    "@memberjunction/core": "2.5.1",
-    "@memberjunction/global": "2.5.1",
-    "@memberjunction/core-entities": "2.5.1",
+    "@memberjunction/ai": "2.5.2",
+    "@memberjunction/aiengine": "2.5.2",
+    "@memberjunction/core": "2.5.2",
+    "@memberjunction/global": "2.5.2",
+    "@memberjunction/core-entities": "2.5.2",
     "@types/uuid": "^9.0.1",
     "uuid": "^9.0.0"
   }
