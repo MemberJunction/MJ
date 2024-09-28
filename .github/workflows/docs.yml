@@ -1,8 +1,10 @@
 name: Update package documentation
 
 on:
-  push:
-    branches: ["main"]
+  workflow_run:
+    workflows: [Build and publish new package versions]
+    types:
+      - completed
 
   workflow_dispatch:
 
@@ -18,13 +20,13 @@ concurrency:
 jobs:
   docs:
     name: Generate and deploy package documentation
-    timeout-minutes: 10
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0          
+          fetch-depth: 0
 
       - name: Set up node
         uses: actions/setup-node@v4
