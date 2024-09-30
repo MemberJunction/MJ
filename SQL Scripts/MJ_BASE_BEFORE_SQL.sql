@@ -271,23 +271,28 @@ GO
 CREATE VIEW [__mj].vwCompanyIntegrationRuns
 AS
 SELECT
-   cir.*,
-   c.Name Company,
-   i.Name Integration
+    [cir].*,
+	[i].Name Integration,
+	[c].Name Company,
+    [u].[Name] AS [RunByUser]
 FROM
-   __mj.CompanyIntegrationRun cir
+    [__mj].[CompanyIntegrationRun] AS [cir]
 INNER JOIN
-   __mj.CompanyIntegration ci
-ON
-   cir.CompanyIntegrationID = ci.ID
+	[__mj].[CompanyIntegration] AS [ci]
+  ON
+	[cir].[CompanyIntegrationID] = [ci].[ID]
+INNER JOIN 
+	[__mj].[Company] AS [c]
+  ON
+	[ci].CompanyID = [c].ID
 INNER JOIN
-   __mj.Company c
-ON
-   ci.CompanyID = c.ID
+    [__mj].[User] AS [u]
+  ON
+    [cir].[RunByUserID] = [u].[ID]
 INNER JOIN
-   __mj.Integration i
-ON
-   ci.IntegrationID = i.ID
+	[__mj].[Integration] AS [i]
+  ON
+	[ci].[IntegrationID] = [i].[ID]
 GO
 
 DROP VIEW IF EXISTS [__mj].vwCompanyIntegrationRunDetails

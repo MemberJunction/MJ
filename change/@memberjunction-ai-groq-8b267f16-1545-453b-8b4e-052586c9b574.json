@@ -1,7 +1,0 @@
-{
-  "type": "none",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ai-groq",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "none"
-}

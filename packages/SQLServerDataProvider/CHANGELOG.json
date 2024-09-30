@@ -2,6 +2,134 @@
   "name": "@memberjunction/sqlserver-dataprovider",
   "entries": [
     {
+      "date": "Sat, 28 Sep 2024 00:19:39 GMT",
+      "version": "2.6.0",
+      "tag": "@memberjunction/sqlserver-dataprovider_v2.6.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "eee051825e691a8b9ed5f52a82e41ef4f388b574",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/actions to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v2.6.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v2.6.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 28 Sep 2024 00:06:02 GMT",
+      "version": "2.5.2",
+      "tag": "@memberjunction/sqlserver-dataprovider_v2.5.2",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "1eae7a80c243225b317b38f3a274254df50e2aa4",
+            "comment": "Bump minor version"
+          }
+        ],
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/actions to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v2.5.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v2.5.2",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 20 Sep 2024 17:51:58 GMT",
       "version": "2.5.1",
       "tag": "@memberjunction/sqlserver-dataprovider_v2.5.1",

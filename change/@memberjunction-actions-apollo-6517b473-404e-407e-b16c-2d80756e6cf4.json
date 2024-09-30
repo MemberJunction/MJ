@@ -1,7 +1,0 @@
-{
-  "type": "none",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/actions-apollo",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "none"
-}
