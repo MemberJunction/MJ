@@ -346,7 +346,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
 
             //we have the info we need
             const recipient: MessageRecipient = {
-                To: "jonathan.stfelix@bluecypress.io",
+                To: record.TestEmail,
                 FullName: record.first_name,
                 ContextData: {
                     Entity: record,

@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
 import fs from 'fs';
-import { LogStatus } from "@memberjunction/core";
+import { LogError, LogStatus } from "@memberjunction/core";
 
 /**
  * Implementation of the SendGrid provider for sending and receiving messages
@@ -11,11 +11,8 @@ import { LogStatus } from "@memberjunction/core";
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
+        
         message.ProcessedHTMLBody = message.ProcessedHTMLBody.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-
-        const date = new Date();
-        fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailBodyTest${date.getUTCMilliseconds()}.html`, message.ProcessedHTMLBody);
-        fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailSubjectTest${date.getUTCMilliseconds()}.html`, message.ProcessedSubject);
 
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
@@ -34,22 +31,30 @@ export class SendGridProvider extends BaseCommunicationProvider {
         }
 
         try {
-            const result = await sgMail.send(msg);
-            console.log("result:", result);
-            if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
-                return {
-                    Message: message,
-                    Success: true,
-                    Error: ''
-                };
-            }
-            else {
+            //not using await syntax here because we dont get a return value
+            return sgMail.send(msg).then((result: [sgMail.ClientResponse, {}]) => {
+                if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
+                    return {
+                        Message: message,
+                        Success: true,
+                        Error: ''
+                    };
+                }
+                else {
+                    return {
+                        Message: message,
+                        Success: false,
+                        Error: result[0].toString()
+                    };
+                }
+            }).catch((error: any) => {
+                LogError(`Error sending email:`, undefined, error);
                 return {
                     Message: message,
                     Success: false,
-                    Error: result[0].toString()
+                    Error: error.message
                 };
-            }
+            });
         } catch (error) {
             return {
                 Message: message,

@@ -730,7 +730,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
 
     const msg: Message = new Message();
-    msg.From = "e-mail.td.org"
+    msg.From = "bc.test@e-mail.td.org"
 
     const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
     if (!sendGrid)
@@ -740,7 +740,6 @@ export class EntityVectorSyncer extends VectorBase {
     if (!email){
       throw new Error("Email message type not found");
     } 
-
 
     const bodyTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "B4A2FCD1-7274-EF11-BDFD-000D3AF6A893");
     const subjectTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "6005290C-8674-EF11-BDFD-000D3AF6A893");
