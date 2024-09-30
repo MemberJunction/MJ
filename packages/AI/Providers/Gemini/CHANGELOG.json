@@ -2,6 +2,27 @@
   "name": "@memberjunction/ai-gemini",
   "entries": [
     {
+      "date": "Mon, 30 Sep 2024 15:55:48 GMT",
+      "version": "2.6.1",
+      "tag": "@memberjunction/ai-gemini_v2.6.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/ai to v2.6.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/global to v2.6.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 28 Sep 2024 00:19:40 GMT",
       "version": "2.6.0",
       "tag": "@memberjunction/ai-gemini_v2.6.0",

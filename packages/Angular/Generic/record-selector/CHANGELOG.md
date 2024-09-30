@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/ng-record-selector
 
-This log was last generated on Sat, 28 Sep 2024 00:19:39 GMT and should not be manually modified.
+This log was last generated on Mon, 30 Sep 2024 15:55:48 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.6.1
+
+Mon, 30 Sep 2024 15:55:48 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.6.1
+- Bump @memberjunction/global to v2.6.1
+- Bump @memberjunction/core to v2.6.1
+- Bump @memberjunction/ng-container-directives to v2.6.1
+- Bump @memberjunction/ng-shared to v2.6.1
 
 ## 2.6.0
 

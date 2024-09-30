@@ -4,7 +4,7 @@ import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
-import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
 import { BaseEntity, EntityInfo, Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -22,6 +22,7 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public entities: EntityInfo[] = [];
     public sourceEntityNames: string[] = [];
     public entityNames: string[] = [];
+    public dropdownItems: Record<'text', string>[] = [{text: "List"}];
     
 
     //create dialog properties
@@ -121,6 +122,12 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
 
     public onSelectionChange(value: string): void {
         this.selectedEntity = this.entities.find(e => `${e.SchemaName}.${e.Name}` === value) || null;
+    }
+
+    public onDropdownOptionClick(option: DropdownOptionClickEvent): void {
+        if(option.Text === "Create List"){
+            this.toggleCreateDialog(true);
+        }
     }
 } 
 

@@ -3,6 +3,7 @@ title="Lists"
 itemType="list"
 iconName="graph" 
 [items]="items"
+[extraDropdownOptions]="dropdownItems"
 addText="Create New List"
 ItemEntityName="Lists"
 CategoryEntityName="List Categories" 
@@ -17,6 +18,7 @@ resourceName = "List"
 (viewModeChangeEvent)="onViewModeChange($event)"
 (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
 (BeforeAddItemEvent)="onBeforeAddItemEvent($event)"
+(dropdownOptionClickEvent)="onDropdownOptionClick($event)"
 />
 <kendo-dialog
 title="Create New List"
@@ -31,17 +33,19 @@ title="Create New List"
     }
     @else {
         <div class="col-xs-12 col-sm-6 example-col">
-            <kendo-label text="Name">
-                <kendo-textbox  
-                    class="mt-10"
-                    placeholder="Enter List Name" 
-                    [(ngModel)]="listName">
-                </kendo-textbox>
-            </kendo-label>
-            <div class="mt-10">
+            <div class="margin-bottom-20">
+                <kendo-label text="Name">
+                    <kendo-textbox  
+                        class="margin-top-10"
+                        placeholder="Enter List Name" 
+                        [(ngModel)]="listName">
+                    </kendo-textbox>
+                </kendo-label>
+            </div>
+            <div class="margin-bottom-20">
                 <kendo-label text="Description">
                     <kendo-textarea
-                        class="mt-10"
+                        class="margin-top-10"
                         placeholder="Enter Description"
                         [rows]="3"
                         resizable="vertical"
@@ -49,10 +53,10 @@ title="Create New List"
                     ></kendo-textarea>
                 </kendo-label>
             </div>
-            <div class="mt-10">
+            <div class="margin-bottom-20">
                 <kendo-label text="Select an Entity">
                     <kendo-dropdownlist 
-                        class="mt-10"
+                        class="margin-top-10"
                         [data]="entityNames"
                         [filterable]="true"
                         (filterChange)="onFilterChange($event)"
