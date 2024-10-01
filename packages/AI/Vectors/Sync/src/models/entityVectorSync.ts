@@ -761,7 +761,8 @@ export class EntityVectorSyncer extends VectorBase {
     */
 
     const atdParams: ATDParams = {
-      ListID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',
+      //ListID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',
+      ListID: 'FEBE2325-4F7F-EF11-8473-002248C14EEC', /* Personalized ATD Persons */
       CurrentUser: super.CurrentUser,
       RecommendedEntityID: "83723AD2-6D70-EF11-BDFD-00224877C022",
       RecommendationID: "71BB905A-2275-EF11-BDFD-000D3AF6A893",

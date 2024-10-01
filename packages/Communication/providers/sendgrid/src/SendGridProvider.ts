@@ -14,6 +14,9 @@ export class SendGridProvider extends BaseCommunicationProvider {
         
         message.ProcessedHTMLBody = message.ProcessedHTMLBody.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
+        const date = new Date();
+        //fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailBodyTest${date.getUTCMilliseconds()}.html`, message.ProcessedHTMLBody);
+
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
         const msg: MailDataRequired = {
@@ -34,6 +37,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
             //not using await syntax here because we dont get a return value
             return sgMail.send(msg).then((result: [sgMail.ClientResponse, {}]) => {
                 if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
+                    console.log(`Email sent: ${result[0].statusCode}`);
                     return {
                         Message: message,
                         Success: true,
@@ -41,6 +45,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
                     };
                 }
                 else {
+                    LogError(`Error sending email:`, undefined, result);
                     return {
                         Message: message,
                         Success: false,
