@@ -88,7 +88,7 @@ export class ReportResolverExtended {
                    ON
                       cd.ConversationID = c.ID
                    WHERE
-                      cd.ID=${ConversationDetailID}`;
+                      cd.ID='${ConversationDetailID}'`;
 
       const result = await dataSource.query(sql);
       if (!result || result.length === 0) throw new Error('Unable to retrieve converation details');
