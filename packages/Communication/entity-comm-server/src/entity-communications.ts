@@ -346,7 +346,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
 
             //we have the info we need
             const recipient: MessageRecipient = {
-                To: 'monitoring.runme.0.all@previews.emailonacid.com',
+                To: 'linda@askskip.ai',
                 FullName: record.first_name,
                 ContextData: {
                     Entity: record,
@@ -423,7 +423,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         const rvEntityResult: RunViewResult<T> = await rv.RunView<T>({
           EntityName: entityName,
           ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
-          MaxRows: 1
+          MaxRows: 5
         }, currentUser);
     
         if(!rvEntityResult.Success) {
