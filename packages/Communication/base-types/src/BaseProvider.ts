@@ -128,6 +128,20 @@ export class MessageResult {
     public Error: string;
 }
 
+export type GetMessagesParams<T = Record<string, any>> = {
+    /**
+     * Optional, any provider-specific parameters that are needed to get messages
+     */
+    ContextData?: T;
+};
+
+export type GetMessagesResult<T = Record<string, any>> = {
+    /**
+     * If populated, holds provider-specific data that is returned from the provider
+     */
+    SourceData?: T[];
+};
+
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
  */
@@ -136,6 +150,11 @@ export abstract class BaseCommunicationProvider {
      * 
      */
     public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> 
+
+    /**
+     * Fetches messages using the provider 
+     */
+    public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>
 }
 
 @RegisterClass(BaseEntity, 'Communication Providers') // sub-class to extend the properties of the base entity

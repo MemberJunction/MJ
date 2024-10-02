@@ -3,6 +3,7 @@ import * as Config from './config';
 import msal from '@azure/msal-node';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
+import { LogError } from '@memberjunction/core';
 
 /**
  * Configuration object to be passed to MSAL instance on creation.
@@ -72,7 +73,7 @@ export async function CallGraphApi<T>(endpoint: string): Promise<T | null> {
         return response;
     } 
     catch (error) {
-        console.log(`Error calling api: ${error}`);
+        LogError(`Error calling api:`, undefined, error);
         return null;
     }
 };
