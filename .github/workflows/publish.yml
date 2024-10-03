@@ -53,6 +53,19 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
+      - name: Preview version to be published and validate against PR title
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          npx beachball bump --no-commit
+          NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          PR_TITLE_CONTAINS_VERSION=$(echo $PR_TITLE | grep $NEXT_VERSION || true)
+          if [ -z "$PR_TITLE_CONTAINS_VERSION" ]; then
+            echo "::error::The PR title must contain the version number $NEXT_VERSION to publish"
+            exit 1
+          fi
+
       - name: Publish changes to npm main packages
         if: ${{ env.BRANCH == 'main' }}
         run: npm run release -- --branch origin/main --token "$NPM_TOKEN"
