@@ -128,6 +128,11 @@ const returnType = {
     userExplanationMessage: string
 };
 
+In MemberJunction, we have a concept called "Entities" and these are metadata constructs that wrap SQL tables and views. The entity that we are currently 
+building a filter for is called "${entityInfo.Name}" and has an ID of "${entityInfo.ID}" 
+
+You won't be using this Entity name or ID in your SQL, unless you need to use it for List filtering (more on that below).
+
 The view that the user is querying is called ${entityInfo.BaseView} and has these fields:
 ${entityInfo.Fields.map(f => {
     let ret: string = `${f.Name} (${f.Type})`;
@@ -200,6 +205,8 @@ ID IN (SELECT ID FROM ${listsEntity.SchemaName}.vwListDetails INNER JOIN ${lists
 
 In this example we're assuming the user has asked us to filter to include only records that are part of the list named 'My List Name'. You can use any fields at the detail level or header level to filter the records and of course 
 combine this type of list-oriented sub-query with other filters as appropriate to satisfy the user's request.
+
+Remember to use the Entity ID in filtering the ${listsEntity}.vwListDetails view as it is a unique identifier that will properly filter the records in the list to only the entity that the user is querying.
 </IMPORTANT - LISTS FEATURE>
 `
 
