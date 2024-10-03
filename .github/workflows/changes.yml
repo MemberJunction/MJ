@@ -46,6 +46,7 @@ jobs:
           git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
               echo "::error file=$file::Migration filename doesn't match the next minor version ($EXPECTED_STRING)"
+              echo "::error file=$file::Migration filename '$file' doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
               exit 1
             fi
           done
