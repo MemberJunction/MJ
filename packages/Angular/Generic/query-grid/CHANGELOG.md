@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ng-query-grid
 
-This log was last generated on Mon, 30 Sep 2024 15:55:48 GMT and should not be manually modified.
+This log was last generated on Thu, 03 Oct 2024 23:03:31 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.0
+
+Thu, 03 Oct 2024 23:03:31 GMT
+
+### Minor changes
+
+- Bump minor version (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/core-entities to v2.7.0
+- Bump @memberjunction/global to v2.7.0
+- Bump @memberjunction/core to v2.7.0
+- Bump @memberjunction/ng-container-directives to v2.7.0
+- Bump @memberjunction/ng-compare-records to v2.7.0
+- Bump @memberjunction/ng-shared to v2.7.0
 
 ## 2.6.1
 

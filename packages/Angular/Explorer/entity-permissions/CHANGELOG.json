@@ -2,6 +2,51 @@
   "name": "@memberjunction/ng-entity-permissions",
   "entries": [
     {
+      "date": "Thu, 03 Oct 2024 23:03:31 GMT",
+      "version": "2.7.0",
+      "tag": "@memberjunction/ng-entity-permissions_v2.7.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-entity-permissions",
+            "commit": "4def320808e79d192ce4ec99d6f588abfe8441e1",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-permissions",
+            "comment": "Bump @memberjunction/core-entities to v2.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-permissions",
+            "comment": "Bump @memberjunction/global to v2.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-permissions",
+            "comment": "Bump @memberjunction/core to v2.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-permissions",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.7.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-permissions",
+            "comment": "Bump @memberjunction/ng-shared to v2.7.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 30 Sep 2024 15:55:48 GMT",
       "version": "2.6.1",
       "tag": "@memberjunction/ng-entity-permissions_v2.6.1",
