@@ -68,7 +68,10 @@ export class MSGraphProvider extends BaseCommunicationProvider{
     public async GetMessages(params: GetMessagesParams<GetMessagesContextDataParams>): Promise<GetMessagesResult> {
         const user: User = await this.GetServiceAccount();
         if(!user){
-            return {};
+            return {
+                SourceData: [],
+                Messages: []
+            };
         }
 
         let filter: string = "(isRead eq false) and (startswith(subject, '[support]') or startswith(subject, 'RE: [support]'))";
@@ -94,7 +97,8 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
         const messages: Message[] = response.value;
         const messageResults: GetMessagesResult = {
-            SourceData: messages
+            SourceData: messages,
+            Messages: []
         };
 
         return messageResults;

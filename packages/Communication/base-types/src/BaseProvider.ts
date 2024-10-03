@@ -137,10 +137,39 @@ export type GetMessagesParams<T = Record<string, any>> = {
 
 export type GetMessagesResult<T = Record<string, any>> = {
     /**
-     * If populated, holds provider-specific data that is returned from the provider
+     * Holds the orignal, unmodified messages that were fetched from the provider
      */
     SourceData?: T[];
+    /**
+     * Holds the messages that were fetched and converted to a standard message format
+     */
+    Messages: GetMessagesResultMessage[];
 };
+
+export type GetMessagesResultMessage = {
+    /**
+     * The owner of the mailbox from which the message is sent
+     */
+    From: string,
+    /**
+     * If the original message specifies a recipient in the replyTo property, 
+     * per Internet Message Format (RFC 2822), send the reply to the recipients in replyTo 
+     * and not the recipient in the from property.
+     */
+    ReplyTo: string[],
+    /**
+     * The subject of the message.
+     */
+    Subject: string,
+    /**
+     * The body of the message. It can be in HTML or text format.
+     */
+    Body: string,
+    /**
+     * The ID of the message provided by the provider
+     */
+    ExternalSystemRecordID: string,
+}
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
