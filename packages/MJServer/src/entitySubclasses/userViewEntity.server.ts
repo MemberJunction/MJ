@@ -115,6 +115,8 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
     public GenerateSysPrompt(entityInfo: EntityInfo): string {
         const processedViews: string[] = [entityInfo.BaseView];
         const md = new Metadata();
+        const listsEntity = md.EntityByName("Lists");
+        const listDetailsEntity = md.EntityByName("List Details");
         const gptSysPrompt: string = `You are an expert in SQL and Microsoft SQL Server.
 You will be provided a user prompt representing how they want to filter the data.
 You may *NOT* use JOINS, only sub-queries for related tables. 
@@ -179,7 +181,27 @@ ${
         else
             return '';
     }).join('\n')
-}`
+}
+
+<IMPORTANT - LISTS FEATURE> 
+Finally, in addition to the above related views, a user may talk about "Lists" in their request. A List is a static set of records modeled in our database with the ${listsEntity.SchemaName}.vwLists view and 
+the ${listsEntity.SchemaName}.vwListDetails view. ${listsEntity.SchemaName}.vwLists contains the list "header" information with these columns:
+${listsEntity.Fields.map(f => {
+    return f.Name + ' (' + f.SQLFullType + ')';
+}).join(', ')}
+The vwListDetails view contains the list "detail" information with these columns which is basically the records that are part of the list. ${listsEntity.SchemaName}.vwListDetails contains these columns:
+${listDetailsEntity.Fields.map(f => {
+    return f.Name + ' (' + f.SQLFullType + ')';
+}).join(', ')}.
+
+If a user is asking to use a list in creating a view, you need to use a sub-query along these lines:
+
+ID IN (SELECT ID FROM ${listsEntity.SchemaName}.vwListDetails INNER JOIN ${listsEntity.SchemaName}.vwLists ON vwListDetails.ListID = vwLists.ID WHERE vwLists.Name = 'My List Name')
+
+In this example we're assuming the user has asked us to filter to include only records that are part of the list named 'My List Name'. You can use any fields at the detail level or header level to filter the records and of course 
+combine this type of list-oriented sub-query with other filters as appropriate to satisfy the user's request.
+</IMPORTANT - LISTS FEATURE>
+`
 
         return gptSysPrompt + (processedViews.length > 1 /*we always have 1 from the entity base view*/ ? relationships : '') + `
         **** REMEMBER **** I am a BOT, do not return anything other than JSON to me or I will choke on your response!`;
