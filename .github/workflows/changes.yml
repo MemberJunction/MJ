@@ -61,6 +61,8 @@ jobs:
 
       - name: Check for minor version change
         run: |
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }}
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$'
           MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$')
           echo $MIGRATION_FILES
           if [ -n "$MIGRATION_FILES" ]; then
