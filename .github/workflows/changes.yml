@@ -52,7 +52,7 @@ jobs:
 
       - name: Check migration content
         run: |
-          git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if grep -qP "__mj[^_]" "$file"; then
               echo "::error file=$file::Migration script contains a reference to a hard-coded `__mj` schema"
               exit 1
@@ -61,8 +61,9 @@ jobs:
 
       - name: Check for minor version change
         run: |
-          MIGRATION_FILES=$(git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$')
+          MIGRATION_FILES=$(git diff --name-only  ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$')
           if [ -n "$MIGRATION_FILES" ]; then
+            echo $MIGRATION_FILES
             MINOR_CHANGE=$(find change -name '*.json' -exec jq -e 'select(.type == "minor")' {} + 2>/dev/null)
             if [ -z "$MINOR_CHANGE" ]; then
               echo "::error::Migration files were added, but no minor version change file was found in the `change/` directory"
