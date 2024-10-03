@@ -53,7 +53,7 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
-      - name: Preview version to be published and validate against PR title
+      - name: Preview version to be published
         if: ${{ env.BRANCH == 'main' }}
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -66,6 +66,7 @@ jobs:
           #   echo "::error::The PR title must contain the version number $NEXT_VERSION to publish"
           #   exit 1
           # fi
+          git reset --hard HEAD
 
       - name: Publish changes to npm main packages
         if: ${{ env.BRANCH == 'main' }}
