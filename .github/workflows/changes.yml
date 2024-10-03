@@ -1,4 +1,4 @@
-name: Ensure change files are included in PR
+name: Ensure change files and migrations are valid
 
 on:
   pull_request:
@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    name: Check for change files
+  changes_and_migrations:
+    name: Check change files and migrations
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -28,3 +28,32 @@ jobs:
 
       - name: Run check script
         run: npx beachball check --verbose --branch ${{ github.event.pull_request.base.ref }}
+
+      - name: Get current version
+        id: get_version
+        run: |
+          CURRENT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          echo "Current version: $CURRENT_VERSION"
+          echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check migration filenames
+        run: |
+          CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
+          EXPECTED_STRING="__v$NEXT_MINOR_VERSION"
+
+          git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+            if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
+              echo "::error file=$file::Migration filename doesn't match the next minor version ($EXPECTED_STRING)"
+              exit 1
+            fi
+          done
+      - name: Check migration content
+        run: |
+          git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+            if grep -qP "__mj[^_]" "$file"; then
+              echo "::error file=$file::Migration script contains a reference to a hard-coded __mj schema"
+              exit 1
+            fi
+          done
