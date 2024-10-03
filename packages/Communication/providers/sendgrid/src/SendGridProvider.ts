@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, Message, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
@@ -48,6 +48,10 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 Error: error.message
             };
         }
+    }
+
+    public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
+        throw new Error("SendGridProvider does not support fetching messages");
     }
 }
 
