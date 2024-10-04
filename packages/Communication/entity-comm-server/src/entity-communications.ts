@@ -294,6 +294,8 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
                 throw new Error(`Bad test email for ${record.first_name}`);
             }
 
+            const firstName: string = this.capitalizeFirstLetter(record.first_name);
+
             const courseFilter: string = `
             ID IN 
             (
@@ -344,10 +346,11 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
 
             LogStatus(`Found ${courseCopy.CourseParts.length} course parts for ${record.first_name}'s best course ${bestCourse.Name}, emailing ${record.TestEmail}`);
 
+            record.name = firstName;
             //we have the info we need
             const recipient: MessageRecipient = {
-                To: 'linda@askskip.ai',
-                FullName: record.first_name,
+                To: 'linda.tomczynski@memberjunction.com',
+                FullName: firstName,
                 ContextData: {
                     Entity: record,
                     Person: record,
@@ -440,6 +443,10 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         }, currentUser);
 
         return rvResult.Results;
+    }
+
+    private capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
     }
 }
 
