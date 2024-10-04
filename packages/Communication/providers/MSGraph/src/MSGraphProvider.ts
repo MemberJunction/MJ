@@ -1,19 +1,18 @@
-import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { User, Message } from "@microsoft/microsoft-graph-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError } from "@memberjunction/core";
-import { GetMessagesContextDataParams, MSGraphGetResponse } from "./generic/models";
 import * as Auth from "./auth";
 import * as Config from "./config";
 
 /**
  * Implementation of the MS Graph provider for sending and receiving messages
  */
-@RegisterClass(BaseCommunicationProvider, 'SendGrid')
+@RegisterClass(BaseCommunicationProvider, 'Microsoft Graph')
 export class MSGraphProvider extends BaseCommunicationProvider{
 
-    ServiceAccount: User = null;
+    ServiceAccount: User | null = null;
     
     constructor() {
         super();
@@ -60,13 +59,13 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             return {
                 Message: message,
                 Success: false,
-                Error: ex.message
+                Error: 'Error sending message'
             };
         }
     }
 
-    public async GetMessages(params: GetMessagesParams<GetMessagesContextDataParams>): Promise<GetMessagesResult> {
-        const user: User = await this.GetServiceAccount();
+    public async GetMessages(params: Record<string, any>): Promise<Record<string, any>> {
+        const user: User | null = await this.GetServiceAccount();
         if(!user){
             return {
                 SourceData: [],
@@ -87,12 +86,12 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
         const messagesPath: string = `${Auth.ApiConfig.uri}/${user.id}/messages`;
         const Client: Client = Auth.GraphClient;
-        const response: MSGraphGetResponse<Message[]> | null = await Client.api(messagesPath)
+        const response: Record<string, any> | null = await Client.api(messagesPath)
         .filter(filter).top(top).get();
 
         if(!response){
             console.log('Error: could not get messages');
-            return;
+            return {};
         }
 
         const messages: Message[] = response.value;
@@ -104,12 +103,14 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         return messageResults;
     }
 
-    protected async GetServiceAccount(): Promise<User | null> {
+    protected async GetServiceAccount(email?: string): Promise<User | null> {
         if(this.ServiceAccount){
             return this.ServiceAccount;
         }
 
-        const path: string = `${Auth.ApiConfig.uri}/${Config.AZURE_ACCOUNT_EMAIL}`;
+        let accountEmail: string = email || Config.AZURE_ACCOUNT_EMAIL;
+
+        const path: string = `${Auth.ApiConfig.uri}/${accountEmail}`;
         const user: User | null = await Auth.CallGraphApi<User>(path)
         if(!user){
             LogError('Error: could not get user info');
