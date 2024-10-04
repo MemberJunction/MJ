@@ -24,7 +24,12 @@ export class SendGridProvider extends BaseCommunicationProvider {
             from: message.From,
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
-            html: message.ProcessedHTMLBody
+            html: message.ProcessedHTMLBody,
+            trackingSettings: {
+                subscriptionTracking: {
+                    enable: false
+                }
+            }
         };
 
         if(message.SendAt){
