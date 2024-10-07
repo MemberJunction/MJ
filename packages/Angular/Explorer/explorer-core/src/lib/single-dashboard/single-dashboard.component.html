@@ -12,9 +12,11 @@
         <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
         <kendo-button (click)="saveDashboardName()">
           <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
+          Save
         </kendo-button>
         <kendo-button (click)="cancelNameChange()" >
           <span class="k-icon k-i-cancel"></span>
+          Cancel
         </kendo-button>
       </div>
       <ng-template #dashboard_name_header>
