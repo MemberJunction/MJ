@@ -69,8 +69,7 @@ export class SingleDashboardComponent implements OnInit {
       let uiConfig: any = {items:[]};
       this.dashboardEntity = await md.GetEntityObject<DashboardEntity>('Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
-        const dashboardID = this.ResourceData.ResourceRecordID.startsWith('ID|') ? this.ResourceData.ResourceRecordID.slice(3) : this.ResourceData.ResourceRecordID;
-        await this.dashboardEntity.Load(dashboardID);
+        await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // now we have loaded and we need to get the UIConfigDetails
         const raw = this.dashboardEntity.UIConfigDetails;
         if (raw) {
@@ -211,7 +210,7 @@ export class SingleDashboardComponent implements OnInit {
       const configJSON = JSON.stringify(configData);
       this.dashboardEntity.UIConfigDetails = configJSON;
       const result = await this.dashboardEntity.Save();
-      this.dashboardSaved.emit(this.dashboardEntity);
+      //this.dashboardSaved.emit(this.dashboardEntity); // We dont wait to raise the event that causes the navigation component to modify the URL. Uncommenting this will cause save operation to fail so would have to rewrite saves in that case. 
       return result;
     }
     else  
