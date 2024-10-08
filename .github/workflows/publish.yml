@@ -36,6 +36,33 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
+      - name: Determine next expected version
+        id: version_check
+        run: |
+          CURRENT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
+          NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
+          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
+          if [ -n "$NEW_MIGRATION_FILES" ]; then
+            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Preview version to be published
+        if: ${{ env.BRANCH == 'main' }}
+        run: |
+          EXPECTED_NEXT_VERSION="${{ steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
+          npx beachball bump --no-commit
+          NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          echo "::notice::Version to be published: $NEXT_VERSION"
+          if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
+            echo "::error::The version to be published ($NEXT_VERSION) does not match the expected version ($EXPECTED_NEXT_VERSION)"
+            exit 1
+          fi
+          git reset --hard HEAD
+
       - name: Install dependencies
         run: npm ci
 
@@ -52,21 +79,6 @@ jobs:
           git remote set-url origin "https://$REPO_PAT@github.com/MemberJunction/MJ"
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
-
-      - name: Preview version to be published
-        if: ${{ env.BRANCH == 'main' }}
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          npx beachball bump --no-commit
-          NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
-          echo "::notice::Version to be published: $NEXT_VERSION"
-          # PR_TITLE_CONTAINS_VERSION=$(echo $PR_TITLE | grep $NEXT_VERSION || true)
-          # if [ -z "$PR_TITLE_CONTAINS_VERSION" ]; then
-          #   echo "::error::The PR title must contain the version number $NEXT_VERSION to publish"
-          #   exit 1
-          # fi
-          git reset --hard HEAD
 
       - name: Publish changes to npm main packages
         if: ${{ env.BRANCH == 'main' }}
