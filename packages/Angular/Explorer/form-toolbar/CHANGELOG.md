@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
-This log was last generated on Thu, 03 Oct 2024 23:03:31 GMT and should not be manually modified.
+This log was last generated on Tue, 08 Oct 2024 22:16:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.1
+
+Tue, 08 Oct 2024 22:16:58 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.7.1
+- Bump @memberjunction/core to v2.7.1
+- Bump @memberjunction/ng-shared to v2.7.1
+- Bump @memberjunction/ng-base-forms to v2.7.1
+- Bump @memberjunction/ng-ask-skip to v2.7.1
+- Bump @memberjunction/ng-record-changes to v2.7.1
+- Bump @memberjunction/ng-container-directives to v2.7.1
 
 ## 2.7.0
 

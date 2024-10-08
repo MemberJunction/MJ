@@ -2,6 +2,51 @@
   "name": "@memberjunction/ng-simple-record-list",
   "entries": [
     {
+      "date": "Tue, 08 Oct 2024 22:16:58 GMT",
+      "version": "2.7.1",
+      "tag": "@memberjunction/ng-simple-record-list_v2.7.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/core-entities to v2.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/global to v2.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/core to v2.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-shared to v2.7.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.7.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 03 Oct 2024 23:03:31 GMT",
       "version": "2.7.0",
       "tag": "@memberjunction/ng-simple-record-list_v2.7.0",

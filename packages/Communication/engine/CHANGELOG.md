@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/communication-engine
 
-This log was last generated on Thu, 03 Oct 2024 23:03:31 GMT and should not be manually modified.
+This log was last generated on Tue, 08 Oct 2024 22:16:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.1
+
+Tue, 08 Oct 2024 22:16:58 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.7.1
+- Bump @memberjunction/core to v2.7.1
+- Bump @memberjunction/templates to v2.7.1
+- Bump @memberjunction/core-entities to v2.7.1
+- Bump @memberjunction/communication-types to v2.7.1
 
 ## 2.7.0
 
