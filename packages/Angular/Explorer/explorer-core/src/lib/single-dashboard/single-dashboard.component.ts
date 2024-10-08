@@ -210,7 +210,7 @@ export class SingleDashboardComponent implements OnInit {
       const configJSON = JSON.stringify(configData);
       this.dashboardEntity.UIConfigDetails = configJSON;
       const result = await this.dashboardEntity.Save();
-      //this.dashboardSaved.emit(this.dashboardEntity); // We dont wait to raise the event that causes the navigation component to modify the URL. Uncommenting this will cause save operation to fail so would have to rewrite saves in that case. 
+      
       return result;
     }
     else  
