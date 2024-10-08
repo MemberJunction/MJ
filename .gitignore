@@ -116,3 +116,4 @@ packages/MJAPI/.env-remote
 mj.config.js
 mj.config.ts
 mj.config.cjs
+/test-vectorization/htmlTexts

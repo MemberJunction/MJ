@@ -288,80 +288,87 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             course.CourseParts = [];
         }
 
+        console.log(`Found ${records.length} records for list ${params.ListID}`);
+        const chunkSize = 100;
+        const ListToProcess = records;
         const startTime: Date = new Date();
-        const recipients: MessageRecipient[] = await Promise.all(records.map(async (record: Record<string, any>, index: number) => {
-            if(record.TestEmail !== "devtest@bluecypress.io"){
-                throw new Error(`Bad test email for ${record.first_name}`);
-            }
+        const recipients: MessageRecipient[] = [];
+        for(let i = 0; i < ListToProcess.length; i += chunkSize){
+            console.log(`Processing chunk ${i} to ${i + chunkSize} out of ${ListToProcess.length}`);
+            const chunk = ListToProcess.slice(i, i + chunkSize);
+            await Promise.all(chunk.map(async (record: Record<string, any>, index: number) => {
 
-            const firstName: string = this.capitalizeFirstLetter(record.first_name);
-
-            const courseFilter: string = `
-            ID IN 
-            (
-                Select TOP 1 RecommendedEntityRecordID
-                FROM __mj.vwRecommendationItems
-                WHERE RecommendedEntityID = 'E08DE4C9-6D70-EF11-BDFD-00224877C022'
-                AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
-				AND DestinationEntityRecordID = '${record.ID}'
-                ORDER BY MatchProbability DESC
-            )`;
-
-            const rvCourseResults = await rv.RunView({
-                EntityName: "Courses",
-                ExtraFilter: courseFilter
-            }, params.CurrentUser);
-
-            let bestCourse: Record<string, any>;
-            if(rvCourseResults.Success && rvCourseResults.Results.length > 0){
-                bestCourse = rvCourseResults.Results[0];
-            }
-            else{
-                LogStatus(`No best course found for ${record.first_name} (${record.ID}), using default course`);
-                bestCourse = courses[0];
-            }
-            
-            const filter: string = `
-            ID IN 
-            (
-                Select RecommendedEntityRecordID
-                FROM __mj.vwRecommendationItems
-                WHERE RecommendedEntityID = '83723AD2-6D70-EF11-BDFD-00224877C022'
-                AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
-                AND DestinationEntityRecordID = '${record.ID}'
-            )
-            AND CourseID = '${bestCourse.ID}'
-            `;
-            const rvCoursePartResults = await rv.RunView({
-                EntityName: "Course Parts",
-                ExtraFilter: filter
-            }, params.CurrentUser);
-
-            let courseCopy = structuredClone(bestCourse);
-            courseCopy.CourseParts = [];
-            courseCopy.CourseParts = rvCoursePartResults.Results;
-            const courseCopies = structuredClone(courses);
-            const courseParts = rvCoursePartResults.Results;
-
-
-            LogStatus(`Found ${courseCopy.CourseParts.length} course parts for ${record.first_name}'s best course ${bestCourse.Name}, emailing ${record.TestEmail}`);
-
-            record.name = firstName;
-            //we have the info we need
-            const recipient: MessageRecipient = {
-                To: 'linda.tomczynski@memberjunction.com',
-                FullName: firstName,
-                ContextData: {
-                    Entity: record,
-                    Person: record,
-                    Courses: courseCopies,
-                    CourseParts: courseParts,
-                    BestCourse: courseCopy
+                const firstName: string = this.capitalizeFirstLetter(record.first_name);
+    
+                const courseFilter: string = `
+                ID IN 
+                (
+                    Select TOP 1 RecommendedEntityRecordID
+                    FROM __mj.vwRecommendationItems
+                    WHERE RecommendedEntityID = 'E08DE4C9-6D70-EF11-BDFD-00224877C022'
+                    AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
+                    AND DestinationEntityRecordID = '${record.ID}'
+                    ORDER BY MatchProbability DESC
+                )`;
+    
+                const rvCourseResults = await rv.RunView({
+                    EntityName: "Courses",
+                    ExtraFilter: courseFilter
+                }, params.CurrentUser);
+    
+                let bestCourse: Record<string, any>;
+                if(rvCourseResults.Success && rvCourseResults.Results.length > 0){
+                    bestCourse = rvCourseResults.Results[0];
                 }
-            };
-
-            return recipient;
-        }));
+                else{
+                    LogStatus(`No best course found for ${record.first_name} (${record.ID}), using default course`);
+                    bestCourse = courses[0];
+                }
+                
+                const filter: string = `
+                ID IN 
+                (
+                    Select RecommendedEntityRecordID
+                    FROM __mj.vwRecommendationItems
+                    WHERE RecommendedEntityID = '83723AD2-6D70-EF11-BDFD-00224877C022'
+                    AND DestinationEntityID = '88723AD2-6D70-EF11-BDFD-00224877C022'
+                    AND DestinationEntityRecordID = '${record.ID}'
+                )
+                AND CourseID = '${bestCourse.ID}'
+                `;
+                const rvCoursePartResults = await rv.RunView({
+                    EntityName: "Course Parts",
+                    ExtraFilter: filter
+                }, params.CurrentUser);
+    
+                let courseCopy = structuredClone(bestCourse);
+                courseCopy.CourseParts = [];
+                courseCopy.CourseParts = rvCoursePartResults.Results;
+                const courseCopies = structuredClone(courses);
+                const courseParts = rvCoursePartResults.Results;
+    
+    
+                //LogStatus(`Found ${courseCopy.CourseParts.length} course parts for ${record.first_name}'s best course ${bestCourse.Name}, emailing ${record.email}`);
+    
+                record.first_name = firstName;
+                //we have the info we need
+                const recipient: MessageRecipient = {
+                    //To: record.email,
+                    To: record.email,
+                    FullName: firstName,
+                    ContextData: {
+                        Entity: record,
+                        Person: record,
+                        Courses: courseCopies,
+                        CourseParts: courseParts,
+                        BestCourse: courseCopy
+                    }
+                };
+    
+                recipients.push(recipient);
+                //return recipient;
+            }));
+        }
 
         const endTime: Date = new Date();
         const timeEslapsed: number = (endTime.getTime() - startTime.getTime()) / 1000;
@@ -426,7 +433,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         const rvEntityResult: RunViewResult<T> = await rv.RunView<T>({
           EntityName: entityName,
           ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
-          MaxRows: 5
+          IgnoreMaxRows: true
         }, currentUser);
     
         if(!rvEntityResult.Success) {
@@ -445,8 +452,10 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         return rvResult.Results;
     }
 
-    private capitalizeFirstLetter(string) {
-        return string.charAt(0).toUpperCase() + string.slice(1);
+    private capitalizeFirstLetter(text: string): string {
+        const firstLetter: string = text.charAt(0).toUpperCase();
+        const rest: string = text.slice(1).toLowerCase();  
+        return  firstLetter + rest;
     }
 }
 

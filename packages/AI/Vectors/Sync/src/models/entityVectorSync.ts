@@ -730,7 +730,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, super.CurrentUser);
 
     const msg: Message = new Message();
-    msg.From = "bc.test@e-mail.td.org"
+    msg.From = "donotreply@e-mail.td.org";
 
     const sendGrid = CommunicationEngineBase.Instance.Providers.find(p => p.Name === "SendGrid")
     if (!sendGrid)
@@ -744,9 +744,15 @@ export class EntityVectorSyncer extends VectorBase {
     const bodyTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "B4A2FCD1-7274-EF11-BDFD-000D3AF6A893");
     const subjectTemplate: TemplateEntityExtended = TemplateEngineServer.Instance.Templates.find(t => t.ID === "6005290C-8674-EF11-BDFD-000D3AF6A893");
 
+    const sendAt: number = 1728392400; //real value
+    //const sendAt: number = 1728353760; // test value
+
+    const date = new Date(0);
+    date.setUTCSeconds(sendAt);
     msg.MessageType = email;
     msg.HTMLBodyTemplate = bodyTemplate;
     msg.SubjectTemplate = subjectTemplate;
+    msg.SendAt = date;
     
     /*
     const commParams: EntityCommunicationParams = {
@@ -762,7 +768,7 @@ export class EntityVectorSyncer extends VectorBase {
 
     const atdParams: ATDParams = {
       //ListID: '4C04EEF4-7970-EF11-BDFD-00224879D6C4',
-      ListID: 'FEBE2325-4F7F-EF11-8473-002248C14EEC', /* Personalized ATD Persons */
+      ListID: '2A0EDA6F-0985-EF11-8473-002248C14EEC', /* Personalized ATD Persons */
       CurrentUser: super.CurrentUser,
       RecommendedEntityID: "83723AD2-6D70-EF11-BDFD-00224877C022",
       RecommendationID: "71BB905A-2275-EF11-BDFD-000D3AF6A893",

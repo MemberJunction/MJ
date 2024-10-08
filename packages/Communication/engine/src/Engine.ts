@@ -53,6 +53,21 @@ export class CommunicationEngine extends CommunicationEngineBase {
             throw new Error(`Failed to start communication run.`);
         }
 
+        const results = [];
+        const chunkSize = 100;
+        for(let i = 0; i < recipients.length; i += chunkSize){
+            const chunk = recipients.slice(i, i + chunkSize);
+            console.log(`Processing chunk ${i} to ${i + chunkSize} out of ${recipients.length}`);
+            const promises = await Promise.all(chunk.map(async (recipient) => {
+                const messageCopy = new Message(message);
+                messageCopy.To = recipient.To;
+                messageCopy.ContextData = recipient.ContextData;
+                const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly);
+                results.push(result);
+            }));
+        }
+
+        /*
         const results: MessageResult[] = await Promise.all(recipients.map(async (r) => {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
@@ -60,6 +75,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
             const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly);
             return result;
         }));
+        */
 
         if (!await this.EndRun(run)){
             throw new Error(`Failed to end communication run.`);

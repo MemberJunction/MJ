@@ -1,6 +1,6 @@
 import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
-import sgMail, { MailDataRequired } from '@sendgrid/mail';
+import sgMail, { MailDataRequired,  } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
 import fs from 'fs';
 import { LogError, LogStatus } from "@memberjunction/core";
@@ -17,11 +17,15 @@ export class SendGridProvider extends BaseCommunicationProvider {
         const date = new Date();
         fs.writeFileSync(`C:/Development/MemberJunction/test-vectorization/htmlTexts/SampleEmailBodyTest${date.getUTCMilliseconds()}.html`, message.ProcessedHTMLBody);
 
+        const from: string = message.From
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
         const msg: MailDataRequired = {
             to: message.To,
-            from: message.From,
+            from: {
+                email: from,
+                name: "ATD Education"
+            },
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
             html: message.ProcessedHTMLBody,
@@ -33,6 +37,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
         };
 
         if(message.SendAt){
+            //console.log("SendAt", message.SendAt.toDateString());
             const time = message.SendAt.getTime();
             const unitTime = Math.floor(time/1000);
             msg.sendAt = unitTime;
@@ -42,7 +47,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
             //not using await syntax here because we dont get a return value
             return sgMail.send(msg).then((result: [sgMail.ClientResponse, {}]) => {
                 if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
-                    console.log(`Email sent: ${result[0].statusCode}`);
+                    console.log(`Email sent to ${msg.to}: ${result[0].statusCode}`);
                     return {
                         Message: message,
                         Success: true,
@@ -50,7 +55,8 @@ export class SendGridProvider extends BaseCommunicationProvider {
                     };
                 }
                 else {
-                    LogError(`Error sending email:`, undefined, result);
+                    LogError(`Error sending email to ${msg.to}:`, undefined, result);
+                    console.log(result[0].body);
                     return {
                         Message: message,
                         Success: false,
@@ -58,7 +64,8 @@ export class SendGridProvider extends BaseCommunicationProvider {
                     };
                 }
             }).catch((error: any) => {
-                LogError(`Error sending email:`, undefined, error);
+                LogError(`Error sending email to ${msg.to}:`, undefined, error);
+                console.log("body?", error.response.body);
                 return {
                     Message: message,
                     Success: false,
