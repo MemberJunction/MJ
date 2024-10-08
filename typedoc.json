@@ -12,6 +12,8 @@
     "packages/GeneratedActions/",
     "packages/MJAPI/",
     "packages/MJExplorer/",
+    "packages/AngularElements/mj-angular-elements-demo/",
+    "packages/MJCodeGenAPI/",
     "**/*.spec.ts",
     "**/*.d.ts",
     "node_modules"

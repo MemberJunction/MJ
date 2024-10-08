@@ -15,6 +15,7 @@ import { RegisterClass } from '@memberjunction/global';
 @RegisterClass(BaseNavigationComponent, 'Dashboards')
 export class DashboardBrowserComponent extends BaseBrowserComponent {
   public extraDropdownOptions:  {text: string}[] = [
+    {text: 'Dashboard'},
     {text: 'View'}
   ];
 

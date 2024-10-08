@@ -189,7 +189,7 @@ ${
 }
 
 <IMPORTANT - LISTS FEATURE> 
-Finally, in addition to the above related views, a user may talk about "Lists" in their request. A List is a static set of records modeled in our database with the ${listsEntity.SchemaName}.vwLists view and 
+In addition to the above related views, a user may talk about "Lists" in their request. A List is a static set of records modeled in our database with the ${listsEntity.SchemaName}.vwLists view and 
 the ${listsEntity.SchemaName}.vwListDetails view. ${listsEntity.SchemaName}.vwLists contains the list "header" information with these columns:
 ${listsEntity.Fields.map(f => {
     return f.Name + ' (' + f.SQLFullType + ')';
@@ -201,13 +201,27 @@ ${listDetailsEntity.Fields.map(f => {
 
 If a user is asking to use a list in creating a view, you need to use a sub-query along these lines:
 
-ID IN (SELECT ID FROM ${listsEntity.SchemaName}.vwListDetails INNER JOIN ${listsEntity.SchemaName}.vwLists ON vwListDetails.ListID = vwLists.ID WHERE vwLists.Name = 'My List Name')
+ID IN (SELECT ID FROM ${listsEntity.SchemaName}.vwListDetails WHERE ListID='My List ID')
 
-In this example we're assuming the user has asked us to filter to include only records that are part of the list named 'My List Name'. You can use any fields at the detail level or header level to filter the records and of course 
-combine this type of list-oriented sub-query with other filters as appropriate to satisfy the user's request.
+In this example we're assuming the user has asked us to filter to include only records that are part of the list with the ID of 'My List ID'. In reality the prompt you will have will have a UUID/GUID type ID not a text string like this. 
+You can use any fields at the detail level filter the records and of course combine this type of list-oriented sub-query with other filters as appropriate to satisfy the user's request.
+
+It is also possible that a user will provide the name of the list they want to filter on. This isn't ideal as names can collide but if they do this use this style of query with a join to the vwLists view (the list "header") to filter on the name
+of the view or other header information if they want to filter on other list header attributes you can do this. Here is an example:
+
+ID IN (SELECT ld.ID FROM ${listsEntity.SchemaName}.vwListDetails ld INNER JOIN ${listsEntity.SchemaName}.vwLists l ON ld.ListID=l.ID WHERE l.Name='My List Name')
 
 Remember to use the Entity ID in filtering the ${listsEntity}.vwListDetails view as it is a unique identifier that will properly filter the records in the list to only the entity that the user is querying.
 </IMPORTANT - LISTS FEATURE>
+<IMPORTANT - OTHER VIEWS>
+The user might reference other "views" in their request. In the user's terminology a view is what we call a "User View" in MemberJunction system-speak. The idea is a user might ask for a filter that includes or excludes
+records from another view. Unlike Lists, which are STATIC sets of records, User Views are dynamic and can change based on the underlying data. So, what we need to do is use a sub-query that pulls in the SQL for the other view
+The user will be referring to the other view by name, so what you need to do when generating SQL for this scenario is to simply embed a sub-query along the lines of this example, updated of course in the context of the user's request and the rest of any filters you are building:
+    ID IN ({%UserView "ViewID"%}) -- this is for filtering the primary key using other User Views for this entity: "${entityInfo.Name}"
+    AccountID IN ({%UserView "ViewID"%}) -- this is an example where the foreign key relationship for the AccountID field in this entity (${entityInfo.Name}) links to another entity hypothetically called "Accounts" and we want to use an Accounts view for filtering in some way 
+By including this sub-query in your generated WHERE clause, it will give me what I need to dynamically replace the {%UserView "View Name"%} with the actual SQL for the view that the user is referring to. Since that actual SQL
+can change over time, I don't want to embed it directly here but rather have it templatized and each time it is run, I will pre-process the SQL to replace the template with the actual SQL for the view.
+</IMPORTANT - OTHER VIEWS>
 `
 
         return gptSysPrompt + (processedViews.length > 1 /*we always have 1 from the entity base view*/ ? relationships : '') + `

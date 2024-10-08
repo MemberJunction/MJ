@@ -141,6 +141,69 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     /**************************************************************************/
 
 
+    /**
+     * This method will check to see if the where clause for the view provided has any templating within it, and if it does
+     * will replace the templating with the appropriate run-time values. This is done recursively with depth-first traversal
+     * so that if there are nested templates, they will be replaced as well. We also maintain a stack to ensure that any
+     * possible circular references are caught and an error is thrown if that is the case.
+     * @param viewEntity 
+     * @param user 
+     */
+    protected async RenderViewWhereClause(viewEntity: UserViewEntityExtended, user: UserInfo, stack: string[] = []): Promise<string> {
+        try {
+            let sWhere = viewEntity.WhereClause;
+            if (sWhere && sWhere.length > 0) {
+                // check for the existence of one or more templated values in the where clause which will follow the nunjucks format of {%variable%}
+                const templateRegex = /{%([^%]+)%}/g;
+                const matches = sWhere.match(templateRegex);
+                if (matches) {
+                    for (const match of matches) {
+                        const variable = match.substring(2, match.length - 2); // remove the {% and %}
+
+                        // the variable has a name and a parameter value for example {%UserView "123456"%}
+                        // where UserView is the variable name and 123456 is the parameter value, in this case the View ID
+                        // we need to split the variable into its name and parameter value
+                        const parts = variable.split(' ');
+                        const variableName = parts[0];
+                        if (variableName.trim().toLowerCase() === 'userview') {
+                            let variableValue = parts.length > 1 ? parts[1] : null;
+                            // now strip the quotes from the variable value if they are there
+                            if (variableValue && variableValue.startsWith('"') && variableValue.endsWith('"'))
+                                variableValue = variableValue.substring(1, variableValue.length - 1);
+
+                            if (stack.includes(variable))
+                                throw new Error(`Circular reference detected in view where clause for variable ${variable}`);
+                            else
+                                stack.push(variable); // add to the stack for circular reference detection
+
+                            // variable values is the view ID of the view that we want to get its WHERE CLAUSE, so we need to get the view entity
+                            const innerViewEntity = await ViewInfo.GetViewEntity(variableValue, user);
+                            if (innerViewEntity) {
+                                // we have the inner view, so now call this function recursively to get the where clause for the inner view
+                                const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
+                                const innerSQL = `SELECT [${innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name}] FROM [${innerViewEntity.ViewEntityInfo.SchemaName}].[${innerViewEntity.ViewEntityInfo.BaseView}] WHERE (${innerWhere})`
+                                sWhere = sWhere.replace(match, innerSQL);
+                            }
+                            else
+                                throw new Error(`View ID ${variableValue} not found in metadata`);
+                        }
+                        else {
+                            // we don't know what this variable is, so throw an error
+                            throw new Error(`Unknown variable ${variableName} as part of template match ${match} in view where clause`);
+                        }
+                    }
+                }
+                else {
+                    // no matches, just a regular old SQL where clause, so we're done, do nothing here as the return process will be below
+                }
+            }
+            return sWhere;
+        }
+        catch (e) {
+            LogError(e);
+            throw (e)
+        }
+    }
 
     /**************************************************************************/
     // START ---- IRunViewProvider
@@ -211,7 +274,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
                 // The view may have a where clause that is part of the view definition. If so, we need to add it to the SQL
                 if (viewEntity?.WhereClause && viewEntity?.WhereClause.length > 0) {
-                    whereSQL = `(${viewEntity.WhereClause})`;
+                    const renderedWhere = await this.RenderViewWhereClause(viewEntity, contextUser);
+                    whereSQL = `(${renderedWhere})`;
                     bHasWhere = true;
                 }
 
