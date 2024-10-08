@@ -210,7 +210,7 @@ export class SingleDashboardComponent implements OnInit {
       const configJSON = JSON.stringify(configData);
       this.dashboardEntity.UIConfigDetails = configJSON;
       const result = await this.dashboardEntity.Save();
-      this.dashboardSaved.emit(this.dashboardEntity);
+      
       return result;
     }
     else  
