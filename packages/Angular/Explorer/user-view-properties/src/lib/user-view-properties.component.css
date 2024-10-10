@@ -71,6 +71,11 @@
   .smart-filter-prompt {
     margin-top: 15px;
   }
+
+  .smart-filter-button {
+    margin-right: 5px;
+    margin-bottom: 5px;
+  }
   
   .advanced-tab-details
   {

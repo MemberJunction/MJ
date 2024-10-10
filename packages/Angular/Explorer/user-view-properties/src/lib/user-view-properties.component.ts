@@ -1,17 +1,21 @@
 import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
+import { FormBuilder } from "@angular/forms";
+
 import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError } from "@memberjunction/core";
-import { DragEndEvent} from '@progress/kendo-angular-sortable';
-import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { ListEntity, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { ResourceData } from '@memberjunction/ng-shared';
+import { ResourceData, EventCodes, SharedService } from '@memberjunction/ng-shared';
+
+
+import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
-import { TextBoxComponent } from '@progress/kendo-angular-inputs';
-import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { FormBuilder } from "@angular/forms";
+import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
+
 
 @Component({
   selector: 'mj-user-view-properties-dialog',
@@ -47,11 +51,17 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     { Name: 'Down', Value: 'desc' }
   ];
 
+
+ 
+
+
   @ViewChild(WindowComponent) kendoWindow!: WindowComponent;
   @ViewChild(TabComponent) kendoTab!: TabComponent;
   @ViewChild('nameField') nameField!: TextBoxComponent;
+  @ViewChild('smartFilterTextArea') smartFilterTextArea!: TextAreaComponent;
   @ViewChild('dialogContainer') dialogContainer!: ElementRef;
   @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
+  @ViewChild('findRecordDialog') private findRecordDialog!: FindRecordDialogComponent;
 
 
   constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
@@ -60,12 +70,76 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   }
 
+
   onKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    const activeElement = document.activeElement as HTMLElement;
+
+    if (event.key === 'Enter' && activeElement.tagName !== 'TEXTAREA') {
       this.saveProperties();
     }
   }
 
+  public onFindRecordDialogClosed(event: any) {
+    if (this.findRecordDialog.SelectedRecord) {
+      // a record was selected, so insert the text into the smart filter prompt
+      const selectedRecord = this.findRecordDialog.SelectedRecord;
+      let text: string = '';
+      if (this.findRecordDialog.EntityName === 'User Views') {
+        const record = <UserViewEntityExtended>selectedRecord;
+        text = `View(Name: "${record.Name}", ID: "${record.ID}")`;
+      }
+      else if (this.findRecordDialog.EntityName === 'Lists') {
+        const record = <ListEntity>selectedRecord;
+        text = `List(Name: "${record.Name}", ID: "${record.ID}")`;
+      }
+      else {
+        const error = `Unknown entity name ${this.findRecordDialog.EntityName}`;
+        LogError(error);
+        throw new Error(error);
+      }
+
+      this.smartFilterPrompt_insertText(text);
+    }
+  }
+
+  public smartFilterPrompt_insertViewReference() {
+    this.showFindRecordDialog('User Views', ['ID', 'Name', 'Entity','UserName']);
+  }
+  public smartFilterPrompt_insertListReference() {
+    this.showFindRecordDialog('Lists', ['ID', 'Name', 'Entity', 'User']);
+  }
+
+  protected showFindRecordDialog(entityName: string, fields: string[] = []) {
+    const md = new Metadata();
+    const entity = md.EntityByName(entityName);
+    this.findRecordDialog.EntityName = entityName;
+    this.findRecordDialog.DisplayFields = entity.Fields.filter((f: EntityFieldInfo) => fields.includes(f.Name));
+    this.findRecordDialog.DialogVisible = true;
+  }
+
+  // Method to insert text at the current cursor position
+  public smartFilterPrompt_insertText(text: string) {
+    const textareaElement = this.smartFilterTextArea.input.nativeElement;
+    const cursorPosition = textareaElement.selectionStart;
+    const selectionEnd = textareaElement.selectionEnd;
+    const currentValue = this.record.SmartFilterPrompt ? this.record.SmartFilterPrompt : '';
+
+    // Insert the new text at the cursor position
+    this.record.SmartFilterPrompt = [
+      currentValue.slice(0, cursorPosition),
+      text,
+      currentValue.slice(selectionEnd)
+    ].join('');
+
+    // Update the value in the TextArea
+    textareaElement.value = this.record.SmartFilterPrompt;
+
+    // Set cursor position after the inserted text
+    const newCursorPosition = cursorPosition + text.length;
+    textareaElement.setSelectionRange(newCursorPosition, newCursorPosition);
+    textareaElement.focus();
+  }
+ 
   override GetTabTopPosition(): number {
     return 50; // for this dialog, we don't want to offset the tab position related to where it is on the page, this is relative to top of dialog
   }

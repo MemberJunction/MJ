@@ -1,0 +1,19 @@
+@if (DialogVisible) {
+    <kendo-dialog
+        [width]="DialogWidth"
+        [height]="DialogHeight"
+        [title]="DialogTitle"        
+        (close)="OnCancel()"
+    >
+        <mj-find-record
+            [EntityName]="EntityName"
+            [DisplayFields]="DisplayFields"
+            (OnRecordSelected)="BubbleOnRecordSelected($event)"
+        >
+        </mj-find-record>
+        <kendo-dialog-actions>
+            <button kendoButton (click)="OnOK()" themeColor="primary">OK</button>
+            <button kendoButton (click)="OnCancel()">Cancel</button>
+        </kendo-dialog-actions>    
+    </kendo-dialog>    
+}

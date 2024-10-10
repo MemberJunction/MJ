@@ -79,11 +79,25 @@
                                 <kendo-switch [(ngModel)]="record.SmartFilterEnabled"></kendo-switch>
                             </div>
                             <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
+                                <mj-find-record-dialog #findRecordDialog
+                                    (RecordSelected)="onFindRecordSelected($event)"
+                                    (DialogClosed)="onFindRecordDialogClosed()"
+                                >
+                                </mj-find-record-dialog>
+                                <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button">
+                                    <span class="fa-solid fa-table tab-icon"></span>
+                                    Reference a View
+                                </button>
+                                <button kendoButton (click)="smartFilterPrompt_insertListReference()" class="smart-filter-button">
+                                    <span class="fa-list fa-solid"></span>
+                                    Reference a List
+                                </button>
                                 <kendo-textarea
-                                placeholder="Describe how you would like the data filtered"
-                                [rows]="10"
-                                [(ngModel)]="record.SmartFilterPrompt"
-                                resizable="vertical"
+                                    #smartFilterTextArea
+                                    placeholder="Describe how you would like the data filtered and our AI will do the rest."
+                                    [rows]="12"
+                                    [(ngModel)]="record.SmartFilterPrompt"
+                                    resizable="vertical"
                                 ></kendo-textarea>
                             </div>
                             <div *ngIf="!record.SmartFilterEnabled">

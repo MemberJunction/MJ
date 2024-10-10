@@ -14,6 +14,7 @@ import { SortableModule } from '@progress/kendo-angular-sortable';
 import { FilterModule } from '@progress/kendo-angular-filter';
 import { DropDownsModule } from "@progress/kendo-angular-dropdowns";
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { FindRecordModule } from '@memberjunction/ng-find-record';
 
 @NgModule({
   declarations: [
@@ -30,7 +31,8 @@ import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
     SortableModule,
     FilterModule,
     DropDownsModule,
-    MJTabStripModule
+    MJTabStripModule,
+    FindRecordModule
   ],
   exports: [
     UserViewPropertiesDialogComponent
