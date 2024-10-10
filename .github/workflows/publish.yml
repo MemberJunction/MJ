@@ -37,6 +37,7 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Determine next expected version
+        if: ${{ env.BRANCH == 'main' }}
         id: version_check
         run: |
           git fetch --tags
@@ -55,7 +56,7 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: |
           EXPECTED_NEXT_VERSION="${{ steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
-          npx beachball bump --no-commit
+          npx beachball bump --no-commit --branch origin/main
           NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
           if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
@@ -68,7 +69,7 @@ jobs:
         run: npm ci
 
       - name: Validate change set
-        run: npm run checkchange
+        run: npm run checkchange -- --branch origin/main
 
       - name: Build packages
         run: npm run build

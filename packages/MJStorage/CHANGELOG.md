@@ -1,8 +1,29 @@
 # Change Log - @memberjunction/storage
 
-This log was last generated on Mon, 30 Sep 2024 15:55:48 GMT and should not be manually modified.
+This log was last generated on Tue, 08 Oct 2024 22:16:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.1
+
+Tue, 08 Oct 2024 22:16:58 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.7.1
+- Bump @memberjunction/core-entities to v2.7.1
+- Bump @memberjunction/global to v2.7.1
+
+## 2.7.0
+
+Thu, 03 Oct 2024 23:03:31 GMT
+
+### Minor changes
+
+- Bump minor version (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/core to v2.7.0
+- Bump @memberjunction/core-entities to v2.7.0
+- Bump @memberjunction/global to v2.7.0
 
 ## 2.6.1
 
