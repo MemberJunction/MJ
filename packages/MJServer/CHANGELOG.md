@@ -1,8 +1,71 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Mon, 30 Sep 2024 15:55:48 GMT and should not be manually modified.
+This log was last generated on Tue, 08 Oct 2024 22:16:58 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.1
+
+Tue, 08 Oct 2024 22:16:58 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/actions to v2.7.1
+- Bump @memberjunction/ai to v2.7.1
+- Bump @memberjunction/ai-mistral to v2.7.1
+- Bump @memberjunction/ai-openai to v2.7.1
+- Bump @memberjunction/ai-vectors-pinecone to v2.7.1
+- Bump @memberjunction/aiengine to v2.7.1
+- Bump @memberjunction/core to v2.7.1
+- Bump @memberjunction/core-actions to v2.7.1
+- Bump @memberjunction/core-entities to v2.7.1
+- Bump @memberjunction/data-context to v2.7.1
+- Bump @memberjunction/data-context-server to v2.7.1
+- Bump @memberjunction/doc-utils to v2.7.1
+- Bump @memberjunction/entity-communications-server to v2.7.1
+- Bump @memberjunction/external-change-detection to v2.7.1
+- Bump @memberjunction/global to v2.7.1
+- Bump @memberjunction/queue to v2.7.1
+- Bump @memberjunction/skip-types to v2.7.1
+- Bump @memberjunction/sqlserver-dataprovider to v2.7.1
+- Bump @memberjunction/graphql-dataprovider to v2.7.1
+- Bump @memberjunction/storage to v2.7.1
+- Bump @memberjunction/templates to v2.7.1
+
+## 2.7.0
+
+Thu, 03 Oct 2024 23:03:31 GMT
+
+### Minor changes
+
+- Bump minor version (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/actions to v2.7.0
+- Bump @memberjunction/ai to v2.7.0
+- Bump @memberjunction/ai-mistral to v2.7.0
+- Bump @memberjunction/ai-openai to v2.7.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.7.0
+- Bump @memberjunction/aiengine to v2.7.0
+- Bump @memberjunction/core to v2.7.0
+- Bump @memberjunction/core-actions to v2.7.0
+- Bump @memberjunction/core-entities to v2.7.0
+- Bump @memberjunction/data-context to v2.7.0
+- Bump @memberjunction/data-context-server to v2.7.0
+- Bump @memberjunction/doc-utils to v2.7.0
+- Bump @memberjunction/entity-communications-server to v2.7.0
+- Bump @memberjunction/external-change-detection to v2.7.0
+- Bump @memberjunction/global to v2.7.0
+- Bump @memberjunction/queue to v2.7.0
+- Bump @memberjunction/skip-types to v2.7.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.7.0
+- Bump @memberjunction/graphql-dataprovider to v2.7.0
+- Bump @memberjunction/storage to v2.7.0
+- Bump @memberjunction/templates to v2.7.0
+
+### Patches
+
+- Applying package updates [skip ci] (nico.ortiz@bluecypress.io)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.6.1
 

@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ng-chat",
-  "email": "155523863+JS-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}
