@@ -107,7 +107,7 @@ export const loadModule = () => {
     * @method
     * @override
     */
-    public async Load(${loadFieldString}, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(${loadFieldString}, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         ${entity.PrimaryKeys.map((f) => `compositeKey.KeyValuePairs.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
