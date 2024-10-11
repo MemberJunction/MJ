@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Sat, 28 Sep 2024 00:19:39 GMT and should not be manually modified.
+This log was last generated on Thu, 03 Oct 2024 23:03:31 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.7.0
+
+Thu, 03 Oct 2024 23:03:31 GMT
+
+### Minor changes
+
+- Bump minor version (155523863+JS-BC@users.noreply.github.com)
 
 ## 2.6.0
 

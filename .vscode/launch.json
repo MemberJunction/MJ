@@ -40,6 +40,14 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start"],
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Launch Chrome against localhost",
+      "url": "http://localhost:4200",
+      "webRoot": "${workspaceFolder}/packages/MJExplorer",
+      "sourceMaps": true
     }
   ]
 }

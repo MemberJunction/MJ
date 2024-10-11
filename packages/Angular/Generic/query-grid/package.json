@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-query-grid",
-  "version": "2.6.1",
+  "version": "2.7.1",
   "description": "MemberJunction: Angular Grid to display any MemberJunction Query",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,12 +28,12 @@
     "@progress/kendo-angular-dialog": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.6.1",
-    "@memberjunction/global": "2.6.1",
-    "@memberjunction/core": "2.6.1",
-    "@memberjunction/ng-container-directives": "2.6.1",
-    "@memberjunction/ng-compare-records": "2.6.1",
-    "@memberjunction/ng-shared": "2.6.1",
+    "@memberjunction/core-entities": "2.7.1",
+    "@memberjunction/global": "2.7.1",
+    "@memberjunction/core": "2.7.1",
+    "@memberjunction/ng-container-directives": "2.7.1",
+    "@memberjunction/ng-compare-records": "2.7.1",
+    "@memberjunction/ng-shared": "2.7.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

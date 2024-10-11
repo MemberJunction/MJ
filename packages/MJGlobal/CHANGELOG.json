@@ -2,6 +2,21 @@
   "name": "@memberjunction/global",
   "entries": [
     {
+      "date": "Thu, 03 Oct 2024 23:03:31 GMT",
+      "version": "2.7.0",
+      "tag": "@memberjunction/global_v2.7.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/global",
+            "commit": "4def320808e79d192ce4ec99d6f588abfe8441e1",
+            "comment": "Bump minor version"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 28 Sep 2024 00:19:39 GMT",
       "version": "2.6.0",
       "tag": "@memberjunction/global_v2.6.0",
