@@ -5,7 +5,7 @@ CREATE TABLE ${flyway:defaultSchema}.ResourcePermission (
     ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
 
     ResourceTypeID UNIQUEIDENTIFIER NOT NULL, -- Foreign key to ResourceType table
-    CONSTRAINT FK_ResourceTypeID FOREIGN KEY (ResourceTypeID) REFERENCES __mj.ResourceType(ID),
+    CONSTRAINT FK_ResourceTypeID FOREIGN KEY (ResourceTypeID) REFERENCES ${flyway:defaultSchema}.ResourceType(ID),
 
     ResourceRecordID NVARCHAR(255) NOT NULL,  -- The specific resource being shared
     Type NVARCHAR(10) CHECK (Type IN ('Role', 'User')) NOT NULL, -- Defines if shared with a role or a user
@@ -13,10 +13,10 @@ CREATE TABLE ${flyway:defaultSchema}.ResourcePermission (
     EndSharingAt DATETIMEOFFSET NULL,         -- Optional: When sharing ends
     
     RoleID UNIQUEIDENTIFIER NULL,             -- Nullable, required if Type == 'Role'
-    CONSTRAINT FK_RoleID FOREIGN KEY (RoleID) REFERENCES __mj.[Role](ID),
+    CONSTRAINT FK_RoleID FOREIGN KEY (RoleID) REFERENCES ${flyway:defaultSchema}.[Role](ID),
 
     UserID UNIQUEIDENTIFIER NULL,             -- Nullable, required if Type == 'User'
-    CONSTRAINT FK_UserID FOREIGN KEY (UserID) REFERENCES __mj.[User](ID),
+    CONSTRAINT FK_UserID FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
     
     -- PermissionLevel constraint
     PermissionLevel NVARCHAR(20) NULL,       
