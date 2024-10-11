@@ -1,7 +1,7 @@
 /****
 Create ResourcePermission table - which will result in the creation of a Resource Shares entity when we run CodeGen. This will be used for sharing information for any resource type
 ****/
-CREATE TABLE __mj.ResourcePermission (
+CREATE TABLE ${flyway:defaultSchema}.ResourcePermission (
     ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
 
     ResourceTypeID UNIQUEIDENTIFIER NOT NULL, -- Foreign key to ResourceType table
