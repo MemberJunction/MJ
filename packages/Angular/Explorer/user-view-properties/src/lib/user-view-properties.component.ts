@@ -15,6 +15,7 @@ import { TabComponent } from '@progress/kendo-angular-layout';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
 import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
+import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
 
 @Component({
@@ -40,6 +41,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   public record!: UserViewEntityExtended;
 
   public ViewEntityInfo!: EntityInfo;
+  public ViewResourceTypeID!: string;
 
   private keyPressListener: any;
   public usedFields: Set<string> = new Set(); // Track used fields
@@ -62,6 +64,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   @ViewChild('dialogContainer') dialogContainer!: ElementRef;
   @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
   @ViewChild('findRecordDialog') private findRecordDialog!: FindRecordDialogComponent;
+  @ViewChild('resourcePermissions') private resourcePermissions!: ResourcePermissionsComponent;
 
 
   constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
@@ -160,6 +163,12 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   async Load() {
     const md = new Metadata();
     this.record = <UserViewEntityExtended> await md.GetEntityObject('User Views');
+
+    // load up the ResourceType ID for User Views
+    const rt = this.sharedService.ResourceTypeByName("User Views")
+    if (rt) {
+      this.ViewResourceTypeID = rt.ID;
+    }
 
     if (this.ViewID) {
       // load the view
@@ -331,6 +340,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     if (valResults.Success === false) {
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
+      return;
     }
 
     let saveResult: boolean = await this.record.Save(); 
@@ -339,6 +349,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Saving the view failed, please try again and if this persists contact your administrator.', 'error', 5000);
       LogError(this.record.LatestResult);
+    }
+    else {
+      // it saved, no save sharing
+      if (this.resourcePermissions.ResourceRecordID !== this.record.ID) { // update the resource record id
+        await this.resourcePermissions.UpdateResourceRecordID(this.record.ID);
+      }
+      await this.resourcePermissions.SavePermissions();
     }
 
     // stop showing the loader and close the dialog if we saved successfully

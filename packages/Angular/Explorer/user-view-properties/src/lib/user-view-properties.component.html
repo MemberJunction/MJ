@@ -44,134 +44,163 @@
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab title="Fields">
+                            <ng-template kendoTabTitle>
+                                <span class="fa-solid fa-table-columns tab-header-icon"></span>
+                                <span>Fields</span>
+                            </ng-template>
                             <ng-template kendoTabContent>
-                
-                            <kendo-sortable
-                                [kendoSortableBinding]="this.localGridState.columnSettings"
-                                [animation]="true"
-                                itemClass="item"
-                                activeItemClass="item active"
-                                (dragEnd)="onDragEnd($event)"
-                            >
-                                <ng-template let-col="item">
-                                <div class="item-content">
-                                    <div>
-                                    <kendo-checkbox
-                                        [checkedState]="!col.hidden"
-                                        (change)="toggleColumn(col)"
-                                    ></kendo-checkbox>
-                                    <kendo-label
-                                        [for]="'column_'+col.ID"
-                                        [text]="col.DisplayName ? col.DisplayName : col.Name"
-                                        class="k-checkbox-label"
-                                    ></kendo-label>
+                                <kendo-sortable
+                                    [kendoSortableBinding]="this.localGridState.columnSettings"
+                                    [animation]="true"
+                                    itemClass="item"
+                                    activeItemClass="item active"
+                                    (dragEnd)="onDragEnd($event)"
+                                >
+                                    <ng-template let-col="item">
+                                    <div class="item-content">
+                                        <div>
+                                        <kendo-checkbox
+                                            [checkedState]="!col.hidden"
+                                            (change)="toggleColumn(col)"
+                                        ></kendo-checkbox>
+                                        <kendo-label
+                                            [for]="'column_'+col.ID"
+                                            [text]="col.DisplayName ? col.DisplayName : col.Name"
+                                            class="k-checkbox-label"
+                                        ></kendo-label>
+                                        </div>
+                                        <span class="fa-solid fa-bars-staggered"></span>
                                     </div>
-                                    <span class="fa-solid fa-bars-staggered"></span>
-                                </div>
-                                </ng-template>
-                            </kendo-sortable>
+                                    </ng-template>
+                                </kendo-sortable>
                             </ng-template>
                         </kendo-tabstrip-tab>
-                        <kendo-tabstrip-tab title="Filters">
+                        <kendo-tabstrip-tab>
+                            <ng-template kendoTabTitle>
+                                <span class="fa-solid fa-filter tab-header-icon"></span>
+                                <span>Filters</span>
+                            </ng-template>
                             <ng-template kendoTabContent>
-                            <div class="smart-filter-container">
-                                <kendo-label text="Smart Filter" class="smart-filter-label"></kendo-label>
-                                <kendo-switch [(ngModel)]="record.SmartFilterEnabled"></kendo-switch>
-                            </div>
-                            <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
-                                <mj-find-record-dialog #findRecordDialog
-                                    (RecordSelected)="onFindRecordSelected($event)"
-                                    (DialogClosed)="onFindRecordDialogClosed()"
-                                >
-                                </mj-find-record-dialog>
-                                <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button">
-                                    <span class="fa-solid fa-table tab-icon"></span>
-                                    Reference a View
-                                </button>
-                                <button kendoButton (click)="smartFilterPrompt_insertListReference()" class="smart-filter-button">
-                                    <span class="fa-list fa-solid"></span>
-                                    Reference a List
-                                </button>
-                                <kendo-textarea
-                                    #smartFilterTextArea
-                                    placeholder="Describe how you would like the data filtered and our AI will do the rest."
-                                    [rows]="12"
-                                    [(ngModel)]="record.SmartFilterPrompt"
-                                    resizable="vertical"
-                                ></kendo-textarea>
-                            </div>
-                            <div *ngIf="!record.SmartFilterEnabled">
-                                <kendo-filter
-                                    [filters]="setupFilters()"
-                                    [value]="defaultFilterState"
-                                    (valueChange)="onFilterChange($event)"
-                                >
-                            </kendo-filter>
-                            </div>
+                                <div class="smart-filter-container">
+                                    <kendo-label text="Smart Filter" class="smart-filter-label"></kendo-label>
+                                    <kendo-switch [(ngModel)]="record.SmartFilterEnabled"></kendo-switch>
+                                </div>
+                                <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
+                                    <mj-find-record-dialog #findRecordDialog
+                                        (RecordSelected)="onFindRecordSelected($event)"
+                                        (DialogClosed)="onFindRecordDialogClosed()"
+                                    >
+                                    </mj-find-record-dialog>
+                                    <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button">
+                                        <span class="fa-solid fa-table tab-icon"></span>
+                                        Reference a View
+                                    </button>
+                                    <button kendoButton (click)="smartFilterPrompt_insertListReference()" class="smart-filter-button">
+                                        <span class="fa-list fa-solid"></span>
+                                        Reference a List
+                                    </button>
+                                    <kendo-textarea
+                                        #smartFilterTextArea
+                                        placeholder="Describe how you would like the data filtered and our AI will do the rest."
+                                        [rows]="12"
+                                        [(ngModel)]="record.SmartFilterPrompt"
+                                        resizable="vertical"
+                                    ></kendo-textarea>
+                                </div>
+                                <div *ngIf="!record.SmartFilterEnabled">
+                                    <kendo-filter
+                                        [filters]="setupFilters()"
+                                        [value]="defaultFilterState"
+                                        (valueChange)="onFilterChange($event)"
+                                    >
+                                    </kendo-filter>
+                                </div>
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab title="Sorting">
+                            <ng-template kendoTabTitle>
+                                <span class="fa-solid fa-arrow-up-wide-short tab-header-icon"></span>
+                                <span>Sorting</span>
+                            </ng-template>
                             <ng-template kendoTabContent>
-                            <div class="sort-header">
-                                <button kendoButton (click)="addSort()">
-                                    <span class="fa-solid fa-plus"></span>
-                                    Add
-                                </button>
-                            </div>
-                            <div *ngFor="let s of this.sortState"> 
-                                <kendo-dropdownlist 
-                                    class="sort-column"
-                                    [data]="sortFields"
-                                    textField="Name"
-                                    valueField="Name"
-                                    (valueChange)="sortColumnValueChange(s, $event)"
-                                    [(ngModel)]="s.field"
-                                >
-                                </kendo-dropdownlist>
-                                <kendo-dropdownlist
-                                    class="sort-direction"
-                                    [data]="sortDirections"
-                                    textField="Name"
-                                    valueField="Value"
-                                    (valueChange)="sortDirectionValueChange(s, $event)"
-                                    [(ngModel)]="s.direction"
-                                >
-                                </kendo-dropdownlist>
-                                <button kendoButton (click)="removeSort(s)">
-                                    <span class="fa-solid fa-xmark"></span>
-                                    Remove
-                                </button>
-                            </div> 
+                                <div class="sort-header">
+                                    <button kendoButton (click)="addSort()">
+                                        <span class="fa-solid fa-plus"></span>
+                                        Add
+                                    </button>
+                                </div>
+                                <div *ngFor="let s of this.sortState"> 
+                                    <kendo-dropdownlist 
+                                        class="sort-column"
+                                        [data]="sortFields"
+                                        textField="Name"
+                                        valueField="Name"
+                                        (valueChange)="sortColumnValueChange(s, $event)"
+                                        [(ngModel)]="s.field"
+                                    >
+                                    </kendo-dropdownlist>
+                                    <kendo-dropdownlist
+                                        class="sort-direction"
+                                        [data]="sortDirections"
+                                        textField="Name"
+                                        valueField="Value"
+                                        (valueChange)="sortDirectionValueChange(s, $event)"
+                                        [(ngModel)]="s.direction"
+                                    >
+                                    </kendo-dropdownlist>
+                                    <button kendoButton (click)="removeSort(s)">
+                                        <span class="fa-solid fa-xmark"></span>
+                                        Remove
+                                    </button>
+                                </div> 
                             </ng-template>
                         </kendo-tabstrip-tab>
-                        <kendo-tabstrip-tab title="Advanced">
+                        <kendo-tabstrip-tab>
+                            <i class="fa-solid fa-arrow-up-wide-short"></i>
+                            <ng-template kendoTabTitle>
+                                <span class="fa-solid fa-share-from-square tab-header-icon"></span>
+                                <span>Sharing</span>
+                            </ng-template>
                             <ng-template kendoTabContent>
-                            @if(record.SmartFilterEnabled) {
-                                <kendo-textarea
-                                [readonly]="true"
-                                [rows]="5"
-                                [(ngModel)]="record.SmartFilterExplanation"
-                                resizable="vertical"
-                                class="advanced-tab-details"
-                                ></kendo-textarea>
-                                <kendo-textarea
-                                [readonly]="true"
-                                [rows]="5"
-                                [(ngModel)]="record.SmartFilterWhereClause"
-                                resizable="vertical"
-                                class="advanced-tab-details"
-                                ></kendo-textarea>  
-                            }
-                            @else {
-                                <kendo-textarea
-                                [readonly]="true"
-                                [rows]="7"
-                                [(ngModel)]="record.WhereClause"
-                                resizable="vertical"
-                                class="advanced-tab-details"
-                                ></kendo-textarea>
-                            }
-            
+                                <mj-resource-permissions
+                                    #resourcePermissions
+                                    [ResourceTypeID]="ViewResourceTypeID"
+                                    [ResourceRecordID]="ViewID"
+                                >
+                                </mj-resource-permissions>
+                            </ng-template>
+                        </kendo-tabstrip-tab>
+                        <kendo-tabstrip-tab *ngIf="ViewID && ViewID.length > 0">
+                            <ng-template kendoTabTitle>
+                                <span class="fa-solid fa-gear tab-header-icon"></span>
+                                <span>Advanced</span>
+                            </ng-template>
+                            <ng-template kendoTabContent>
+                                @if(record.SmartFilterEnabled) {
+                                    <kendo-textarea
+                                        [readonly]="true"
+                                        [rows]="5"
+                                        [(ngModel)]="record.SmartFilterExplanation"
+                                        resizable="vertical"
+                                        class="advanced-tab-details"
+                                        ></kendo-textarea>
+                                        <kendo-textarea
+                                        [readonly]="true"
+                                        [rows]="5"
+                                        [(ngModel)]="record.SmartFilterWhereClause"
+                                        resizable="vertical"
+                                        class="advanced-tab-details"
+                                    ></kendo-textarea>  
+                                }
+                                @else {
+                                    <kendo-textarea
+                                        [readonly]="true"
+                                        [rows]="7"
+                                        [(ngModel)]="record.WhereClause"
+                                        resizable="vertical"
+                                        class="advanced-tab-details"
+                                    ></kendo-textarea>
+                                }
                             </ng-template>
                         </kendo-tabstrip-tab>
                     </kendo-tabstrip>

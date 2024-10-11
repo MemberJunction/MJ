@@ -2,7 +2,7 @@
 Create ResourcePermission table - which will result in the creation of a Resource Shares entity when we run CodeGen. This will be used for sharing information for any resource type
 ****/
 CREATE TABLE __mj.ResourcePermission (
-    ID UNIQUEIDENTIFIER PRIMARY KEY,
+    ID UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
 
     ResourceTypeID UNIQUEIDENTIFIER NOT NULL, -- Foreign key to ResourceType table
     CONSTRAINT FK_ResourceTypeID FOREIGN KEY (ResourceTypeID) REFERENCES __mj.ResourceType(ID),
@@ -11,8 +11,6 @@ CREATE TABLE __mj.ResourcePermission (
     Type NVARCHAR(10) CHECK (Type IN ('Role', 'User')) NOT NULL, -- Defines if shared with a role or a user
     StartSharingAt DATETIMEOFFSET NULL,       -- Optional: When sharing starts
     EndSharingAt DATETIMEOFFSET NULL,         -- Optional: When sharing ends
-    -- Ensures EndSharingAt is after StartSharingAt, if both are provided
-    CONSTRAINT CK_EndAfterStart CHECK (EndSharingAt IS NULL OR StartSharingAt IS NULL OR EndSharingAt > StartSharingAt),
     
     RoleID UNIQUEIDENTIFIER NULL,             -- Nullable, required if Type == 'Role'
     CONSTRAINT FK_RoleID FOREIGN KEY (RoleID) REFERENCES __mj.[Role](ID),

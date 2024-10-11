@@ -7223,6 +7223,93 @@ export const ReportSchema = z.object({
 export type ReportEntityType = z.infer<typeof ReportSchema>;
 
 /**
+ * zod schema definition for the entity Resource Permissions
+ */
+export const ResourcePermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    ResourceTypeID: z.string().describe(`
+        * * Field Name: ResourceTypeID
+        * * Display Name: Resource Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)`),
+    ResourceRecordID: z.string().describe(`
+        * * Field Name: ResourceRecordID
+        * * Display Name: Resource Record ID
+        * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being shared`),
+    Type: z.union([z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Role
+    *   * User
+    * * Description: The level of sharing either Role or User`),
+    StartSharingAt: z.date().nullish().describe(`
+        * * Field Name: StartSharingAt
+        * * Display Name: Start Sharing At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing starts`),
+    EndSharingAt: z.date().nullish().describe(`
+        * * Field Name: EndSharingAt
+        * * Display Name: End Sharing At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing ends`),
+    RoleID: z.string().nullish().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)`),
+    UserID: z.string().nullish().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    PermissionLevel: z.union([z.literal('View'), z.literal('Edit'), z.literal('Owner')]).nullish().describe(`
+        * * Field Name: PermissionLevel
+        * * Display Name: Permission Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * View
+    *   * Edit
+    *   * Owner
+    * * Description: Permission level defining the type of access (View, Edit, Owner)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ResourceType: z.string().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    Role: z.string().nullish().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: null`),
+    User: z.string().nullish().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
+});
+
+export type ResourcePermissionEntityType = z.infer<typeof ResourcePermissionSchema>;
+
+/**
  * zod schema definition for the entity Resource Types
  */
 export const ResourceTypeSchema = z.object({
@@ -28444,6 +28531,211 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get OutputWorkflow(): string | null {
         return this.Get('OutputWorkflow');
+    }
+}
+
+
+/**
+ * Resource Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ResourcePermission
+ * * Base View: vwResourcePermissions
+ * * @description Table for managing sharing of resources to users or roles with time constraints and permission levels
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Resource Permissions')
+export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntityType> {
+    /**
+    * Loads the Resource Permissions record from the database
+    * @param ID: string - primary key value to load the Resource Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ResourcePermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)
+    */
+    get ResourceTypeID(): string {
+        return this.Get('ResourceTypeID');
+    }
+    set ResourceTypeID(value: string) {
+        this.Set('ResourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being shared
+    */
+    get ResourceRecordID(): string {
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string) {
+        this.Set('ResourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Role
+    *   * User
+    * * Description: The level of sharing either Role or User
+    */
+    get Type(): 'Role' | 'User' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Role' | 'User') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: StartSharingAt
+    * * Display Name: Start Sharing At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing starts
+    */
+    get StartSharingAt(): Date | null {
+        return this.Get('StartSharingAt');
+    }
+    set StartSharingAt(value: Date | null) {
+        this.Set('StartSharingAt', value);
+    }
+
+    /**
+    * * Field Name: EndSharingAt
+    * * Display Name: End Sharing At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing ends
+    */
+    get EndSharingAt(): Date | null {
+        return this.Get('EndSharingAt');
+    }
+    set EndSharingAt(value: Date | null) {
+        this.Set('EndSharingAt', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: PermissionLevel
+    * * Display Name: Permission Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * View
+    *   * Edit
+    *   * Owner
+    * * Description: Permission level defining the type of access (View, Edit, Owner)
+    */
+    get PermissionLevel(): 'View' | 'Edit' | 'Owner' | null {
+        return this.Get('PermissionLevel');
+    }
+    set PermissionLevel(value: 'View' | 'Edit' | 'Owner' | null) {
+        this.Set('PermissionLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ResourceType(): string {
+        return this.Get('ResourceType');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: null
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 

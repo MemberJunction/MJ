@@ -114,7 +114,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
          0,
          0,
          0,
-         'null',
+         'NEWSEQUENTIALID()',
          0,
          0,
          0,
