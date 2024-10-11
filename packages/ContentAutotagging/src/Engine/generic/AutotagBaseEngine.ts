@@ -365,6 +365,8 @@ export class AutotagBaseEngine extends AIEngine {
                 return this.stringToBoolean(value)
             case 'string':
                 return value
+            case 'string[]':
+                return this.parseStringArray(value)
             case 'regexp':
                 return new RegExp(value.replace(/\\\\/g, '\\'))
             default:
@@ -374,6 +376,11 @@ export class AutotagBaseEngine extends AIEngine {
 
     public stringToBoolean(string: string): boolean {
         return string === 'true'
+    }
+
+    public parseStringArray(value: string): string[] {
+        const stringArray = JSON.parse(value)
+        return stringArray
     }
 
     /**
