@@ -99,11 +99,14 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
-    const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
-      dataSource,
-      ConversationId,
-      AskSkipResolver._maxHistoricalMessages
-    );
+    let messages: SkipMessage[] = [];
+    if (ConversationId && ConversationId.length > 0) {
+      messages = await this.LoadConversationDetailsIntoSkipMessages(
+        dataSource,
+        ConversationId,
+        AskSkipResolver._maxHistoricalMessages
+      );  
+    }
 
     const md = new Metadata();
     const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipInitialObjectLoading(
@@ -539,6 +542,10 @@ export class AskSkipResolver {
     maxHistoricalMessages?: number
   ): Promise<SkipMessage[]> {
     try {
+      if (!ConversationId || ConversationId.length === 0) {
+        throw new Error(`ConversationId is required`);
+      }
+
       // load up all the conversation details from the database server
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
@@ -551,7 +558,8 @@ export class AskSkipResolver {
                    ORDER
                       BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);
-      if (!result) throw new Error(`Error running SQL: ${sql}`);
+      if (!result) 
+        throw new Error(`Error running SQL: ${sql}`);
       else {
         // first, let's sort the result array into a local variable called returnData and in that we will sort by __mj_CreatedAt in ASCENDING order so we have the right chronological order
         // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the

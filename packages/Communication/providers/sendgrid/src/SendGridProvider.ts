@@ -1,7 +1,9 @@
 import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
-import sgMail, { MailDataRequired } from '@sendgrid/mail';
+import sgMail, { MailDataRequired,  } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
+import fs from 'fs';
+import { LogError, LogStatus } from "@memberjunction/core";
 
 /**
  * Implementation of the SendGrid provider for sending and receiving messages
@@ -9,14 +11,24 @@ import { __API_KEY } from "./config";
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
+        
+        const from: string = message.From
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
-        let msg: MailDataRequired = {
+        const msg: MailDataRequired = {
             to: message.To,
-            from: message.From,
+            from: {
+                email: from,
+                name: "ATD Education"
+            },
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
-            html: message.ProcessedHTMLBody
+            html: message.ProcessedHTMLBody,
+            trackingSettings: {
+                subscriptionTracking: {
+                    enable: false
+                }
+            }
         };
 
         if(message.SendAt){
@@ -26,21 +38,34 @@ export class SendGridProvider extends BaseCommunicationProvider {
         }
 
         try {
-            const result = await sgMail.send(msg);
-            if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
-                return {
-                    Message: message,
-                    Success: true,
-                    Error: ''
-                };
-            }
-            else {
+            //not using await syntax here because we dont get a return value
+            return sgMail.send(msg).then((result: [sgMail.ClientResponse, {}]) => {
+                if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {
+                    LogStatus(`Email sent to ${msg.to}: ${result[0].statusCode}`);
+                    return {
+                        Message: message,
+                        Success: true,
+                        Error: ''
+                    };
+                }
+                else {
+                    LogError(`Error sending email to ${msg.to}:`, undefined, result);
+                    LogError(result[0].body);
+                    return {
+                        Message: message,
+                        Success: false,
+                        Error: result[0].toString()
+                    };
+                }
+            }).catch((error: any) => {
+                LogError(`Error sending email to ${msg.to}:`, undefined, error);
+                LogError(error?.response?.body);
                 return {
                     Message: message,
                     Success: false,
-                    Error: result[0].toString()
+                    Error: error.message
                 };
-            }
+            });
         } catch (error) {
             return {
                 Message: message,
@@ -55,6 +80,6 @@ export class SendGridProvider extends BaseCommunicationProvider {
     }
 }
 
-export function LoadProvider() {
+export function LoadSendGridProvider() {
     // do nothing, this prevents tree shaking from removing this class
 }
