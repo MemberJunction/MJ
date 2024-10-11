@@ -114,7 +114,7 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
                 const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
                 logStatus('Managing Metadata...')
-                manageMD.manageMetaDataLogging(configInfo.metadataConfig);
+                manageMD.manageMetaDataLogging(configInfo.metadataSQLOutput);
                 const metadataSuccess = await manageMD.manageMetadata(AppDataSource); 
                 if (!metadataSuccess){
                     logError('ERROR managing metadata');
