@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata } from '@memberjunction/core';
-import { logError, logMessage, logStatus, logWarning } from '../Misc/logging';
+import { logError, logMessage, logStatus, logWarning } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
 

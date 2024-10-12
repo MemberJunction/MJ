@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": true
+            "value": false
         }
     ],
     "logging": {
@@ -262,10 +262,10 @@
             "when": "after"
         }
     ],
-    "metadataSQLOutput" :{
+    "SQLOutput" :{
         "enabled": true,
         "folderPath": "../../migrations/v2/",
-        "fileName": "V202410101051__v2.8x_ResourceSharing_CodeGenMetadata.sql",
+        "fileName": "V202410120926__v2.8x_ResourceLinks_CodeGenMetadata.sql",
         "appendToFile": false,
         "convertToMigrationFile": true
     }

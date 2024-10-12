@@ -2,7 +2,7 @@ import { Metadata, UserInfo } from "@memberjunction/core";
 import { NewUserSetup } from "../Config/config";
 import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
-import { logError, logStatus } from "./logging";
+import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
 
 /**
