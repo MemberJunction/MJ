@@ -47,7 +47,7 @@ export class SQLLogging {
 
      public static finishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) {
-            if(configInfo.SQLOutput.convertCoreSchemaToFlywaySchema){
+            if(configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
                 SQLLogging.convertSQLLogToFlywaySchema();
             }
         }

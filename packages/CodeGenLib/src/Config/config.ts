@@ -140,7 +140,7 @@ export type SQLOutputConfig  = {
      * If true, all mention of the core schema within the log file will be replaced with the flyway schema,
      *  ${flyway:defaultSchema}
      */
-    convertCoreSchemaToFlywaySchema: boolean;
+    convertCoreSchemaToFlywayMigrationFile: boolean;
 };
 
 export type NewEntityDefaults = {
