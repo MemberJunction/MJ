@@ -25,7 +25,7 @@ VALUES (
    NULL,
    'ResourcePermission', 
    'vwResourcePermissions', 
-   '__mj',
+   '${flyway:defaultSchema}',
    1, 
    0
    , 1

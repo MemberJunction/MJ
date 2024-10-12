@@ -36,48 +36,48 @@ CREATE TABLE ${flyway:defaultSchema}.ResourcePermission (
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'Table for managing sharing of resources to users or roles with time constraints and permission levels', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'Reference to the type of resource being shared (View, Dashboard, Report, etc.)', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'ResourceTypeID';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'ID of the specific resource being shared', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'ResourceRecordID';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'Optional: Date when sharing starts', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'StartSharingAt';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'Optional: Date when sharing ends', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'EndSharingAt';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'The level of sharing either Role or User', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'Type';
 
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
     @value = N'Permission level defining the type of access (View, Edit, Owner)', 
-    @level0type = N'SCHEMA', @level0name = N'__mj', 
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'ResourcePermission', 
     @level2type = N'COLUMN', @level2name = N'PermissionLevel';
 
