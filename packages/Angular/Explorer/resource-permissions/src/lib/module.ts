@@ -16,10 +16,14 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { FormsModule } from '@angular/forms';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { AvailableResourcesComponent } from './available-resources.component';
+import { AvailableResourcesDialogComponent } from './available-resources-dialog.component';
 
 @NgModule({
   declarations: [
     ResourcePermissionsComponent,
+    AvailableResourcesComponent,
+    AvailableResourcesDialogComponent
   ],
   imports: [
     CommonModule,
@@ -37,6 +41,8 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
   ],
   exports: [
     ResourcePermissionsComponent,
+    AvailableResourcesComponent,
+    AvailableResourcesDialogComponent
   ]
 })
 export class ResourcePermissionsModule { }

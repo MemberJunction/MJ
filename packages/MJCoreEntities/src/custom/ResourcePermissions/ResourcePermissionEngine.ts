@@ -93,4 +93,21 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         }
     }
 
+    /**
+     * Returns all the permissions a user has for a specific resource type based on both their user-specific permissions and permissions assigned through roles.
+     * @param user 
+     * @param ResourceTypeID 
+     * @returns 
+     */
+    public GetUserAvailableResources(user: UserInfo, ResourceTypeID?: string): ResourcePermissionEntity[] {
+        let rolePermissions = this.Permissions.filter((r) => r.Type === 'Role' && user.UserRoles.find(ur => ur.RoleID === r.RoleID) !== undefined);
+        let permissions = this.Permissions.filter((r) => r.Type === 'User' && r.UserID === user.ID);
+        if (ResourceTypeID) {
+            permissions = permissions.filter((r) => r.ResourceTypeID === ResourceTypeID);
+            rolePermissions = rolePermissions.filter((r) => r.ResourceTypeID === ResourceTypeID);
+        }
+        permissions = permissions.concat(rolePermissions);
+        return permissions;
+
+    }
 }

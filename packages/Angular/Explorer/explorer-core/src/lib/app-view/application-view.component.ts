@@ -29,7 +29,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public app: ApplicationInfo | undefined;
     public userApp: UserApplicationEntity | undefined;
     public extraDropdownOptions:  {text: string}[] = [
-        {text: 'View'}
+        {text: 'View'},
+        {text: 'Link to Shared View'},
     ];
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService, private cdr: ChangeDetectorRef){

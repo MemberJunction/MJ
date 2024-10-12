@@ -1,0 +1,20 @@
+<div class="container">
+    <h3>Available Resources for {{ user.Name }}</h3>
+  
+    <kendo-grid
+      [data]="resources"
+      [selectable]="{ mode: SelectionMode.toLowerCase() === 'Single' ? 'single' : 'multiple' }"
+      (selectionChange)="onSelectionChange($event)"
+      style="width: 100%; max-height: 400px;">
+      
+      <kendo-grid-column field="ResourceType" title="Type" [width]="150">
+      </kendo-grid-column>
+  
+      <kendo-grid-column
+        field="ResourceRecordID"
+        title="Resource Record ID"
+        [width]="200">
+      </kendo-grid-column>
+    </kendo-grid>
+  </div>
+  
