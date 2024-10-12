@@ -113,7 +113,7 @@ export type ConfigInfo = {
     newSchemaDefaults: NewSchemaDefaults;
     dbSchemaJSONOutput: DBSchemaJSONOutput;
     newEntityRelationshipDefaults: NewEntityRelationshipDefaults;
-    metadataConfig: MetadataSQLOutputConfig;
+    metadataSQLOutput: MetadataSQLOutputConfig;
 }
 
 export type MetadataSQLOutputConfig  = {
@@ -127,13 +127,14 @@ export type MetadataSQLOutputConfig  = {
      */
     folderPath: string;
     /**
-     * The path of the specific file to use when logging is enabled.
+     * Optional, the file name that will be written WITHIN the folderPath specified.  
      */
-    filePath?: string,
+    fileName?: string,
+
     /**
-     * Whether or not to append or overwrite the generated sql to the file provided in the filePath.
+     * If set to true, then we append to the existing file, if one exists, otherwise we create a new file.
      */
-    overwriteFile?: boolean;
+    appendToFile?: boolean;
 
     /**
      * If true, all mention of the core schema within the log file will be replaced with the flyway schema,
