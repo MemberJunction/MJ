@@ -27,7 +27,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public backText: string = 'Go Back';
   @Input() public ItemEntityName: string = '';
   @Input() public CategoryEntityName: string = '';
-  @Input() public selectedFolderID: number | null = null;
+  @Input() public selectedFolderID: string | null = null;
   @Input() public showNotifications: boolean = true;
   @Input() public categoryEntityID: string | null = null;
   @Input() public displayAsGrid: boolean = false;

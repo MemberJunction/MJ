@@ -96,5 +96,6 @@
         [ResourceTypeID]="ViewResourceTypeID"
         SelectionMode="Multiple"
         (DialogClosed)="HandleLinkToSharedView($event)"
+        [ResourceExtraFilter]="FilterOutCurrentUserViews"
     ></mj-available-resources-dialog>
 </div>

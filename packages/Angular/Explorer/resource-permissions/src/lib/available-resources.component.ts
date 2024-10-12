@@ -16,17 +16,24 @@ import { GridComponent } from '@progress/kendo-angular-grid';
 export class AvailableResourcesComponent implements AfterViewInit {
     @Input() User!: UserInfo;
     @Input() ResourceTypeID!: string;
+    @Input() ResourceExtraFilter?: string;
     @Input() SelectionMode: 'Single' | 'Multiple' = 'Single';
     @Input() SelectedResources: ResourceData[] = [];
     @Output() SelectionChanged = new EventEmitter<ResourceData[]>();
 
+    public gridRecordSelection: string[] = [];
 
     @ViewChild('resourcesGrid') resourcesGrid!: GridComponent;
     public onSelectionChange(e: SelectionEvent) {
-        this.SelectedResources = this.resourcesGrid.selection.map((item) => {
-            console.log(item);
-            return this.resources[<number>item]
+        this.SelectedResources.splice(0, this.SelectedResources.length); // empty the array
+
+        this.gridRecordSelection.forEach((item) => {
+            const resourceMatch = this.resources.find((r) => r.ResourceRecordID === item);
+            if (resourceMatch) {
+                this.SelectedResources.push(resourceMatch);
+            }
         });
+
         // now bubble up the event
         this.SelectionChanged.emit(this.SelectedResources);
     }
@@ -52,20 +59,22 @@ export class AvailableResourcesComponent implements AfterViewInit {
             throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
         const rv = new RunView();
         const nameField = entity.NameField;
+        const extraFilter = this.ResourceExtraFilter ? ` AND (${this.ResourceExtraFilter})` : '';
         const result = await rv.RunView({
             EntityName: entity.Name,
-            ExtraFilter: `ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})`,
+            ExtraFilter: `(ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
             OrderBy: nameField.Name
         })
         if (!result || !result.Success)
             throw new Error(`Error running view for entity ${entity.Name}`);
 
-        this.resources = this.resourcePermissions.map((r) => {
+        // only return rows where we have a record in result.Results
+        this.resources = result.Results.map((r) => {
             return new ResourceData({
-                ResourceRecordID: r.ResourceRecordID,
-                ResourceName: result.Results.find((row) => row.ID === r.ResourceRecordID)?.[nameField.Name] ?? 'Unknown',
-                ResourceTypeID: r.ResourceTypeID,
-                ResourceType: r.ResourceType
+                ResourceRecordID: r.ID,
+                Name: r[nameField.Name],
+                ResourceTypeID: this.ResourceTypeID,
+                ResourceType: rt.Name
             });
         });
     }

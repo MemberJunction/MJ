@@ -9,7 +9,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
     public items: Item[];
     public folders: Folder[];
     public entityData: any[];
-    public selectedFolderID: number | null = null;
+    public selectedFolderID: string | null = null;
     public pageTitle: string = '';
 
     protected pageName: string = "";
@@ -55,7 +55,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
 
     protected InitForResource(router: ActivatedRoute): void {
         router.paramMap.subscribe(async (params) => {
-            this.selectedFolderID = Number(params.get('folderID')) || null;
+            this.selectedFolderID = params.get('folderID') || null;
             await this.buildFiltersAndLoadData();
         });
     }

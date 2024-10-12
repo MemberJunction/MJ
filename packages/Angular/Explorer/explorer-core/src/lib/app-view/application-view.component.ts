@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, Input, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity, UserInfo } from '@memberjunction/core';
-import { EntityEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
@@ -31,6 +31,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public app: ApplicationInfo | undefined;
     public userApp: UserApplicationEntity | undefined;
     public currentUser!: UserInfo;
+    public FilterOutCurrentUserViews!: string;
     public extraDropdownOptions:  {text: string}[] = [
         {text: 'View'},
         {text: 'Link to Shared View'},
@@ -54,8 +55,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const folderID = params.get('folderID'); 
             this.showLoader = true;
 
-            if(folderID){
-                this.selectedFolderID = parseInt(folderID) || null;
+            if (folderID) {
+                this.selectedFolderID = folderID
             }
             
             if (appName && appName !== this.app?.Name) {
@@ -228,7 +229,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
         this.showLoader = true;
         this.currentlySelectedAppEntity = entity;
-        
+        this.FilterOutCurrentUserViews = `UserID <> '${this.currentUser.ID}' AND EntityID = '${entity.ID}'`;
+
         if(this.selectedFolderID){
             let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID='${this.selectedFolderID}'`);
             if(viewResult.length > 0){
@@ -331,11 +333,26 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 break;
         }
     }
-    public HandleLinkToSharedView(okClicked: Boolean) {
+    public async HandleLinkToSharedView(okClicked: Boolean) {
         this.LinkToSharedViewDialogVisible = false;
         if (okClicked) {
-            console.log(this.availableResourcesDialog.SelectedResources);
-            alert('check da log')
+            const resources = this.availableResourcesDialog.SelectedResources;
+            const md = new Metadata();
+            let success = true;
+            for (const r of resources) {
+                const newResourceLink = await md.GetEntityObject<ResourceLinkEntity>('Resource Links');
+                newResourceLink.ResourceRecordID = r.ResourceRecordID;
+                newResourceLink.ResourceTypeID = r.ResourceTypeID;
+                newResourceLink.UserID = this.currentUser.ID;
+                newResourceLink.FolderID = this.selectedFolderID
+                if (!await newResourceLink.Save()) {
+                    LogError('Error saving new resource link: ' + newResourceLink.LatestResult.Message);
+                    success = false;
+                }
+            }
+            if (!success) {
+                this.sharedService.CreateSimpleNotification('There was an error linking to the shared view(s). Please try again later or notify a system administrator.', 'error', 3500);
+            }
         }
     }
 

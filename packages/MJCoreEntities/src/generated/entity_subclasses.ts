@@ -7237,26 +7237,22 @@ export const ResourceLinkSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Default Value: null
     * * Description: Foreign key to the user linking the resource`),
     ResourceTypeID: z.string().describe(`
         * * Field Name: ResourceTypeID
         * * Display Name: Resource Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
-        * * Default Value: null
     * * Description: Foreign key to the resource type (view, dashboard, etc.)`),
     ResourceRecordID: z.string().describe(`
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
     * * Description: ID of the specific resource being linked`),
     FolderID: z.string().nullish().describe(`
         * * Field Name: FolderID
         * * Display Name: Folder ID
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
     * * Description: Optional folder where the user organizes the linked resource`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -7268,6 +7264,16 @@ export const ResourceLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
+    ResourceType: z.string().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
 });
 
 export type ResourceLinkEntityType = z.infer<typeof ResourceLinkSchema>;
@@ -28629,7 +28635,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    * * Default Value: null
     * * Description: Foreign key to the user linking the resource
     */
     get UserID(): string {
@@ -28644,7 +28649,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Display Name: Resource Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
-    * * Default Value: null
     * * Description: Foreign key to the resource type (view, dashboard, etc.)
     */
     get ResourceTypeID(): string {
@@ -28658,7 +28662,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Field Name: ResourceRecordID
     * * Display Name: Resource Record ID
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     * * Description: ID of the specific resource being linked
     */
     get ResourceRecordID(): string {
@@ -28672,7 +28675,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Field Name: FolderID
     * * Display Name: Folder ID
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     * * Description: Optional folder where the user organizes the linked resource
     */
     get FolderID(): string | null {
@@ -28700,6 +28702,26 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get ResourceType(): string {
+        return this.Get('ResourceType');
     }
 }
 

@@ -459,6 +459,119 @@ EXEC [__mj].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,sta
          'Search'
       )
 
+
+
+
+      INSERT INTO [__mj].EntityField
+      (
+         EntityID,
+         Sequence,
+         Name,
+         DisplayName,
+         Description,
+         Type,
+         Length,
+         Precision,
+         Scale,
+         AllowsNull,
+         DefaultValue,
+         AutoIncrement,
+         AllowUpdateAPI,
+         IsVirtual,
+         RelatedEntityID,
+         RelatedEntityFieldName,
+         IsNameField,
+         IncludeInUserSearchAPI,
+         IncludeRelatedEntityNameFieldInBaseView,
+         DefaultInView,
+         IsPrimaryKey,
+         IsUnique,
+         RelatedEntityDisplayType
+      )
+      VALUES
+      (
+         '78D31F3F-A688-EF11-8473-6045BDF077EE',
+         8,
+         'User',
+         'User',
+         NULL,
+         'nvarchar',
+         200,
+         0,
+         0,
+         0,
+         null,
+         0,
+         0,
+         1,
+         NULL,
+         NULL,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         'Search'
+      )
+
+
+
+
+
+      INSERT INTO [__mj].EntityField
+      (
+         EntityID,
+         Sequence,
+         Name,
+         DisplayName,
+         Description,
+         Type,
+         Length,
+         Precision,
+         Scale,
+         AllowsNull,
+         DefaultValue,
+         AutoIncrement,
+         AllowUpdateAPI,
+         IsVirtual,
+         RelatedEntityID,
+         RelatedEntityFieldName,
+         IsNameField,
+         IncludeInUserSearchAPI,
+         IncludeRelatedEntityNameFieldInBaseView,
+         DefaultInView,
+         IsPrimaryKey,
+         IsUnique,
+         RelatedEntityDisplayType
+      )
+      VALUES
+      (
+         '78D31F3F-A688-EF11-8473-6045BDF077EE',
+         9,
+         'ResourceType',
+         'Resource Type',
+         NULL,
+         'nvarchar',
+         510,
+         0,
+         0,
+         0,
+         null,
+         0,
+         0,
+         1,
+         NULL,
+         NULL,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         'Search'
+      )
+
 /* SQL text to set default column width where needed */
 EXEC __mj.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
 

@@ -14,7 +14,6 @@ export class AvailableResourcesDialogComponent implements OnInit {
   @Input() DialogWidth: string = '700px';
   @Input() DialogHeight: string = '450px';
 
-
   @Input() get DialogVisible(): boolean {
     return this._dialogVisible;
   }
@@ -47,6 +46,7 @@ export class AvailableResourcesDialogComponent implements OnInit {
    * Optional, set this to the currently selected record to start the dialog with that record selected, if desired. This property will be updated as the user selects records in the dialog.
    */
   @Input() SelectedResources: ResourceData[] =[];
+  @Input() ResourceExtraFilter?: string;
   @Input() User!: UserInfo;
   /**
    * Resource Type to show available resources for
