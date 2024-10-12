@@ -1,8 +1,9 @@
-import { AfterViewInit, Component, EventEmitter, Input, Output } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
-import { ResourceData } from '@memberjunction/ng-shared';
-import { SelectionEvent } from '@progress/kendo-angular-grid';
+import { ResourceData, SharedService } from '@memberjunction/ng-shared';
+import { GridSelectionItem, SelectionEvent } from '@progress/kendo-angular-grid';
+import { GridComponent } from '@progress/kendo-angular-grid';
 
 /**
  * This component displays a list of available resources for a user for a specific Resource Type.
@@ -13,30 +14,56 @@ import { SelectionEvent } from '@progress/kendo-angular-grid';
   styleUrls: ['./available-resources.component.css']
 })
 export class AvailableResourcesComponent implements AfterViewInit {
-    @Input() user!: UserInfo;
+    @Input() User!: UserInfo;
     @Input() ResourceTypeID!: string;
     @Input() SelectionMode: 'Single' | 'Multiple' = 'Single';
     @Input() SelectedResources: ResourceData[] = [];
-
     @Output() SelectionChanged = new EventEmitter<ResourceData[]>();
 
+
+    @ViewChild('resourcesGrid') resourcesGrid!: GridComponent;
     public onSelectionChange(e: SelectionEvent) {
-        const selectedResources = e.selectedRows?.map((row) => row.dataItem as ResourceData) ?? [];
+        this.SelectedResources = this.resourcesGrid.selection.map((item) => {
+            console.log(item);
+            return this.resources[<number>item]
+        });
         // now bubble up the event
-        this.SelectionChanged.emit(selectedResources);
+        this.SelectionChanged.emit(this.SelectedResources);
     }
 
     public resourcePermissions: ResourcePermissionEntity[] = [];
     public resources: ResourceData[] = [];
     async ngAfterViewInit() {
+        if (!this.User) {
+            throw new Error('User is a required property for the AvailableResourcesDialogComponent');
+        }
+
         // load up the current permissions for the specified ResourceTypeID and user
         await ResourcePermissionEngine.Instance.Config();
         // now we can get the permissions for the specified resource
-        this.resourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.user, this.ResourceTypeID);
+        this.resourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.User, this.ResourceTypeID);
+        const rt = SharedService.Instance.ResourceTypeByID(this.ResourceTypeID);
+        if (!rt || !rt.EntityID)
+            throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
+
+        const md = new Metadata();
+        const entity = md.EntityByID(rt.EntityID);
+        if (!entity || !entity.NameField)
+            throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
+        const rv = new RunView();
+        const nameField = entity.NameField;
+        const result = await rv.RunView({
+            EntityName: entity.Name,
+            ExtraFilter: `ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})`,
+            OrderBy: nameField.Name
+        })
+        if (!result || !result.Success)
+            throw new Error(`Error running view for entity ${entity.Name}`);
+
         this.resources = this.resourcePermissions.map((r) => {
             return new ResourceData({
-                ResourceID: r.ResourceRecordID,
-                ResourceName: 'fill in here',
+                ResourceRecordID: r.ResourceRecordID,
+                ResourceName: result.Results.find((row) => row.ID === r.ResourceRecordID)?.[nameField.Name] ?? 'Unknown',
                 ResourceTypeID: r.ResourceTypeID,
                 ResourceType: r.ResourceType
             });

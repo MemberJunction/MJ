@@ -5,11 +5,12 @@
         [title]="DialogTitle"        
         (close)="OnCancel()"
     >
-        <mj-available-resources>
+        <mj-available-resources
+            [User]="User"
             [ResourceTypeID]="ResourceTypeID"
             [SelectionMode]="SelectionMode"
             [SelectedResources]="SelectedResources"
-            (OnRecordSelected)="BubbleOnSelectedResourcesChanged($event)"
+            (SelectionChanged)="BubbleOnSelectedResourcesChanged($event)"
         >
         </mj-available-resources>
         <kendo-dialog-actions>

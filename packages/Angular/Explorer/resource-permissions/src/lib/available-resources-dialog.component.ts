@@ -1,4 +1,4 @@
-import { Component, Output, EventEmitter, Input  } from '@angular/core';
+import { Component, Output, EventEmitter, Input, OnInit  } from '@angular/core';
 
 import { BaseEntity, EntityFieldInfo, UserInfo } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/ng-shared';
@@ -9,7 +9,7 @@ import { ResourceData } from '@memberjunction/ng-shared';
   templateUrl: './available-resources-dialog.component.html',
   styleUrls: ['./available-resources-dialog.component.css']
 })
-export class AvailableResourcesDialogComponent {
+export class AvailableResourcesDialogComponent implements OnInit {
   @Input() DialogTitle: string = 'Available Resources';
   @Input() DialogWidth: string = '700px';
   @Input() DialogHeight: string = '450px';
@@ -47,7 +47,7 @@ export class AvailableResourcesDialogComponent {
    * Optional, set this to the currently selected record to start the dialog with that record selected, if desired. This property will be updated as the user selects records in the dialog.
    */
   @Input() SelectedResources: ResourceData[] =[];
-  @Input() user!: UserInfo;
+  @Input() User!: UserInfo;
   /**
    * Resource Type to show available resources for
    */
@@ -59,4 +59,9 @@ export class AvailableResourcesDialogComponent {
     this.SelectedResourcesChanged.emit(resources);
   }
 
+  public ngOnInit(): void {
+      if (!this.User) {
+          throw new Error('User is a required property for the AvailableResourcesDialogComponent');
+      }
+  }
 }
