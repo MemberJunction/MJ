@@ -92,6 +92,24 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     this.resourcePermissions.push(permission);
   }
 
+  public permissionAlreadyExists(): boolean {
+    // check to see if the selection that the user currently has in place for the combination of TYPE + either USER or ROLE already exists
+    // in our list of permissions
+    for (const permission of this.resourcePermissions) {
+      if (permission.Type === this.SelectedType) {
+        if (this.SelectedType === 'User' && permission.UserID === this.SelectedUser?.ID) {
+          return true;
+        }
+        else if (this.SelectedType === 'Role' && permission.RoleID === this.SelectedRole?.ID) {
+          return true;
+        }
+      }
+    }
+
+    // if we get here, then the permission does not already exist
+    return false;
+  }
+
   public async SavePermissions(): Promise<boolean> {
     // first delete any permissions that were marked for deletion
     const md = new Metadata();
@@ -126,6 +144,7 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     if (await tg.Submit()) {
       this._pendingDeletes = [];
       this._pendingAdds = [];
+      await ResourcePermissionEngine.Instance.RefreshAllItems(); // refresh the permissions cache
       return true;
     }
     else {

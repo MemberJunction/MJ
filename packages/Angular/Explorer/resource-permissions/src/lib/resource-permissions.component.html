@@ -17,7 +17,7 @@
             [(ngModel)]="SelectedUser"
             textField="Name"
             valueField="ID"
-            style="width: 150px;">
+            style="width: 225px;">
           </kendo-dropdownlist>
         }
         @else if (SelectedType === 'Role') {
@@ -37,7 +37,7 @@
           [(ngModel)]="SelectedPermissionLevel"
           style="width: 100px;">
         </kendo-dropdownlist>
-        <button kendoButton (click)="addPermission()">Add</button>
+        <button kendoButton (click)="addPermission()" [disabled]="permissionAlreadyExists()" [title]="permissionAlreadyExists() ? 'This combination of Type/User/Role already exists below' : ''" >Add</button>
       </div>
     }
     <table class="resource-table">
