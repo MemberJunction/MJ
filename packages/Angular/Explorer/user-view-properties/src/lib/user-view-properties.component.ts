@@ -2,9 +2,9 @@ import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, View
 import { ActivatedRoute, Router } from "@angular/router";
 import { FormBuilder } from "@angular/forms";
 
-import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError } from "@memberjunction/core";
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError, getAnsiColorCode } from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListEntity, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
+import { ListEntity, ResourcePermissionEngine, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { ResourceData, EventCodes, SharedService } from '@memberjunction/ng-shared';
 
@@ -42,6 +42,66 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   public ViewEntityInfo!: EntityInfo;
   public ViewResourceTypeID!: string;
+
+
+  private _userCanEdit: boolean | undefined = undefined;
+  /**
+   * This property determines if the current user can save the current view, or not.
+   */
+  public override get UserCanEdit(): boolean {
+    if (this._userCanEdit !== undefined) {
+      return this._userCanEdit;
+    }
+    else {
+      this._userCanEdit = this.CalculateUserCanEdit();
+      return this._userCanEdit;
+    }
+  }
+
+  public get FieldsDisabledIndexes(): number[] {
+    if (this.UserCanEdit) {
+      return [];
+    }
+    else {
+      // return an array of all indexes, get the full list of fields that are in the view, and then get the index of each of those fields in the full list of fields
+      // which is in this.localGridState.columnSettings, just create an array that has all of the indexes from the array this.localGridState.columnSettings
+      const result: number[] = [];
+      for (let i = 0; i < this.localGridState.columnSettings.length; i++) {
+        result.push(i);
+      }
+      return result;
+    }
+  }
+
+  private CalculateUserCanEdit(): boolean {
+    // if the record is new, not saved, then the user can save
+    if (!this.record || !this.ViewResourceTypeID)
+      return false; // not loaded yet, bail out
+
+
+    if (!this.record.IsSaved) {
+      return true;
+    }
+    else {
+      const md = new Metadata();
+      // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
+      // so of course they can save it
+      if (this.record.UserID === md.CurrentUser.ID) {
+        return true;
+      }
+      else {
+        // if the user is an admin, they can save any view
+        if (md.CurrentUser.Type.trim().toLowerCase() === 'owner') {
+          return true;
+        }
+        else {
+          // if the user is not an admin, and they are not the owner of the view, we check the permissions on the resource
+          const perms = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.record.ID, md.CurrentUser);
+          return perms === 'Owner' || perms === 'Edit'; // these are the only two levels that can save a view
+        }
+      }
+    }
+  }
 
   private keyPressListener: any;
   public usedFields: Set<string> = new Set(); // Track used fields
@@ -161,6 +221,9 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   async Load() {
+    await ResourcePermissionEngine.Instance.Config(); // make sure our permissions engine is loaded, this will do nothing if it's already loaded
+    this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
+
     const md = new Metadata();
     this.record = <UserViewEntityExtended> await md.GetEntityObject('User Views');
 

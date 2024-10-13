@@ -119,3 +119,20 @@
   border-color: var(--border-blue);
   color: white;
 }
+
+.filter-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.5); /* Semi-transparent white */
+  z-index: 1; /* Ensure it's above the other components */
+  pointer-events: all; /* get all clicks */
+  cursor: not-allowed; /* Change cursor to indicate it's disabled */
+}
