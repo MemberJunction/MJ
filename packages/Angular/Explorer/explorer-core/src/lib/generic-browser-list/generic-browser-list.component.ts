@@ -19,7 +19,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
   @Input() public title: string | undefined = '';
-  @Input() public items: any[] = [];
+  @Input() public items: Item[] = [];
   @Input() public iconName: string = 'view';
   @Input() public disableAddButton: boolean = false;
   @Input() public disableEditButton: boolean = false;
@@ -27,7 +27,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public backText: string = 'Go Back';
   @Input() public ItemEntityName: string = '';
   @Input() public CategoryEntityName: string = '';
-  @Input() public selectedFolderID: number | null = null;
+  @Input() public selectedFolderID: string | null = null;
   @Input() public showNotifications: boolean = true;
   @Input() public categoryEntityID: string | null = null;
   @Input() public displayAsGrid: boolean = false;
@@ -103,15 +103,7 @@ export class GenericBrowserListComponent implements OnInit{
 
     const view = new RunView();
     
-    const rvResult = await view.RunView({
-      EntityName: "Resource Types",
-      ResultType: 'entity_object'
-    }, md.CurrentUser);
-
-    if(rvResult && rvResult.Success){
-      let results: ResourceTypeEntity[] = rvResult.Results;
-      this.resourceTypes = results;
-    }
+    this.resourceTypes = SharedService.Instance.ResourceTypes;
   }
   
 
@@ -240,6 +232,10 @@ export class GenericBrowserListComponent implements OnInit{
 
       this.deleteDialogOpened = true;
     }
+  }
+
+  public async deleteLink(item: Item){
+    console.log('not implemented');
   }
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
@@ -496,7 +492,8 @@ export class GenericBrowserListComponent implements OnInit{
 
     const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
     if(resourceType){
-      return LargeClass + resourceType.Icon;
+      //const rotateStyle: string = item.IsLink ? " fa-rotate-90" : "";
+      return LargeClass + resourceType.Icon;// + rotateStyle;
     }
 
     return "";

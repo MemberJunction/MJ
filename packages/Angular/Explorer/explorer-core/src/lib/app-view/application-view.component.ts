@@ -1,13 +1,14 @@
 import { ChangeDetectorRef, Component, Input, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity } from '@memberjunction/core';
-import { EntityEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity, UserInfo } from '@memberjunction/core';
+import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
-import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
+import { AvailableResourcesDialogComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
   selector: 'mj-application-view',
@@ -17,6 +18,7 @@ import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
+    @ViewChild('availableResourcesDialog') availableResourcesDialog!: AvailableResourcesDialogComponent;
 
     @Input() public categoryEntityID!: string;
 
@@ -28,9 +30,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public UnselectedAppEntities: EntityEntity[] = [];
     public app: ApplicationInfo | undefined;
     public userApp: UserApplicationEntity | undefined;
+    public currentUser!: UserInfo;
+    public FilterOutCurrentUserViews!: string;
     public extraDropdownOptions:  {text: string}[] = [
-        {text: 'View'}
+        {text: 'View'},
+        {text: 'Link to Shared View'},
     ];
+    public ViewResourceTypeID!: string;
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService, private cdr: ChangeDetectorRef){
         super();
@@ -39,14 +45,18 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
     async ngOnInit(): Promise<void> {
+        const md = new Metadata();
+        this.currentUser = md.CurrentUser;
+        this.ViewResourceTypeID = this.sharedService.ResourceTypeByName('User Views')?.ID || '';
+
         this.route.paramMap.subscribe(async (params) => {
             const appName = params.get('appName');
             const entityName = params.get('entityName');
             const folderID = params.get('folderID'); 
             this.showLoader = true;
 
-            if(folderID){
-                this.selectedFolderID = parseInt(folderID) || null;
+            if (folderID) {
+                this.selectedFolderID = folderID
             }
             
             if (appName && appName !== this.app?.Name) {
@@ -219,7 +229,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
         this.showLoader = true;
         this.currentlySelectedAppEntity = entity;
-        
+        this.FilterOutCurrentUserViews = `UserID <> '${this.currentUser.ID}' AND EntityID = '${entity.ID}'`;
+
         if(this.selectedFolderID){
             let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID='${this.selectedFolderID}'`);
             if(viewResult.length > 0){
@@ -241,6 +252,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             sortItemsAfterLoad: true, 
             categoryItemFilter: categoryFilter, 
             entityItemFilter: userViewFilter, 
+            linkItemFilter: `EntityID='${this.currentlySelectedAppEntity.ID}'`,
             showLoader: true
         });
 
@@ -311,7 +323,42 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.viewMode = viewMode;
     }
 
-    createNewView(event: BeforeAddItemEvent) {
+    public LinkToSharedViewDialogVisible: boolean = false;
+    public createItemClickedEvent(event: DropdownOptionClickEvent) {
+        switch (event.Text.trim().toLowerCase()) {
+            case 'link to shared view':
+                this.LinkToSharedViewDialogVisible = true;
+                break;
+            default:
+                LogError('Unknown dropdown option clicked');
+                break;
+        }
+    }
+    public async HandleLinkToSharedView(okClicked: Boolean) {
+        this.LinkToSharedViewDialogVisible = false;
+        if (okClicked) {
+            const resources = this.availableResourcesDialog.SelectedResources;
+            const md = new Metadata();
+            let success = true;
+            for (const r of resources) {
+                const newResourceLink = await md.GetEntityObject<ResourceLinkEntity>('Resource Links');
+                newResourceLink.ResourceRecordID = r.ResourceRecordID;
+                newResourceLink.ResourceTypeID = r.ResourceTypeID;
+                newResourceLink.UserID = this.currentUser.ID;
+                newResourceLink.FolderID = this.selectedFolderID
+                if (!await newResourceLink.Save()) {
+                    LogError('Error saving new resource link: ' + newResourceLink.LatestResult.Message);
+                    success = false;
+                }
+            }
+            if (!success) {
+                this.sharedService.CreateSimpleNotification('There was an error linking to the shared view(s). Please try again later or notify a system administrator.', 'error', 3500);
+            }
+        }
+    }
+
+
+    public createNewView(event: BeforeAddItemEvent) {
         event.Cancel = true;
         if(this.viewPropertiesDialog && this.currentlySelectedAppEntity){
             console.log("Creating new view ", this.currentlySelectedAppEntity?.Name);

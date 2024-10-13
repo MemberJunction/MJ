@@ -32,6 +32,7 @@ import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
@@ -159,7 +160,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     UserViewPropertiesDialogModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    RecordSelectorModule
+    RecordSelectorModule,
+    ResourcePermissionsModule
   ],
   exports: [
     FormToolbarComponent,

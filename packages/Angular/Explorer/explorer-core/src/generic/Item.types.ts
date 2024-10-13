@@ -12,6 +12,14 @@ export class Item {
     public Description: string;
     public Type: ItemType;
     public Favorite: boolean = false;
+    /**
+     * Is this item a link to a shared resource from another user?
+     */
+    public IsLink: boolean = false;
+    /**
+     * If this item is a link, what is the permission level of the link?
+     */
+    public LinkPermissionLevel: 'View' | 'Edit' | 'Owner' | null = null;
     public Data : any | Folder;
 
     constructor(data: any | Folder, type: ItemType){

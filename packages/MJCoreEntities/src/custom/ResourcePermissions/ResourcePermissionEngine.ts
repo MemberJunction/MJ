@@ -93,4 +93,45 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         }
     }
 
+    /**
+     * Returns all the permissions a user has for a specific resource type based on both their user-specific permissions and permissions assigned through roles.
+     * @param user 
+     * @param ResourceTypeID 
+     * @returns 
+     */
+    public GetUserAvailableResources(user: UserInfo, ResourceTypeID?: string): ResourcePermissionEntity[] {
+        let rolePermissions = this.Permissions.filter((r) => r.Type === 'Role' && user.UserRoles.find(ur => ur.RoleID === r.RoleID) !== undefined);
+        let permissions = this.Permissions.filter((r) => r.Type === 'User' && r.UserID === user.ID);
+        if (ResourceTypeID) {
+            permissions = permissions.filter((r) => r.ResourceTypeID === ResourceTypeID);
+            rolePermissions = rolePermissions.filter((r) => r.ResourceTypeID === ResourceTypeID);
+        }
+        permissions = permissions.concat(rolePermissions);
+
+        // now, we reduce the array so that we only have the highest permission level for each resourcetypeid/resourcerecordid combination
+        let reducedPermissions: ResourcePermissionEntity[] = [];
+        permissions.forEach((p) => {
+            let existing = reducedPermissions.find((r) => r.ResourceTypeID === p.ResourceTypeID && r.ResourceRecordID === p.ResourceRecordID);
+            if (!existing) {
+                reducedPermissions.push(p);
+            } else {
+                // existing permission and see if this one is higher, if so, replace it in the array with the new one
+                let bSwap = false;  
+                if (p.PermissionLevel === 'Owner' && existing.PermissionLevel !== 'Owner') {
+                    bSwap = true;
+                } 
+                else if (p.PermissionLevel === 'Edit' && existing.PermissionLevel === 'View') {
+                    bSwap = true;
+                }
+                if (bSwap) {
+                    // get rid of the existing permission
+                    reducedPermissions = reducedPermissions.filter((r) => r !== existing);
+                    // add the new permission
+                    reducedPermissions.push(p);
+                }
+            }
+        });
+
+        return reducedPermissions;
+    }
 }

@@ -1,11 +1,11 @@
-import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
+import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
-import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
+import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource, { MSSQLConnection } from "./Config/db-connection"
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
-import { logError, logMessage, logStatus, logWarning } from './Misc/logging';
+import { logError, logMessage, logStatus, logWarning } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core'
 import { RunCommandsBase } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
@@ -13,8 +13,9 @@ import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
+import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { ActionEngine } from '@memberjunction/actions';
+import { SQLLogging } from './Misc/sql_logging';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -74,6 +75,9 @@ export class RunCodeGenBase {
             const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
             if (!skipDB) {
                 logStatus("Handling SQL Script Execution, Metadata Maintenance, and SQL Object Generation... (to skip this, set skip_database_generation to true in the config file under settings)")
+
+                SQLLogging.initSQLLogging(); // initialize the SQL Logging functionality
+
                 /****************************************************************************************
                 // STEP 0 --- Precursor Step execute any commands specified in the config file
                 ****************************************************************************************/
@@ -114,7 +118,6 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
                 const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
                 logStatus('Managing Metadata...')
-                manageMD.manageMetaDataLogging(configInfo.metadataSQLOutput);
                 const metadataSuccess = await manageMD.manageMetadata(AppDataSource); 
                 if (!metadataSuccess){
                     logError('ERROR managing metadata');
@@ -133,6 +136,8 @@ export class RunCodeGenBase {
                 }
                 else
                     logStatus('SQL output directory NOT found in config file, skipping...');
+
+                SQLLogging.finishSQLLogging(); // finish up the SQL Logging
             }
             else {
                 logMessage("Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings", MJ.SeverityType.Warning, false);

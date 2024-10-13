@@ -34,7 +34,7 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
     //because BaseBrowserComponent's resource filter includes a filter for UserID
     //which doesnt exist on queries
     this.route.paramMap.subscribe(async (params) => {
-      this.selectedFolderID = Number(params.get('folderID')) || null;
+      this.selectedFolderID = params.get('folderID');
       const md: Metadata = new Metadata();
         let categoryFilter: string = this.selectedFolderID ? `CategoryID = '${this.selectedFolderID}'` : `CategoryID IS NULL`;
         let resourceFilter: string = `${categoryFilter}`;

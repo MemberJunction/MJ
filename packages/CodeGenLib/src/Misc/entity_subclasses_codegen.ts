@@ -1,9 +1,9 @@
 import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from './Misc/util';
+import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
-import { logStatus } from './Misc/logging';
+import { logStatus } from './status_logging';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
