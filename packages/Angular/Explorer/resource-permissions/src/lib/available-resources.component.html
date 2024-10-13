@@ -1,25 +1,24 @@
 <div class="container">
     @if (User) {
         <kendo-grid
-          #resourcesGrid
-          [data]="resources"
-          [selectable]="{ mode: SelectionMode.toLowerCase() === 'Single' ? 'single' : 'multiple' }"
-          (selectionChange)="onSelectionChange($event)"
-          style="width: 100%; max-height: 400px;"
-          kendoGridSelectBy="ResourceRecordID"
-          [(selectedKeys)]="gridRecordSelection"
+            #resourcesGrid
+            [data]="resources"
+            [selectable]="{ mode: SelectionMode.toLowerCase() === 'Single' ? 'single' : 'multiple' }"
+            (selectionChange)="onSelectionChange($event)"
+            style="width: 100%; max-height: 400px;"
+            kendoGridSelectBy="ResourceRecordID"
+            [(selectedKeys)]="gridRecordSelection"
           >
-          
-        <kendo-grid-column field="Name" title="Name" [width]="150">
-        </kendo-grid-column>
-        <kendo-grid-column field="ResourceType" title="Type" [width]="150">
-        </kendo-grid-column>
-      
-          <kendo-grid-column
-            field="ResourceRecordID"
-            title="Resource Record ID"
-            [width]="200">
-          </kendo-grid-column>
+            <kendo-grid-column field="Name" title="Name" [width]="150">
+            </kendo-grid-column>
+
+            @for (col of gridExtraColumns; track col) {
+                <kendo-grid-column [title]="col.DisplayNameOrName">
+                    <ng-template kendoGridCellTemplate let-dataItem>
+                        {{ dataItem.Configuration[col.Name] }} 
+                    </ng-template>
+                </kendo-grid-column>
+            }
         </kendo-grid>    
     }
   </div>

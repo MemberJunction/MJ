@@ -54,6 +54,12 @@ export class AvailableResourcesDialogComponent implements OnInit {
   @Input() ResourceTypeID!: string;
   @Input() SelectionMode: 'Single' | 'Multiple' = 'Single';
 
+  /**
+   * Optional, comma-delimited list of field names to provide extra columns here to display in the grid. These columns will be displayed after the Name of the resource
+   */
+  @Input() ExtraColumns: string = "";
+
+
   public BubbleOnSelectedResourcesChanged(resources: ResourceData[]) {
     this.SelectedResources = resources;
     this.SelectedResourcesChanged.emit(resources);

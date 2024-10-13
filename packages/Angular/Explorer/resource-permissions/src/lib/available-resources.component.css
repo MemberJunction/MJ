@@ -27,14 +27,6 @@
   kendo-grid td {
     padding: 12px;
     border-bottom: 1px solid #ddd;
+    cursor: pointer;
   }
-  
-  kendo-grid tr:nth-child(even) {
-    background-color: #f9f9f9;
-  }
-  
-  kendo-grid tr:hover {
-    background-color: #f1f1f1;
-  }
-  
   

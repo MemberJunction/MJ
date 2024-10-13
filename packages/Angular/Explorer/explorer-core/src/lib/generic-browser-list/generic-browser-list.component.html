@@ -75,17 +75,29 @@
             @for(item of items; track item){
               <kendo-card class="card-wrapper cursor-pointer">
                 <div class="list-item-icon">
-                  @if(!disableEditButton){
-                    <button (click)="editItem(item)" class="list-btn">
+                  @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel == 'Owner' || item.LinkPermissionLevel == 'Edit')) {
+                    <button (click)="editItem(item)" class="list-btn" title="Edit Item">
                       <span class="fa-regular fa-pen-to-square"></span>
                     </button>
                   }
-                  <button (click)="deleteItem(item)" class="list-btn">
-                    <span class="fa-regular fa-trash-can"></span>
-                  </button>
+                  @if(!item.IsLink || item.LinkPermissionLevel == 'Owner') {
+                    <button (click)="deleteItem(item)" class="list-btn" title="Delete Item">
+                      <span class="fa-regular fa-trash-can"></span>
+                    </button>                    
+                  }
+                  @else if (item.IsLink) {
+                    <button (click)="deleteLink(item)" class="list-btn" title="Remove Link to Shared Item" >
+                      <span class="fa-regular fa-trash-can"  style="color: rgb(19, 92, 201);"></span>
+                    </button>                    
+                  }
                 </div>
                 <kendo-card-body (click)="itemClick(item)">
-                    <span (title)="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    @if(item.IsLink) {
+                      <i [title]="item.Name + '(Shared)'" [ngClass]="getIconForResourceType(item)" style="color: rgb(19, 92, 201);"></i>
+                    }
+                    @else {
+                      <span [title]="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    }
                     <div class="padding-top-small">
                       <h5 kendoCardTitle>{{ item.Name }}</h5>
                       <p kendoCardSubtitle>{{ item.Description }}</p>

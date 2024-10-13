@@ -252,6 +252,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             sortItemsAfterLoad: true, 
             categoryItemFilter: categoryFilter, 
             entityItemFilter: userViewFilter, 
+            linkItemFilter: `EntityID='${this.currentlySelectedAppEntity.ID}'`,
             showLoader: true
         });
 

@@ -10,14 +10,14 @@
 
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      Resource Permissions
------               SCHEMA:      __mj
+-----               SCHEMA:      ${flyway:defaultSchema}
 -----               BASE TABLE:  ResourcePermission
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [__mj].[vwResourcePermissions]
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwResourcePermissions]
 GO
 
-CREATE VIEW [__mj].[vwResourcePermissions]
+CREATE VIEW [${flyway:defaultSchema}].[vwResourcePermissions]
 AS
 SELECT
     r.*,
@@ -25,21 +25,21 @@ SELECT
     Role_RoleID.[Name] AS [Role],
     User_UserID.[Name] AS [User]
 FROM
-    [__mj].[ResourcePermission] AS r
+    [${flyway:defaultSchema}].[ResourcePermission] AS r
 INNER JOIN
-    [__mj].[ResourceType] AS ResourceType_ResourceTypeID
+    [${flyway:defaultSchema}].[ResourceType] AS ResourceType_ResourceTypeID
   ON
     [r].[ResourceTypeID] = ResourceType_ResourceTypeID.[ID]
 LEFT OUTER JOIN
-    [__mj].[Role] AS Role_RoleID
+    [${flyway:defaultSchema}].[Role] AS Role_RoleID
   ON
     [r].[RoleID] = Role_RoleID.[ID]
 LEFT OUTER JOIN
-    [__mj].[User] AS User_UserID
+    [${flyway:defaultSchema}].[User] AS User_UserID
   ON
     [r].[UserID] = User_UserID.[ID]
 GO
-GRANT SELECT ON [__mj].[vwResourcePermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwResourcePermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
 
 
 -----------------------------------------------------------------
@@ -55,10 +55,10 @@ GRANT SELECT ON [__mj].[vwResourcePermissions] TO [cdp_UI], [cdp_Developer], [cd
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ResourcePermission
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateResourcePermission]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateResourcePermission]
 GO
 
-CREATE PROCEDURE [__mj].[spCreateResourcePermission]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateResourcePermission]
     @ResourceTypeID uniqueidentifier,
     @ResourceRecordID nvarchar(255),
     @Type nvarchar(10),
@@ -72,7 +72,7 @@ BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO
-    [__mj].[ResourcePermission]
+    [${flyway:defaultSchema}].[ResourcePermission]
         (
             [ResourceTypeID],
             [ResourceRecordID],
@@ -96,10 +96,10 @@ BEGIN
             @PermissionLevel
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwResourcePermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwResourcePermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [__mj].[spCreateResourcePermission] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateResourcePermission] TO [cdp_Developer], [cdp_Integration]
     
 
 
@@ -116,10 +116,10 @@ GRANT EXECUTE ON [__mj].[spCreateResourcePermission] TO [cdp_Developer], [cdp_In
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ResourcePermission
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spUpdateResourcePermission]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateResourcePermission]
 GO
 
-CREATE PROCEDURE [__mj].[spUpdateResourcePermission]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateResourcePermission]
     @ID uniqueidentifier,
     @ResourceTypeID uniqueidentifier,
     @ResourceRecordID nvarchar(255),
@@ -133,7 +133,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ResourcePermission]
+        [${flyway:defaultSchema}].[ResourcePermission]
     SET
         [ResourceTypeID] = @ResourceTypeID,
         [ResourceRecordID] = @ResourceRecordID,
@@ -150,33 +150,33 @@ BEGIN
     SELECT
                                         *
                                     FROM
-                                        [__mj].[vwResourcePermissions]
+                                        [${flyway:defaultSchema}].[vwResourcePermissions]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [__mj].[spUpdateResourcePermission] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourcePermission] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ResourcePermission table
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ResourcePermission table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [__mj].trgUpdateResourcePermission
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateResourcePermission
 GO
-CREATE TRIGGER [__mj].trgUpdateResourcePermission
-ON [__mj].[ResourcePermission]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateResourcePermission
+ON [${flyway:defaultSchema}].[ResourcePermission]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ResourcePermission]
+        [${flyway:defaultSchema}].[ResourcePermission]
     SET
-        __mj_UpdatedAt = GETUTCDATE()
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].[ResourcePermission] AS _organicTable
+        [${flyway:defaultSchema}].[ResourcePermission] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -198,17 +198,17 @@ GO
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ResourcePermission
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spDeleteResourcePermission]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteResourcePermission]
 GO
 
-CREATE PROCEDURE [__mj].[spDeleteResourcePermission]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteResourcePermission]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [__mj].[ResourcePermission]
+        [${flyway:defaultSchema}].[ResourcePermission]
     WHERE
         [ID] = @ID
 
@@ -216,7 +216,7 @@ BEGIN
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [__mj].[spDeleteResourcePermission] TO [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteResourcePermission] TO [cdp_Integration]
 
 
 -----------------------------------------------------------------
@@ -231,31 +231,31 @@ GRANT EXECUTE ON [__mj].[spDeleteResourcePermission] TO [cdp_Integration]
 
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      Resource Links
------               SCHEMA:      __mj
+-----               SCHEMA:      ${flyway:defaultSchema}
 -----               BASE TABLE:  ResourceLink
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [__mj].[vwResourceLinks]
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwResourceLinks]
 GO
 
-CREATE VIEW [__mj].[vwResourceLinks]
+CREATE VIEW [${flyway:defaultSchema}].[vwResourceLinks]
 AS
 SELECT
     r.*,
     User_UserID.[Name] AS [User],
     ResourceType_ResourceTypeID.[Name] AS [ResourceType]
 FROM
-    [__mj].[ResourceLink] AS r
+    [${flyway:defaultSchema}].[ResourceLink] AS r
 INNER JOIN
-    [__mj].[User] AS User_UserID
+    [${flyway:defaultSchema}].[User] AS User_UserID
   ON
     [r].[UserID] = User_UserID.[ID]
 INNER JOIN
-    [__mj].[ResourceType] AS ResourceType_ResourceTypeID
+    [${flyway:defaultSchema}].[ResourceType] AS ResourceType_ResourceTypeID
   ON
     [r].[ResourceTypeID] = ResourceType_ResourceTypeID.[ID]
 GO
-GRANT SELECT ON [__mj].[vwResourceLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwResourceLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
 
 
 -----------------------------------------------------------------
@@ -271,10 +271,10 @@ GRANT SELECT ON [__mj].[vwResourceLinks] TO [cdp_UI], [cdp_Developer], [cdp_Inte
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ResourceLink
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateResourceLink]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateResourceLink]
 GO
 
-CREATE PROCEDURE [__mj].[spCreateResourceLink]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateResourceLink]
     @UserID uniqueidentifier = '00000000-0000-0000-0000-000000000000',
     @ResourceTypeID uniqueidentifier = '00000000-0000-0000-0000-000000000000',
     @ResourceRecordID nvarchar(255),
@@ -284,7 +284,7 @@ BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
     INSERT INTO
-    [__mj].[ResourceLink]
+    [${flyway:defaultSchema}].[ResourceLink]
         (
             [UserID],
             [ResourceTypeID],
@@ -300,10 +300,10 @@ BEGIN
             @FolderID
         )
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwResourceLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwResourceLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [__mj].[spCreateResourceLink] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateResourceLink] TO [cdp_Developer], [cdp_Integration]
 
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -318,10 +318,10 @@ GRANT EXECUTE ON [__mj].[spCreateResourceLink] TO [cdp_Developer], [cdp_Integrat
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ResourceLink
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spUpdateResourceLink]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateResourceLink]
 GO
 
-CREATE PROCEDURE [__mj].[spUpdateResourceLink]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateResourceLink]
     @ID uniqueidentifier,
     @UserID uniqueidentifier,
     @ResourceTypeID uniqueidentifier,
@@ -331,7 +331,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ResourceLink]
+        [${flyway:defaultSchema}].[ResourceLink]
     SET
         [UserID] = @UserID,
         [ResourceTypeID] = @ResourceTypeID,
@@ -344,33 +344,33 @@ BEGIN
     SELECT
                                         *
                                     FROM
-                                        [__mj].[vwResourceLinks]
+                                        [${flyway:defaultSchema}].[vwResourceLinks]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [__mj].[spUpdateResourceLink] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourceLink] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the ResourceLink table
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ResourceLink table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [__mj].trgUpdateResourceLink
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateResourceLink
 GO
-CREATE TRIGGER [__mj].trgUpdateResourceLink
-ON [__mj].[ResourceLink]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateResourceLink
+ON [${flyway:defaultSchema}].[ResourceLink]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ResourceLink]
+        [${flyway:defaultSchema}].[ResourceLink]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].[ResourceLink] AS _organicTable
+        [${flyway:defaultSchema}].[ResourceLink] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -391,17 +391,17 @@ GO
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ResourceLink
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spDeleteResourceLink]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteResourceLink]
 GO
 
-CREATE PROCEDURE [__mj].[spDeleteResourceLink]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteResourceLink]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [__mj].[ResourceLink]
+        [${flyway:defaultSchema}].[ResourceLink]
     WHERE
         [ID] = @ID
 
@@ -409,4 +409,4 @@ BEGIN
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [__mj].[spDeleteResourceLink] TO [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteResourceLink] TO [cdp_Integration]

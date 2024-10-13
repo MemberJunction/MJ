@@ -94,6 +94,7 @@
         [User]="currentUser"
         [DialogVisible]="LinkToSharedViewDialogVisible"
         [ResourceTypeID]="ViewResourceTypeID"
+        ExtraColumns= "UserName, Description"
         SelectionMode="Multiple"
         (DialogClosed)="HandleLinkToSharedView($event)"
         [ResourceExtraFilter]="FilterOutCurrentUserViews"

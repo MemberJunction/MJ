@@ -2,7 +2,8 @@ import { LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { Router, Params, ActivatedRoute } from '@angular/router';
 import { BaseEvent, EventTypes, AfterAddFolderEvent, AfterDeleteItemEvent } from "../../generic/Events.types";
-import { BaseNavigationComponent } from "@memberjunction/ng-shared";
+import { BaseNavigationComponent, SharedService } from "@memberjunction/ng-shared";
+import { ResourceLinkEntity, ResourcePermissionEngine } from "@memberjunction/core-entities";
 
 export class BaseBrowserComponent extends BaseNavigationComponent {
     public showLoader: boolean = false;
@@ -83,11 +84,42 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
             const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
             const itemType: ItemType = params?.entityItemType || ItemType.Entity;
             let resourceItems: Item[] = this.createItemsFromEntityData(entityData, itemType);
-            if(params?.sortItemsAfterLoad){
+            if (params?.sortItemsAfterLoad) {
                 resourceItems = this.sortItems(resourceItems);
             }
             this.items.push(...resourceItems);
             this.entityData = entityData;
+        }
+
+        if (!params?.skipLoadResourceLinks) {
+            // load up the resource links for the current user/resource type/folder combination
+            const md = new Metadata();
+            const categoryFilter = this.selectedFolderID ? ` AND FolderID = '${this.selectedFolderID}'` : ` AND FolderID IS NULL`;
+            const rt = SharedService.Instance.ResourceTypes.find((rt) => rt.Entity === this.itemEntityName);
+            if (!rt)
+                throw new Error(`Resource Type for entity ${this.itemEntityName} not found`);
+            const extraFilter: string = `UserID = '${md.CurrentUser.ID}' AND ResourceTypeID ='${rt.ID}'${categoryFilter}`;
+            // we now have the filter built, run the view
+            const result = await this.RunView('Resource Links', extraFilter);
+            if (result && result.length > 0) {
+                // here, we have 1+ resource links, so we need to add them to the items array, and we need to get the items from the related entity
+                // e.g. Views/Dashboards/Reports/etc, and add them to the items array, but turn on the link flag so it is displayed correctly in the UI
+                const linkItemFilter = params?.linkItemFilter ? ` AND ${params.linkItemFilter}` : '';
+                const resourceExtraFilter = `ID in (${result.map((r) => `'${r.ResourceRecordID}'`).join(',')})${linkItemFilter}`;
+                const linkedItems = await this.RunView(this.itemEntityName, resourceExtraFilter);
+                const itemType: ItemType = params?.entityItemType || ItemType.Entity;
+                let linkedResourceItems: Item[] = this.createItemsFromEntityData(linkedItems, itemType);
+                if (params?.sortItemsAfterLoad) {
+                    linkedResourceItems = this.sortItems(linkedResourceItems);
+                }
+                // set the flag for each item show UI knows it is a link
+                await ResourcePermissionEngine.Instance.Config(); // probably already configured, but make sure
+                linkedResourceItems.forEach((i) => {
+                    i.LinkPermissionLevel = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(rt.ID, i.Data.ID, md.CurrentUser)
+                    i.IsLink = true
+                });
+                this.items.push(...linkedResourceItems);
+            }
         }
 
         this.showLoader = false;
@@ -183,10 +215,12 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
 
 export type LoadDataParams = {
     entityItemFilter?: string,
+    linkItemFilter?: string,
     entityItemType?: ItemType,
     categoryItemFilter?: string,
     skiploadEntityData?: boolean,
     skipLoadCategoryData?: boolean,
+    skipLoadResourceLinks?: boolean,
     sortItemsAfterLoad?: boolean,
     showLoader?: boolean
 }
