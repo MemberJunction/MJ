@@ -55,7 +55,6 @@
                                     itemClass="item"
                                     activeItemClass="item active"
                                     (dragEnd)="onDragEnd($event)"
-                                    [disabledIndexes]="FieldsDisabledIndexes"
                                 >
                                     <ng-template let-col="item">
                                     <div class="item-content">
@@ -74,6 +73,9 @@
                                     </div>
                                     </ng-template>
                                 </kendo-sortable>
+
+                                <!-- The overlay div, only visible when UserCanEdit is false -->
+                                <div *ngIf="!UserCanEdit" class="overlay"></div>                                    
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab>

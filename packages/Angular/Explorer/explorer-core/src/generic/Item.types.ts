@@ -20,6 +20,10 @@ export class Item {
      * If this item is a link, what is the permission level of the link?
      */
     public LinkPermissionLevel: 'View' | 'Edit' | 'Owner' | null = null;
+    /**
+     * Only used when IsLink = true, this will be set to the value of the link in the Resource Links.ID column.
+     */
+    public ResourceLinkID: string | null = null;
     public Data : any | Folder;
 
     constructor(data: any | Folder, type: ItemType){

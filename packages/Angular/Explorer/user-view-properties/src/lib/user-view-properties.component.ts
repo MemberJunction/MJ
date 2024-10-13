@@ -26,6 +26,10 @@ import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permis
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
   @Input() public ViewID: string | undefined;
   @Input() public EntityName: string | undefined;
+  /**
+   * View Category ID, optional
+   */
+  @Input() public CategoryID: string | null = null; 
   @Input() public ShowPropertiesButton: boolean = true;
 
   @Output() dialogClosed = new EventEmitter();
@@ -49,58 +53,10 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
    * This property determines if the current user can save the current view, or not.
    */
   public override get UserCanEdit(): boolean {
-    if (this._userCanEdit !== undefined) {
-      return this._userCanEdit;
+    if (this._userCanEdit === undefined) {
+      this._userCanEdit = this.record.UserCanEdit; // cache the value
     }
-    else {
-      this._userCanEdit = this.CalculateUserCanEdit();
-      return this._userCanEdit;
-    }
-  }
-
-  public get FieldsDisabledIndexes(): number[] {
-    if (this.UserCanEdit) {
-      return [];
-    }
-    else {
-      // return an array of all indexes, get the full list of fields that are in the view, and then get the index of each of those fields in the full list of fields
-      // which is in this.localGridState.columnSettings, just create an array that has all of the indexes from the array this.localGridState.columnSettings
-      const result: number[] = [];
-      for (let i = 0; i < this.localGridState.columnSettings.length; i++) {
-        result.push(i);
-      }
-      return result;
-    }
-  }
-
-  private CalculateUserCanEdit(): boolean {
-    // if the record is new, not saved, then the user can save
-    if (!this.record || !this.ViewResourceTypeID)
-      return false; // not loaded yet, bail out
-
-
-    if (!this.record.IsSaved) {
-      return true;
-    }
-    else {
-      const md = new Metadata();
-      // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
-      // so of course they can save it
-      if (this.record.UserID === md.CurrentUser.ID) {
-        return true;
-      }
-      else {
-        // if the user is an admin, they can save any view
-        if (md.CurrentUser.Type.trim().toLowerCase() === 'owner') {
-          return true;
-        }
-        else {
-          // if the user is not an admin, and they are not the owner of the view, we check the permissions on the resource
-          const perms = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.record.ID, md.CurrentUser);
-          return perms === 'Owner' || perms === 'Edit'; // these are the only two levels that can save a view
-        }
-      }
-    }
+    return this._userCanEdit;
   }
 
   private keyPressListener: any;
@@ -207,10 +163,24 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     return 50; // for this dialog, we don't want to offset the tab position related to where it is on the page, this is relative to top of dialog
   }
 
+  /**
+   * Displays a dialog to create a new view
+   * @param entityName 
+   */
   public CreateView(entityName: string) {
     this.EntityName = entityName;
     this.ViewID = undefined;
     this.Open();
+  }
+
+  /**
+   * Displays a dialog to create a new view, if the user saves the view, it will be created in the specified category
+   * @param entityName 
+   * @param viewCategoryID 
+   */
+  public CreateViewInCategory(entityName: string, viewCategoryID: string) {
+    this.CategoryID = viewCategoryID;
+    return this.CreateView(entityName);
   }
 
   public async Open(ViewID: string | undefined = this.ViewID) {
@@ -406,6 +376,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       return;
     }
 
+    // make sure the view category is set into the record if provided
+    this.record.CategoryID = this.CategoryID;
     let saveResult: boolean = await this.record.Save(); 
     if(!saveResult){
       // it failed, so don't close the dialog

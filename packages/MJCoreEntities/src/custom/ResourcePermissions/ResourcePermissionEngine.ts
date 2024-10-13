@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
-import { ResourcePermissionEntity } from "../../generated/entity_subclasses";
+import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
  * Resource Permission Engine is used for accessing metadata about permissions for resources and also determining if a user has access to a resource and at what level.
@@ -13,16 +13,28 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     }
 
     private _Permissions: ResourcePermissionEntity[];
-
+    private _ResourceTypes: {
+        ResourceTypes: ResourceTypeEntity[];
+    };
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
                 EntityName: 'Resource Permissions',
                 PropertyName: "_Permissions"
+            },
+            {
+                Type: 'dataset',
+                DatasetName: 'ResourceTypes',
+                PropertyName: "_ResourceTypes",
+                DatasetResultHandling: "single_property"
             }
         ]
         await this.Load(c, forceRefresh, contextUser);
+    }
+  
+    public get ResourceTypes(): ResourceTypeEntity[] {
+        return this._ResourceTypes.ResourceTypes;
     }
 
     public get Permissions(): ResourcePermissionEntity[] {
