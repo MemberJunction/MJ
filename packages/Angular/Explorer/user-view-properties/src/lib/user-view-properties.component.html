@@ -33,12 +33,12 @@
                             <ng-template kendoTabContent>
                             <div class="view-prop-tab-contents">
                                 <div class="form-group">
-                                <kendo-label class="k-form-label" text="Name"></kendo-label>
-                                <kendo-textbox #nameField class="view-name" [(ngModel)]="record.Name"></kendo-textbox>
+                                    <kendo-label class="k-form-label" text="Name"></kendo-label>
+                                    <kendo-textbox #nameField class="view-name" [(ngModel)]="record.Name" [disabled]="!UserCanEdit"></kendo-textbox>
                                 </div>
                                 <div class="form-group form-group-description">
-                                <kendo-label class="k-form-label" text="Description"></kendo-label>
-                                <textarea class="k-input k-input-solid view-description" [(ngModel)]="record.Description"></textarea>
+                                    <kendo-label class="k-form-label" text="Description"></kendo-label>
+                                    <textarea class="k-input k-input-solid view-description" [(ngModel)]="record.Description" [disabled]="!UserCanEdit"></textarea>
                                 </div>
                             </div>
                             </ng-template>
@@ -73,6 +73,9 @@
                                     </div>
                                     </ng-template>
                                 </kendo-sortable>
+
+                                <!-- The overlay div, only visible when UserCanEdit is false -->
+                                <div *ngIf="!UserCanEdit" class="overlay"></div>                                    
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab>
@@ -83,7 +86,7 @@
                             <ng-template kendoTabContent>
                                 <div class="smart-filter-container">
                                     <kendo-label text="Smart Filter" class="smart-filter-label"></kendo-label>
-                                    <kendo-switch [(ngModel)]="record.SmartFilterEnabled"></kendo-switch>
+                                    <kendo-switch [(ngModel)]="record.SmartFilterEnabled" [disabled]="!UserCanEdit"></kendo-switch>
                                 </div>
                                 <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
                                     <mj-find-record-dialog #findRecordDialog
@@ -91,11 +94,11 @@
                                         (DialogClosed)="onFindRecordDialogClosed()"
                                     >
                                     </mj-find-record-dialog>
-                                    <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button">
+                                    <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button" [disabled]="!UserCanEdit">
                                         <span class="fa-solid fa-table tab-icon"></span>
                                         Reference a View
                                     </button>
-                                    <button kendoButton (click)="smartFilterPrompt_insertListReference()" class="smart-filter-button">
+                                    <button kendoButton (click)="smartFilterPrompt_insertListReference()" class="smart-filter-button" [disabled]="!UserCanEdit">
                                         <span class="fa-list fa-solid"></span>
                                         Reference a List
                                     </button>
@@ -105,6 +108,7 @@
                                         [rows]="12"
                                         [(ngModel)]="record.SmartFilterPrompt"
                                         resizable="vertical"
+                                        [disabled]="!UserCanEdit"
                                     ></kendo-textarea>
                                 </div>
                                 <div *ngIf="!record.SmartFilterEnabled">
@@ -112,8 +116,11 @@
                                         [filters]="setupFilters()"
                                         [value]="defaultFilterState"
                                         (valueChange)="onFilterChange($event)"
+                                        [disabled]="!UserCanEdit"
                                     >
                                     </kendo-filter>
+                                    <!-- The overlay div, only visible when UserCanEdit is false -->
+                                    <div *ngIf="!UserCanEdit" class="overlay"></div>                                    
                                 </div>
                             </ng-template>
                         </kendo-tabstrip-tab>
@@ -124,7 +131,7 @@
                             </ng-template>
                             <ng-template kendoTabContent>
                                 <div class="sort-header">
-                                    <button kendoButton (click)="addSort()">
+                                    <button kendoButton (click)="addSort()" [disabled]="!UserCanEdit">
                                         <span class="fa-solid fa-plus"></span>
                                         Add
                                     </button>
@@ -137,6 +144,7 @@
                                         valueField="Name"
                                         (valueChange)="sortColumnValueChange(s, $event)"
                                         [(ngModel)]="s.field"
+                                        [disabled]="!UserCanEdit"
                                     >
                                     </kendo-dropdownlist>
                                     <kendo-dropdownlist
@@ -146,9 +154,10 @@
                                         valueField="Value"
                                         (valueChange)="sortDirectionValueChange(s, $event)"
                                         [(ngModel)]="s.direction"
+                                        [disabled]="!UserCanEdit"
                                     >
                                     </kendo-dropdownlist>
-                                    <button kendoButton (click)="removeSort(s)">
+                                    <button kendoButton (click)="removeSort(s)" [disabled]="!UserCanEdit">
                                         <span class="fa-solid fa-xmark"></span>
                                         Remove
                                     </button>
@@ -168,6 +177,8 @@
                                     [ResourceRecordID]="ViewID"
                                 >
                                 </mj-resource-permissions>
+                                <!-- The overlay div, only visible when UserCanEdit is false -->
+                                <div *ngIf="!UserCanEdit" class="overlay"></div>                                    
                             </ng-template>
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab *ngIf="ViewID && ViewID.length > 0">
@@ -206,10 +217,12 @@
                     </kendo-tabstrip>
             
                     <div class="k-actions k-actions-end customBtn popup-actions">
-                        <button kendoButton (click)="saveProperties()" themeColor="info">
-                            <span class="fa-solid fa-circle-check"></span>
-                            Save
-                        </button>
+                        @if (UserCanEdit) {
+                            <button kendoButton (click)="saveProperties()" themeColor="info">
+                                <span class="fa-solid fa-circle-check"></span>
+                                Save
+                            </button>    
+                        }
                         <button fillMode="outline" themeColor="info" kendoButton (click)="closePropertiesDialog()">Cancel</button>
                     </div>
                 </div>

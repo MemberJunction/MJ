@@ -117,6 +117,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
                 linkedResourceItems.forEach((i) => {
                     i.LinkPermissionLevel = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(rt.ID, i.Data.ID, md.CurrentUser)
                     i.IsLink = true
+                    i.ResourceLinkID = result.find((r) => r.ResourceRecordID === i.Data.ID).ID;
                 });
                 this.items.push(...linkedResourceItems);
             }
@@ -196,15 +197,20 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
     }
 
     public onEvent(event: BaseEvent): void {
-        if(event.EventType === EventTypes.AfterAddFolder || event.EventType === EventTypes.AfterAddItem){
-            //specific type does not matter, we just need a type that has the Item property
-            let addEvent: AfterAddFolderEvent = event as AfterAddFolderEvent;
-            this.items.push(addEvent.Item);
-        }
-        else if(event.EventType === EventTypes.AfterDeleteItem || event.EventType === EventTypes.AfterDeleteFolder){
-            //specific type does not matter, we just need a type that has the Item property
-            let deleteEvent: AfterDeleteItemEvent = event as AfterDeleteItemEvent;
-            this.items = this.items.filter((item: Item) => item !== deleteEvent.Item);
+        switch (event.EventType) {
+            case EventTypes.AfterAddFolder:
+            case EventTypes.AfterAddItem:
+                //specific type does not matter, we just need a type that has the Item property
+                let addEvent: AfterAddFolderEvent = event as AfterAddFolderEvent;
+                this.items.push(addEvent.Item);
+                break;
+            case EventTypes.AfterDeleteItem:
+            case EventTypes.AfterDeleteFolder:
+            case EventTypes.AfterUnlinkItem:
+                //specific type does not matter, we just need a type that has the Item property
+                let deleteEvent: AfterDeleteItemEvent = event as AfterDeleteItemEvent;
+                this.items = this.items.filter((item: Item) => item !== deleteEvent.Item);
+                break;
         }
     }
 

@@ -280,6 +280,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private _mostRecentURL: string = '';
+  private _mostRecentHomeURL: string = ''; // used only when we're on the home tab so we can remember the full URL for the HOME tab when we come back to it from another tab
   protected async NavigateFromUrl() {
     let url = this.router.url.trim().toLowerCase();
     if (url === '/') {
@@ -317,6 +318,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if(url.toLowerCase().includes('/app') && this.activeTabIndex > 0){
       this.setActiveTabToHome();
+    }
+
+    // finally, if we are on the home tab, update the _mostRecentHomeURL property to the current URL
+    if (this.activeTabIndex === 0) {
+      // only update the most recent home URL if we have a url that starts with something that is in the drawer
+      // or /app
+      if (!url.startsWith('/home') && (url.startsWith("/app") || this.drawerItems.find((item: any) => url.startsWith(item.path))))
+        this._mostRecentHomeURL = url;
     }
   }
 
@@ -363,6 +372,15 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         // we only do this IF the most recent URL does NOT start with the selectedDrawerItem path. 
         // The reason is because there could be SUB-PATHS within the _mostRecentURL that are not part of the selectedDrawerItem path
         // plus this is redundant if we're already on the selectedDrawerItem path
+
+        if (this._mostRecentHomeURL.startsWith(url) || 
+            (url === '/data' && this._mostRecentHomeURL.startsWith('/app')) || // special case for the /data drawer item, it leads to resources that start with /app after the first level, so we compare that too 
+            (url === '/home' && this._mostRecentHomeURL.startsWith('/app'))    // special case for the /data drawer item, it leads to resources that start with /app after the first level, so we compare that too 
+        ) {
+          // we use the most recent HomeURL if it starts with the selectedDrawerItem path
+          // this is because we want to preserve the query params that were on the URL when we first navigated to the home tab
+          url = this._mostRecentHomeURL;
+        }
         this.router.navigate([url]);
         this.setAppTitle();
         this._mostRecentURL = url;  

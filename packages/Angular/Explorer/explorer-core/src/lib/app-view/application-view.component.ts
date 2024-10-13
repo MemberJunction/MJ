@@ -1,13 +1,13 @@
 import { ChangeDetectorRef, Component, Input, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity, UserInfo } from '@memberjunction/core';
-import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewCategoryEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
-import { BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
+import { BaseEvent, BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent, EventTypes } from '../../generic/Events.types';
 import { AvailableResourcesDialogComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
@@ -120,7 +120,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             // now down here we have either loaded the app above, or already had the current app loaded. Now we move on to set the current entity and load er up
             if ( this.app && this.SelectedAppEntities.length ){
                 if ( entityName ) {
-                    const entityNameToLower: string = entityName.toLowerCase();
+                    // sometimes the entity name contains a ? and values after it, look for that and only grab stuff to left of ?
+                    const entityNameParts = entityName.split('?');
+                    const entityNameToLower: string = entityNameParts[0].toLowerCase().trim();
                     const selectedAppEntity = this.SelectedAppEntities.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
                     if ( selectedAppEntity ) {
                         await this.loadEntityAndFolders(selectedAppEntity);
@@ -229,6 +231,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
         this.showLoader = true;
         this.currentlySelectedAppEntity = entity;
+        this.categoryEntityID = entity.ID;
         this.FilterOutCurrentUserViews = `UserID <> '${this.currentUser.ID}' AND EntityID = '${entity.ID}'`;
 
         if(this.selectedFolderID){
@@ -350,6 +353,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                     LogError('Error saving new resource link: ' + newResourceLink.LatestResult.Message);
                     success = false;
                 }
+                else {
+                    await this.loadEntityAndFolders(this.currentlySelectedAppEntity); // refresh the view
+                }
             }
             if (!success) {
                 this.sharedService.CreateSimpleNotification('There was an error linking to the shared view(s). Please try again later or notify a system administrator.', 'error', 3500);
@@ -361,8 +367,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public createNewView(event: BeforeAddItemEvent) {
         event.Cancel = true;
         if(this.viewPropertiesDialog && this.currentlySelectedAppEntity){
-            console.log("Creating new view ", this.currentlySelectedAppEntity?.Name);
-            this.viewPropertiesDialog.CreateView(this.currentlySelectedAppEntity.Name);
+            this.viewPropertiesDialog.CategoryID = this.selectedFolderID; // pass along a folder if we have one, if null, that's fine it saves to "root" which is the null CategoryID
+            this.viewPropertiesDialog.CreateView(this.currentlySelectedAppEntity.Name);  
         }
         else{
             LogError("View Properties Dialog not found");
@@ -386,6 +392,20 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         if(args && args.Saved && this.currentlySelectedAppEntity){
             args.Cancel = true;
             await this.loadEntityAndFolders(this.currentlySelectedAppEntity);
+        }
+    }
+
+    public async navigateToParentFolder() {
+        if (this.selectedFolderID) {
+            const rv = new RunView();
+            const parentResult = await rv.RunView({
+                EntityName: "User View Categories",
+                ExtraFilter: `ID='${this.selectedFolderID}'`,
+            })
+            if (parentResult && parentResult.Success && parentResult.Results.length > 0) {
+                this.selectedFolderID = parentResult.Results[0].ParentID;
+                this.navigateToCurrentPage();
+            }
         }
     }
 

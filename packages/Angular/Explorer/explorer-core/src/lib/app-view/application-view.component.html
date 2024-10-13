@@ -80,10 +80,12 @@
                 (AfterAddItemEvent)="onEvent($event)"
                 (AfterDeleteItemEvent)="onEvent($event)"
                 (AfterDeleteFolderEvent)="onEvent($event)"
+                (AfterUnlinkItemEvent)="onEvent($event)"
                 (viewModeChangeEvent)="onViewModeChange($event)"
                 (BeforeAddItemEvent)="createNewView($event)"
                 (BeforeUpdateItemEvent)="editView($event)"
                 (dropdownOptionClickEvent)="createItemClickedEvent($event)"
+                (NavigateToParentEvent)="navigateToParentFolder()"
             />
         </div>
     }

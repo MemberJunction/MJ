@@ -2,9 +2,9 @@ import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, View
 import { ActivatedRoute, Router } from "@angular/router";
 import { FormBuilder } from "@angular/forms";
 
-import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError } from "@memberjunction/core";
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError, getAnsiColorCode } from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListEntity, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
+import { ListEntity, ResourcePermissionEngine, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { ResourceData, EventCodes, SharedService } from '@memberjunction/ng-shared';
 
@@ -26,6 +26,10 @@ import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permis
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
   @Input() public ViewID: string | undefined;
   @Input() public EntityName: string | undefined;
+  /**
+   * View Category ID, optional
+   */
+  @Input() public CategoryID: string | null = null; 
   @Input() public ShowPropertiesButton: boolean = true;
 
   @Output() dialogClosed = new EventEmitter();
@@ -42,6 +46,18 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   public ViewEntityInfo!: EntityInfo;
   public ViewResourceTypeID!: string;
+
+
+  private _userCanEdit: boolean | undefined = undefined;
+  /**
+   * This property determines if the current user can save the current view, or not.
+   */
+  public override get UserCanEdit(): boolean {
+    if (this._userCanEdit === undefined) {
+      this._userCanEdit = this.record.UserCanEdit; // cache the value
+    }
+    return this._userCanEdit;
+  }
 
   private keyPressListener: any;
   public usedFields: Set<string> = new Set(); // Track used fields
@@ -147,10 +163,24 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     return 50; // for this dialog, we don't want to offset the tab position related to where it is on the page, this is relative to top of dialog
   }
 
+  /**
+   * Displays a dialog to create a new view
+   * @param entityName 
+   */
   public CreateView(entityName: string) {
     this.EntityName = entityName;
     this.ViewID = undefined;
     this.Open();
+  }
+
+  /**
+   * Displays a dialog to create a new view, if the user saves the view, it will be created in the specified category
+   * @param entityName 
+   * @param viewCategoryID 
+   */
+  public CreateViewInCategory(entityName: string, viewCategoryID: string) {
+    this.CategoryID = viewCategoryID;
+    return this.CreateView(entityName);
   }
 
   public async Open(ViewID: string | undefined = this.ViewID) {
@@ -161,6 +191,9 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   async Load() {
+    await ResourcePermissionEngine.Instance.Config(); // make sure our permissions engine is loaded, this will do nothing if it's already loaded
+    this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
+
     const md = new Metadata();
     this.record = <UserViewEntityExtended> await md.GetEntityObject('User Views');
 
@@ -343,6 +376,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       return;
     }
 
+    // make sure the view category is set into the record if provided
+    this.record.CategoryID = this.CategoryID;
     let saveResult: boolean = await this.record.Save(); 
     if(!saveResult){
       // it failed, so don't close the dialog

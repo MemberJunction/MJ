@@ -8,6 +8,7 @@ export const EventTypes = {
     BeforeAddItem: "BeforeAddItem",
     BeforeDeleteFolder: "BeforeDeleteFolder",
     BeforeDeleteItem: "BeforeDeleteItem",
+    BeforeUnlinkItem: "BeforeUnlinkItem",
     BeforeUpdateFolder: "BeforeUpdateFolder",
     BeforeUpdateItem: "BeforeUpdateItem",
 
@@ -15,6 +16,7 @@ export const EventTypes = {
     AfterAddItem: "AfterAddItem",
     AfterDeleteFolder: "AfterDeleteFolder",
     AfterDeleteItem: "AfterDeleteItem",
+    AfterUnlinkItem: "AfterUnlinkItem",
     AfterUpdateFolder: "AfterUpdateFolder",
     AfterUpdateItem: "AfterUpdateItem"
 } as const;
@@ -91,6 +93,22 @@ export class BeforeDeleteItemEvent extends BaseEvent {
         super(EventTypes.BeforeDeleteItem);
         this.Item = item;
     }
+}
+
+export class BeforeUnlinkItemEvent extends BaseEvent {
+    /**
+     * The {@link Item} and its underlying data to be unlinked.
+     * Note that the type variable for the Data property is set to any.
+     * The method subscribing to this event is responsible
+     * for casting the item to the correct type.
+     */
+    public Item: Item;
+
+    constructor(item: Item){
+        super(EventTypes.BeforeUnlinkItem);
+        this.Item = item;
+    }
+
 }
 
 export class BeforeUpdateFolderEvent extends BaseEvent {
@@ -176,6 +194,19 @@ export class AfterDeleteItemEvent extends BaseEvent {
 
     constructor(item: Item){
         super(EventTypes.AfterDeleteItem);
+        this.Item = item;
+    }
+}
+
+
+export class AfterUnlinkItemEvent extends BaseEvent {
+    /**
+     * The {@link Item} that was deleted.
+     */
+    public Item: Item;
+
+    constructor(item: Item){
+        super(EventTypes.AfterUnlinkItem);
         this.Item = item;
     }
 }
