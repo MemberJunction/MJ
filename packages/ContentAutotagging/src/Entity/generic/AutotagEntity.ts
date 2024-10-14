@@ -74,8 +74,9 @@ export class AutotagEntity extends AutotagBase {
             ResultType: 'entity_object'
         }, contextUser);
 
+        const entityResults: BaseEntity[] = results.Results
         if (results.Results && results.Results.length > 0) {
-            const contentItems: ContentItemEntity[] = await this.setContentItemsFromEntityResults(results.Results, contentSourceParams, lastRunDateISOString, contextUser);
+            const contentItems: ContentItemEntity[] = await this.setContentItemsFromEntityResults(entityResults.splice(0,10), contentSourceParams, lastRunDate, contextUser);
             return contentItems;
         }
         else {
@@ -83,16 +84,18 @@ export class AutotagEntity extends AutotagBase {
         }
     }
 
-    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDateISOString: string, contextUser: UserInfo): Promise<ContentItemEntity[]> {
+    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDateISOString: Date, contextUser: UserInfo): Promise<ContentItemEntity[]> {
         const contentItems: ContentItemEntity[] = [];
         for (const result of results) {
-            if (result.Get('__mj_CreatedAt') > lastRunDateISOString) {
+            const lastUpdatedAt = result.Get('__mj_UpdatedAt');
+            const lastCreatedAt = result.Get('__mj_CreatedAt');
+            if (lastUpdatedAt > lastRunDateISOString) {
                 const contentItem = await this.setNewContentItem(result, contentSourceParams, contextUser);
                 if (contentItem){
                     contentItems.push(contentItem);
                 }
             }
-            else if (result.Get('__mj_UpdatedAt') > lastRunDateISOString) {
+            else if (lastCreatedAt > lastRunDateISOString) {
                 const contentItem = await this.updateModifiedContentItem(result, contentSourceParams, contextUser);
                 if (contentItem) {
                     contentItems.push(contentItem);
