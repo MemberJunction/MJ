@@ -243,6 +243,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
 
       INSERT INTO [${flyway:defaultSchema}].EntityField
       (
+         ID,
          EntityID,
          Sequence,
          Name,
@@ -269,6 +270,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
       )
       VALUES
       (
+        'DE344718-4687-EF11-8473-6045BDF077EE',
          '201852E1-4587-EF11-8473-6045BDF077EE',
          4,
          'Type',
@@ -334,7 +336,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
          34,
          7,
          1,
-         'null',
+         null,
          0,
          1,
          0,
@@ -389,7 +391,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
          34,
          7,
          1,
-         'null',
+         null,
          0,
          1,
          0,
@@ -518,6 +520,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
 
       INSERT INTO [${flyway:defaultSchema}].EntityField
       (
+         ID,
          EntityID,
          Sequence,
          Name,
@@ -544,6 +547,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
       )
       VALUES
       (
+         'E3344718-4687-EF11-8473-6045BDF077EE',
          '201852E1-4587-EF11-8473-6045BDF077EE',
          9,
          'PermissionLevel',
