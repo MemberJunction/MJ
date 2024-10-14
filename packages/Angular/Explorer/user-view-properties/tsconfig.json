@@ -6,6 +6,7 @@
       "experimentalDecorators": true,
       "declarationMap": true,
       "declaration": true,
+      "sourceMap": true,
       "outDir": "./dist",
       "strict": true,
       "lib": ["es2018", "dom"]

@@ -3,8 +3,8 @@ export { initializeConfig } from './Config/config'
 export * from './Config/config'
 export * from './Config/db-connection'
 export * from './Database/dbSchema'
-export * from './entity_subclasses_codegen'
-export * from './action_subclasses_codegen';
+export * from './Misc/entity_subclasses_codegen'
+export * from './Misc/action_subclasses_codegen';
 export * from './Misc/graphql_server_codegen'
 export * from './Misc/status_logging'
 export * from './Database/manage-metadata'
