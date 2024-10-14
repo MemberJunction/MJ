@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 10/12/2024, 5:09:57 PM
+* GENERATED: 10/14/2024, 12:35:59 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -13028,9 +13028,17 @@ export class ResourceType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: 'Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.'}) 
+    @MaxLength(16)
+    CategoryEntityID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    CategoryEntity?: string;
         
     @Field(() => [WorkspaceItem_])
     WorkspaceItems_ResourceTypeIDArray: WorkspaceItem_[]; // Link to WorkspaceItems
