@@ -7267,13 +7267,11 @@ export const ResourceLinkSchema = z.object({
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     ResourceType: z.string().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ResourceLinkEntityType = z.infer<typeof ResourceLinkSchema>;
@@ -7403,9 +7401,19 @@ export const ResourceTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CategoryEntityID: z.string().nullish().describe(`
+        * * Field Name: CategoryEntityID
+        * * Display Name: Category Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`),
     Entity: z.string().nullish().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    CategoryEntity: z.string().nullish().describe(`
+        * * Field Name: CategoryEntity
+        * * Display Name: Category Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -28708,7 +28716,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string {
         return this.Get('User');
@@ -28718,7 +28725,6 @@ export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
     * * Field Name: ResourceType
     * * Display Name: Resource Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ResourceType(): string {
         return this.Get('ResourceType');
@@ -29074,12 +29080,35 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     }
 
     /**
+    * * Field Name: CategoryEntityID
+    * * Display Name: Category Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.
+    */
+    get CategoryEntityID(): string | null {
+        return this.Get('CategoryEntityID');
+    }
+    set CategoryEntityID(value: string | null) {
+        this.Set('CategoryEntityID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
         return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CategoryEntity
+    * * Display Name: Category Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CategoryEntity(): string | null {
+        return this.Get('CategoryEntity');
     }
 }
 
