@@ -12,6 +12,16 @@
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {
+      "type": "node", 
+      "request": "launch",
+      "name": "Test Autotaggers",
+      "envFile": "${workspaceFolder}/packages/ContentAutotagging.env",
+      "program": "${workspaceFolder}/packages/ContentAutotagging/src/Core/generic/TestAutotaggers.ts",
+      "outFiles": [
+        "${workspaceFolder}/packages/ContentAutotagging/dist/src/Core/generic/TestAutotaggers.js"
+      ]
+    },
+    {
       "type": "node",
       "request": "launch",
       "name": "MJAPI",

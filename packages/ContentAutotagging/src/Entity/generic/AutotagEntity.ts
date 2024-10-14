@@ -67,6 +67,8 @@ export class AutotagEntity extends AutotagBase {
         const lastRunDateISOString: string = lastRunDate.toISOString();
         
         const rv = new RunView();
+
+        // Get all entities that have been added/updated since the last run date
         const results = await rv.RunView<BaseEntity>({
             EntityName: this.EntityName,
             Fields: this.EntityFields,
@@ -76,7 +78,7 @@ export class AutotagEntity extends AutotagBase {
 
         const entityResults: BaseEntity[] = results.Results
         if (results.Results && results.Results.length > 0) {
-            const contentItems: ContentItemEntity[] = await this.setContentItemsFromEntityResults(entityResults.splice(0,10), contentSourceParams, lastRunDate, contextUser);
+            const contentItems: ContentItemEntity[] = await this.setContentItemsFromEntityResults(entityResults, contentSourceParams, lastRunDate);
             return contentItems;
         }
         else {
@@ -84,20 +86,13 @@ export class AutotagEntity extends AutotagBase {
         }
     }
 
-    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDateISOString: Date, contextUser: UserInfo): Promise<ContentItemEntity[]> {
+    public async setContentItemsFromEntityResults(results: BaseEntity[], contentSourceParams: ContentSourceParams, lastRunDate: Date): Promise<ContentItemEntity[]> {
         const contentItems: ContentItemEntity[] = [];
         for (const result of results) {
             const lastUpdatedAt = result.Get('__mj_UpdatedAt');
-            const lastCreatedAt = result.Get('__mj_CreatedAt');
-            if (lastUpdatedAt > lastRunDateISOString) {
-                const contentItem = await this.setNewContentItem(result, contentSourceParams, contextUser);
+            if (lastUpdatedAt > lastRunDate) {
+                const contentItem = await this.setNewContentItem(result, contentSourceParams);
                 if (contentItem){
-                    contentItems.push(contentItem);
-                }
-            }
-            else if (lastCreatedAt > lastRunDateISOString) {
-                const contentItem = await this.updateModifiedContentItem(result, contentSourceParams, contextUser);
-                if (contentItem) {
                     contentItems.push(contentItem);
                 }
             }
@@ -106,7 +101,7 @@ export class AutotagEntity extends AutotagBase {
         return contentItems;
     }
 
-    public async setNewContentItem(item: BaseEntity, contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<ContentItemEntity> {
+    public async setNewContentItem(item: BaseEntity, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> {
         const md = new Metadata();
         const text = this.getTextFromEntityResult(item);
         const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
@@ -127,10 +122,6 @@ export class AutotagEntity extends AutotagBase {
         else {
             throw new Error('Failed to save content item');
         }
-    }
-
-    public async updateModifiedContentItem(item: BaseEntity, contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<ContentItemEntity> {
-        throw new Error('Method not implemented.');
     }
 
     public getTextFromEntityResult(result: BaseEntity): string {
