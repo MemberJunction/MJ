@@ -23,6 +23,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     @Input() public categoryEntityID!: string;
 
     public currentlySelectedAppEntity: EntityEntity | undefined;
+    public ResourceItemFilter: string = "";
 
     public AppEntitySelectionDialogVisible: boolean = false;
     public AllAppEntities: EntityEntity[] = [];
@@ -123,7 +124,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                     // sometimes the entity name contains a ? and values after it, look for that and only grab stuff to left of ?
                     const entityNameParts = entityName.split('?');
                     const entityNameToLower: string = entityNameParts[0].toLowerCase().trim();
-                    const selectedAppEntity = this.SelectedAppEntities.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
+                    const selectedAppEntity = this.SelectedAppEntities.find(e => e.Name.toLocaleLowerCase() === entityNameToLower);
                     if ( selectedAppEntity ) {
                         await this.loadEntityAndFolders(selectedAppEntity);
                     }
@@ -232,6 +233,8 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.showLoader = true;
         this.currentlySelectedAppEntity = entity;
         this.categoryEntityID = entity.ID;
+        this.ResourceItemFilter = `EntityID='${entity.ID}'`;
+
         this.FilterOutCurrentUserViews = `UserID <> '${this.currentUser.ID}' AND EntityID = '${entity.ID}'`;
 
         if(this.selectedFolderID){
@@ -268,10 +271,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             return;
         }
 
-        if(item.Type == ItemType.Entity){
+        if(item.Type === ItemType.Resource){
             this.router.navigate(['resource', 'view', item.Data.ID], {queryParams: {viewMode: this.viewMode}});
         }
-        else if(item.Type == ItemType.Folder){
+        else if(item.Type === ItemType.Folder){
             this.selectedFolderID = item.Data.ID;
             this.navigateToCurrentPage();
         }

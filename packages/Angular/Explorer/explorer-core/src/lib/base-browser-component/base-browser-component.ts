@@ -82,7 +82,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
 
         if(!params?.skiploadEntityData){
             const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
-            const itemType: ItemType = params?.entityItemType || ItemType.Entity;
+            const itemType: ItemType = params?.entityItemType || ItemType.Resource;
             let resourceItems: Item[] = this.createItemsFromEntityData(entityData, itemType);
             if (params?.sortItemsAfterLoad) {
                 resourceItems = this.sortItems(resourceItems);
@@ -107,7 +107,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
                 const linkItemFilter = params?.linkItemFilter ? ` AND ${params.linkItemFilter}` : '';
                 const resourceExtraFilter = `ID in (${result.map((r) => `'${r.ResourceRecordID}'`).join(',')})${linkItemFilter}`;
                 const linkedItems = await this.RunView(this.itemEntityName, resourceExtraFilter);
-                const itemType: ItemType = params?.entityItemType || ItemType.Entity;
+                const itemType: ItemType = params?.entityItemType || ItemType.Resource;
                 let linkedResourceItems: Item[] = this.createItemsFromEntityData(linkedItems, itemType);
                 if (params?.sortItemsAfterLoad) {
                     linkedResourceItems = this.sortItems(linkedResourceItems);
@@ -186,7 +186,7 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
             return
         }
       
-        if (item.Type === ItemType.Entity) {
+        if (item.Type === ItemType.Resource || item.Type === ItemType.Entity) {
             router.navigate(['resource', this.routeNameSingular, dataID]);
         }
         else if(item.Type === ItemType.Folder){

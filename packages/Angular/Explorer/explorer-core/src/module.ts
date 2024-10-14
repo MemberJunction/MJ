@@ -76,6 +76,7 @@ import { ApplicationViewComponent } from './lib/app-view/application-view.compon
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
+import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 
 @NgModule({
   declarations: [
@@ -115,7 +116,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
-    SingleListDetailComponent
+    SingleListDetailComponent,
+    ResourceBrowserComponent
   ],
   imports: [
     AppRoutingModule,
@@ -196,7 +198,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
-    SingleListDetailComponent
+    SingleListDetailComponent,
+    ResourceBrowserComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

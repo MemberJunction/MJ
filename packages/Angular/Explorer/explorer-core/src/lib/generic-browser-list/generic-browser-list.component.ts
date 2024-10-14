@@ -21,7 +21,6 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public title: string | undefined = '';
   @Input() public items: Item[] = [];
   @Input() public iconName: string = 'view';
-  @Input() public disableAddButton: boolean = false;
   @Input() public disableEditButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';
@@ -150,7 +149,7 @@ export class GenericBrowserListComponent implements OnInit{
     if(saveResult){
       this.showNotification(`successfully created ${resourceName}`, "info");
 
-      let item: Item = new Item(entity, ItemType.Entity);
+      let item: Item = new Item(entity, ItemType.Resource);
       item.Name = resourceName;
       this.AfterAddItemEvent.emit(new AfterAddItemEvent(item));
     }
@@ -232,7 +231,7 @@ export class GenericBrowserListComponent implements OnInit{
 
       this.deleteDialogOpened = true;
     }
-    else if(item.Type === ItemType.Entity && bDelete){
+    else if(item.Type === ItemType.Resource && bDelete){
       let event: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
       this.BeforeDeleteItemEvent.emit(event);
       
@@ -242,7 +241,7 @@ export class GenericBrowserListComponent implements OnInit{
 
       this.deleteDialogOpened = true;
     }
-    else if (item.Type === ItemType.Entity && !bDelete) {
+    else if (item.Type === ItemType.Resource && !bDelete) {
       let event: BeforeUnlinkItemEvent = new BeforeUnlinkItemEvent(item);
       this.BeforeUnlinkItemEvent.emit(event);
       
@@ -279,12 +278,12 @@ export class GenericBrowserListComponent implements OnInit{
       }
 
     }
-    else if(item.Type === ItemType.Entity && this._currentDeleteOrUnlinkState){
+    else if(item.Type === ItemType.Resource && this._currentDeleteOrUnlinkState){
       await this.deleteResource(item);
       let deleteItemEvent: AfterDeleteItemEvent = new AfterDeleteItemEvent(item);
       this.AfterDeleteItemEvent.emit(deleteItemEvent);
     }
-    else if(item.Type === ItemType.Entity && !this._currentDeleteOrUnlinkState){
+    else if(item.Type === ItemType.Resource && !this._currentDeleteOrUnlinkState){
       await this.unlinkResource(item);
       let unlinkItemEvent: AfterUnlinkItemEvent = new AfterUnlinkItemEvent(item);
       this.AfterUnlinkItemEvent.emit(unlinkItemEvent);
