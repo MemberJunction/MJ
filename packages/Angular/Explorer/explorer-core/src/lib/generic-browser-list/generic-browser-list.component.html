@@ -4,6 +4,7 @@
     <div class="title-wrapper">
       <div class="title-flex-display">
         @if(selectedFolderID){
+          <span title="Parent" class="title-folder fa-solid fa-arrow-left fa-2xl breadcrumb-icon" (click)="goToParent()"></span> 
           <span title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
         }
         <h4>{{title}}</h4>
@@ -75,17 +76,29 @@
             @for(item of items; track item){
               <kendo-card class="card-wrapper cursor-pointer">
                 <div class="list-item-icon">
-                  @if(!disableEditButton){
-                    <button (click)="editItem(item)" class="list-btn">
+                  @if(!disableEditButton && (!item.IsLink || item.LinkPermissionLevel === 'Owner' || item.LinkPermissionLevel === 'Edit')) {
+                    <button (click)="editItem(item)" class="list-btn" title="Edit Item">
                       <span class="fa-regular fa-pen-to-square"></span>
                     </button>
                   }
-                  <button (click)="deleteItem(item)" class="list-btn">
-                    <span class="fa-regular fa-trash-can"></span>
-                  </button>
+                  @if(!item.IsLink || item.LinkPermissionLevel === 'Owner') {
+                    <button (click)="deleteItem(item)" class="list-btn" title="Delete Item">
+                      <span class="fa-regular fa-trash-can"></span>
+                    </button>                    
+                  }
+                  @else if (item.IsLink) {
+                    <button (click)="unlinkItem(item)" class="list-btn" title="Remove Link to Shared Item" >
+                      <span class="fa-solid fa-link-slash" style="color: rgb(19, 92, 201);"></span>
+                    </button>                    
+                  }
                 </div>
                 <kendo-card-body (click)="itemClick(item)">
-                    <span (title)="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    @if(item.IsLink) {
+                      <i [title]="item.Name + '(Shared)'" [ngClass]="getIconForResourceType(item)" style="color: rgb(19, 92, 201);"></i>
+                    }
+                    @else {
+                      <span [title]="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    }
                     <div class="padding-top-small">
                       <h5 kendoCardTitle>{{ item.Name }}</h5>
                       <p kendoCardSubtitle>{{ item.Description }}</p>
@@ -107,20 +120,20 @@
   *ngIf="deleteDialogOpened" 
   (close)="onConfirmDeleteItem(false)">
     <p class="k-m-7.5 k-text-center">
-      Are you sure you want to delete <b>{{selectedItem?.Name}}?</b>
+      Are you sure you want to {{(selectedItem?.IsLink && selectedItem?.LinkPermissionLevel === 'Owner') || !selectedItem?.IsLink ? 'delete' : 'unlink'}} <b>{{selectedItem?.Name}}?</b>
     </p>
     <kendo-dialog-actions class="popup-actions-btn">
       <button class="cancel-btn" (click)="onConfirmDeleteItem(true)" kendoButton themeColor="info">
-        Yes, Delete
+        Yes
       </button>
       <button class="yes-btn" (click)="onConfirmDeleteItem(false)" kendoButton fillMode="outline" themeColor="info">
-        No, Cancel
+        No 
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
 
   <kendo-dialog 
-    title="Create new Folder" 
+    title="Create new folder" 
     *ngIf="createFolderDialogOpened" 
     (close)="toggleCreateFolderView()"
     [minWidth]="250"

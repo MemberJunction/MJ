@@ -1,0 +1,70 @@
+/* Container styling */
+.container {
+  max-width: 100%;
+}
+
+/* Table container for vertical scrolling */
+.table-container {
+  max-height: 400px; /* Adjust as needed */
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Table styling */
+.resource-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.resource-table thead {
+  background-color: #f4f4f4;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.resource-table th, .resource-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.resource-table th {
+  background-color: #f8f8f8;
+}
+
+.resource-table tbody tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.resource-table tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
+/* Button styling */
+button.k-button {
+  background-color: #ff5252;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button.k-button:hover {
+  background-color: #ff1744;
+}
+
+.add-permission-label {
+  margin-left: 5px;
+  margin-right: 5px;
+  font-weight: bold;
+}
+
+.add-permission-section {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}

@@ -1,4 +1,4 @@
-import { logError } from "../Misc/logging";
+import { logError } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";

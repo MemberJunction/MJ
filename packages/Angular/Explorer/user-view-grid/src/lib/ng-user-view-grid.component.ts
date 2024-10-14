@@ -280,13 +280,19 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }, 5000); // 5 seconds delay
   };
 
+  public get UserCanEdit(): boolean {
+    if (this._viewEntity) 
+      return this._viewEntity.UserCanEdit;
+    else
+      return false;
+  }
 
   private _viewDirty: boolean = false;
   public async innerSaveView() {
     if (this._viewDirty) {
       const md = new Metadata()
       if (this._viewEntity && 
-          this._viewEntity.Get('UserID') === md.CurrentUser.ID) {  
+          this._viewEntity.UserCanEdit) {  
         // this view is a saved view, AND it belongs to the current user
   
         // update the grid state if we have settings updates for columns and/or sorts
@@ -298,7 +304,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           
         // now stringify the grid state and save it
         this._viewEntity.Set('GridState', JSON.stringify(tempGridState));
-        const newSortState = tempGridState.sortSettings.map((s: any) => {return {field: s.field, direction: s.dir}})
+        const newSortState = tempGridState.sortSettings ? tempGridState.sortSettings.map((s: any) => {return {field: s.field, direction: s.dir}}) : [];
         const oldSortState = JSON.parse(this._viewEntity.Get('SortState'));
         this._viewEntity.Set('SortState', JSON.stringify(newSortState));
   

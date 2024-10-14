@@ -25,6 +25,7 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
+    "@memberjunction/core-entities": "2.7.1",
     "@memberjunction/core": "2.7.1",
     "@memberjunction/global": "2.7.1",
     "@memberjunction/graphql-dataprovider": "2.7.1",

@@ -262,11 +262,11 @@
             "when": "after"
         }
     ],
-    "metadataSQLOutput" :{
+    "SQLOutput" :{
         "enabled": true,
-        "folderPath": "./MetadataOutput",
-        "filePath": "",
+        "folderPath": "../../migrations/v2/",
+        "fileName": "V202410120926__v2.8x_ResourceLinks_CodeGenMetadata.sql",
         "appendToFile": false,
-        "convertToMigrationFile": true
+        "convertCoreSchemaToFlywayMigrationFile": true
     }
 }

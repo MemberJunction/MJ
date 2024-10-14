@@ -146,7 +146,6 @@
     text-overflow: ellipsis;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
 
 }
@@ -257,4 +256,11 @@
 .title-flex-display {
     display: flex;
     flex-direction: row;
+}
+
+.breadcrumb-icon {
+    cursor: pointer;
+}
+.breacrumb-icon:hover {
+    color: var(--primary-color);
 }

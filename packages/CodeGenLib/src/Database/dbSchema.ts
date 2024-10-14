@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { logStatus } from '../Misc/logging';
+import { logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
 import { configInfo } from '../Config/config';

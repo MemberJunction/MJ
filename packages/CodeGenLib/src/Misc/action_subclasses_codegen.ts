@@ -1,10 +1,10 @@
 import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, SeverityType, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { makeDir } from './Misc/util';
+import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { logError, logMessage, logStatus } from './Misc/logging';
+import { logError, logMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs-extra';
 import { ActionEngine, ActionEntityServerEntity } from '@memberjunction/actions';
 

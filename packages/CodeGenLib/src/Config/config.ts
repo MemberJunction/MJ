@@ -1,7 +1,7 @@
 import env from 'env-var';
 import fs from 'fs';
 import path from 'path';
-import { logStatus } from '../Misc/logging';
+import { logStatus } from '../Misc/status_logging';
 
 export const dbHost = env.get('DB_HOST').required().asString();
 export const dbPort = env.get('DB_PORT').default('1433').asPortNumber();
@@ -113,10 +113,10 @@ export type ConfigInfo = {
     newSchemaDefaults: NewSchemaDefaults;
     dbSchemaJSONOutput: DBSchemaJSONOutput;
     newEntityRelationshipDefaults: NewEntityRelationshipDefaults;
-    metadataConfig: MetadataSQLOutputConfig;
+    SQLOutput: SQLOutputConfig;
 }
 
-export type MetadataSQLOutputConfig  = {
+export type SQLOutputConfig  = {
     /**
      * Whether or not sql statements generated while managing metadata should be written to a file
      */
@@ -127,19 +127,20 @@ export type MetadataSQLOutputConfig  = {
      */
     folderPath: string;
     /**
-     * The path of the specific file to use when logging is enabled.
+     * Optional, the file name that will be written WITHIN the folderPath specified.  
      */
-    filePath?: string,
+    fileName?: string,
+
     /**
-     * Whether or not to append or overwrite the generated sql to the file provided in the filePath.
+     * If set to true, then we append to the existing file, if one exists, otherwise we create a new file.
      */
-    overwriteFile?: boolean;
+    appendToFile?: boolean;
 
     /**
      * If true, all mention of the core schema within the log file will be replaced with the flyway schema,
      *  ${flyway:defaultSchema}
      */
-    convertCoreSchemaToFlywaySchema: boolean;
+    convertCoreSchemaToFlywayMigrationFile: boolean;
 };
 
 export type NewEntityDefaults = {

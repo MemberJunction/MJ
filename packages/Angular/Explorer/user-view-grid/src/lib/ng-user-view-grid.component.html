@@ -14,10 +14,10 @@
             (pageChange)="pageChange($event)"
             [loading]="isLoading"
             [height]="gridHeight"
-            [sortable]="true"
+            [sortable]="UserCanEdit"
             [sort]="sortSettings" 
-            [resizable]="true"
-            [reorderable]="true"
+            [resizable]="UserCanEdit"
+            [reorderable]="UserCanEdit"
             [selectable]="true"
             kendoGridSelectBy
             [(selectedKeys)]="selectedKeys"

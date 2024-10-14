@@ -31,14 +31,23 @@ export class BettyBotLLM extends BaseLLM {
                 } as any;
             }
 
-            const endpoint: string = Config.BETTY_BOT_BASE_URL + '/response';
+            const endpoint: string = Config.BETTY_BOT_BASE_URL + 'response';
             const config: AxiosRequestConfig = {
                 headers: {
-                    Authorization: this.JWTToken
+                    Authorization: `Bearer ${this.JWTToken}`
                 }
             };
+
+            const userMessage = params.messages.find(m => m.role === 'user');
+            if(!userMessage){
+                return {
+                    success: false,
+                    errorMessage: 'No user message found in params',
+                } as any;
+            }
+
             const data = {
-                input: params.messages[0].content
+                input: userMessage.content,
             };
 
             const bettyResponse = await axios.post<BettyResponse>(endpoint, data, config);
@@ -60,8 +69,8 @@ export class BettyBotLLM extends BaseLLM {
                     choices: [
                         {
                             message: {
-                                role: 'assistant',
-                                content: ""
+                                role: 'user',
+                                content: bettyResponse.data.response
                             },
                             finish_reason: "",
                             index: 0
@@ -108,6 +117,12 @@ export class BettyBotLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 
+    /**
+     * Fetches and caches a JWT token from the Betty Bot API.
+     * The tokens are cached for 30 minutes before being refreshed.
+     * @param forceRefresh If true, the cached token will be ignored and a new one will be fetched
+     * @returns 
+     */
     public async GetJWTToken(forceRefresh?: boolean): Promise<SettingsResponse | null> {
         try {
 
@@ -128,7 +143,7 @@ export class BettyBotLLM extends BaseLLM {
                 token: this.APIKey
             };
 
-            const endpoint: string = Config.BETTY_BOT_BASE_URL + '/settings';
+            const endpoint: string = Config.BETTY_BOT_BASE_URL + 'settings';
             const response = await axios.post<SettingsResponse>(endpoint, data);
 
             if(response.data){
