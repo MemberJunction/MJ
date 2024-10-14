@@ -5,13 +5,11 @@
       "moduleResolution": "node",
       "declaration": true,
       "declarationMap": true,
+      "sourceMap": true,
       "experimentalDecorators": true,
       "outDir": "./dist",
       "strict": true,
-      "lib": [
-        "es2018",
-        "dom"
-      ]
+      "lib": ["es2018", "dom"]
     },
     "angularCompilerOptions": {
       "skipTemplateCodegen": true,

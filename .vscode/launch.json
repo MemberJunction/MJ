@@ -28,8 +28,11 @@
       "name": "MJExplorer",
       "url": "http://localhost:4200",
       "cwd": "${workspaceFolder}/packages/MJExplorer",
-      "webRoot": "${workspaceFolder}/packages/MJExplorer",
-      "sourceMaps": true
+      "sourceMaps": true,
+      "webRoot": "${workspaceFolder}/packages",
+      "sourceMapPathOverrides": {
+        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
+      }
     },
     {
       "type": "node",
