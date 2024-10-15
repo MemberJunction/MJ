@@ -1,0 +1,33 @@
+<div class="request-access-container">
+    <div class="request-icon">
+      <i class="fas fa-lock"></i>
+    </div>
+    <div class="request-info">
+      <h3>Request Access</h3>
+      <h5>{{ResourceType ? ResourceType : 'Resource'}}{{ResourceName ? ': ' + ResourceName : ''}}</h5>
+      @if (!AfterRequest){
+        <p> You do not have access to this resource. Click the button below to request access.</p>
+      }
+      @else {
+        <h3>Your request has been submitted</h3>
+        <p> You will be notified when your request has been processed.</p>
+      }
+      @if(ShowPermissionLevelDropdown && !AfterRequest) {
+        <span>
+            <label for="permissionLevel">Permission Level:</label>
+            <select [(ngModel)] = "PermissionLevel">
+                <option value="View">View</option>
+                <option value="Edit">Edit</option>
+                <option value="Owner">Owner</option>    
+            </select>
+        </span>  
+      }
+    </div>
+    @if (!AfterRequest) {
+        <div class="request-actions">
+            <button kendoButton class="request-button" (click)="requestAccess()">
+              <i class="fas fa-paper-plane"></i> Request Access
+            </button>
+        </div>      
+    }
+</div>

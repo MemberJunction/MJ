@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, Metadata, UserInfo } from "@memberjunction/core";
 import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
@@ -153,5 +153,31 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         });
 
         return reducedPermissions;
+    }
+
+    /**
+     * This method will use the MJ metadata to find the fields names for the fields that represent the OwnerID and the Name of the resource in the given resource type.
+     * Often, these fields are simply named OwnerID and Name in the underlying entity that represents the resource, but this method uses metadata lookups to find the first
+     * foreign key to the Users entity from the resource type's entity and looks for the field that is consider the "Name Field" for the entity and returns those values.
+     */
+    public GetResourceTypeInfoFields(ResourceTypeID: string): {OwnerIDFieldName: string, NameFieldName: string, PrimaryKeyFieldName: string} {
+        const md = new Metadata();        
+        const rt = this.ResourceTypes.find((rt) => rt.ID === ResourceTypeID);
+        if (!rt)
+            throw new Error(`Resource Type ${ResourceTypeID} not found`);
+        const entity = md.EntityByID(rt.EntityID);
+        if (!entity)
+            throw new Error(`Entity ${rt.EntityID} not found`); 
+        const usersEntity = md.EntityByName('Users');
+        if (!usersEntity)
+            throw new Error(`Entity Users not found`);
+
+        const ownerIDField = entity.Fields.find((f) => f.RelatedEntityID === usersEntity.ID);
+        const nameField = entity.NameField;
+        return {
+            OwnerIDFieldName: ownerIDField?.Name,
+            NameFieldName: nameField?.Name,
+            PrimaryKeyFieldName: entity.FirstPrimaryKey.Name
+        }
     }
 }

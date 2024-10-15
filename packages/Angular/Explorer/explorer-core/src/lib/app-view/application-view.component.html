@@ -112,14 +112,21 @@
     }
 
     <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
-    <mj-available-resources-dialog 
-        #availableResourcesDialog
-        [User]="currentUser"
-        [DialogVisible]="LinkToSharedViewDialogVisible"
-        [ResourceTypeID]="ViewResourceTypeID"
-        ExtraColumns= "UserName, Description"
-        SelectionMode="Multiple"
+
+    <mj-generic-dialog
+        DialogTitle="Available Resources"
         (DialogClosed)="HandleLinkToSharedView($event)"
-        [ResourceExtraFilter]="FilterOutCurrentUserViews"
-    ></mj-available-resources-dialog>
+        [DialogVisible]="LinkToSharedViewDialogVisible"
+    >
+        <mj-available-resources
+            *ngIf="LinkToSharedViewDialogVisible"  
+            #availableResourcesComponent
+            [User]="currentUser"
+            [ResourceTypeID]="ViewResourceTypeID"
+            [ResourceExtraFilter]="FilterOutCurrentUserViews"
+            ExtraColumns= "UserName, Description"
+            SelectionMode="Multiple"
+        >
+        </mj-available-resources>
+    </mj-generic-dialog>    
 </div>

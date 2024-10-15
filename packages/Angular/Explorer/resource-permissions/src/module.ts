@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core';
-import { ResourcePermissionsComponent } from './resource-permissions.component';
+import { ResourcePermissionsComponent } from './lib/resource-permissions.component';
 import { CommonModule } from '@angular/common';
 
 // Kendo UI Angular imports
@@ -16,14 +16,15 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { FormsModule } from '@angular/forms';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { AvailableResourcesComponent } from './available-resources.component';
-import { AvailableResourcesDialogComponent } from './available-resources-dialog.component';
+import { AvailableResourcesComponent } from './lib/available-resources.component';
+import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
+import { RequestResourceAccessComponent } from './lib/request-access.component';
 
 @NgModule({
   declarations: [
     ResourcePermissionsComponent,
     AvailableResourcesComponent,
-    AvailableResourcesDialogComponent
+    RequestResourceAccessComponent
   ],
   imports: [
     CommonModule,
@@ -37,12 +38,13 @@ import { AvailableResourcesDialogComponent } from './available-resources-dialog.
     DropDownsModule,
     IndicatorsModule,
     ListViewModule,
-    LayoutModule
+    LayoutModule,
+    GenericDialogModule
   ],
   exports: [
     ResourcePermissionsComponent,
     AvailableResourcesComponent,
-    AvailableResourcesDialogComponent
+    RequestResourceAccessComponent
   ]
 })
 export class ResourcePermissionsModule { }

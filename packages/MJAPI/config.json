@@ -17,6 +17,10 @@
     "enableSmartFilters": true
   },
   "askSkip": {
-    "organizationInfo": ""
+    "organizationInfo": "",
+    "entitiesToSendSkip": {
+      "excludeSchemas": ["__mj"],
+      "includeEntities": ["Content Auto Tagger Stuff Here", "And here", "And here"]
+    }
   }
 }

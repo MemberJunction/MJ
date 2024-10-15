@@ -1,4 +1,15 @@
-<div class="single-view-wrap" mjFillContainer [bottomMargin]="20">
+@if (!UserCanView && selectedView && selectedView.ID) {
+  <mj-request-resource-access
+      [ResourceRecordID]="selectedView!.ID"
+      ResourceType="User Views"
+      [ResourceName]="selectedView.Name"
+  >
+
+  </mj-request-resource-access>
+}
+<div class="single-view-wrap" mjFillContainer [bottomMargin]="20"
+     [ngStyle]="dynamicWrapperStyle()">
+
   <div class="card-container" class="searchBox">
     <kendo-textbox
       id="txtSearch"

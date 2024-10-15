@@ -2,7 +2,7 @@ import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from
 import { EntityFieldInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
 import { ResourceData, SharedService } from '@memberjunction/ng-shared';
-import { GridSelectionItem, SelectionEvent } from '@progress/kendo-angular-grid';
+import { SelectionEvent } from '@progress/kendo-angular-grid';
 import { GridComponent } from '@progress/kendo-angular-grid';
 
 /**
@@ -48,6 +48,13 @@ export class AvailableResourcesComponent implements AfterViewInit {
     public resourcePermissions: ResourcePermissionEntity[] = [];
     public resources: ResourceData[] = [];
     async ngAfterViewInit() {
+        await this.Refresh();
+    }
+
+    /**
+     * This method will refresh the contents of the component based on the current state of the component.  
+     */
+    public async Refresh() {
         if (!this.User) {
             throw new Error('User is a required property for the AvailableResourcesDialogComponent');
         }
@@ -56,44 +63,50 @@ export class AvailableResourcesComponent implements AfterViewInit {
         await ResourcePermissionEngine.Instance.Config();
         // now we can get the permissions for the specified resource
         this.resourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.User, this.ResourceTypeID);
-        const rt = SharedService.Instance.ResourceTypeByID(this.ResourceTypeID);
-        if (!rt || !rt.EntityID)
-            throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
+        if (this.resourcePermissions.length === 0) {
+            this.resources = [];
+        }
+        else {
+            const rt = SharedService.Instance.ResourceTypeByID(this.ResourceTypeID);
+            if (!rt || !rt.EntityID)
+                throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
 
-        const md = new Metadata();
-        const entity = md.EntityByID(rt.EntityID);
-        if (!entity || !entity.NameField)
-            throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
-        const rv = new RunView();
-        const nameField = entity.NameField;
-        if (this.ExtraColumns && this.ExtraColumns.length > 0) {
-            /// split the comma delim string and for each item find it in the EntityFields collection
-            const extraColumns = this.ExtraColumns.split(',');
-            extraColumns.forEach((ec) => {
-                const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === ec.trim().toLowerCase());
-                if (field) 
-                    this.gridExtraColumns.push(field);
+            const md = new Metadata();
+            const entity = md.EntityByID(rt.EntityID);
+            if (!entity || !entity.NameField)
+                throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
+            const rv = new RunView();
+            const nameField = entity.NameField;
+            if (this.ExtraColumns && this.ExtraColumns.length > 0) {
+                /// split the comma delim string and for each item find it in the EntityFields collection
+                const extraColumns = this.ExtraColumns.split(',');
+                this.gridExtraColumns = [];
+                extraColumns.forEach((ec) => {
+                    const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === ec.trim().toLowerCase());
+                    if (field) 
+                        this.gridExtraColumns.push(field);
+                });
+            }
+
+            const extraFilter = this.ResourceExtraFilter ? ` AND (${this.ResourceExtraFilter})` : '';
+            const result = await rv.RunView({
+                EntityName: entity.Name,
+                ExtraFilter: `(ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
+                OrderBy: nameField.Name
+            })
+            if (!result || !result.Success)
+                throw new Error(`Error running view for entity ${entity.Name}`);
+
+            // only return rows where we have a record in result.Results
+            this.resources = result.Results.map((r) => {
+                return new ResourceData({
+                    ResourceRecordID: r.ID,
+                    Name: r[nameField.Name],
+                    ResourceTypeID: this.ResourceTypeID,
+                    ResourceType: rt.Name,
+                    Configuration: r // pass the whole resource record into configuration so it is accessible as desired
+                });
             });
         }
-
-        const extraFilter = this.ResourceExtraFilter ? ` AND (${this.ResourceExtraFilter})` : '';
-        const result = await rv.RunView({
-            EntityName: entity.Name,
-            ExtraFilter: `(ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
-            OrderBy: nameField.Name
-        })
-        if (!result || !result.Success)
-            throw new Error(`Error running view for entity ${entity.Name}`);
-
-        // only return rows where we have a record in result.Results
-        this.resources = result.Results.map((r) => {
-            return new ResourceData({
-                ResourceRecordID: r.ID,
-                Name: r[nameField.Name],
-                ResourceTypeID: this.ResourceTypeID,
-                ResourceType: rt.Name,
-                Configuration: r // pass the whole resource record into configuration so it is accessible as desired
-            });
-        });
     }
 }
