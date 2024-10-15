@@ -100,7 +100,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateResourcePermission] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 
 -----------------------------------------------------------------
@@ -153,7 +153,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwResourcePermissions]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -161,7 +161,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourcePermission] TO [cdp_
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ResourcePermission table
+----- TRIGGER FOR __mj_UpdatedAt field for the ResourcePermission table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateResourcePermission
 GO
@@ -174,7 +174,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[ResourcePermission]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[ResourcePermission] AS _organicTable
     INNER JOIN
@@ -182,7 +182,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 
 -----------------------------------------------------------------
@@ -347,7 +347,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwResourceLinks]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -355,7 +355,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourceLink] TO [cdp_Develo
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ResourceLink table
+----- TRIGGER FOR __mj_UpdatedAt field for the ResourceLink table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateResourceLink
 GO

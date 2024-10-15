@@ -348,12 +348,9 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
 UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='E3344718-4687-EF11-8473-6045BDF077EE'
 
 /* SQL text to update entity field related entity name field map for entity field ID 67E7CC2B-528A-EF11-8473-6045BDF077EE */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap 
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          @EntityFieldID='67E7CC2B-528A-EF11-8473-6045BDF077EE',
          @RelatedEntityNameFieldMap='CategoryEntity'
-
-/* SQL text to delete unneeded entity fields */
-EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
 
 /* SQL text to update existingg entity fields from schema */
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'

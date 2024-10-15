@@ -1,13 +1,13 @@
 /* SQL generated to create new entity Resource Links */
 INSERT INTO [${flyway:defaultSchema}].Entity (
     ID,
-    Name, 
+    Name,
     Description,
     NameSuffix,
-    BaseTable, 
-    BaseView, 
-    SchemaName, 
-    IncludeInAPI, 
+    BaseTable,
+    BaseView,
+    SchemaName,
+    IncludeInAPI,
     AllowUserSearchAPI
     , TrackRecordChanges
     , AuditRecordAccess
@@ -17,16 +17,16 @@ INSERT INTO [${flyway:defaultSchema}].Entity (
     , AllowUpdateAPI
     , AllowDeleteAPI
     , UserViewMaxRows
-) 
+)
 VALUES (
     '78D31F3F-A688-EF11-8473-6045BDF077EE', --hardcoded for migration file after CodeGen ran locally for dev environment
-    'Resource Links', 
+    'Resource Links',
     NULL,
     NULL,
-    'ResourceLink', 
-    'vwResourceLinks', 
+    'ResourceLink',
+    'vwResourceLinks',
     '${flyway:defaultSchema}',
-    1, 
+    1,
     0
     , 1
     , 0
@@ -37,36 +37,36 @@ VALUES (
     , 1
     , 1000
 )
-   
+
 
 /* SQL generated to add new entity Resource Links to application Admin */
-INSERT INTO ${flyway:defaultSchema}.ApplicationEntity 
-                                                            (ApplicationID, EntityID, Sequence) VALUES 
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                                            (ApplicationID, EntityID, Sequence) VALUES
                                                             ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '78D31F3F-A688-EF11-8473-6045BDF077EE', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
 /* SQL generated to add new permission for entity Resource Links for role UI */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission 
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('78D31F3F-A688-EF11-8473-6045BDF077EE', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
 /* SQL generated to add new permission for entity Resource Links for role Developer */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission 
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('78D31F3F-A688-EF11-8473-6045BDF077EE', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
 /* SQL generated to add new permission for entity Resource Links for role Integration */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission 
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES 
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('78D31F3F-A688-EF11-8473-6045BDF077EE', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL text to update existing entities from schema */
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
 
-/* SQL text to add special date field ${flyway:defaultSchema}_CreatedAt to entity ${flyway:defaultSchema}.ResourceLink */
-ALTER TABLE [${flyway:defaultSchema}].[ResourceLink] ADD ${flyway:defaultSchema}_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ResourceLink */
+ALTER TABLE [${flyway:defaultSchema}].[ResourceLink] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
-/* SQL text to add special date field ${flyway:defaultSchema}_UpdatedAt to entity ${flyway:defaultSchema}.ResourceLink */
-ALTER TABLE [${flyway:defaultSchema}].[ResourceLink] ADD ${flyway:defaultSchema}_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.ResourceLink */
+ALTER TABLE [${flyway:defaultSchema}].[ResourceLink] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
 /* SQL text to delete unneeded entity fields */
 EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
@@ -801,12 +801,12 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
 UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='E3344718-4687-EF11-8473-6045BDF077EE'
 
 /* SQL text to create Entitiy Relationships */
-INSERT INTO ${flyway:defaultSchema}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+INSERT INTO ${flyway:defaultSchema}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                                           VALUES ('E1238F34-2837-EF11-86D4-6045BDEE16E6', '78D31F3F-A688-EF11-8473-6045BDF077EE', 'UserID', 'One To Many', 1, 1, 'Resource Links', 1);
-                              
+
 
 /* SQL text to create Entitiy Relationships */
-INSERT INTO ${flyway:defaultSchema}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+INSERT INTO ${flyway:defaultSchema}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                                           VALUES ('0B248F34-2837-EF11-86D4-6045BDEE16E6', '78D31F3F-A688-EF11-8473-6045BDF077EE', 'ResourceTypeID', 'One To Many', 1, 1, 'Resource Links', 2);
-                              
+
 

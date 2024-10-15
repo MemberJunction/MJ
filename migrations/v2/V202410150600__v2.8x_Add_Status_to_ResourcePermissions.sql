@@ -8,14 +8,14 @@ ADD CONSTRAINT CHK_Status_ValidValues
 CHECK ([Status] IN ('Requested','Approved', 'Rejected', 'Revoked'));
 
 -- Add the extended property description for the Status column
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = N'Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.', 
-    @level0type = N'Schema', 
-    @level0name = N'${flyway:defaultSchema}', 
-    @level1type = N'Table', 
-    @level1name = N'ResourcePermission', 
-    @level2type = N'Column', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.',
+    @level0type = N'Schema',
+    @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'Table',
+    @level1name = N'ResourcePermission',
+    @level2type = N'Column',
     @level2name = N'Status';
 
 
@@ -61,7 +61,7 @@ LEFT OUTER JOIN
     [r].[UserID] = User_UserID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwResourcePermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -177,7 +177,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwResourcePermissions]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -185,7 +185,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourcePermission] TO [cdp_
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ResourcePermission table
+----- TRIGGER FOR __mj_UpdatedAt field for the ResourcePermission table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateResourcePermission
 GO
@@ -198,7 +198,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[ResourcePermission]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[ResourcePermission] AS _organicTable
     INNER JOIN
@@ -206,7 +206,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 -----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: Resource Permissions

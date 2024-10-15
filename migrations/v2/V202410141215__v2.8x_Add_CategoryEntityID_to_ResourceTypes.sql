@@ -25,7 +25,7 @@ GO
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
-  ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE(),
+  __mj_UpdatedAt=GETUTCDATE(),
   CategoryEntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name='User View Categories')
 WHERE
   Name='User Views'
@@ -33,7 +33,7 @@ WHERE
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
-  ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE(),
+  __mj_UpdatedAt=GETUTCDATE(),
   CategoryEntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name='Dashboard Categories')
 WHERE
   Name='Dashboards'
@@ -41,7 +41,7 @@ WHERE
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
-  ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE(),
+  __mj_UpdatedAt=GETUTCDATE(),
   CategoryEntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name='Report Categories')
 WHERE
   Name='Reports'
@@ -50,7 +50,7 @@ WHERE
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
-  ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE(),
+  __mj_UpdatedAt=GETUTCDATE(),
   CategoryEntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name='Query Categories')
 WHERE
   Name='Queries'
@@ -59,7 +59,7 @@ WHERE
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
-  ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE(),
+  __mj_UpdatedAt=GETUTCDATE(),
   CategoryEntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name='List Categories')
 WHERE
   Name='Lists'
