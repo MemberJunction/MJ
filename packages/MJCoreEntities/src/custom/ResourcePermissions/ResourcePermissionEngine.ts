@@ -43,7 +43,8 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
 
 
     /**
-     * Convenience method to find all of the permissions for a given Resource Type and Resource Record ID
+     * Convenience method to find all of the permissions for a given Resource Type and Resource Record ID, no additional filtering takes place in this method regarding
+     * the status or level of the permission.
      * @param ResourceTypeID 
      * @param ResourceRecordID 
      * @returns 
@@ -56,6 +57,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
      * Determines the highest level of resource permission a user has for a specific resource.
      * This function checks both user-specific permissions and permissions assigned through roles
      * and returns the highest level of permission ('View', 'Edit', 'Owner', or `null` if no permission is found).
+     * Note: This only returns ResourcePermissionEntity objects that have Status === Approved.
      *
      * @param {string} ResourceTypeID - The ID of the resource type (e.g., document, project).
      * @param {string} ResourceRecordID - The ID of the specific resource record.
@@ -88,12 +90,14 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         // Combine user-specific permissions and role-based permissions
         const allPermissionsForUser = userPermissions.concat(rolePermissions);
 
+        const approvedPermissionsForUser = allPermissionsForUser.filter((p) => p.Status === 'Approved');
+
         // If no permissions are found, return null
-        if (allPermissionsForUser.length === 0) {
+        if (approvedPermissionsForUser.length === 0) {
             return null;
         } else {
             // Reduce permissions to find the highest permission level ('Owner' > 'Edit' > 'View')
-            return allPermissionsForUser.reduce((prev, current) => {
+            return approvedPermissionsForUser.reduce((prev, current) => {
                 if (current.PermissionLevel === 'Owner') {
                     return 'Owner'; // 'Owner' has the highest priority
                 } else if (current.PermissionLevel === 'Edit' && (prev === 'View' || prev === null)) {
@@ -107,6 +111,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
 
     /**
      * Returns all the permissions a user has for a specific resource type based on both their user-specific permissions and permissions assigned through roles.
+     * This only returns ResourcePermissionEntity objects that have Status === Approved.
      * @param user 
      * @param ResourceTypeID 
      * @returns 
@@ -119,6 +124,9 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
             rolePermissions = rolePermissions.filter((r) => r.ResourceTypeID === ResourceTypeID);
         }
         permissions = permissions.concat(rolePermissions);
+
+        // now filter to ONLY approved permissions
+        permissions = permissions.filter((r) => r.Status === 'Approved');
 
         // now, we reduce the array so that we only have the highest permission level for each resourcetypeid/resourcerecordid combination
         let reducedPermissions: ResourcePermissionEntity[] = [];
