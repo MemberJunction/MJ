@@ -7,16 +7,17 @@ ADD CONSTRAINT FK_ResourceType_CategoryEntityID
 FOREIGN KEY (CategoryEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID);
 
 -- Add a description for the FolderEntityID column
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = N'Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.', 
-    @level0type = N'Schema', 
-    @level0name = N'${flyway:defaultSchema}', 
-    @level1type = N'Table', 
-    @level1name = N'ResourceType', 
-    @level2type = N'Column', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.',
+    @level0type = N'Schema',
+    @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'Table',
+    @level1name = N'ResourceType',
+    @level2type = N'Column',
     @level2name = N'CategoryEntityID';
 
+GO
 
 /**
    NOW, add values to the ResourceType.CategoryEntityID column for the resources that support it
@@ -45,7 +46,7 @@ SET
 WHERE
   Name='Reports'
 
-  
+
 UPDATE
   ${flyway:defaultSchema}.ResourceType
 SET
