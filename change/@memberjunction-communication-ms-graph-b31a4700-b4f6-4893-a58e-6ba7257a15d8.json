@@ -3,5 +3,5 @@
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/communication-ms-graph",
   "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
+  "dependentChangeType": "minor"
 }
