@@ -1,9 +1,9 @@
 import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
-import { logError } from './Misc/logging';
-import { mjCoreSchema } from './Config/config';
-import { makeDir } from './Misc/util';
+import { logError } from './status_logging';
+import { mjCoreSchema } from '../Config/config';
+import { makeDir } from './util';
 import { RegisterClass } from '@memberjunction/global';
 
 /**

@@ -46,6 +46,7 @@
     "@memberjunction/ng-base-forms": "2.7.1",
     "@memberjunction/ng-entity-form-dialog": "2.7.1",
     "@memberjunction/ng-record-selector": "2.7.1",
+    "@memberjunction/ng-resource-permissions": "2.7.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",

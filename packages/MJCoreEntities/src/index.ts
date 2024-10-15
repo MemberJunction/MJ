@@ -5,3 +5,4 @@ export * from './custom/AIModelExtended';
 export * from './custom/ListDetailEntityExtended';
 export * from './custom/TypeTablesCache';
 export * from './custom/ScheduledActionExtended';
+export * from './custom/ResourcePermissions/ResourcePermissionEngine';

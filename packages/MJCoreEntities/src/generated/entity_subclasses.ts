@@ -7223,6 +7223,158 @@ export const ReportSchema = z.object({
 export type ReportEntityType = z.infer<typeof ReportSchema>;
 
 /**
+ * zod schema definition for the entity Resource Links
+ */
+export const ResourceLinkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for each resource link`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign key to the user linking the resource`),
+    ResourceTypeID: z.string().describe(`
+        * * Field Name: ResourceTypeID
+        * * Display Name: Resource Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Foreign key to the resource type (view, dashboard, etc.)`),
+    ResourceRecordID: z.string().describe(`
+        * * Field Name: ResourceRecordID
+        * * Display Name: Resource Record ID
+        * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being linked`),
+    FolderID: z.string().nullish().describe(`
+        * * Field Name: FolderID
+        * * Display Name: Folder ID
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional folder where the user organizes the linked resource`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    ResourceType: z.string().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ResourceLinkEntityType = z.infer<typeof ResourceLinkSchema>;
+
+/**
+ * zod schema definition for the entity Resource Permissions
+ */
+export const ResourcePermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ResourceTypeID: z.string().describe(`
+        * * Field Name: ResourceTypeID
+        * * Display Name: Resource Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)`),
+    ResourceRecordID: z.string().describe(`
+        * * Field Name: ResourceRecordID
+        * * Display Name: Resource Record ID
+        * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being shared`),
+    Type: z.union([z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Role
+    *   * User
+    * * Description: The level of sharing either Role or User`),
+    StartSharingAt: z.date().nullish().describe(`
+        * * Field Name: StartSharingAt
+        * * Display Name: Start Sharing At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing starts`),
+    EndSharingAt: z.date().nullish().describe(`
+        * * Field Name: EndSharingAt
+        * * Display Name: End Sharing At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing ends`),
+    RoleID: z.string().nullish().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)`),
+    UserID: z.string().nullish().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    PermissionLevel: z.union([z.literal('View'), z.literal('Edit'), z.literal('Owner')]).nullish().describe(`
+        * * Field Name: PermissionLevel
+        * * Display Name: Permission Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * View
+    *   * Edit
+    *   * Owner
+    * * Description: Permission level defining the type of access (View, Edit, Owner)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Requested
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Approved
+    *   * Rejected
+    *   * Revoked
+    *   * Requested
+    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.`),
+    ResourceType: z.string().describe(`
+        * * Field Name: ResourceType
+        * * Display Name: Resource Type
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().nullish().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullish().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ResourcePermissionEntityType = z.infer<typeof ResourcePermissionSchema>;
+
+/**
  * zod schema definition for the entity Resource Types
  */
 export const ResourceTypeSchema = z.object({
@@ -7262,9 +7414,19 @@ export const ResourceTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CategoryEntityID: z.string().nullish().describe(`
+        * * Field Name: CategoryEntityID
+        * * Display Name: Category Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`),
     Entity: z.string().nullish().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    CategoryEntity: z.string().nullish().describe(`
+        * * Field Name: CategoryEntity
+        * * Display Name: Category Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -9134,7 +9296,7 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9252,7 +9414,7 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9381,7 +9543,7 @@ export class ActionContextTypeEntity extends BaseEntity<ActionContextTypeEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9469,7 +9631,7 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9594,7 +9756,7 @@ export class ActionExecutionLogEntity extends BaseEntity<ActionExecutionLogEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9764,7 +9926,7 @@ export class ActionFilterEntity extends BaseEntity<ActionFilterEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9874,7 +10036,7 @@ export class ActionLibraryEntity extends BaseEntity<ActionLibraryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -9993,7 +10155,7 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10175,7 +10337,7 @@ export class ActionResultCodeEntity extends BaseEntity<ActionResultCodeEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10298,7 +10460,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10601,7 +10763,7 @@ export class AIActionEntity extends BaseEntity<AIActionEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10734,7 +10896,7 @@ export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10853,7 +11015,7 @@ export class AIModelTypeEntity extends BaseEntity<AIModelTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -10939,7 +11101,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11177,7 +11339,7 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11286,7 +11448,7 @@ export class AIPromptTypeEntity extends BaseEntity<AIPromptTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11372,7 +11534,7 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11572,7 +11734,7 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11749,7 +11911,7 @@ export class ApplicationEntityEntity extends BaseEntity<ApplicationEntityEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -11912,7 +12074,7 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12032,7 +12194,7 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12141,7 +12303,7 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12294,7 +12456,7 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12508,7 +12670,7 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12654,7 +12816,7 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12813,7 +12975,7 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -12954,7 +13116,7 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13161,7 +13323,7 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13310,7 +13472,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13468,7 +13630,7 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13649,7 +13811,7 @@ export class CompanyEntity extends BaseEntity<CompanyEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13766,7 +13928,7 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity<CompanyIntegra
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -13898,7 +14060,7 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14052,7 +14214,7 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity<CompanyIntegra
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14225,7 +14387,7 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14398,7 +14560,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14677,7 +14839,7 @@ export class ContentFileTypeEntity extends BaseEntity<ContentFileTypeEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14762,7 +14924,7 @@ export class ContentItemAttributeEntity extends BaseEntity<ContentItemAttributeE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14869,7 +15031,7 @@ export class ContentItemTagEntity extends BaseEntity<ContentItemTagEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -14964,7 +15126,7 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15173,7 +15335,7 @@ export class ContentProcessRunEntity extends BaseEntity<ContentProcessRunEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15304,7 +15466,7 @@ export class ContentSourceParamEntity extends BaseEntity<ContentSourceParamEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15411,7 +15573,7 @@ export class ContentSourceTypeParamEntity extends BaseEntity<ContentSourceTypePa
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15532,7 +15694,7 @@ export class ContentSourceTypeEntity extends BaseEntity<ContentSourceTypeEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15617,7 +15779,7 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15768,7 +15930,7 @@ export class ContentTypeAttributeEntity extends BaseEntity<ContentTypeAttributeE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -15877,7 +16039,7 @@ export class ContentTypeEntity extends BaseEntity<ContentTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16008,7 +16170,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16158,7 +16320,7 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16359,7 +16521,7 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16489,7 +16651,7 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16631,7 +16793,7 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16853,7 +17015,7 @@ export class DataContextEntity extends BaseEntity<DataContextEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -16973,7 +17135,7 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17164,7 +17326,7 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17273,7 +17435,7 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17491,7 +17653,7 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17665,7 +17827,7 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -17912,7 +18074,7 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity<EmployeeCompany
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18035,7 +18197,7 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18143,7 +18305,7 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18252,7 +18414,7 @@ export class EmployeeEntity extends BaseEntity<EmployeeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -18463,7 +18625,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19153,7 +19315,7 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19273,7 +19435,7 @@ export class EntityActionInvocationTypeEntity extends BaseEntity<EntityActionInv
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19374,7 +19536,7 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19490,7 +19652,7 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19632,7 +19794,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -19757,7 +19919,7 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20014,7 +20176,7 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20127,7 +20289,7 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20258,7 +20420,7 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20396,7 +20558,7 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20527,7 +20689,7 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20624,7 +20786,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -20864,7 +21026,7 @@ export class EntityFieldValueEntity extends BaseEntity<EntityFieldValueEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -21026,7 +21188,7 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -21685,7 +21847,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -21938,7 +22100,7 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -22138,7 +22300,7 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -22254,7 +22416,7 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -22657,7 +22819,7 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -22788,7 +22950,7 @@ export class ErrorLogEntity extends BaseEntity<ErrorLogEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -22955,7 +23117,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23137,7 +23299,7 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23244,7 +23406,7 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23373,7 +23535,7 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23520,7 +23682,7 @@ export class FileEntity extends BaseEntity<FileEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23687,7 +23849,7 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     * @method
     * @override
     */
-    public async Load(installed_rank: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(installed_rank: number, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -23857,7 +24019,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24007,7 +24169,7 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24164,7 +24326,7 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24307,7 +24469,7 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24435,7 +24597,7 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24577,7 +24739,7 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24720,7 +24882,7 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -24893,7 +25055,7 @@ export class OutputDeliveryTypeEntity extends BaseEntity<OutputDeliveryTypeEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25002,7 +25164,7 @@ export class OutputFormatTypeEntity extends BaseEntity<OutputFormatTypeEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25123,7 +25285,7 @@ export class OutputTriggerTypeEntity extends BaseEntity<OutputTriggerTypeEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25233,7 +25395,7 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25458,7 +25620,7 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25587,7 +25749,7 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25828,7 +25990,7 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -25945,7 +26107,7 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26142,7 +26304,7 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26289,7 +26451,7 @@ export class QueueEntity extends BaseEntity<QueueEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26567,7 +26729,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26702,7 +26864,7 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26800,7 +26962,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -26976,7 +27138,7 @@ export class RecommendationEntity extends BaseEntity<RecommendationEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -27098,7 +27260,7 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -27239,7 +27401,7 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -27533,7 +27695,7 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -27661,7 +27823,7 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -27897,7 +28059,7 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28026,7 +28188,7 @@ export class ReportSnapshotEntity extends BaseEntity<ReportSnapshotEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28143,7 +28305,7 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28449,6 +28611,364 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
 
 
 /**
+ * Resource Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ResourceLink
+ * * Base View: vwResourceLinks
+ * * @description Table to track user links to shared resources such as views, dashboards, etc.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Resource Links')
+export class ResourceLinkEntity extends BaseEntity<ResourceLinkEntityType> {
+    /**
+    * Loads the Resource Links record from the database
+    * @param ID: string - primary key value to load the Resource Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ResourceLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for each resource link
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign key to the user linking the resource
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Foreign key to the resource type (view, dashboard, etc.)
+    */
+    get ResourceTypeID(): string {
+        return this.Get('ResourceTypeID');
+    }
+    set ResourceTypeID(value: string) {
+        this.Set('ResourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being linked
+    */
+    get ResourceRecordID(): string {
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string) {
+        this.Set('ResourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: FolderID
+    * * Display Name: Folder ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional folder where the user organizes the linked resource
+    */
+    get FolderID(): string | null {
+        return this.Get('FolderID');
+    }
+    set FolderID(value: string | null) {
+        this.Set('FolderID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResourceType(): string {
+        return this.Get('ResourceType');
+    }
+}
+
+
+/**
+ * Resource Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ResourcePermission
+ * * Base View: vwResourcePermissions
+ * * @description Table for managing sharing of resources to users or roles with time constraints and permission levels
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Resource Permissions')
+export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntityType> {
+    /**
+    * Loads the Resource Permissions record from the database
+    * @param ID: string - primary key value to load the Resource Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ResourcePermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
+    * * Description: Reference to the type of resource being shared (View, Dashboard, Report, etc.)
+    */
+    get ResourceTypeID(): string {
+        return this.Get('ResourceTypeID');
+    }
+    set ResourceTypeID(value: string) {
+        this.Set('ResourceTypeID', value);
+    }
+
+    /**
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ID of the specific resource being shared
+    */
+    get ResourceRecordID(): string {
+        return this.Get('ResourceRecordID');
+    }
+    set ResourceRecordID(value: string) {
+        this.Set('ResourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Role
+    *   * User
+    * * Description: The level of sharing either Role or User
+    */
+    get Type(): 'Role' | 'User' {
+        return this.Get('Type');
+    }
+    set Type(value: 'Role' | 'User') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: StartSharingAt
+    * * Display Name: Start Sharing At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing starts
+    */
+    get StartSharingAt(): Date | null {
+        return this.Get('StartSharingAt');
+    }
+    set StartSharingAt(value: Date | null) {
+        this.Set('StartSharingAt', value);
+    }
+
+    /**
+    * * Field Name: EndSharingAt
+    * * Display Name: End Sharing At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional: Date when sharing ends
+    */
+    get EndSharingAt(): Date | null {
+        return this.Get('EndSharingAt');
+    }
+    set EndSharingAt(value: Date | null) {
+        this.Set('EndSharingAt', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: PermissionLevel
+    * * Display Name: Permission Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * View
+    *   * Edit
+    *   * Owner
+    * * Description: Permission level defining the type of access (View, Edit, Owner)
+    */
+    get PermissionLevel(): 'View' | 'Edit' | 'Owner' | null {
+        return this.Get('PermissionLevel');
+    }
+    set PermissionLevel(value: 'View' | 'Edit' | 'Owner' | null) {
+        this.Set('PermissionLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Requested
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Requested
+    *   * Approved
+    *   * Rejected
+    *   * Revoked
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
+    */
+    get Status(): 'Requested' | 'Approved' | 'Rejected' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Requested' | 'Approved' | 'Rejected' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResourceType(): string {
+        return this.Get('ResourceType');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * Resource Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ResourceType
@@ -28471,7 +28991,7 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28593,12 +29113,35 @@ export class ResourceTypeEntity extends BaseEntity<ResourceTypeEntityType> {
     }
 
     /**
+    * * Field Name: CategoryEntityID
+    * * Display Name: Category Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.
+    */
+    get CategoryEntityID(): string | null {
+        return this.Get('CategoryEntityID');
+    }
+    set CategoryEntityID(value: string | null) {
+        this.Set('CategoryEntityID', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
         return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: CategoryEntity
+    * * Display Name: Category Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CategoryEntity(): string | null {
+        return this.Get('CategoryEntity');
     }
 }
 
@@ -28627,7 +29170,7 @@ export class RoleEntity extends BaseEntity<RoleEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28735,7 +29278,7 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -28856,7 +29399,7 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29002,7 +29545,7 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29262,7 +29805,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29384,7 +29927,7 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29502,7 +30045,7 @@ export class TaggedItemEntity extends BaseEntity<TaggedItemEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29632,7 +30175,7 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29776,7 +30319,7 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -29920,7 +30463,7 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30043,7 +30586,7 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30201,7 +30744,7 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30457,7 +31000,7 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30653,7 +31196,7 @@ export class UserApplicationEntityEntity extends BaseEntity<UserApplicationEntit
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30778,7 +31321,7 @@ export class UserApplicationEntity extends BaseEntity<UserApplicationEntityType>
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -30908,7 +31451,7 @@ export class UserFavoriteEntity extends BaseEntity<UserFavoriteEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31032,7 +31575,7 @@ export class UserNotificationEntity extends BaseEntity<UserNotificationEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31210,7 +31753,7 @@ export class UserRecordLogEntity extends BaseEntity<UserRecordLogEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31413,7 +31956,7 @@ export class UserRoleEntity extends BaseEntity<UserRoleEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31518,7 +32061,7 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31670,7 +32213,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31786,7 +32329,7 @@ export class UserViewRunEntity extends BaseEntity<UserViewRunEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -31915,7 +32458,7 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -32240,7 +32783,7 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -32491,7 +33034,7 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -32612,7 +33155,7 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -32753,7 +33296,7 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -32947,7 +33490,7 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -33065,7 +33608,7 @@ export class WorkflowRunEntity extends BaseEntity<WorkflowRunEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -33233,7 +33776,7 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -33423,7 +33966,7 @@ export class WorkspaceItemEntity extends BaseEntity<WorkspaceItemEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
@@ -33589,7 +34132,7 @@ export class WorkspaceEntity extends BaseEntity<WorkspaceEntityType> {
     * @method
     * @override
     */
-    public async Load(ID: string, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);

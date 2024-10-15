@@ -1,17 +1,22 @@
 import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
-import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError } from "@memberjunction/core";
-import { DragEndEvent} from '@progress/kendo-angular-sortable';
-import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
+import { FormBuilder } from "@angular/forms";
+
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError, getAnsiColorCode } from "@memberjunction/core";
+import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { ListEntity, ResourcePermissionEngine, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { ResourceData } from '@memberjunction/ng-shared';
+import { ResourceData, EventCodes, SharedService } from '@memberjunction/ng-shared';
+
+
+import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
-import { TextBoxComponent } from '@progress/kendo-angular-inputs';
-import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { FormBuilder } from "@angular/forms";
+import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
+import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
+
 
 @Component({
   selector: 'mj-user-view-properties-dialog',
@@ -21,6 +26,10 @@ import { FormBuilder } from "@angular/forms";
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
   @Input() public ViewID: string | undefined;
   @Input() public EntityName: string | undefined;
+  /**
+   * View Category ID, optional
+   */
+  @Input() public CategoryID: string | null = null; 
   @Input() public ShowPropertiesButton: boolean = true;
 
   @Output() dialogClosed = new EventEmitter();
@@ -36,6 +45,19 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   public record!: UserViewEntityExtended;
 
   public ViewEntityInfo!: EntityInfo;
+  public ViewResourceTypeID!: string;
+
+
+  private _userCanEdit: boolean | undefined = undefined;
+  /**
+   * This property determines if the current user can save the current view, or not.
+   */
+  public override get UserCanEdit(): boolean {
+    if (this._userCanEdit === undefined) {
+      this._userCanEdit = this.record.UserCanEdit; // cache the value
+    }
+    return this._userCanEdit;
+  }
 
   private keyPressListener: any;
   public usedFields: Set<string> = new Set(); // Track used fields
@@ -47,11 +69,18 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     { Name: 'Down', Value: 'desc' }
   ];
 
+
+ 
+
+
   @ViewChild(WindowComponent) kendoWindow!: WindowComponent;
   @ViewChild(TabComponent) kendoTab!: TabComponent;
   @ViewChild('nameField') nameField!: TextBoxComponent;
+  @ViewChild('smartFilterTextArea') smartFilterTextArea!: TextAreaComponent;
   @ViewChild('dialogContainer') dialogContainer!: ElementRef;
   @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
+  @ViewChild('findRecordDialog') private findRecordDialog!: FindRecordDialogComponent;
+  @ViewChild('resourcePermissions') private resourcePermissions!: ResourcePermissionsComponent;
 
 
   constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
@@ -60,20 +89,98 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   }
 
+
   onKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    const activeElement = document.activeElement as HTMLElement;
+
+    if (event.key === 'Enter' && activeElement.tagName !== 'TEXTAREA') {
       this.saveProperties();
     }
   }
 
+  public onFindRecordDialogClosed(event: any) {
+    if (this.findRecordDialog.SelectedRecord) {
+      // a record was selected, so insert the text into the smart filter prompt
+      const selectedRecord = this.findRecordDialog.SelectedRecord;
+      let text: string = '';
+      if (this.findRecordDialog.EntityName === 'User Views') {
+        const record = <UserViewEntityExtended>selectedRecord;
+        text = `View(Name: "${record.Name}", ID: "${record.ID}")`;
+      }
+      else if (this.findRecordDialog.EntityName === 'Lists') {
+        const record = <ListEntity>selectedRecord;
+        text = `List(Name: "${record.Name}", ID: "${record.ID}")`;
+      }
+      else {
+        const error = `Unknown entity name ${this.findRecordDialog.EntityName}`;
+        LogError(error);
+        throw new Error(error);
+      }
+
+      this.smartFilterPrompt_insertText(text);
+    }
+  }
+
+  public smartFilterPrompt_insertViewReference() {
+    this.showFindRecordDialog('User Views', ['ID', 'Name', 'Entity','UserName']);
+  }
+  public smartFilterPrompt_insertListReference() {
+    this.showFindRecordDialog('Lists', ['ID', 'Name', 'Entity', 'User']);
+  }
+
+  protected showFindRecordDialog(entityName: string, fields: string[] = []) {
+    const md = new Metadata();
+    const entity = md.EntityByName(entityName);
+    this.findRecordDialog.EntityName = entityName;
+    this.findRecordDialog.DisplayFields = entity.Fields.filter((f: EntityFieldInfo) => fields.includes(f.Name));
+    this.findRecordDialog.DialogVisible = true;
+  }
+
+  // Method to insert text at the current cursor position
+  public smartFilterPrompt_insertText(text: string) {
+    const textareaElement = this.smartFilterTextArea.input.nativeElement;
+    const cursorPosition = textareaElement.selectionStart;
+    const selectionEnd = textareaElement.selectionEnd;
+    const currentValue = this.record.SmartFilterPrompt ? this.record.SmartFilterPrompt : '';
+
+    // Insert the new text at the cursor position
+    this.record.SmartFilterPrompt = [
+      currentValue.slice(0, cursorPosition),
+      text,
+      currentValue.slice(selectionEnd)
+    ].join('');
+
+    // Update the value in the TextArea
+    textareaElement.value = this.record.SmartFilterPrompt;
+
+    // Set cursor position after the inserted text
+    const newCursorPosition = cursorPosition + text.length;
+    textareaElement.setSelectionRange(newCursorPosition, newCursorPosition);
+    textareaElement.focus();
+  }
+ 
   override GetTabTopPosition(): number {
     return 50; // for this dialog, we don't want to offset the tab position related to where it is on the page, this is relative to top of dialog
   }
 
+  /**
+   * Displays a dialog to create a new view
+   * @param entityName 
+   */
   public CreateView(entityName: string) {
     this.EntityName = entityName;
     this.ViewID = undefined;
     this.Open();
+  }
+
+  /**
+   * Displays a dialog to create a new view, if the user saves the view, it will be created in the specified category
+   * @param entityName 
+   * @param viewCategoryID 
+   */
+  public CreateViewInCategory(entityName: string, viewCategoryID: string) {
+    this.CategoryID = viewCategoryID;
+    return this.CreateView(entityName);
   }
 
   public async Open(ViewID: string | undefined = this.ViewID) {
@@ -84,8 +191,17 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   async Load() {
+    await ResourcePermissionEngine.Instance.Config(); // make sure our permissions engine is loaded, this will do nothing if it's already loaded
+    this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
+
     const md = new Metadata();
     this.record = <UserViewEntityExtended> await md.GetEntityObject('User Views');
+
+    // load up the ResourceType ID for User Views
+    const rt = this.sharedService.ResourceTypeByName("User Views")
+    if (rt) {
+      this.ViewResourceTypeID = rt.ID;
+    }
 
     if (this.ViewID) {
       // load the view
@@ -257,14 +373,24 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     if (valResults.Success === false) {
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
+      return;
     }
 
+    // make sure the view category is set into the record if provided
+    this.record.CategoryID = this.CategoryID;
     let saveResult: boolean = await this.record.Save(); 
     if(!saveResult){
       // it failed, so don't close the dialog
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Saving the view failed, please try again and if this persists contact your administrator.', 'error', 5000);
       LogError(this.record.LatestResult);
+    }
+    else {
+      // it saved, no save sharing
+      if (this.resourcePermissions.ResourceRecordID !== this.record.ID) { // update the resource record id
+        await this.resourcePermissions.UpdateResourceRecordID(this.record.ID);
+      }
+      await this.resourcePermissions.SavePermissions();
     }
 
     // stop showing the loader and close the dialog if we saved successfully

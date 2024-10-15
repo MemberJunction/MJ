@@ -99,11 +99,14 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
-    const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
-      dataSource,
-      ConversationId,
-      AskSkipResolver._maxHistoricalMessages
-    );
+    let messages: SkipMessage[] = [];
+    if (ConversationId && ConversationId.length > 0) {
+      messages = await this.LoadConversationDetailsIntoSkipMessages(
+        dataSource,
+        ConversationId,
+        AskSkipResolver._maxHistoricalMessages
+      );  
+    }
 
     const md = new Metadata();
     const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipInitialObjectLoading(
@@ -465,12 +468,13 @@ export class AskSkipResolver {
         if (!DataContextId || DataContextId.length === 0) {
           dataContextEntity.NewRecord();
           dataContextEntity.UserID = user.ID;
-          dataContextEntity.Name = 'Data Context for Skip Conversation';
+          dataContextEntity.Name = 'Data Context for Skip Conversation ';
           if (!(await dataContextEntity.Save())) {
             LogError(`Creating a new data context failed`, undefined, dataContextEntity.LatestResult);
             throw new Error(`Creating a new data context failed`);
           }
-        } else {
+        } 
+        else {
           const dcLoadResult = await dataContextEntity.Load(DataContextId);
           if (!dcLoadResult) {
             throw new Error(`Loading DataContextEntity for DataContextId ${DataContextId} failed`);
@@ -487,32 +491,61 @@ export class AskSkipResolver {
               LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
             }
           }
-        } else {
+        } 
+        else {
           LogError(`Creating a new conversation failed`, undefined, convoEntity.LatestResult);
           throw new Error(`Creating a new conversation failed`);
         }
-      } else {
+      } 
+      else {
         throw new Error(`User ${userPayload.email} not found in UserCache`);
       }
-    } else {
+    } 
+    else {
       await convoEntity.Load(ConversationId); // load the existing conversation, will need it later
       dataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', user);
 
-      // note - we ignore the parameter DataContextId if it is passed in, we will use the data context from the conversation that is saved. If a user wants to change the data context for a convo, they can do that elsewhere
+      // check to see if the DataContextId is passed in and if it is different than the DataContextID in the conversation
       if (DataContextId && DataContextId.length > 0 && DataContextId !== convoEntity.DataContextID) {
         if (convoEntity.DataContextID === null) {
+          // use the DataContextId passed in if the conversation doesn't have a DataContextID
           convoEntity.DataContextID = DataContextId;
           const convoEntitySaveResult: boolean = await convoEntity.Save();
           if (!convoEntitySaveResult) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
-        } else
+        } 
+        else {
+          // note - we ignore the parameter DataContextId if it is passed in, we will use the data context from the conversation that is saved. 
+          // If a user wants to change the data context for a convo, they can do that elsewhere
           console.warn(
             `AskSkipResolver: DataContextId ${DataContextId} was passed in but it was ignored because it was different than the DataContextID in the conversation ${convoEntity.DataContextID}`
           );
+        }
+        // only load if we have a data context here, otherwise we have a new record in the dataContext entity
+        if (convoEntity.DataContextID)
+          await dataContextEntity.Load(convoEntity.DataContextID);
       }
-
-      await dataContextEntity.Load(convoEntity.DataContextID);
+      else if ((!DataContextId || DataContextId.length === 0) && (!convoEntity.DataContextID || convoEntity.DataContextID.length === 0)) {
+        // in this branch of the logic we don't have a passed in DataContextId and we don't have a DataContextID in the conversation, so we need to save the data context, get the ID,
+        // update the conversation and save it as well
+        dataContextEntity.NewRecord();
+        dataContextEntity.UserID = user.ID;
+        dataContextEntity.Name = 'Data Context for Skip Conversation ' + ConversationId;
+        if (await dataContextEntity.Save()) {
+          DataContextId = convoEntity.DataContextID;
+          convoEntity.DataContextID = dataContextEntity.ID;
+          if (!await convoEntity.Save()) {
+            LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
+          }
+        } 
+        else
+          LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
+      }
+      else {
+        // finally in this branch we get here if we have a DataContextId passed in and it is the same as the DataContextID in the conversation, in this case simply load the data context
+        await dataContextEntity.Load(convoEntity.DataContextID);
+      }
     }
 
     // now, create a conversation detail record for the user message
@@ -528,7 +561,7 @@ export class AskSkipResolver {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
     }
 
-    const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext); // await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
+    const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext);  
     await dataContext.Load(dataContextEntity.ID, dataSource, false, false, 0, user);
     return { dataContext, convoEntity, dataContextEntity, convoDetailEntity };
   }
@@ -539,6 +572,10 @@ export class AskSkipResolver {
     maxHistoricalMessages?: number
   ): Promise<SkipMessage[]> {
     try {
+      if (!ConversationId || ConversationId.length === 0) {
+        throw new Error(`ConversationId is required`);
+      }
+
       // load up all the conversation details from the database server
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
@@ -551,7 +588,8 @@ export class AskSkipResolver {
                    ORDER
                       BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);
-      if (!result) throw new Error(`Error running SQL: ${sql}`);
+      if (!result) 
+        throw new Error(`Error running SQL: ${sql}`);
       else {
         // first, let's sort the result array into a local variable called returnData and in that we will sort by __mj_CreatedAt in ASCENDING order so we have the right chronological order
         // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the

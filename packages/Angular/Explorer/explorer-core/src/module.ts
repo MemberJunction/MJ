@@ -32,6 +32,7 @@ import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
@@ -75,6 +76,7 @@ import { ApplicationViewComponent } from './lib/app-view/application-view.compon
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
+import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 
 @NgModule({
   declarations: [
@@ -114,7 +116,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
-    SingleListDetailComponent
+    SingleListDetailComponent,
+    ResourceBrowserComponent
   ],
   imports: [
     AppRoutingModule,
@@ -159,7 +162,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     UserViewPropertiesDialogModule,
     MJTabStripModule,
     EntityFormDialogModule,
-    RecordSelectorModule
+    RecordSelectorModule,
+    ResourcePermissionsModule
   ],
   exports: [
     FormToolbarComponent,
@@ -194,7 +198,8 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
-    SingleListDetailComponent
+    SingleListDetailComponent,
+    ResourceBrowserComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

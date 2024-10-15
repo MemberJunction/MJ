@@ -1,0 +1,81 @@
+<div class="container">
+  @if(ShowSaveButton) {
+    <button kendoButton (click)="SavePermissions()">Save</button>
+  }
+  <div class="table-container">
+    @if(AllowAddPermissions) {
+      <div class="add-permission-section">
+        <span class="add-permission-label">Add Permission</span>
+        <kendo-dropdownlist 
+          [data]="permissionTypes"
+          [(ngModel)]="SelectedType"
+          style="width: 100px;">
+        </kendo-dropdownlist>
+        @if (SelectedType === 'User') {
+          <kendo-dropdownlist 
+            [data]="AllUsers"
+            [(ngModel)]="SelectedUser"
+            textField="Name"
+            valueField="ID"
+            style="width: 225px;">
+          </kendo-dropdownlist>
+        }
+        @else if (SelectedType === 'Role') {
+          <kendo-dropdownlist 
+            [data]="AllRoles"
+            [(ngModel)]="SelectedRole"
+            textField="Name"
+            valueField="ID"
+            style="width: 150px;">
+          </kendo-dropdownlist>
+        }
+        @else {
+          SelectedType: {{ SelectedType }}
+        }
+        <kendo-dropdownlist 
+          [data]="permissionLevels"
+          [(ngModel)]="SelectedPermissionLevel"
+          style="width: 100px;">
+        </kendo-dropdownlist>
+        <button kendoButton (click)="addPermission()" [disabled]="permissionAlreadyExists()" [title]="permissionAlreadyExists() ? 'This combination of Type/User/Role already exists below' : ''" >Add</button>
+      </div>
+    }
+    <table class="resource-table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Name</th>
+          <th>Level</th>
+          @if(AllowDeletePermissions) {
+            <th>Actions</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of resourcePermissions; track p) {
+          <tr>
+            <td>{{ p.Type }}</td>
+            <td>{{ p.Type === 'User' ? p.User : p.Role }}</td>
+            <td>
+              @if (AllowEditPermissions) {
+                <kendo-dropdownlist 
+                  [(ngModel)]="p.PermissionLevel"
+                  [data]="permissionLevels"
+                  style="width: 100px;">
+                </kendo-dropdownlist>
+              }
+              @else {
+                {{ p.PermissionLevel }}
+              }
+            </td>
+            @if(AllowDeletePermissions) {
+              <td>
+                <button kendoButton (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
+              </td>
+            }
+          </tr>  
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

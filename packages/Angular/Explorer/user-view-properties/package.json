@@ -28,6 +28,8 @@
     "@memberjunction/core": "2.7.1",
     "@memberjunction/core-entities": "2.7.1",
     "@memberjunction/ng-base-forms": "2.7.1",
+    "@memberjunction/ng-find-record": "2.7.1",
+    "@memberjunction/ng-resource-permissions": "2.7.1",
     "@memberjunction/ng-shared": "2.7.1",
     "@progress/kendo-angular-sortable": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",

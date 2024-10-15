@@ -1,0 +1,23 @@
+@if (DialogVisible) {
+    <kendo-dialog
+        [width]="DialogWidth"
+        [height]="DialogHeight"
+        [title]="DialogTitle"        
+        (close)="OnCancel()"
+    >
+        <mj-available-resources
+            [User]="User"
+            [ResourceTypeID]="ResourceTypeID"
+            [ResourceExtraFilter]="ResourceExtraFilter"
+            [ExtraColumns]="ExtraColumns"
+            [SelectionMode]="SelectionMode"
+            [SelectedResources]="SelectedResources"
+            (SelectionChanged)="BubbleOnSelectedResourcesChanged($event)"
+        >
+        </mj-available-resources>
+        <kendo-dialog-actions>
+            <button kendoButton (click)="OnOK()" themeColor="primary">OK</button>
+            <button kendoButton (click)="OnCancel()">Cancel</button>
+        </kendo-dialog-actions>    
+    </kendo-dialog>    
+}

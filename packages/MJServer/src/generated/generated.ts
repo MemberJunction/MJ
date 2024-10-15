@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 9/27/2024, 4:14:06 PM
+* GENERATED: 10/15/2024, 6:15:08 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, flyway_schema_historyEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, flyway_schema_historyEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1302,11 +1302,11 @@ export class AIPromptCategory_ {
     @MaxLength(510)
     Parent?: string;
         
-    @Field(() => [AIPrompt_])
-    AIPrompts_CategoryIDArray: AIPrompt_[]; // Link to AIPrompts
-    
     @Field(() => [AIPromptCategory_])
     AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
+    
+    @Field(() => [AIPrompt_])
+    AIPrompts_CategoryIDArray: AIPrompt_[]; // Link to AIPrompts
     
 }
 
@@ -1399,19 +1399,19 @@ export class AIPromptCategoryResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_CategoryIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompts', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIPromptCategory_])
     async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPrompt_])
+    async AIPrompts_CategoryIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
         return result;
     }
         
@@ -2626,6 +2626,9 @@ export class Role_ {
     @Field(() => [EmployeeRole_])
     EmployeeRoles_RoleIDArray: EmployeeRole_[]; // Link to EmployeeRoles
     
+    @Field(() => [ResourcePermission_])
+    ResourcePermissions_RoleIDArray: ResourcePermission_[]; // Link to ResourcePermissions
+    
 }
 
 //****************************************************************************
@@ -2768,6 +2771,14 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourcePermission_])
+    async ResourcePermissions_RoleIDArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -5057,6 +5068,12 @@ export class User_ {
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
     
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
+    
+    @Field(() => [ResourcePermission_])
+    ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
+    
 }
 
 //****************************************************************************
@@ -5457,6 +5474,22 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourcePermission_])
+    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -10457,11 +10490,11 @@ export class AIModel_ {
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
-    @Field(() => [AIResultCache_])
-    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
-    
     @Field(() => [EntityAIAction_])
     EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
+    
+    @Field(() => [AIResultCache_])
+    AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
     
 }
 
@@ -10662,19 +10695,19 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIResultCache_])
-    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Result Cache', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIResultCache_])
+    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
         return result;
     }
         
@@ -12995,15 +13028,29 @@ export class ResourceType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: 'Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.'}) 
+    @MaxLength(16)
+    CategoryEntityID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    CategoryEntity?: string;
         
     @Field(() => [WorkspaceItem_])
     WorkspaceItems_ResourceTypeIDArray: WorkspaceItem_[]; // Link to WorkspaceItems
     
     @Field(() => [UserNotification_])
     UserNotifications_ResourceTypeIDArray: UserNotification_[]; // Link to UserNotifications
+    
+    @Field(() => [ResourceLink_])
+    ResourceLinks_ResourceTypeIDArray: ResourceLink_[]; // Link to ResourceLinks
+    
+    @Field(() => [ResourcePermission_])
+    ResourcePermissions_ResourceTypeIDArray: ResourcePermission_[]; // Link to ResourcePermissions
     
 }
 //****************************************************************************
@@ -13071,6 +13118,22 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourcePermission_])
+    async ResourcePermissions_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -26345,6 +26408,388 @@ export class EntityActionParamResolver extends ResolverBase {
     async DeleteEntityActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Params', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Resource Permissions
+//****************************************************************************
+@ObjectType({ description: 'Table for managing sharing of resources to users or roles with time constraints and permission levels' })
+export class ResourcePermission_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: 'Reference to the type of resource being shared (View, Dashboard, Report, etc.)'}) 
+    @MaxLength(16)
+    ResourceTypeID: string;
+        
+    @Field({description: 'ID of the specific resource being shared'}) 
+    @MaxLength(510)
+    ResourceRecordID: string;
+        
+    @Field({description: 'The level of sharing either Role or User'}) 
+    @MaxLength(20)
+    Type: string;
+        
+    @Field({nullable: true, description: 'Optional: Date when sharing starts'}) 
+    @MaxLength(10)
+    StartSharingAt?: Date;
+        
+    @Field({nullable: true, description: 'Optional: Date when sharing ends'}) 
+    @MaxLength(10)
+    EndSharingAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RoleID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    UserID?: string;
+        
+    @Field({nullable: true, description: 'Permission level defining the type of access (View, Edit, Owner)'}) 
+    @MaxLength(40)
+    PermissionLevel?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({description: 'Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.'}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field() 
+    @MaxLength(510)
+    ResourceType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Role?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Resource Permissions
+//****************************************************************************
+@InputType()
+export class CreateResourcePermissionInput {
+    @Field()
+    ResourceTypeID: string;
+
+    @Field()
+    ResourceRecordID: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    StartSharingAt?: Date;
+
+    @Field({ nullable: true })
+    EndSharingAt?: Date;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    PermissionLevel?: string;
+
+    @Field()
+    Status: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Resource Permissions
+//****************************************************************************
+@InputType()
+export class UpdateResourcePermissionInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    ResourceTypeID: string;
+
+    @Field()
+    ResourceRecordID: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    StartSharingAt?: Date;
+
+    @Field({ nullable: true })
+    EndSharingAt?: Date;
+
+    @Field({ nullable: true })
+    RoleID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    PermissionLevel?: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Resource Permissions
+//****************************************************************************
+@ObjectType()
+export class RunResourcePermissionViewResult {
+    @Field(() => [ResourcePermission_])
+    Results: ResourcePermission_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ResourcePermission_)
+export class ResourcePermissionResolver extends ResolverBase {
+    @Query(() => RunResourcePermissionViewResult)
+    async RunResourcePermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunResourcePermissionViewResult)
+    async RunResourcePermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunResourcePermissionViewResult)
+    async RunResourcePermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Resource Permissions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ResourcePermission_, { nullable: true })
+    async ResourcePermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourcePermission_ | null> {
+        this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ResourcePermission_)
+    async CreateResourcePermission(
+        @Arg('input', () => CreateResourcePermissionInput) input: CreateResourcePermissionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Resource Permissions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ResourcePermission_)
+    async UpdateResourcePermission(
+        @Arg('input', () => UpdateResourcePermissionInput) input: UpdateResourcePermissionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Resource Permissions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ResourcePermission_)
+    async DeleteResourcePermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Resource Permissions', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Resource Links
+//****************************************************************************
+@ObjectType({ description: 'Table to track user links to shared resources such as views, dashboards, etc.' })
+export class ResourceLink_ {
+    @Field({description: 'Unique identifier for each resource link'}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: 'Foreign key to the user linking the resource'}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({description: 'Foreign key to the resource type (view, dashboard, etc.)'}) 
+    @MaxLength(16)
+    ResourceTypeID: string;
+        
+    @Field({description: 'ID of the specific resource being linked'}) 
+    @MaxLength(510)
+    ResourceRecordID: string;
+        
+    @Field({nullable: true, description: 'Optional folder where the user organizes the linked resource'}) 
+    @MaxLength(510)
+    FolderID?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field() 
+    @MaxLength(510)
+    ResourceType: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Resource Links
+//****************************************************************************
+@InputType()
+export class CreateResourceLinkInput {
+    @Field()
+    UserID: string;
+
+    @Field()
+    ResourceTypeID: string;
+
+    @Field()
+    ResourceRecordID: string;
+
+    @Field({ nullable: true })
+    FolderID?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Resource Links
+//****************************************************************************
+@InputType()
+export class UpdateResourceLinkInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    UserID: string;
+
+    @Field()
+    ResourceTypeID: string;
+
+    @Field()
+    ResourceRecordID: string;
+
+    @Field({ nullable: true })
+    FolderID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Resource Links
+//****************************************************************************
+@ObjectType()
+export class RunResourceLinkViewResult {
+    @Field(() => [ResourceLink_])
+    Results: ResourceLink_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ResourceLink_)
+export class ResourceLinkResolver extends ResolverBase {
+    @Query(() => RunResourceLinkViewResult)
+    async RunResourceLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunResourceLinkViewResult)
+    async RunResourceLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunResourceLinkViewResult)
+    async RunResourceLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Resource Links';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ResourceLink_, { nullable: true })
+    async ResourceLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceLink_ | null> {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ResourceLink_)
+    async CreateResourceLink(
+        @Arg('input', () => CreateResourceLinkInput) input: CreateResourceLinkInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Resource Links', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ResourceLink_)
+    async UpdateResourceLink(
+        @Arg('input', () => UpdateResourceLinkInput) input: UpdateResourceLinkInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Resource Links', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ResourceLink_)
+    async DeleteResourceLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Resource Links', key, options, dataSource, userPayload, pubSub);
     }
     
 }

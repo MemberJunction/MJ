@@ -90,6 +90,21 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="Resource Permissions" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'D9F47024-4687-EF11-8473-6045BDF077EE'}">
+                        Resource Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions')"  
+                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

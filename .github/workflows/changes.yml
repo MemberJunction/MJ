@@ -48,6 +48,10 @@ jobs:
               echo "::error file=$file::Migration filename doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
               exit 1
             fi
+            if [[ ! "$file" =~ "V" ]]; then
+              echo "::error file=$file::Migration filename doesn't begin with a  capital `V` character"
+              exit 1
+            fi
           done
 
       - name: Check migration content

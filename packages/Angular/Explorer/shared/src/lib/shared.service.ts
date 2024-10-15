@@ -1,6 +1,6 @@
 import { ElementRef, Injectable } from '@angular/core';
 import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
-import { ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
+import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
@@ -145,13 +145,8 @@ export class SharedService {
   private static async handleDataLoading() {
     const md = new Metadata();
 
-    const rtResult = await md.GetAndCacheDatasetByName('ResourceTypes');
-    if (rtResult && rtResult.Success) {
-      const data = rtResult.Results.find(r => r.EntityName === 'Resource Types');
-      if (data) {
-        SharedService._resourceTypes = <ResourceTypeEntity[]>data.Results;
-      }
-    }
+    await ResourcePermissionEngine.Instance.Config(); // don't reload if already loaded
+    this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
     await SharedService.RefreshUserNotifications();  
   }  

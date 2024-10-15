@@ -2,10 +2,10 @@ import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angu
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
 import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
-import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent, EventTypes } from '../../generic/Events.types';
+import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUnlinkItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUnlinkItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent, EventTypes } from '../../generic/Events.types';
 import { Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
-import { ResourceTypeEntity } from '@memberjunction/core-entities';
+import { ResourceLinkEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
 @Component({
@@ -19,15 +19,14 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
   @Input() public title: string | undefined = '';
-  @Input() public items: any[] = [];
+  @Input() public items: Item[] = [];
   @Input() public iconName: string = 'view';
-  @Input() public disableAddButton: boolean = false;
   @Input() public disableEditButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';
   @Input() public ItemEntityName: string = '';
   @Input() public CategoryEntityName: string = '';
-  @Input() public selectedFolderID: number | null = null;
+  @Input() public selectedFolderID: string | null = null;
   @Input() public showNotifications: boolean = true;
   @Input() public categoryEntityID: string | null = null;
   @Input() public displayAsGrid: boolean = false;
@@ -51,6 +50,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Output() public BeforeAddItemEvent: EventEmitter<BeforeAddItemEvent> = new EventEmitter<BeforeAddItemEvent>();
   @Output() public BeforeDeleteFolderEvent: EventEmitter<BeforeDeleteFolderEvent> = new EventEmitter<BeforeDeleteFolderEvent>();
   @Output() public BeforeDeleteItemEvent: EventEmitter<BeforeDeleteItemEvent> = new EventEmitter<BeforeDeleteItemEvent>();  
+  @Output() public BeforeUnlinkItemEvent: EventEmitter<BeforeUnlinkItemEvent> = new EventEmitter<BeforeUnlinkItemEvent>();  
   @Output() public BeforeUpdateFolderEvent: EventEmitter<BeforeUpdateFolderEvent> = new EventEmitter<BeforeUpdateFolderEvent>();
   @Output() public BeforeUpdateItemEvent: EventEmitter<BeforeUpdateItemEvent> = new EventEmitter<BeforeUpdateItemEvent>();
 
@@ -59,8 +59,11 @@ export class GenericBrowserListComponent implements OnInit{
   @Output() public AfterAddItemEvent: EventEmitter<AfterAddItemEvent> = new EventEmitter<AfterAddItemEvent>();
   @Output() public AfterDeleteFolderEvent: EventEmitter<AfterDeleteFolderEvent> = new EventEmitter<AfterDeleteFolderEvent>();
   @Output() public AfterDeleteItemEvent: EventEmitter<AfterDeleteItemEvent> = new EventEmitter<AfterDeleteItemEvent>();  
+  @Output() public AfterUnlinkItemEvent: EventEmitter<AfterUnlinkItemEvent> = new EventEmitter<AfterUnlinkItemEvent>();  
   @Output() public AfterUpdateFolderEvent: EventEmitter<AfterUpdateFolderEvent> = new EventEmitter<AfterUpdateFolderEvent>();
   @Output() public AfterUpdateItemEvent: EventEmitter<AfterUpdateItemEvent> = new EventEmitter<AfterUpdateItemEvent>();
+
+  @Output() public NavigateToParentEvent: EventEmitter<void> = new EventEmitter<void>();  
   
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
@@ -103,15 +106,7 @@ export class GenericBrowserListComponent implements OnInit{
 
     const view = new RunView();
     
-    const rvResult = await view.RunView({
-      EntityName: "Resource Types",
-      ResultType: 'entity_object'
-    }, md.CurrentUser);
-
-    if(rvResult && rvResult.Success){
-      let results: ResourceTypeEntity[] = rvResult.Results;
-      this.resourceTypes = results;
-    }
+    this.resourceTypes = SharedService.Instance.ResourceTypes;
   }
   
 
@@ -154,7 +149,7 @@ export class GenericBrowserListComponent implements OnInit{
     if(saveResult){
       this.showNotification(`successfully created ${resourceName}`, "info");
 
-      let item: Item = new Item(entity, ItemType.Entity);
+      let item: Item = new Item(entity, ItemType.Resource);
       item.Name = resourceName;
       this.AfterAddItemEvent.emit(new AfterAddItemEvent(item));
     }
@@ -208,19 +203,25 @@ export class GenericBrowserListComponent implements OnInit{
       this.itemClick(item);
     }
     else{
-      this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
+      this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error", 3500);
     }
     this.newFolderText = "Sample Folder";
   }
 
-  public async deleteItem(item: Item){
+  public async unlinkItem(item: Item){
+    await this.deleteOrUnlink(item, false);
+  }
+
+  private _currentDeleteOrUnlinkState: boolean = false;
+  public async deleteOrUnlink(item: Item, bDelete: boolean){
+    this._currentDeleteOrUnlinkState = bDelete;
     if(!item){
       return;
     }
 
     this.selectedItem = item;
 
-    if(item.Type === ItemType.Folder){
+    if(item.Type === ItemType.Folder && bDelete){
       let event: BeforeDeleteFolderEvent = new BeforeDeleteFolderEvent(item);
       this.BeforeDeleteFolderEvent.emit(event);
       
@@ -230,7 +231,7 @@ export class GenericBrowserListComponent implements OnInit{
 
       this.deleteDialogOpened = true;
     }
-    else if(item.Type === ItemType.Entity){
+    else if(item.Type === ItemType.Resource && bDelete){
       let event: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
       this.BeforeDeleteItemEvent.emit(event);
       
@@ -240,6 +241,24 @@ export class GenericBrowserListComponent implements OnInit{
 
       this.deleteDialogOpened = true;
     }
+    else if (item.Type === ItemType.Resource && !bDelete) {
+      let event: BeforeUnlinkItemEvent = new BeforeUnlinkItemEvent(item);
+      this.BeforeUnlinkItemEvent.emit(event);
+      
+      if(event.Cancel){
+        return;
+      }
+
+      this.deleteDialogOpened = true;
+    }  
+  }
+
+  public goToParent() {
+    this.NavigateToParentEvent.emit();
+  }
+
+  public async deleteItem(item: Item) {
+    await this.deleteOrUnlink(item, true);
   }
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
@@ -251,7 +270,7 @@ export class GenericBrowserListComponent implements OnInit{
     
     let item: Item = this.selectedItem;
 
-    if(item.Type === ItemType.Folder){
+    if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
       let deleteResult = await this.deleteFolder(item);
       if(deleteResult){
         let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
@@ -259,10 +278,15 @@ export class GenericBrowserListComponent implements OnInit{
       }
 
     }
-    else if(item.Type === ItemType.Entity){
+    else if(item.Type === ItemType.Resource && this._currentDeleteOrUnlinkState){
       await this.deleteResource(item);
       let deleteItemEvent: AfterDeleteItemEvent = new AfterDeleteItemEvent(item);
       this.AfterDeleteItemEvent.emit(deleteItemEvent);
+    }
+    else if(item.Type === ItemType.Resource && !this._currentDeleteOrUnlinkState){
+      await this.unlinkResource(item);
+      let unlinkItemEvent: AfterUnlinkItemEvent = new AfterUnlinkItemEvent(item);
+      this.AfterUnlinkItemEvent.emit(unlinkItemEvent);
     }
 
     this.selectedItem = null;
@@ -293,19 +317,19 @@ export class GenericBrowserListComponent implements OnInit{
     //then create a new component for applications that wraps around the view browser component 
     let loadResult = await folderEntity.InnerLoad(compositeKey);
     if(!loadResult){
-      this.sharedService.CreateSimpleNotification(`unable to fetch folder ${folder.Name}`, "error");
+      this.sharedService.CreateSimpleNotification(`Unable to fetch folder ${folder.Name}`, "error", 3500);
       this.showLoader = false;
       return false;
     }
 
     let deleteResult = await folderEntity.Delete();
     if(!deleteResult){
-      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name}`, "error");
+      this.sharedService.CreateSimpleNotification(`Unable to delete folder ${folder.Name}`, "error", 3500);
       this.showLoader = false;
       return false;
     }
     else{
-      this.sharedService.CreateSimpleNotification(`successfully deleted folder ${folder.Name}`, "info");
+      this.sharedService.CreateSimpleNotification(`Successfully deleted folder ${folder.Name}`, "info", 2000);
       this.showLoader = false;
     }
     return true;
@@ -335,19 +359,33 @@ export class GenericBrowserListComponent implements OnInit{
       if(loadResult){
         let deleteResult = await entityObject.Delete();
         if(deleteResult){
-          this.showNotification(`successfully deleted dashboard`, "info");
+          this.showNotification(`successfully deleted`, "info");
           return true;
         }
         else{
-          this.showNotification(`Unable to delete dashboard`, "error");
+          this.showNotification(`Unable to delete`, "error");
         }
       }
       else{
-        this.showNotification(`unable to fetch dashboard`, "error");
+        this.showNotification(`unable to fetch`, "error");
       }
     }
 
-    return false;
+    return false; 
+  }
+
+  private async unlinkResource(item: Item): Promise<boolean> {
+    // remove the link by removing the Resource Link record
+    if (item.ResourceLinkID) {
+      const md = new Metadata();
+      const link = await md.GetEntityObject<ResourceLinkEntity>("Resource Links");
+      if (await link.Load(item.ResourceLinkID))
+        return await link.Delete();  
+      else
+        return false;
+    }
+    else
+      return false;
   }
 
   private async doesFolderHaveChildren(folderID: string): Promise<boolean>{
@@ -496,7 +534,7 @@ export class GenericBrowserListComponent implements OnInit{
 
     const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
     if(resourceType){
-      return LargeClass + resourceType.Icon;
+      return LargeClass + resourceType.Icon;// + rotateStyle;
     }
 
     return "";

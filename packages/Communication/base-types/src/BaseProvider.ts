@@ -135,11 +135,23 @@ export type GetMessagesParams<T = Record<string, any>> = {
     ContextData?: T;
 };
 
+export type GetMessageMessage = {
+    From: string;
+    ReplyTo: string[];
+    Subject: string;
+    Body: string;
+    ExternalSystemRecordID: string;
+}
+
 export type GetMessagesResult<T = Record<string, any>> = {
     /**
      * If populated, holds provider-specific data that is returned from the provider
      */
     SourceData?: T[];
+    /**
+     * Messages returned in a standardized format
+     */
+    Messages: GetMessageMessage[];
 };
 
 /**

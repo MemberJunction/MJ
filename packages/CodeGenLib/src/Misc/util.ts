@@ -1,4 +1,4 @@
-import { logError } from "./logging";
+import { logError } from "./status_logging";
 import { unlinkSync } from "fs-extra";
 
 const fs = require('fs');

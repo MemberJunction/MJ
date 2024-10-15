@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo } from '@memberjunction/core';
-import { logError, logStatus } from '../Misc/logging';
+import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue } from '../Config/config';

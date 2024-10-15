@@ -6,12 +6,10 @@
       "declaration": true,
       "declarationMap": true,
       "experimentalDecorators": true,
+      "sourceMap": true,
       "outDir": "./dist",
       "strict": true,
-      "lib": [
-        "es2018",
-        "dom"
-      ]
+      "lib": ["es2018", "dom"]
     },
     "angularCompilerOptions": {
       "skipTemplateCodegen": true,

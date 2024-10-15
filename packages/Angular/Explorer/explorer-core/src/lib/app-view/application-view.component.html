@@ -61,6 +61,27 @@
     }
     @else {
         <div class="main-area margin-top-neg-20" *ngIf="SelectedAppEntities.length > 0">
+            <!-- 
+            WIP: uncomment this to continue working on the rest of this imnplementation @JS-BC
+            Items to continue:
+                1) Make sure to load folders and linked items the way it is done in the 'BaseBrowserCOmponent' but inside our new compnent and generically
+                2) Implement the rest of the functionality in the new component's UI, remember to never violate encapsulation, bubble events for things the container component (this component) should be handling
+                3) Then implement this in the other areas.
+                4) You should be able to then kill off the generic-browser-list component and I still don't know what generic-BROWSE-list component does, kill that too when done if it doens't have a purpose. And finally, the BaseBrowwserComponent may no longer serve a purpose after this is done
+            
+            <mj-resource-browser
+                ResourceTypeName="User Views"
+                [EnableCategories]="true"
+                [Title]="currentlySelectedAppEntity?.Name"
+                [ItemFilter]="ResourceItemFilter"
+                DisplayMode="Tile"
+
+                (ResourceSelected)="onItemClick($event)"
+            >
+
+            </mj-resource-browser> -->
+                
+           
             <app-generic-browser-list 
                 iconName="aggregateFields" 
                 [items]="items"
@@ -80,12 +101,25 @@
                 (AfterAddItemEvent)="onEvent($event)"
                 (AfterDeleteItemEvent)="onEvent($event)"
                 (AfterDeleteFolderEvent)="onEvent($event)"
+                (AfterUnlinkItemEvent)="onEvent($event)"
                 (viewModeChangeEvent)="onViewModeChange($event)"
                 (BeforeAddItemEvent)="createNewView($event)"
                 (BeforeUpdateItemEvent)="editView($event)"
+                (dropdownOptionClickEvent)="createItemClickedEvent($event)"
+                (NavigateToParentEvent)="navigateToParentFolder()"
             />
         </div>
     }
 
     <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
+    <mj-available-resources-dialog 
+        #availableResourcesDialog
+        [User]="currentUser"
+        [DialogVisible]="LinkToSharedViewDialogVisible"
+        [ResourceTypeID]="ViewResourceTypeID"
+        ExtraColumns= "UserName, Description"
+        SelectionMode="Multiple"
+        (DialogClosed)="HandleLinkToSharedView($event)"
+        [ResourceExtraFilter]="FilterOutCurrentUserViews"
+    ></mj-available-resources-dialog>
 </div>

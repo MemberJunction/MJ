@@ -86,7 +86,8 @@ export class AutotagBaseEngine extends AIEngine {
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
         const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID)
         const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-        const text = this.chunkExtractedText(params.text, model.Get('InputTokenLimit'))
+        const tokenLimit = model.InputTokenLimit
+        const text = this.chunkExtractedText(params.text, model.InputTokenLimit)
         let LLMResults: JsonObject = {}
         const startTime = new Date()
 
@@ -365,6 +366,8 @@ export class AutotagBaseEngine extends AIEngine {
                 return this.stringToBoolean(value)
             case 'string':
                 return value
+            case 'string[]':
+                return this.parseStringArray(value)
             case 'regexp':
                 return new RegExp(value.replace(/\\\\/g, '\\'))
             default:
@@ -374,6 +377,11 @@ export class AutotagBaseEngine extends AIEngine {
 
     public stringToBoolean(string: string): boolean {
         return string === 'true'
+    }
+
+    public parseStringArray(value: string): string[] {
+        const stringArray = JSON.parse(value)
+        return stringArray
     }
 
     /**

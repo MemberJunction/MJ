@@ -201,17 +201,18 @@ ${listDetailsEntity.Fields.map(f => {
 
 If a user is asking to use a list in creating a view, you need to use a sub-query along these lines:
 
-ID IN (SELECT ID FROM ${listsEntity.SchemaName}.vwListDetails WHERE ListID='My List ID')
+ID IN (SELECT RecordID FROM ${listsEntity.SchemaName}.vwListDetails WHERE ListID='My List ID')
 
 In this example we're assuming the user has asked us to filter to include only records that are part of the list with the ID of 'My List ID'. In reality the prompt you will have will have a UUID/GUID type ID not a text string like this. 
 You can use any fields at the detail level filter the records and of course combine this type of list-oriented sub-query with other filters as appropriate to satisfy the user's request.
 
-It is also possible that a user will provide the name of the list they want to filter on. This isn't ideal as names can collide but if they do this use this style of query with a join to the vwLists view (the list "header") to filter on the name
+It is also possible that a user will provide ONLY the name of the list they want to filter on. If they provide the List ID, use it with a query like the above. However, if ONLY a List name is provided, you can do as follows: use this style of query with a join to the vwLists view (the list "header") to filter on the name
 of the view or other header information if they want to filter on other list header attributes you can do this. Here is an example:
 
-ID IN (SELECT ld.ID FROM ${listsEntity.SchemaName}.vwListDetails ld INNER JOIN ${listsEntity.SchemaName}.vwLists l ON ld.ListID=l.ID WHERE l.Name='My List Name')
+ID IN (SELECT ld.RecordID FROM ${listsEntity.SchemaName}.vwListDetails ld INNER JOIN ${listsEntity.SchemaName}.vwLists l ON ld.ListID=l.ID WHERE l.Name='My List Name')
 
-Remember to use the Entity ID in filtering the ${listsEntity}.vwListDetails view as it is a unique identifier that will properly filter the records in the list to only the entity that the user is querying.
+No need to use table aliasing if you're just using the vwListDetails view, in that simple subquery it is automatic and unnecessary. If you need to join to the vwLists view, you can use the aliases "l" and "ld", as shown in the example above.
+
 </IMPORTANT - LISTS FEATURE>
 <IMPORTANT - OTHER VIEWS>
 The user might reference other "views" in their request. In the user's terminology a view is what we call a "User View" in MemberJunction system-speak. The idea is a user might ask for a filter that includes or excludes

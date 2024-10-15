@@ -1,6 +1,7 @@
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult } from "@memberjunction/core";
 import { UserViewEntity } from "../generated/entity_subclasses";
+import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissionEngine";
 
 
 @RegisterClass(BaseEntity, 'User Views') 
@@ -110,7 +111,101 @@ export class UserViewEntityExtended extends UserViewEntity  {
         return super.LoadFromData(data)
     }
 
-    async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+    /**
+     * This property determines if the specified user can edit the view object. All of the below assumes the user has base Create/Update permissions on the "User Views" entity. 
+     * The flow of the logic is:
+     *  1) The view is a new record, by definition the user can edit this because it is new
+     *  2) The user is the owner of the current view - e.g. UserID in the view record matches the ID of the user provided, allowed
+     *  3) The user is a sysadmin (Type === 'Owner' in the User object), allowed
+     *  4) If neither of the above conditions are met, the Resource Permissions are checked to see if the user, directly or via Roles, has either Edit or Owner permissions on the current view
+     * @returns 
+     */
+    public get UserCanEdit(): boolean {
+        if (this._cachedCanUserEdit === null) {
+            this._cachedCanUserEdit = this.CalculateUserCanEdit()
+        }
+        return this._cachedCanUserEdit;
+    }
+    private _cachedCanUserEdit: boolean = null
+
+    /**
+     * This property determines if the specified user can delete the view object. All of the below assumes the user has base Delete permissions on the "User Views" entity.
+     * The flow of the logic is:
+     *  1) The view is a new record, by definition the user can't delete this because it is new
+     *  2) The user is the owner of the current view - e.g. UserID in the view record matches the ID of the user provided, allowed
+     *  3) The user is a sysadmin (Type === 'Owner' in the User object), allowed
+     *  4) If neither of the above conditions are met, the Resource Permissions are checked to see if the user, directly or via Roles, has OWNER permissions on the current view
+     */
+    public get UserCanDelete(): boolean {
+        if (this._cachedUserCanDelete === null) {
+            this._cachedUserCanDelete = this.CalculateUserCanDelete()
+        }
+        return this._cachedUserCanDelete;
+    }
+    private _cachedUserCanDelete: boolean = null
+
+
+    protected ResetCachedCanUserSettings() {
+        this._cachedCanUserEdit = null;
+        this._cachedUserCanDelete = null;
+    }
+
+    private CalculateUserCanDelete(): boolean {
+        if (!this.IsSaved)
+            return false; // new records can't be deleted
+        else {
+            // EXISTING record in the database
+            // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
+            const md = new Metadata();
+            const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
+            if (this.UserID === user.ID || user.Type.trim().toLowerCase() === 'owner' ) {
+                return this.CheckPermissions(EntityPermissionType.Delete, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
+            }
+            else {
+                // if the user is not an admin, and they are NOT the owner of the view, we check the permissions on the resource
+                const perms = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.ID, user);
+                return perms === 'Owner'; // this is the only level that can delete a view
+            }
+        }
+    }
+
+    private CalculateUserCanEdit(): boolean {
+        if (!this.IsSaved) {
+            return this.CheckPermissions(EntityPermissionType.Create, false); // new records an be edited so long as we have Create permissions
+        }
+        else {
+            // EXISTING record in the database
+            // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
+            // so of course they can save it
+            const md = new Metadata();
+            const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
+            if (this.UserID === user.ID || user.Type.trim().toLowerCase() === 'owner') {
+                return this.CheckPermissions(EntityPermissionType.Update, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
+            }
+            else {
+                // if the user is not an admin, and they are NOT the owner of the view, we check the permissions on the resource
+                const perms = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(this.ViewResourceTypeID, this.ID, user);
+                return perms === 'Owner' || perms === 'Edit'; // these are the only two levels that can save a view
+            }
+        }
+    }
+
+    /**
+     * Returns the ID of the Resource Type metadata record that corresponds to the User Views entity
+     */
+    public get ViewResourceTypeID(): string {
+        if (!this._ViewResourceTypeID) {
+            const rt = ResourcePermissionEngine.Instance.ResourceTypes;
+            const rtUV = rt.find(r => r.Entity === 'User Views');
+            if (!rtUV)
+                throw new Error('Unable to find Resource Type for User Views entity');
+            this._ViewResourceTypeID = rtUV.ID;
+        }
+        return this._ViewResourceTypeID;
+    }
+    private _ViewResourceTypeID: string = null
+
+    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         // first load up the view info, use the superclass to do this
         const result = await super.Load(ID, EntityRelationshipsToLoad)
         if (result) {
@@ -123,22 +218,62 @@ export class UserViewEntityExtended extends UserViewEntity  {
                 throw new Error('Unable to find entity info for entity ID: ' + this.EntityID)
         }
 
+        this.ResetCachedCanUserSettings();
         return result;
     }
 
-    override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        // we want to preprocess the Save() call because we need to regenerate the WhereClause in some situations
-        if (!this.ID ||
-            options?.IgnoreDirtyState || 
-            this.Fields.find(c => c.Name.toLowerCase() == 'filterstate')?.Dirty ||
-            this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterenabled')?.Dirty ||
-            this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty) {
-            // either we're ignoring dirty state or the filter state is dirty, so we need to update the where clause
-            await this.UpdateWhereClause(options?.IgnoreDirtyState);
+    override async Delete(): Promise<boolean> {
+        if (this.UserCanDelete) {
+            // if we get here, the user can delete the view, so we delete it
+            if (super.Delete()) {
+                this.ResetCachedCanUserSettings();
+                return true;
+            }
+            else
+                return false;
         }
+        else {
+            // if we get here, the user can't delete the view, so we don't delete it, add a last error and return false
+            const res: BaseEntityResult = new BaseEntityResult();
+            res.Success = false;
+            res.Message = 'User does not have permission to delete this view';
+            res.StartedAt = new Date();
+            res.EndedAt = new Date();
+            this.ResultHistory.push(res);
+            return false;
+        }
+    }
 
-        // now just call our superclass to do the actual save()
-        return super.Save(options);
+    override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (this.UserCanEdit) {
+            // we want to preprocess the Save() call because we need to regenerate the WhereClause in some situations
+            if (!this.ID ||
+                options?.IgnoreDirtyState || 
+                this.Fields.find(c => c.Name.toLowerCase() == 'filterstate')?.Dirty ||
+                this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterenabled')?.Dirty ||
+                this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty) {
+                // either we're ignoring dirty state or the filter state is dirty, so we need to update the where clause
+                await this.UpdateWhereClause(options?.IgnoreDirtyState);
+            }
+
+            // now call our superclass to do the actual save()
+            if (super.Save(options)) {
+                this.ResetCachedCanUserSettings();
+                return true;
+            }            
+            else
+                return false;
+        }
+        else {
+            // if we get here, the user can't edit the view, so we don't save it, add a last error and return false
+            const res: BaseEntityResult = new BaseEntityResult();
+            res.Success = false;
+            res.Message = this.ID ? 'User does not have permission to edit this view' : 'User does not have permission to create a new view';
+            res.StartedAt = new Date();
+            res.EndedAt = new Date();
+            this.ResultHistory.push(res);
+            return false;
+        }
     }
 
     public async SetDefaultsFromEntity(e: EntityInfo) {
@@ -182,7 +317,9 @@ export class UserViewEntityExtended extends UserViewEntity  {
             this.CustomWhereClause = false;
             //this.SmartFilterEnabled = false;
         }
-        return result
+        this.ResetCachedCanUserSettings();
+
+        return result;
     }
 
     /**
