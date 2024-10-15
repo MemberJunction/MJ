@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 10/14/2024, 12:35:59 PM
+* GENERATED: 10/15/2024, 6:15:08 AM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -26461,6 +26461,10 @@ export class ResourcePermission_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: 'Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.'}) 
+    @MaxLength(40)
+    Status: string;
+        
     @Field() 
     @MaxLength(510)
     ResourceType: string;
@@ -26503,6 +26507,9 @@ export class CreateResourcePermissionInput {
 
     @Field({ nullable: true })
     PermissionLevel?: string;
+
+    @Field()
+    Status: string;
 }
     
 
@@ -26537,6 +26544,9 @@ export class UpdateResourcePermissionInput {
 
     @Field({ nullable: true })
     PermissionLevel?: string;
+
+    @Field()
+    Status: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

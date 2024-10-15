@@ -7345,6 +7345,19 @@ export const ResourcePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Requested
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Approved
+    *   * Rejected
+    *   * Revoked
+    *   * Requested
+    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.`),
     ResourceType: z.string().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
@@ -28904,6 +28917,26 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Requested
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Requested
+    *   * Approved
+    *   * Rejected
+    *   * Revoked
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
+    */
+    get Status(): 'Requested' | 'Approved' | 'Rejected' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Requested' | 'Approved' | 'Rejected' | 'Revoked') {
+        this.Set('Status', value);
     }
 
     /**
