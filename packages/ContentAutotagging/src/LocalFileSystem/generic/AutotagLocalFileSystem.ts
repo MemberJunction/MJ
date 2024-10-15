@@ -141,7 +141,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
     public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> { 
         const md = new Metadata();
         const text = await this.engine.parseFileFromPath(filePath);
-        const contentItem = await md.GetEntityObject<any>('Content Items', this.contextUser);
+        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
         contentItem.NewRecord();
         contentItem.ContentSourceID = contentSourceParams.contentSourceID
         contentItem.Name = contentSourceParams.name
@@ -163,7 +163,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
 
     public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<ContentItemEntity> {
         const md = new Metadata();
-        const contentItem = await md.GetEntityObject<any>('Content Items', this.contextUser);
+        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
         const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
         await contentItem.Load(contentItemID);
         const text = await this.engine.parseFileFromPath(filePath);
