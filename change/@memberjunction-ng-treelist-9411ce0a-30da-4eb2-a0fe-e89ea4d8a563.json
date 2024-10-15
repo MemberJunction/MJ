@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ng-treelist",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

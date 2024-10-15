@@ -1,0 +1,58 @@
+{
+  "name": "@memberjunction/ng-find-record",
+  "entries": [
+    {
+      "date": "Tue, 15 Oct 2024 17:01:03 GMT",
+      "version": "2.8.0",
+      "tag": "@memberjunction/ng-find-record_v2.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-find-record",
+            "commit": "a82efb06638ea8b790b9d13423f403a1e560013e",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-find-record",
+            "commit": "a82efb06638ea8b790b9d13423f403a1e560013e",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/core-entities to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/global to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/core to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/ng-shared to v2.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

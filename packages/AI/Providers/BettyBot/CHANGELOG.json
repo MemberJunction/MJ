@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/ai-betty-bot",
+  "entries": [
+    {
+      "date": "Tue, 15 Oct 2024 17:01:03 GMT",
+      "version": "2.8.0",
+      "tag": "@memberjunction/ai-betty-bot_v2.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-betty-bot",
+            "commit": "a82efb06638ea8b790b9d13423f403a1e560013e",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-betty-bot",
+            "comment": "Bump @memberjunction/ai to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-betty-bot",
+            "comment": "Bump @memberjunction/global to v2.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

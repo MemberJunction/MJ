@@ -2,6 +2,39 @@
   "name": "@memberjunction/actions-apollo",
   "entries": [
     {
+      "date": "Tue, 15 Oct 2024 17:01:03 GMT",
+      "version": "2.8.0",
+      "tag": "@memberjunction/actions-apollo_v2.8.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions-apollo",
+            "comment": "Bump @memberjunction/global to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions-apollo",
+            "comment": "Bump @memberjunction/core to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions-apollo",
+            "comment": "Bump @memberjunction/core-entities to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions-apollo",
+            "comment": "Bump @memberjunction/actions to v2.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 08 Oct 2024 22:16:58 GMT",
       "version": "2.7.1",
       "tag": "@memberjunction/actions-apollo_v2.7.1",

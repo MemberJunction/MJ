@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -33,9 +33,9 @@
     "@rollup/rollup-linux-x64-gnu": "4.17.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.7.1",
-    "@memberjunction/core-entities": "2.7.1",
-    "@memberjunction/global": "2.7.1",
+    "@memberjunction/core": "2.8.0",
+    "@memberjunction/core-entities": "2.8.0",
+    "@memberjunction/global": "2.8.0",
     "graphql": "^16.8.0",
     "graphql-request": "^5.2.0",
     "graphql-ws": "^5.14.0",
