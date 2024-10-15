@@ -2,6 +2,95 @@
   "name": "@memberjunction/ng-user-view-grid",
   "entries": [
     {
+      "date": "Tue, 15 Oct 2024 17:01:03 GMT",
+      "version": "2.8.0",
+      "tag": "@memberjunction/ng-user-view-grid_v2.8.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "a82efb06638ea8b790b9d13423f403a1e560013e",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core-entities to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/global to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-shared to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/communication-types to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/templates-base-types to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-entity-communications to v2.8.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-base-types to v2.8.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 08 Oct 2024 22:16:58 GMT",
       "version": "2.7.1",
       "tag": "@memberjunction/ng-user-view-grid_v2.7.1",
