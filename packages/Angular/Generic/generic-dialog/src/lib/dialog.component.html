@@ -1,0 +1,25 @@
+@if (DialogVisible) {
+    <kendo-dialog
+        [width]="DialogWidth"
+        [height]="DialogHeight"
+        [title]="DialogTitle"        
+        (close)="HandleCancelClick()"
+    >
+        <ng-content></ng-content>
+        <kendo-dialog-actions>
+            @if(ShowOKButton) {
+                <button kendoButton (click)="HandleOKClick()" themeColor="primary">{{OKButtonText}}</button>
+            }
+            @if(ShowCancelButton) {
+                <button kendoButton (click)="HandleCancelClick()">{{CancelButtonText}}</button>
+            }
+
+            <!-- Named slot for custom actions/buttons -->
+            <ng-content select="[custom-actions]"></ng-content>
+
+            @if(!ShowOKButton && !ShowCancelButton && !HasCustomActions) {
+                <span>No actions available - enable built-in actions or add custom actions</span>
+            }
+        </kendo-dialog-actions>    
+    </kendo-dialog>    
+}

@@ -37,6 +37,7 @@
     "@memberjunction/templates-base-types": "2.7.1",
     "@memberjunction/ng-entity-communications": "2.7.1",
     "@memberjunction/ng-base-types": "2.7.1",
+    "@memberjunction/ng-resource-permissions": "2.7.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

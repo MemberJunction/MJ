@@ -5,7 +5,7 @@ import { Metadata, EntityInfo, LogError, BaseEntity, EntityPermissionType } from
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
-import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
+import { UserViewEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
@@ -18,7 +18,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   @Input() public viewId: string | null = null;
   @Input() public viewName: string| null = null;
-  @Input() public selectedView: UserViewEntity | null = null;
+  @Input() public selectedView: UserViewEntityExtended | null = null;
   @Input() public extraFilter: string | null = null;
   @Input() public entityName: string | null = null;
 
@@ -54,6 +54,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
         view = <UserViewEntity>await ViewInfo.GetViewEntityByName(this.viewName)
 
       if (view)  {
+        this.selectedView = <UserViewEntityExtended>view;
         await this.LoadView(view);
         const e = md.Entities.find(e => e.ID === view?.EntityID)
         if (e) {
@@ -92,8 +93,9 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async LoadView(viewInfo: UserViewEntity) {
     // load up the view
-    if (viewInfo && viewInfo.ID && viewInfo.ID.length > 0)
-      this.selectedView = viewInfo
+    if (this.viewGridWithAnalysis && 
+        viewInfo && viewInfo.ID && viewInfo.ID.length > 0)
+      this.selectedView = <UserViewEntityExtended>viewInfo; // didn't change the param type of this variable because we didn't want a breaking change in the 2.x era of the system, when we go to 3.0 we can change this to UserViewEntityExtended
       await this.viewGridWithAnalysis.Refresh({
         ViewEntity: viewInfo,
         ViewID: viewInfo.ID,
@@ -103,13 +105,15 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   public async LoadDynamicView() {
-    this.selectedView = null;
-    await this.viewGridWithAnalysis.Refresh({
-      EntityName: this.entityName!,
-      ExtraFilter: this.extraFilter!,
-      UserSearchString: this.searchText
-    })
-    this.loadComplete.emit();
+    if (this.viewGridWithAnalysis) {
+      this.selectedView = null;
+      await this.viewGridWithAnalysis.Refresh({
+        EntityName: this.entityName!,
+        ExtraFilter: this.extraFilter!,
+        UserSearchString: this.searchText
+      })
+      this.loadComplete.emit();  
+    }
   }
 
   async Refresh() {
@@ -143,5 +147,21 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
       this.selectedView = args.ViewEntity
       this.Refresh();
     }
+  }
+
+  public get UserCanView(): boolean {
+    if (this.selectedView) 
+      return this.selectedView.UserCanView;
+    else
+      return true;
+  }
+
+  public dynamicWrapperStyle(): any {
+    if (this.UserCanView)
+      return {};
+    else
+      return {
+        "display": "none"
+      };
   }
 }

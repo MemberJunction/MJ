@@ -121,7 +121,6 @@
                 </kendo-excelexport-column>
             </kendo-excelexport>
         </kendo-grid>
-    }
 
       
     <div #compareDialogContainer>
@@ -233,7 +232,9 @@
             }
         }
     </div>
-      <kendo-dialog-actions>
+
+
+    <kendo-dialog-actions>
         <button kendoButton (click)="addRecordsToSelectedLists()" [disabled]="showAddToListLoader" themeColor="primary">
             Save
         </button>
@@ -242,22 +243,22 @@
         </button>
       </kendo-dialog-actions>
     </kendo-dialog>
+
+    <!-- Entity Form Dialog Component here for future use as needed -->
+    <mj-entity-form-dialog
+        #entityFormDialog
+        Mode="complete"
+        [Visible]="showNewRecordDialog"
+    ></mj-entity-form-dialog>
+
+    <mj-entity-communications-preview-window 
+        #templatePreviewDialog
+        [DialogVisible]="showTemplatePreviewDialog"
+        (DialogClosed)="showTemplatePreviewDialog = false"
+        [entityInfo]="_entityInfo"
+        [runViewParams]="Params"
+    >
+    </mj-entity-communications-preview-window> 
+
+    }
 </div>
-  
-<!-- Entity Form Dialog Component here for future use as needed -->
-<mj-entity-form-dialog
-    #entityFormDialog
-    Mode="complete"
-    [Visible]="showNewRecordDialog"
-></mj-entity-form-dialog>
-
-
-<mj-entity-communications-preview-window 
-    #templatePreviewDialog
-    [DialogVisible]="showTemplatePreviewDialog"
-    (DialogClosed)="showTemplatePreviewDialog = false"
-    [entityInfo]="_entityInfo"
-    [runViewParams]="Params"
->
-
-</mj-entity-communications-preview-window> 

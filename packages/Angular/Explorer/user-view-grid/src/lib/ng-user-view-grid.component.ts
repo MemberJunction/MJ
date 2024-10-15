@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection, RunViewResult } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -286,6 +286,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     else
       return false;
   }
+
+  public get UserCanView(): boolean {
+    if (this._viewEntity) 
+      return this._viewEntity.UserCanView;
+    else
+      return false;
+  }
+
 
   private _viewDirty: boolean = false;
   public async innerSaveView() {
@@ -596,7 +604,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
 
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit() {
+    await ResourcePermissionEngine.Instance.Config();
     //this.setGridHeight();
     if (this.Params)
       this.Refresh(this.Params);

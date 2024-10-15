@@ -6,3 +6,4 @@ export * from './custom/ListDetailEntityExtended';
 export * from './custom/TypeTablesCache';
 export * from './custom/ScheduledActionExtended';
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
+export * from './custom/ResourcePermissions/ResourcePermissionSubclass';

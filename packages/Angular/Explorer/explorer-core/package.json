@@ -28,6 +28,7 @@
   "dependencies": {
     "@memberjunction/global": "2.7.1",
     "@memberjunction/core": "2.7.1",
+    "@memberjunction/core-entities": "2.7.1",
     "@memberjunction/entity-communications-client": "2.7.1",
     "@memberjunction/communication-types": "2.7.1",
     "@memberjunction/templates-base-types": "2.7.1",
@@ -47,6 +48,7 @@
     "@memberjunction/ng-entity-form-dialog": "2.7.1",
     "@memberjunction/ng-record-selector": "2.7.1",
     "@memberjunction/ng-resource-permissions": "2.7.1",
+    "@memberjunction/ng-generic-dialog": "2.7.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",
