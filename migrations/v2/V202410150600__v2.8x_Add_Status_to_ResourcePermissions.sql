@@ -1,5 +1,6 @@
 ALTER TABLE ${flyway:defaultSchema}.ResourcePermission
 ADD [Status] NVARCHAR(20) NOT NULL DEFAULT('Requested');
+GO
 
 -- Now, add the CHECK constraint for the Status column
 ALTER TABLE ${flyway:defaultSchema}.ResourcePermission
