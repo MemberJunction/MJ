@@ -44,8 +44,9 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
     await ResourcePermissionEngine.Instance.Config();
     // now we can get the permissions for the specified resource
-    this.resourcePermissions = ResourcePermissionEngine.Instance.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
-
+    const allResourcePermissions = ResourcePermissionEngine.Instance.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
+    this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
+    
     const md = new Metadata();
     const rv = new RunView();
     const result = await rv.RunView<UserEntity>({
@@ -76,6 +77,7 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     permission.ResourceTypeID = this.ResourceTypeID;
     permission.ResourceRecordID = this.ResourceRecordID;
     permission.Type = this.SelectedType;
+    permission.Status = 'Approved';
     permission.PermissionLevel = this.SelectedPermissionLevel;
     if (this.SelectedType === 'User' && this.SelectedUser) {
       permission.UserID = this.SelectedUser.ID;
