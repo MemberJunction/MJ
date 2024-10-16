@@ -1998,6 +1998,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         };                
     }
  
+    /**
+     * Gets column info for a dataset item, which might be * for all columns or if a Columns field was provided in the DatasetItem table,
+     * attempts to use those columns assuming they are valid.
+     * @param item 
+     * @param datasetName 
+     * @returns 
+     */
     protected GetColumnsForDatasetItem(item: any, datasetName: string): string {
         const specifiedColumns = item.Columns ? item.Columns.split(',') : [];
         if (specifiedColumns.length > 0) {
