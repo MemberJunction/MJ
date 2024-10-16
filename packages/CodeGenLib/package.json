@@ -25,6 +25,7 @@
     "@memberjunction/core-entities": "2.8.0",
     "@memberjunction/global": "2.8.0",
     "@memberjunction/sqlserver-dataprovider": "2.8.0",
+    "uuid": "^10.0.0",
     "env-var": "^7.4.1",
     "mssql": "^11.0.1",
     "fs-extra": "^11.2.0",
