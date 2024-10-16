@@ -1207,7 +1207,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     InvocationType: invocationTypeEntity,
                     ContextUser: user
                 })    
-                results.push(result);
+                results.push(result);    
             }
             return results;    
         }
@@ -1917,7 +1917,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
                 const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
 
-                const itemSQL = `SELECT * FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+                const columns = item.Columns ? item.Columns.split(',').map(col => `[${col.trim()}]`).join(', ') : '*';
+                const itemSQL = `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
                 const itemData = await this.ExecuteSQL(itemSQL);
 
                 // get the latest update date
@@ -2020,6 +2021,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
                 const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
 
+           
                 const itemSQL = `SELECT 
                                         CASE 
                                             WHEN MAX(${item.DateFieldToCheck}) > '${datasetMaxUpdatedAt}' THEN MAX(${item.DateFieldToCheck}) 
