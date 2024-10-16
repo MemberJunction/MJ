@@ -9,3 +9,4 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', 
     @level1type = N'TABLE',  @level1name = N'DatasetItem', 
     @level2type = N'COLUMN', @level2name = N'Columns';
+ 
