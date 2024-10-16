@@ -1997,7 +1997,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             Success: itemData !== null && itemData !== undefined
         };                
     }
-
+ 
     protected GetColumnsForDatasetItem(item: any, datasetName: string): string {
         const specifiedColumns = item.Columns ? item.Columns.split(',') : [];
         if (specifiedColumns.length > 0) {
