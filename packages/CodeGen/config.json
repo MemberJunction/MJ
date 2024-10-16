@@ -265,7 +265,7 @@
     "SQLOutput" :{
         "enabled": true,
         "folderPath": "../../migrations/v2/",
-        "fileName": "V202410150608__v2.8x_Add_Status_To_ResourcePermissions_CodeGenMetadata.sql",
+        "fileName": "V202410150608__v2.9x_Test_CodeGen.sql",
         "appendToFile": true,
         "convertCoreSchemaToFlywayMigrationFile": true
     }

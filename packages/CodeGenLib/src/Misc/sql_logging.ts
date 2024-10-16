@@ -46,7 +46,7 @@ export class SQLLogging {
      }
 
      public static finishSQLLogging() {
-        if (SQLLogging.SQLLoggingFilePath) {
+        if (SQLLogging.SQLLoggingFilePath) { 
             if(configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
                 SQLLogging.convertSQLLogToFlywaySchema();
             }
@@ -111,10 +111,10 @@ export class SQLLogging {
         const coreSchema: string = mj_core_schema();
         const regex: RegExp = new RegExp(coreSchema, 'g');
   
-        const data: string = fs.readFileSync(`${this.SQLLoggingFilePath}`, 'utf-8');
+        const data: string = fs.readFileSync(this.SQLLoggingFilePath, 'utf-8');
         const replacedData: string = data.replace(regex, "${flyway:defaultSchema}");
   
         fs.writeFileSync(`${this.SQLLoggingFilePath}`, replacedData);
-        logStatus(`Replaced all instances of ${coreSchema} with \${flyway:defaultSchema} in the metadata log file`);
+        logStatus(`   >>> Flyway Migration File Completed: Replaced all instances of ${coreSchema} with \${flyway:defaultSchema} in the metadata log file`);
      }
 }
