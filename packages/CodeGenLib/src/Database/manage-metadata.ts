@@ -193,13 +193,14 @@ export class ManageMetadataBase {
       }
    }
    
-   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean}> {
+   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
    
       // first, get the entity definition
       const md = new Metadata();
       const entity = md.EntityByName(virtualEntity.Name);
+      let newEntityFieldUUID = null;
       let didUpdate: boolean = false;
       if (entity) {
          const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
@@ -232,11 +233,12 @@ export class ManageMetadataBase {
          }
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
+            newEntityFieldUUID = this.createNewUUID();
             const sqlAdd = `INSERT INTO [${mj_core_schema()}].EntityField (
-                                      EntityID, Name, Type, AllowsNull, 
+                                      ID, EntityID, Name, Type, AllowsNull, 
                                       Length, Precision, Scale, 
                                       Sequence, IsPrimaryKey, IsUnique ) 
-                            VALUES (  '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0}, 
+                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0}, 
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
                                        ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
                                     )`;
@@ -244,7 +246,7 @@ export class ManageMetadataBase {
             didUpdate = true;
          }
       }
-      return {success: true, updatedField: didUpdate};
+      return {success: true, updatedField: didUpdate, newFieldID: newEntityFieldUUID};
    }
    
    
@@ -320,8 +322,9 @@ export class ManageMetadataBase {
                   // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
-                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
-                                          VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+                  const newEntityRelationshipUUID = this.createNewUUID();
+                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+                                          VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
                               `;
                   // now update the map for the relationship count
                   relationshipCountMap.set(f.EntityID, sequence);                                       
