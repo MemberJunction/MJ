@@ -219,12 +219,9 @@ export class EntityField {
                     }
                     catch (e) {
                         // if we get here, that means the default value is not a valid date, so we need to check to see if the date is a getdate() or getutcdate() type default
-                        const defaultValueIsCurrentDate: boolean = fieldInfo.DefaultValue.trim().toLowerCase().includes("getdate()");
-                        const defaultValueISCurrentUTCDate: boolean = fieldInfo.DefaultValue.trim().toLowerCase().includes("getutcdate()");
-                        
                         // use includes() below because it is possible that the value is wrapped in parenthesis, like (getdate()) and that is still valid.
-                        if (defaultValueIsCurrentDate || defaultValueISCurrentUTCDate) {
-                            // we have a getdate() type default, leave the field alone if its a special date field as the server (i.e. database) will handle
+                        if (fieldInfo.DefaultValue.trim().toLowerCase().includes("getdate()") || fieldInfo.DefaultValue.trim().toLowerCase().includes("getutcdate()")) {
+                            // we have a getdate() or getutcdate() type default, leave the field alone if its a special date field as the server (i.e. database) will handle
                             //setting the value, otherwise set the value to the current date
                             if(fieldInfo.IsSpecialDateField){
                                 this.Value = null;
