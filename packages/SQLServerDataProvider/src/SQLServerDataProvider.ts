@@ -2006,26 +2006,44 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      * @returns 
      */
     protected GetColumnsForDatasetItem(item: any, datasetName: string): string {
-        const specifiedColumns = item.Columns ? item.Columns.split(',') : [];
+        const specifiedColumns = item.Columns ? item.Columns.split(',').map(col => col.trim()) : [];
         if (specifiedColumns.length > 0) {
             // validate that the columns specified are valid within the entity metadata 
             const entity = this.Entities.find(e => e.ID === item.EntityID);
-            if (!entity) {
+            if (!entity && this.Entities.length > 0 ) {
+                // we have loaded entities (e.g. Entites.length > 0) but the entity wasn't found, log an error and return a failed result
+                // the reason we continue below if we have NOT loaded Entities is that when the system first bootstraps, DATASET gets loaded
+                // FIRST before Entities are loaded to load the entity metadata so this would ALWAYS fail :)
+
                 // entity not found, return a failed result, shouldn't ever get here  due to the foreign key constraint on the table
                 LogError(`Entity not found for dataset item ${item.Code} in dataset ${datasetName}`);
                 return null;
             }
             else {
-                // have a valid entity, now make sure that all of the columns specified are valid 
-                const invalidColumns: string[] = [];
-                specifiedColumns.forEach((col) => {
-                    if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
-                        invalidColumns.push(col);
-                    }
-                });
-                if (invalidColumns.length > 0) {
-                    LogError(`Invalid columns specified for dataset item ${item.Code} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
-                    return null;
+                if (entity) {
+                    // have a valid entity, now make sure that all of the columns specified are valid 
+                    // only do the column validity check if we have an entity, we can get here if the entity wasn't found IF we haven't loaded entities yet per above comment
+                    const invalidColumns: string[] = [];
+
+                    specifiedColumns.forEach((col) => {
+                        if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
+                            invalidColumns.push(col);
+                        }
+                    });
+                    if (invalidColumns.length > 0) {
+                        LogError(`Invalid columns specified for dataset item ${item.Code} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
+                        return null;
+                    }    
+                }
+
+                // check to see if the specified columns include the DateFieldToCheck
+                // in the below we only check entity metadata if we have it, if we don't have it, we just add the special fields back in
+                if ( item.DateFieldToCheck && item.DateFieldToCheck.trim().length > 0 && 
+                     specifiedColumns.indexOf(item.DateFieldToCheck) === -1) {
+
+                    // we only check the entity if we have it, otherwise we just add it back in
+                    if (!entity || entity.Fields.find(f => f.Name.trim().toLowerCase() === item.DateFieldToCheck.trim().toLowerCase()))
+                        specifiedColumns.push(item.DateFieldToCheck);
                 }
             }
         }

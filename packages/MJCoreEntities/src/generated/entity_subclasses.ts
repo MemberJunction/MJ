@@ -2998,6 +2998,11 @@ export const DatasetItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Columns: z.string().nullish().describe(`
+        * * Field Name: Columns
+        * * Display Name: Columns
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional column to store a comma-delimited list of columns for the DatasetItem`),
     Dataset: z.string().describe(`
         * * Field Name: Dataset
         * * Display Name: Dataset
@@ -7345,14 +7350,13 @@ export const ResourcePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
+    Status: z.union([z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Approved
     *   * Rejected
     *   * Revoked
@@ -17280,6 +17284,19 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Columns
+    * * Display Name: Columns
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional column to store a comma-delimited list of columns for the DatasetItem
+    */
+    get Columns(): string | null {
+        return this.Get('Columns');
+    }
+    set Columns(value: string | null) {
+        this.Set('Columns', value);
     }
 
     /**
@@ -28926,16 +28943,16 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
-    *   * Requested
     *   * Approved
     *   * Rejected
     *   * Revoked
-    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
+    *   * Requested
+    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.
     */
-    get Status(): 'Requested' | 'Approved' | 'Rejected' | 'Revoked' {
+    get Status(): 'Approved' | 'Rejected' | 'Revoked' | 'Requested' {
         return this.Get('Status');
     }
-    set Status(value: 'Requested' | 'Approved' | 'Rejected' | 'Revoked') {
+    set Status(value: 'Approved' | 'Rejected' | 'Revoked' | 'Requested') {
         this.Set('Status', value);
     }
 

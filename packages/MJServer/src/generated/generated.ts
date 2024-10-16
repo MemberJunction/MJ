@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 10/15/2024, 6:15:08 AM
+* GENERATED: 10/16/2024, 4:51:13 PM
 *
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -13826,6 +13826,9 @@ export class DatasetItem_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: 'Optional column to store a comma-delimited list of columns for the DatasetItem'}) 
+    Columns?: string;
         
     @Field() 
     @MaxLength(200)
