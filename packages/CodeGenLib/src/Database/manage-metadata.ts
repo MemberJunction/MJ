@@ -1473,7 +1473,7 @@ export class ManageMetadataBase {
    }
    
    protected async createNewApplication(ds: DataSource, appID: string, appName: string): Promise<number>{
-      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description) VALUES ('" + appID + "', '" + appName + "', 'Generated for Schema'); SELECT @@IDENTITY AS ID";
+      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema')";
       const result = await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
       return result && result.length > 0 ? result[0].ID : null;
    }
