@@ -187,7 +187,10 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
                 filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
             }
             else {
-                // we can't search on the pkey so leave it alone
+                // we can't search on the pkey unless the escapedQuery is a valid GUID, so check that and if so, search on the pkey
+                if (escapedQuery.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+                    filter = `[${this.RelatedEntityInfo.FirstPrimaryKey.Name}] = '${escapedQuery}'`;
+                }
             }
             
             if (this.RelatedEntityNameField) {
@@ -209,6 +212,19 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
             else {
                 this.RelatedEntityRecords = [<BaseEntity><any>{Name: "Can't search on " + this.RelatedEntityInfo.Name + ' records'}]; // this will have the effect of a single record in the list that says "Can't search on..."
             }
+        }
+    }
+
+    public GetRecordDisplayString(record: any) {
+        if (!record) 
+            return '';
+        if (record.Get !== undefined) {
+            // we have a base entity
+            return this.RelatedEntityNameField ? record.Get(this.RelatedEntityNameField) : record.FirstPrimaryKey.ToString();
+        }
+        else {
+            // we have a plain object because we couldn't find any records
+            return record.Name;
         }
     }
 
