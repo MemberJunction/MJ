@@ -381,7 +381,7 @@ export class AskSkipResolver {
     // don't pass the mj_core_schema entities by default, but allow flexibilty 
     // to include specific entities from the MJAPI config.json
     const md = new Metadata();
-    return md.Entities.filter((e) => e.SchemaName !== mj_core_schema).map((e) => {
+    return md.Entities.filter((e) => e.SchemaName !== mj_core_schema || configInfo.askSkip.entitiesToSendSkip.includeEntitiesFromExcludedSchemas.includes(e.Name)).map((e) => {
       const ret: SkipEntityInfo = {
         id: e.ID,
         name: e.Name,
