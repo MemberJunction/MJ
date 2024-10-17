@@ -12,7 +12,7 @@
 
         <ul *ngIf="showMatchingRecords" class="matching-records">
             <li *ngFor="let record of RelatedEntityRecords" (click)="onRecordSelected(record)">
-                {{ RelatedEntityNameField ? record.Get(RelatedEntityNameField) : record.PrimaryKey.ToString() }}
+                {{ GetRecordDisplayString(record)}}
             </li>
         </ul>
     }
