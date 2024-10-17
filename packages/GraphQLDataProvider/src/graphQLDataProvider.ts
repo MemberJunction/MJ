@@ -1051,6 +1051,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IMetadataProvider
     /**************************************************************************/
+    /**
+     * Returns a dataset by name
+     * @param datasetName 
+     * @param itemFilters 
+     * @returns 
+     */
     public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
         const query = gql`query GetDatasetByName($DatasetName: String!, $ItemFilters: [DatasetItemFilterTypeGQL!]) {
             GetDatasetByName(DatasetName: $DatasetName, ItemFilters: $ItemFilters) {

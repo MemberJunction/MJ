@@ -13,7 +13,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          CompositeKey,
          EntityDeleteOptions,
          BaseEntityResult,
-         Metadata} from "@memberjunction/core";
+         Metadata,
+         DatasetItemResultType} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -1207,7 +1208,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     InvocationType: invocationTypeEntity,
                     ContextUser: user
                 })    
-                results.push(result);
+                results.push(result);    
             }
             return results;    
         }
@@ -1905,44 +1906,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
         if (items && items.length > 0) {
             // fire off all of the item queries in parallel
-            const promises = items.map(async (item) => {
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === item.Code);
-                    if (filter) 
-                        filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
-                }
-        
-                const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
-                const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
-                const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
-
-                const itemSQL = `SELECT * FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
-                const itemData = await this.ExecuteSQL(itemSQL);
-
-                // get the latest update date
-                let latestUpdateDate = new Date(1900, 1, 1);
-                if (itemData && itemData.length > 0) {
-                    itemData.forEach((data) => {
-                        if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
-                            latestUpdateDate = new Date(data[item.DateFieldToCheck]);
-                        }
-                    });
-                }
-                
-                // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
-                if (datasetMaxUpdatedAt > latestUpdateDate) {
-                    latestUpdateDate = datasetMaxUpdatedAt;
-                }
-
-                return {
-                    EntityID: item.EntityID, 
-                    EntityName: item.Entity, 
-                    Code: item.Code,
-                    Results: itemData,
-                    LatestUpdatedDate: latestUpdateDate,
-                    Success: itemData !== null && itemData !== undefined
-                };                
+            const promises = items.map((item) => {
+                return this.GetDatasetItem(item, itemFilters, datasetName); // no await as Promise.All used below
             });
 
             // execute all promises in parallel
@@ -1978,6 +1943,111 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 Results: null,
             }                                
         }
+    }
+
+    protected async GetDatasetItem(item: any, itemFilters, datasetName): Promise<DatasetItemResultType> {
+        let filterSQL = '';
+        if (itemFilters && itemFilters.length > 0) {
+            const filter = itemFilters.find(f => f.ItemCode === item.Code);
+            if (filter) 
+                filterSQL = (item.WhereClause ? ' AND ' : ' WHERE ') + '(' + filter.Filter + ')';
+        }
+
+        const itemUpdatedAt = new Date(item.DatasetItemUpdatedAt);
+        const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
+        const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+
+        const columns = this.GetColumnsForDatasetItem(item, datasetName);
+        if (!columns) {
+            // failure condition within columns, return a failed result
+            return {
+                EntityID: item.EntityID, 
+                EntityName: item.Entity, 
+                Code: item.Code,
+                Results: null,
+                LatestUpdateDate: null,
+                Status: 'Invalid columns specified for dataset item',
+                Success: false
+            };    
+        }
+        const itemSQL = `SELECT ${columns} FROM [${item.EntitySchemaName}].[${item.EntityBaseView}] ${item.WhereClause ? 'WHERE ' + item.WhereClause : ''}${filterSQL}`;
+        const itemData = await this.ExecuteSQL(itemSQL);
+
+        // get the latest update date
+        let latestUpdateDate = new Date(1900, 1, 1);
+        if (itemData && itemData.length > 0) {
+            itemData.forEach((data) => {
+                if (data[item.DateFieldToCheck] && new Date(data[item.DateFieldToCheck]) > latestUpdateDate) {
+                    latestUpdateDate = new Date(data[item.DateFieldToCheck]);
+                }
+            });
+        }
+        
+        // finally, compare the latestUpdatedDate to the dataset max date, and use the latter if it is more recent
+        if (datasetMaxUpdatedAt > latestUpdateDate) {
+            latestUpdateDate = datasetMaxUpdatedAt;
+        }
+
+        return {
+            EntityID: item.EntityID, 
+            EntityName: item.Entity, 
+            Code: item.Code,
+            Results: itemData,
+            LatestUpdateDate: latestUpdateDate,
+            Success: itemData !== null && itemData !== undefined
+        };                
+    }
+ 
+    /**
+     * Gets column info for a dataset item, which might be * for all columns or if a Columns field was provided in the DatasetItem table,
+     * attempts to use those columns assuming they are valid.
+     * @param item 
+     * @param datasetName 
+     * @returns 
+     */
+    protected GetColumnsForDatasetItem(item: any, datasetName: string): string {
+        const specifiedColumns = item.Columns ? item.Columns.split(',').map(col => col.trim()) : [];
+        if (specifiedColumns.length > 0) {
+            // validate that the columns specified are valid within the entity metadata 
+            const entity = this.Entities.find(e => e.ID === item.EntityID);
+            if (!entity && this.Entities.length > 0 ) {
+                // we have loaded entities (e.g. Entites.length > 0) but the entity wasn't found, log an error and return a failed result
+                // the reason we continue below if we have NOT loaded Entities is that when the system first bootstraps, DATASET gets loaded
+                // FIRST before Entities are loaded to load the entity metadata so this would ALWAYS fail :)
+
+                // entity not found, return a failed result, shouldn't ever get here  due to the foreign key constraint on the table
+                LogError(`Entity not found for dataset item ${item.Code} in dataset ${datasetName}`);
+                return null;
+            }
+            else {
+                if (entity) {
+                    // have a valid entity, now make sure that all of the columns specified are valid 
+                    // only do the column validity check if we have an entity, we can get here if the entity wasn't found IF we haven't loaded entities yet per above comment
+                    const invalidColumns: string[] = [];
+
+                    specifiedColumns.forEach((col) => {
+                        if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
+                            invalidColumns.push(col);
+                        }
+                    });
+                    if (invalidColumns.length > 0) {
+                        LogError(`Invalid columns specified for dataset item ${item.Code} in dataset ${datasetName}: ${invalidColumns.join(', ')}`);
+                        return null;
+                    }    
+                }
+
+                // check to see if the specified columns include the DateFieldToCheck
+                // in the below we only check entity metadata if we have it, if we don't have it, we just add the special fields back in
+                if ( item.DateFieldToCheck && item.DateFieldToCheck.trim().length > 0 && 
+                     specifiedColumns.indexOf(item.DateFieldToCheck) === -1) {
+
+                    // we only check the entity if we have it, otherwise we just add it back in
+                    if (!entity || entity.Fields.find(f => f.Name.trim().toLowerCase() === item.DateFieldToCheck.trim().toLowerCase()))
+                        specifiedColumns.push(item.DateFieldToCheck);
+                }
+            }
+        }
+        return specifiedColumns.length > 0 ? specifiedColumns.map(colName => `[${colName.trim()}]`).join(',') : '*'; 
     }
 
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
@@ -2020,6 +2090,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 const datasetUpdatedAt = new Date(item.DatasetUpdatedAt);
                 const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
 
+           
                 const itemSQL = `SELECT 
                                         CASE 
                                             WHEN MAX(${item.DateFieldToCheck}) > '${datasetMaxUpdatedAt}' THEN MAX(${item.DateFieldToCheck}) 
