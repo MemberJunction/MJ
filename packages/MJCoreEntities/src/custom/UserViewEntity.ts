@@ -289,7 +289,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
             }
 
             // now call our superclass to do the actual save()
-            if (super.Save(options)) {
+            if (await super.Save(options)) {
                 this.ResetCachedCanUserSettings();
                 return true;
             }            
