@@ -380,8 +380,9 @@ export class AskSkipResolver {
     // narrower in scope than our native MJ metadata
     // don't pass the mj_core_schema entities by default, but allow flexibilty 
     // to include specific entities from the MJAPI config.json
+    const includedEntities = configInfo.askSkip.entitiesToSendSkip.includeEntitiesFromExcludedSchemas.map((e) => e.trim().toLowerCase());
     const md = new Metadata();
-    return md.Entities.filter((e) => e.SchemaName !== mj_core_schema || configInfo.askSkip.entitiesToSendSkip.includeEntitiesFromExcludedSchemas.includes(e.Name)).map((e) => {
+    return md.Entities.filter((e) => e.SchemaName !== mj_core_schema || includedEntities.includes(e.Name.trim().toLowerCase())).map((e) => {
       const ret: SkipEntityInfo = {
         id: e.ID,
         name: e.Name,
