@@ -20,7 +20,12 @@
     "organizationInfo": "",
     "entitiesToSendSkip": {
       "excludeSchemas": ["__mj"],
-      "includeEntities": ["Content Auto Tagger Stuff Here", "And here", "And here"]
+      "includeEntitiesFromExcludedSchemas": [
+                                              "Content Items", "Content Item Tags", "Content Item Attributes", 
+                                              "Content Types", "Content Type Attributes", "Content File Types",
+                                              "Content Sources", "Content Source Types", "Content Source Params",
+                                              "Content Source Type Params", "Content Process Runs"
+                                            ]
     }
   }
 }
