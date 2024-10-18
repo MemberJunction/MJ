@@ -1,13 +1,14 @@
-import { Component,  EventEmitter,  Input, Output } from '@angular/core';
+import { Component,  EventEmitter,  Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
-
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
  
 @Component({
   selector: 'mj-find-record',
   templateUrl: './find-record.component.html',
   styleUrls: ['./find-record.component.css']
 })
-export class FindRecordComponent  {
+export class FindRecordComponent implements OnInit, OnDestroy {
   /**
    * The name of the entity to show records for.
    */
@@ -17,6 +18,12 @@ export class FindRecordComponent  {
    * Optional, list of fields to be displayed in the grid of search results, if not specified, the default fields will be displayed
    */
   @Input() public DisplayFields: EntityFieldInfo[] = []; // Fields to display in the grid
+
+  /**
+   * Optional, the number of milliseconds to wait after the last keypress before triggering a search. Default is 300ms
+   */
+  @Input() public SearchDebounceTime: number = 300; // Debounce time for search
+
 
   /**
    * When a record is selected, this event is emitted with the selected record
@@ -30,6 +37,10 @@ export class FindRecordComponent  {
   public searchHasRun: boolean = false; // has a search been run
   private entityInfo: EntityInfo | undefined; // Entity metadata
 
+  private searchSubject = new Subject<string>(); // Subject to emit search term changes
+  private searchSubscription: any;
+
+ 
   ngOnInit() {
     // Fetch the entity metadata based on EntityName
     const md = new Metadata();
@@ -45,17 +56,46 @@ export class FindRecordComponent  {
         (field: EntityFieldInfo) => field.DefaultInView || field.IsPrimaryKey || field.IsNameField || field.IncludeInUserSearchAPI
       );
     }
+
+    // Subscribe to the searchSubject with debounce
+    this.searchSubscription = this.searchSubject.pipe(
+      debounceTime(this.SearchDebounceTime), // Delay search execution by 300ms
+      distinctUntilChanged(), // Only proceed if the search term has changed
+      switchMap(term => {
+        this.loading = true;
+        return this.doSearch(term);
+      })
+    ).subscribe({
+      next: (results: any[]) => {
+        this.records = results;
+        this.loading = false;
+        this.searchHasRun = true;
+      },
+      error: (error) => {
+        LogError(error.message);
+        this.loading = false;
+        this.searchHasRun = true;
+      }
+    });    
   }
+
+  ngOnDestroy() {
+    // Cleanup the subscription
+    if (this.searchSubscription) {
+      this.searchSubscription.unsubscribe();
+    }
+  }
+
 
   onFind() {
-    this.loading = true;
+    this.searchSubject.next(this.searchTerm); // Trigger the debounced search
+  }  
 
-    this.doSearch(this.searchTerm).then((results: any[]) => {
-      this.records = results;
-      this.loading = false;
-    });
+  onSearchTermChange(term: string) {
+    this.searchTerm = term;
+    this.searchSubject.next(term); // Emit the new search term
   }
- 
+
   public onSelectionChange(event: any) {
     // Emit the selected record
     this.OnRecordSelected.emit(event.selectedRows[0].dataItem);
