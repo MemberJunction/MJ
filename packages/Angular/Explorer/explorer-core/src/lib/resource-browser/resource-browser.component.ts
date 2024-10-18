@@ -1,17 +1,10 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { Item, ItemType } from '../../generic/Item.types';
-import { ResourceTypeEntity } from '@memberjunction/core-entities';
+import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
+import { ResourceTypeEntity, UserViewEntityType } from '@memberjunction/core-entities';
 import { Subject, debounceTime } from 'rxjs';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, KeyValuePair, LogError, Metadata, RunView } from '@memberjunction/core';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { SharedService } from '@memberjunction/ng-shared';
-
-export class NewItemOption {
-  Text!: string;
-  Description?: string;
-  Icon?: string;
-  Action?: () => void;
-}
 
 @Component({
   selector: 'mj-resource-browser',
@@ -43,6 +36,17 @@ export class ResourceBrowserComponent {
    * Whether or not to enable categories, if set to false, categories will be ignored and not displayed
    */
   @Input() EnableCategories: boolean = true;
+
+  /**
+   * If Categories are enabled, then the categories fetched will be filtered to return only those whoses EntityID
+   * matches this value. 
+   */
+  @Input() CategoryEntityID: string | null | undefined = null;
+
+  /**
+   * If set, this will set the current Category/Folder for the display. Not all Resource Types support Categories, so if the Resource Type in question does not have a CategoryEntityID specified, this property will be ignored.
+   */
+  @Input() CurrentCategoryID: string | null = null;
 
   /**
    * This property determines if the UI will include a button on items in the display to edit. The button will only be shown if the user has edit permissions, but this is a global setting to turn on/off the button even if the user has permissions. Default is true.
@@ -77,19 +81,7 @@ export class ResourceBrowserComponent {
   /**
    * Array of NewItemOption objects that will be displayed in the Create New dropdown. Defaults to having a single entry for creating a new folder, you can remove this or add to it.
    */
-  @Input() NewItemOptions: NewItemOption[] = [{
-    Text: 'New Folder',
-    Description: 'Create a new folder',
-    Icon: 'folder',
-    Action: () => {
-      console.log('New Folder');
-    }
-  }];
-
-  /**
-   * If set, this will set the current Category/Folder for the display. Not all Resource Types support Categories, so if the Resource Type in question does not have a CategoryEntityID specified, this property will be ignored.
-   */
-  @Input() CurrentCategoryID?: string;
+  @Input() NewItemOptions: NewItemOption[] = [];
 
   /**
    * The visual display mode for this component, tile will show the contents in tiles that are spaced and wrapped based on the viewport, list will show the details of the items in a list, and tree will show the items in a tree view - tree view NOT implemented yet
@@ -115,7 +107,10 @@ export class ResourceBrowserComponent {
    * Fires whenever the user changes the display mode of the component
    */
   @Output() DisplayModeChanged: EventEmitter<'Grid' | 'List' | 'Tree'> = new EventEmitter<'Grid' | 'List' | 'Tree'>();
- 
+  /**
+   * Fires whenever the user clicks the back button to view the parent folder
+   */
+  @Output() public NavigateToParentEvent: EventEmitter<void> = new EventEmitter<void>();  
 
 
 
@@ -168,6 +163,25 @@ export class ResourceBrowserComponent {
   public get Items(): Item[] {
     return this._items;
   }
+
+  private _DefaultNewItemOptions: NewItemOption[] = [
+    {
+    Text: 'New Folder',
+    Description: 'Create a new Folder',
+    Icon: 'folder',
+    Action: () => {
+      console.log('New Folder');
+      this.toggleCreateFolderView();
+    }}
+  ];
+
+  public get ItemOptions(): NewItemOption[] {
+    return this._DefaultNewItemOptions;
+  }
+
+  public createNewFolderName: string = "";
+  public createNewFolderDescription: string = "";
+  
   
 
   // JS code here and below from old component....
@@ -179,18 +193,8 @@ export class ResourceBrowserComponent {
   public deleteDialogOpened: boolean = false;
   public copyFromDialogOpened: boolean = false;
   public createFolderDialogOpened: boolean = false;
-  private newFolderText: string = "Sample Folder";
   private _allResourceTypes: ResourceTypeEntity[] = [];
-  private createNewRecordName: string = "Record";
-
   public entityObjectName: string = "";
-
-  /**
-   * Options for the create button dropdown
-   */
-  public dropdownOptions = [
-    { text: "Folder" }
-  ];
 
   constructor(public sharedService: SharedService) {
     this.filterItemsSubject
@@ -199,20 +203,24 @@ export class ResourceBrowserComponent {
   }
 
   public async ngOnInit(): Promise<void> {
+
+    this._DefaultNewItemOptions.push(...this.NewItemOptions);
     this._allResourceTypes = this.sharedService.ResourceTypes;
 
-    const rt = this._allResourceTypes.find(rt => rt.Entity === this.ResourceTypeName);
+    const resourceType: ResourceTypeEntity | undefined = this._allResourceTypes.find(rt => rt.Entity === this.ResourceTypeName);
 
-    if (!rt) 
+    if (!resourceType){
       throw new Error(`Resource Type ${this.ResourceTypeName} not found`);
-    else if (!rt.EntityID)
-      throw new Error(`Resource Type ${this.ResourceTypeName} does not have an EntityID specified. EntityID is required for any Resource Type to be used with this component.`);
-    else
-      this.ResourceType = rt;
+    }
 
+    this.ResourceType = resourceType;
+    if (!this.ResourceType.EntityID){
+      throw new Error(`Resource Type ${this.ResourceTypeName} does not have an EntityID specified. EntityID is required for any Resource Type to be used with this component.`);
+    }
+    
     // now get the entity info for the resource type and for its category entity, if one is specified. 
     const md = new Metadata();
-    const resourceTypeEntity = md.EntityByID(this.ResourceType.EntityID!);  
+    const resourceTypeEntity = md.EntityByID(this.ResourceType.EntityID);  
     const categoryEntity = this.ResourceType.CategoryEntityID ? md.EntityByID(this.ResourceType.CategoryEntityID) : null;   
     // figure out the column inside the entity that points to the categoryEntity, if we have a category entity
     if (categoryEntity) {
@@ -230,32 +238,104 @@ export class ResourceBrowserComponent {
    * Refresh the component from the database based on other current state variables.
    */
   public async Refresh() {
-    try {
-      const md = new Metadata();
-      if (!this.ResourceType || !this.ResourceType.Entity)
-        throw new Error('Resource Type not set, or Resource Type does not have an Entity specified');
+    const views: Item[] = await this.LoadViews();
+    const categories: Item[] = await this.LoadCategories();
 
-      const rv: RunView = new RunView(); 
-      // create a combined filter for the SQL query that combines the user's provided ItemFilter, if provided, with a user filter that only includes items that are OWNED by the current user
-      // and finally filter on the current category, if one is set and we have a category entity
-      const combinedFilter = `${this.ItemFilter ? '(' + this.ItemFilter + ') AND' : ''}
-                              ([${this.UserIDFieldName}] = '${md.CurrentUser.ID}') 
-                              ${this.CurrentCategoryID && this.CategoryIDFieldName ? `AND ([${this.CategoryIDFieldName}] = '${this.CurrentCategoryID}')` : ''}`;
-      const itemResult = await rv.RunView({
-          EntityName: this.ResourceType.Entity!,
-          ExtraFilter: combinedFilter,
-          OrderBy: this.OrderBy
-        }
-      );
-      if (!itemResult || !itemResult.Success)
-        throw new Error(`Failed to load items for ${this.ResourceType.Entity}`);
+    const items = [...categories, ...views];
+    const sortedItems = this.sortItems(items);
+    this._items = sortedItems;
+  }
 
-      this._items = itemResult.Results.map(r => new Item(r, ItemType.Resource));
+  private async LoadViews(): Promise<Item[]> {
+    let results: Item[] = [];
+
+    if(!this.ResourceType || !this.ResourceType.CategoryEntity){
+      return results;
     }
-    catch (error) {
-      LogError(error);
-      console.error(error);
+
+    const md = new Metadata();
+    const rv: RunView = new RunView(); 
+    // create a combined filter for the SQL query that combines the user's provided ItemFilter, if provided, with a user filter that only includes items that are OWNED by the current user
+    // and finally filter on the current category, if one is set and we have a category entity
+    const combinedFilter = `${this.ItemFilter ? '(' + this.ItemFilter + ') AND' : ''}
+                            ([${this.UserIDFieldName}] = '${md.CurrentUser.ID}') 
+                            ${this.CurrentCategoryID && this.CategoryIDFieldName ? `AND ([${this.CategoryIDFieldName}] = '${this.CurrentCategoryID}')` : ''}`;
+    const itemResult = await rv.RunView<Record<string, any>>({
+        EntityName: this.ResourceType.Entity!,
+        ExtraFilter: combinedFilter,
+        OrderBy: this.OrderBy
+      }
+    );
+
+    if(!itemResult.Success){
+      LogError(`Unable to load categories for ${this.ResourceType.CategoryEntity}. Reason: ${itemResult.ErrorMessage}`);
+      return results;;
     }
+
+    const views: Record<string, any>[]  = itemResult.Results;
+    const items: Item[] = views.map(view => new Item(view, ItemType.Resource));
+    return items;
+  }
+
+  private async LoadCategories(): Promise<Item[]> {
+    if(!this.EnableCategories || !this.CategoryEntityID){
+      return [];
+    }
+
+    if(!this.ResourceType || !this.ResourceType.CategoryEntity){
+      return [];
+    }
+
+    const md = new Metadata();
+    let filter: string = `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.CategoryEntityID}'`;
+    if(this.CurrentCategoryID){
+      filter += ` AND ParentID = '${this.CurrentCategoryID}'`;
+    }
+    console.log("categories filter: ", filter);
+
+    const rv: RunView = new RunView();
+    const rvResult = await rv.RunView({
+      EntityName: this.ResourceType.CategoryEntity,
+      ExtraFilter: filter
+    });
+
+    if(!rvResult.Success){
+      LogError(`Unable to load categories for ${this.ResourceType.CategoryEntity}. Reason: ${rvResult.ErrorMessage}`);
+      return [];
+    }
+
+    let IDField: string = "ID";
+    let nameField: string = "Name";
+    const categoryEntity: EntityInfo = md.EntityByName(this.ResourceType.CategoryEntity);
+    if(categoryEntity){
+      const idFieldEntityInfo: EntityFieldInfo | undefined = categoryEntity.Fields.find(f => f.IsPrimaryKey);
+      if(idFieldEntityInfo){
+        IDField = idFieldEntityInfo.Name;
+      }
+
+      const nameFieldEntityInfo: EntityFieldInfo | undefined = categoryEntity.Fields.find(f => f.IsNameField);
+      if(nameFieldEntityInfo){
+        nameField = nameFieldEntityInfo.Name;
+      }
+    }
+
+    const categories: Record<string, any>[]  = rvResult.Results;
+    const folders: Folder[] = categories.map(category => new Folder(category[IDField], category[nameField]));
+    const items: Item[] = folders.map(folder => new Item(folder, ItemType.Folder));
+    return items;
+  }
+
+  //maybe pass in a sort function for custom sorting?
+  protected sortItems(items: Item[]): Item[] {
+    items.sort(function(a, b){
+        const aName: string = a.Name.toLowerCase();
+        const bName: string = b.Name.toLowerCase();
+        if(aName < bName) { return -1; }
+        if(aName > bName) { return 1; }
+        return 0;
+    });
+
+    return items;
   }
   
   //wrapper function for the grid view
@@ -272,7 +352,7 @@ export class ResourceBrowserComponent {
   }
 
   public backButtonClicked(){
-    // this.backButtonClickEvent.emit();
+    //this.backButtonClickEvent.emit();
   }
 
   public async addResourceButtonClicked() {
@@ -308,52 +388,50 @@ export class ResourceBrowserComponent {
   }
 
   public async createFolder(): Promise<void> {
-    // this.toggleCreateFolderView(false);
+    if(!this.ResourceType.CategoryEntity){
+      LogError("ResourceType.CategoryEntity is not set, cannot create folder");
+      this.sharedService.CreateSimpleNotification("Unable to create folder", "error", 1500);
+      return;
+    }
 
-    // let event: BeforeAddFolderEvent = new BeforeAddFolderEvent(this.newFolderText);
-    // if(event.Cancel){
-    //   return;
-    // }
+    if(!this.CategoryEntityID){
+      LogError("CategoryEntityID is not set, cannot create folder");
+      this.sharedService.CreateSimpleNotification("Unable to create folder", "error", 1500);
+      return;
+    }
 
-    // let folderName: string = this.newFolderText;
-    // let description: string = "";
+    this.toggleCreateFolderView(false);
     
-    // const md: Metadata = new Metadata();
-    // const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
+    const md: Metadata = new Metadata();
+    const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.ResourceType.CategoryEntity);
 
-    // folderEntity.NewRecord();
-    // folderEntity.Set("Name", folderName);
-    // folderEntity.Set("ParentID", this.selectedFolderID);
-    // folderEntity.Set("Description", description);
-    // folderEntity.Set("UserID", md.CurrentUser.ID);
+    folderEntity.NewRecord();
+    folderEntity.Set("Name", this.createNewFolderName);
+    folderEntity.Set("Description", this.createNewFolderDescription);
+    folderEntity.Set("ParentID", this.CurrentCategoryID);
+    folderEntity.Set("UserID", md.CurrentUser.ID);
     
-    // if(this.categoryEntityID){
-    //   folderEntity.Set("EntityID", this.categoryEntityID);
-    // }
+    if(this.ResourceType.EntityID){
+      folderEntity.Set("EntityID", this.CategoryEntityID);
+    }
 
-    // let saveResult: boolean = await folderEntity.Save();
-    // if(saveResult){
-    //   this.showNotification(`successfully created folder ${folderName}`, "info");
+    let saveResult: boolean = await folderEntity.Save();
+    if(!saveResult){
+      this.sharedService.CreateSimpleNotification(`Unable to create folder ${this.createNewFolderName}`, "error", 1500);
+      LogError(`Unable to create folder ${this.createNewFolderName}`, undefined, folderEntity.LatestResult);
+      return;
+    }
 
-    //   let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
-    //   folder.Description = folderEntity.Get("Description");
+    this.sharedService.CreateSimpleNotification(`successfully created folder ${this.createNewFolderName}`, 'success', 1500);
+    let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
+    folder.ParentFolderID = folderEntity.Get("ParentID");
+    folder.Description = folderEntity.Get("Description");
 
-    //   let item: Item = new Item(folder, ItemType.Folder);
-    //   let event: AfterAddFolderEvent = new AfterAddFolderEvent(item);
-    //   this.AfterAddFolderEvent.emit(event);
+    let item: Item = new Item(folder, ItemType.Folder);
 
-    //   if(event.Cancel){
-    //     return;
-    //   }
-
-    //   //navigate to the newly created folder
-    //   //by raising an item click event
-    //   this.itemClick(item);
-    // }
-    // else{
-    //   this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error", 3500);
-    // }
-    // this.newFolderText = "Sample Folder";
+    //navigate to the newly created folder
+    //by raising an item click event
+    this.itemClick(item);
   }
 
   public async unlinkItem(item: Item){
@@ -362,47 +440,26 @@ export class ResourceBrowserComponent {
 
   private _currentDeleteOrUnlinkState: boolean = false;
   public async deleteOrUnlink(item: Item, bDelete: boolean){
-    // this._currentDeleteOrUnlinkState = bDelete;
-    // if(!item){
-    //   return;
-    // }
+    if(!item){
+      return;
+    }
 
-    // this.selectedItem = item;
+    this._currentDeleteOrUnlinkState = bDelete;
+    this.selectedItem = item;
 
-    // if(item.Type === ItemType.Folder && bDelete){
-    //   let event: BeforeDeleteFolderEvent = new BeforeDeleteFolderEvent(item);
-    //   this.BeforeDeleteFolderEvent.emit(event);
-      
-    //   if(event.Cancel){
-    //     return;
-    //   }
-
-    //   this.deleteDialogOpened = true;
-    // }
-    // else if(item.Type === ItemType.Entity && bDelete){
-    //   let event: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
-    //   this.BeforeDeleteItemEvent.emit(event);
-      
-    //   if(event.Cancel){
-    //     return;
-    //   }
-
-    //   this.deleteDialogOpened = true;
-    // }
-    // else if (item.Type === ItemType.Entity && !bDelete) {
-    //   let event: BeforeUnlinkItemEvent = new BeforeUnlinkItemEvent(item);
-    //   this.BeforeUnlinkItemEvent.emit(event);
-      
-    //   if(event.Cancel){
-    //     return;
-    //   }
-
-    //   this.deleteDialogOpened = true;
-    // }  
+    if(item.Type === ItemType.Folder && bDelete){
+      this.deleteDialogOpened = true;
+    }
+    else if(item.Type === ItemType.Entity && bDelete){
+      this.deleteDialogOpened = true;
+    }
+    else if (item.Type === ItemType.Entity && !bDelete) {
+      this.deleteDialogOpened = true;
+    }  
   }
 
   public goToParent() {
-    //this.NavigateToParentEvent.emit();
+    this.NavigateToParentEvent.emit();
   }
 
   public async deleteItem(item: Item) {
@@ -410,78 +467,77 @@ export class ResourceBrowserComponent {
   }
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
-    // this.deleteDialogOpened = false;
-    
-    // if(!this.selectedItem || !shouldDelete){
-    //   return;
-    // }
-    
-    // let item: Item = this.selectedItem;
+    if(!this.selectedItem || !shouldDelete){
+      return;
+    }
 
-    // if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
-    //   let deleteResult = await this.deleteFolder(item);
-    //   if(deleteResult){
-    //     let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
-    //     this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
-    //   }
+    this.deleteDialogOpened = false;
+    let item: Item = this.selectedItem;
 
-    // }
-    // else if(item.Type === ItemType.Entity && this._currentDeleteOrUnlinkState){
-    //   await this.deleteResource(item);
-    //   let deleteItemEvent: AfterDeleteItemEvent = new AfterDeleteItemEvent(item);
-    //   this.AfterDeleteItemEvent.emit(deleteItemEvent);
-    // }
-    // else if(item.Type === ItemType.Entity && !this._currentDeleteOrUnlinkState){
-    //   await this.unlinkResource(item);
-    //   let unlinkItemEvent: AfterUnlinkItemEvent = new AfterUnlinkItemEvent(item);
-    //   this.AfterUnlinkItemEvent.emit(unlinkItemEvent);
-    // }
+    let success: boolean = false;
+    if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
+      success = await this.deleteFolder(item);
+    }
+    else if(item.Type === ItemType.Entity && this._currentDeleteOrUnlinkState){
+      success = await this.deleteResource(item);
+    }
+    else if(item.Type === ItemType.Entity && !this._currentDeleteOrUnlinkState){
+      success = await this.unlinkResource(item);
+    }
 
-    // this.selectedItem = null;
+    this.selectedItem = null;
+    if(success){
+      await this.Refresh();
+    }
   }
 
   private async deleteFolder(item: Item): Promise<boolean>{
+    const folder: Folder = <Folder>item.Data;
+
+    if(!this.ResourceType.CategoryEntity){
+      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name}.`, "error", 2500);
+      LogError("ResourceType.CategoryEntity is not set, cannot delete folder");
+      return false;
+    }    
+
+    //the DB will throw an error if we attempt to delete a folder that has children
+    //i.e. sub folders or resources
+    //so the default behavior is to notify the user that the delete operation cannot
+    //go through 
+    const folderHasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
+    if(folderHasChildren){
+      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name} because it has children`, "error", 2500);
+      return false;
+    }
+
+    this._isLoading = true;
+    const md = new Metadata();
+    let folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.ResourceType.CategoryEntity);
+    let pkv: KeyValuePair = new KeyValuePair();
+    pkv.FieldName = "ID";
+    pkv.Value = folder.ID;
+    let compositeKey: CompositeKey = new CompositeKey([pkv]);
+
+    //create view browser component - this will be used to display views
+    //then create a new component for applications that wraps around the view browser component 
+    let loadResult = await folderEntity.InnerLoad(compositeKey);
+    if(!loadResult){
+      this.sharedService.CreateSimpleNotification(`Unable to delete folder ${folder.Name}`, "error", 3500);
+      LogError(`Unable to load folder ${folder.Name} for deletion`, undefined, folderEntity.LatestResult);
+      this._isLoading = false;
+      return false;
+    }
+
+    let deleteResult = await folderEntity.Delete();
+    if(!deleteResult){
+      this.sharedService.CreateSimpleNotification(`Unable to delete folder ${folder.Name}`, "error", 3500);
+      this._isLoading = false;
+      return false;
+    }
+
+    this.sharedService.CreateSimpleNotification(`Successfully deleted folder ${folder.Name}`, "info", 2000);
+    this._isLoading = false;
     return true;
-
-    // const folder: Folder = <Folder>item.Data;
-
-    // //the DB will throw an error if we attempt to delete a folder that has children
-    // //i.e. sub folders or resources
-    // //so the default behavior is to notify the user that the delete operation cannot
-    // //go through 
-    // const folderHasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
-    // if(folderHasChildren){
-    //   this.showNotification(`unable to delete folder ${folder.Name} because it has children`, "error");
-    //   return false;
-    // }
-
-    // this.showLoader = true;
-    // const md = new Metadata();
-    // let folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
-    // let pkv: KeyValuePair = new KeyValuePair();
-    // pkv.FieldName = "ID";
-    // pkv.Value = folder.ID;
-    // let compositeKey: CompositeKey = new CompositeKey([pkv]);
-    // //create view browser component - this will be used to display views
-    // //then create a new component for applications that wraps around the view browser component 
-    // let loadResult = await folderEntity.InnerLoad(compositeKey);
-    // if(!loadResult){
-    //   this.sharedService.CreateSimpleNotification(`Unable to fetch folder ${folder.Name}`, "error", 3500);
-    //   this.showLoader = false;
-    //   return false;
-    // }
-
-    // let deleteResult = await folderEntity.Delete();
-    // if(!deleteResult){
-    //   this.sharedService.CreateSimpleNotification(`Unable to delete folder ${folder.Name}`, "error", 3500);
-    //   this.showLoader = false;
-    //   return false;
-    // }
-    // else{
-    //   this.sharedService.CreateSimpleNotification(`Successfully deleted folder ${folder.Name}`, "info", 2000);
-    //   this.showLoader = false;
-    // }
-    // return true;
   }
 
   private async deleteResource(item: Item): Promise<boolean> {
@@ -544,32 +600,21 @@ export class ResourceBrowserComponent {
   }
 
   private async doesFolderHaveChildren(folderID: string): Promise<boolean>{
-
-    return true;
-
-    // const md: Metadata = new Metadata();
-    // const rv: RunView = new RunView();
-    // const folderResult = await rv.RunView({
-    //   EntityName:this.CategoryEntity,
-    //   ExtraFilter: `ParentID ='${folderID}'`
-    // });
-
-    // return folderResult && folderResult.Success && folderResult.Results.length > 0;
-  }
-
-  private showNotification(message: string, type: "none" | "success" | "error" | "warning" | "info" | undefined): void {
-    // if(this.showNotifications){
-    //   this.sharedService.CreateSimpleNotification(message, type, 1000);
-    // }
-  }
-
-  private TryGetID(data: any): any{
-    if(data && data.ID){
-        return data.ID;
+    if(!this.ResourceType.CategoryEntity){
+      throw new Error("ResourceType.CategoryEntity is not set, cannot check for children");
     }
-    else if(typeof data.Get === "function"){
-        return data.Get("ID");
+
+    const rv: RunView = new RunView();
+    const folderResult = await rv.RunView({
+    EntityName: this.ResourceType.CategoryEntity,
+    ExtraFilter: `ParentID ='${folderID}'`
+    });
+
+    if(!folderResult.Success){
+      throw new Error(`Unable to fetch children for folder ${folderID}. Reason: ${folderResult.ErrorMessage}`);
     }
+
+    return folderResult.Results.length > 0;
   }
 
   public changeViewMode(mode: 'grid' | 'list'){
@@ -583,7 +628,7 @@ export class ResourceBrowserComponent {
   }
 
   public onCreateFolderKeyup(value: string): void {
-    this.newFolderText = value;
+    this.createNewFolderName = value;
   }
 
   private filterItems(filter: string): void {
@@ -637,30 +682,35 @@ export class ResourceBrowserComponent {
     // }
   }
 
-  public async onDropdownItemClick(data: {text: string}): Promise<void>{
-    // if(!data || !data.text){
-    //   return;
-    // }
+  public async onDropdownItemClick(dropdownItem: NewItemOption): Promise<void>{
+    if(!dropdownItem || !dropdownItem.Action){
+      LogError("Dropdown item or action is not set");
+      return;
+    }
 
-    // if(data.text === "Folder"){
-    //   this.toggleCreateFolderView();
-    // }
-    // else if(data.text === this.resourceName){
-    //   this.addResourceButtonClicked();
-    // }
-    // else if(data.text === this.createNewRecordName){
-    //   if(this.entityFormDialogRef){
-    //     // create a new record for the given entity
-    //     const md = new Metadata();
-    //     const newRecord = await md.GetEntityObject(this.entityObjectName);  
-    //     this.entityFormDialogRef.Record = newRecord;
-    //     this.entityFormDialogRef.ShowForm();
-    //   }
-    // }
-    // else{
-    //   let event: DropdownOptionClickEvent = new DropdownOptionClickEvent(data.text);
-    //   this.dropdownOptionClickEvent.emit(event);
-    // }
+    dropdownItem.Action();
+
+    /*
+    if(data.text === "Folder"){
+      this.toggleCreateFolderView();
+    }
+    else if(data.text === this.resourceName){
+      this.addResourceButtonClicked();
+    }
+    else if(data.text === this.createNewRecordName){
+      if(this.entityFormDialogRef){
+        // create a new record for the given entity
+        const md = new Metadata();
+        const newRecord = await md.GetEntityObject(this.entityObjectName);  
+        this.entityFormDialogRef.Record = newRecord;
+        this.entityFormDialogRef.ShowForm();
+      }
+    }
+    else{
+      let event: DropdownOptionClickEvent = new DropdownOptionClickEvent(data.text);
+      this.dropdownOptionClickEvent.emit(event);
+    }
+    */
   }
 
   public toggleCopyFromView(): void {
@@ -672,7 +722,7 @@ export class ResourceBrowserComponent {
   }
 
   public toggleCreateFolderView(visible?: boolean): void {
-    if(visible !== undefined){
+    if(visible){
       this.createFolderDialogOpened = visible;
     }
     else{

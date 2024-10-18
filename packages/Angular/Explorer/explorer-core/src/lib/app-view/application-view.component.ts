@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus, LogError, RunView, ApplicationInfo, BaseEntity, UserInfo } from '@memberjunction/core';
 import { EntityEntity, ResourceLinkEntity, UserApplicationEntity, UserApplicationEntityEntity, UserFavoriteEntity, UserViewCategoryEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Folder, Item, ItemType } from '../../generic/Item.types';
+import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
@@ -33,10 +33,18 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public userApp: UserApplicationEntity | undefined;
     public currentUser!: UserInfo;
     public FilterOutCurrentUserViews!: string;
-    public extraDropdownOptions:  {text: string}[] = [
-        {text: 'View'},
-        {text: 'Link to Shared View'},
-    ];
+    
+    public NewItemOptions: NewItemOption[] = [
+        {
+        Text: 'New View',
+        Description: 'Create a new User View',
+        Icon: 'folder',
+        Action: () => {
+          console.log('New User View');
+          this.createNewView();
+        }}
+      ];
+
     public ViewResourceTypeID!: string;
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService, private cdr: ChangeDetectorRef){
@@ -57,7 +65,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             this.showLoader = true;
 
             if (folderID) {
-                this.selectedFolderID = folderID
+                this.selectedFolderID = folderID;
             }
             
             if (appName && appName !== this.app?.Name) {
@@ -300,8 +308,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
     private navigateToCurrentPage(): void{
-        if (!this.app) 
-            throw new Error('Application Not Loaded')
+        if (!this.app) {
+            throw new Error('Application Not Loaded');
+        }
 
         //we're capable of loading the data associated with the selected ApplicationEntityInfo object
         //without a page refresh, but we'd need additonal logic to handle routing, e.g. back
@@ -309,7 +318,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         //so its easier if we instead navigate to this page with an updated url and leverage angular's router
         let folderID: string | null = this.selectedFolderID ? this.selectedFolderID.toString() : null;
         let url: string[] = ["/app", this.app.Name];
-        let appEntityName: string | null = this.currentlySelectedAppEntity ? this.currentlySelectedAppEntity.Name : null;
+        let appEntityName: string | null = this.currentlySelectedAppEntity?.Name || null;
         if(appEntityName){
             url.push(`${appEntityName}`);
             if(folderID){
@@ -367,8 +376,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     }
 
 
-    public createNewView(event: BeforeAddItemEvent) {
-        event.Cancel = true;
+    public createNewView() {
         if(this.viewPropertiesDialog && this.currentlySelectedAppEntity){
             this.viewPropertiesDialog.CategoryID = this.selectedFolderID; // pass along a folder if we have one, if null, that's fine it saves to "root" which is the null CategoryID
             this.viewPropertiesDialog.CreateView(this.currentlySelectedAppEntity.Name);  

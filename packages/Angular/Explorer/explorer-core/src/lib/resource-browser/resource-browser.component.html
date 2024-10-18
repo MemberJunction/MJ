@@ -9,9 +9,14 @@
         }
         <h4>{{Title}}</h4>
       </div>
-      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="dropdownOptions" themeColor="info">
-        <span class="fa-solid fa-plus"></span>
-        Create New
+      <kendo-dropdownbutton 
+        class="custom-dropdwn" 
+        (itemClick)="onDropdownItemClick($event)" 
+        [data]="ItemOptions" 
+        textField="Text"
+        themeColor="info">
+          <span class="fa-solid fa-plus"></span>
+          Create New
       </kendo-dropdownbutton>
     </div>
     <div class="title-wrapper">
