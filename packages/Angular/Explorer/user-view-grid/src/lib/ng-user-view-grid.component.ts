@@ -472,15 +472,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       const newURL: string[] = ['resource', 'record', compositeKey.ToURLSegment()];
       const newURLString: string = newURL.join('/');
-      const refreshPage: boolean = newURLString === decodedUrl; 
 
-      this.router.navigate(newURL, { queryParams: { Entity: this._entityInfo.Name } }).then(() => {
-        //handle the edge case of us navigating to a new entity record that
-        //has the same ID as the current entity record
-        if (refreshPage) {
-          window.location.reload();
-        }
-      });
+      if (newURLString === decodedUrl) {
+        // we have to force the router to change its state otherwise the next line below won't do anything because the
+        // router thinks it is the same URL, since we have the Entity on the query params, we can just change the URL to something else
+        // and skipLocationChange so that the browser history doesn't get messed up
+        await this.router.navigateByUrl('/dummy', { skipLocationChange: true }) 
+      }
+
+      this.router.navigate(newURL, { queryParams: { Entity: this._entityInfo!.Name } });
     }
   } 
 
