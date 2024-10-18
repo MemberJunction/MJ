@@ -79,7 +79,11 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     const currParams = curr.params;
     const futureQueryParams = future.queryParams;
     const currQueryParams = curr.queryParams;
-    return this.objectContentsEqual(futureParams, currParams) && this.objectContentsEqual(futureQueryParams, currQueryParams);
+
+    // only reuse (e.g. return true) when all of these comparisons are the same
+    return this.objectContentsEqual(futureParams, currParams) &&  // route params are the same
+           this.objectContentsEqual(futureQueryParams, currQueryParams) &&  // query params are the same
+           future.routeConfig === curr.routeConfig; // route config object is the same
   }
 
   objectContentsEqual(obj1: any, obj2: any): boolean {
