@@ -1,7 +1,9 @@
 import { AfterViewInit, Component, ElementRef, Input, ViewChild, ChangeDetectorRef, OnChanges, SimpleChanges } from "@angular/core";
 import { BaseRecordComponent } from "./base-record-component";
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from "@memberjunction/core";
 import { debounceTime, fromEvent } from 'rxjs';
+import { SharedService } from "@memberjunction/ng-shared";
+import { Router } from "@angular/router";
 
 /**
  * This component is used to automatically generate a UI for any field in a given BaseEntity object. The CodeGen tool will generate forms and form sections that
@@ -15,7 +17,7 @@ import { debounceTime, fromEvent } from 'rxjs';
     templateUrl: './link-field.component.html'
 })
 export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
-    constructor(private cdr: ChangeDetectorRef) {
+    constructor(private cdr: ChangeDetectorRef, private router: Router) {
         super();
     }
     /**
@@ -104,6 +106,45 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
 
     async ngAfterViewInit() {
         await this.initComponent();
+    }
+
+    private _cache_userCanCreateNewLinkedRecord: boolean | null = null;
+    public get UserCanCreateNewLinkedRecord(): boolean {
+        if (this._cache_userCanCreateNewLinkedRecord === null) {
+            const md = new Metadata();
+            if (this.RelatedEntityInfo) {
+                const perms = this.RelatedEntityInfo.GetUserPermisions(md.CurrentUser);
+                this._cache_userCanCreateNewLinkedRecord = perms.CanCreate;
+            }
+            else {
+                // we can't do anything yet as we don't have the related entity info, so just return false
+                // do not cache this as we want to check again when we have the related entity info
+                return false;
+            }
+        }
+        return this._cache_userCanCreateNewLinkedRecord;
+    }
+
+    public onNewClicked() {
+        // user wants to create a new record, double check to make sure we can create a record
+        if (this.UserCanCreateNewLinkedRecord && this.RelatedEntityInfo) {
+            // AT THE MOMENT - we only support foreign keys with a single value
+            const keyVals = '' // leave blank so that we invoke the new record functionality
+            const newURL: string[] = ['resource', 'record', keyVals];
+
+            this.router.navigate(newURL, { queryParams: { Entity: this.RelatedEntityInfo.Name } }).then(params => {
+                console.log('navigated to:', newURL.join('/'));
+            }).catch(err => {
+                const newURLString: string = newURL.join('/');
+                LogError(`Error navigating to ${newURLString}: ${err}`);
+            })
+        }
+        else {
+            // user can't create a new record, so let's tell them
+            // they shouldn't actually ever get here as we don't show the New button if they can't create a new record but
+            // this is an extra safeguard.
+            SharedService.Instance.CreateSimpleNotification(`You do not have permission to create a new ${this.RelatedEntityInfo?.Name} record`, 'info', 2500);
+        }
     }
 
     protected async AttemptToLinkValue() {

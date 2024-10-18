@@ -10,6 +10,9 @@
 } 
   
   
+.narrower-component {
+  width: 435px;
+}
 .record-form-row label {
     font-weight: bold;
     padding-right: 10px;

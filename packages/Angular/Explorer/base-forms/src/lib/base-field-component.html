@@ -53,10 +53,10 @@
                     <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
                 }
                 @case ('numerictextbox') {
-                    <kendo-numerictextbox [(value)]="Value"  />
+                    <kendo-numerictextbox [(value)]="Value" class="narrower-component" />
                 }
                 @case ('datepicker') {
-                    <kendo-datepicker [(value)]="Value"></kendo-datepicker>
+                    <kendo-datepicker [(value)]="Value" class="narrower-component"></kendo-datepicker>
                 }
                 @case ('checkbox') {
                     <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />
