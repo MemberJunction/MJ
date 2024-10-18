@@ -72,7 +72,49 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
 
   // Determines if the route should be reused
   shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
-    return future.routeConfig === curr.routeConfig;
+    // we need to compare the params object from future and curr and see if any differences
+    // and do the same for the queryParams object from each
+    // if there are differences, return false, otherwise return true
+    const futureParams = future.params;
+    const currParams = curr.params;
+    const futureQueryParams = future.queryParams;
+    const currQueryParams = curr.queryParams;
+    return this.objectContentsEqual(futureParams, currParams) && this.objectContentsEqual(futureQueryParams, currQueryParams);
+  }
+
+  objectContentsEqual(obj1: any, obj2: any): boolean {
+    if (obj1 === obj2) {
+      return true; // exact same object
+    }
+
+    if (obj1 === null && obj2 !== null) {
+      return false; // not the same object
+    }
+
+    if (obj1 === undefined && obj2 !== undefined) {
+      return false; // not the same object
+    }
+
+    if (typeof obj1 === 'object' || typeof obj2 === 'object') {
+      if (Object.keys(obj1).length !== Object.keys(obj2).length) {
+        return false; // different number of keys
+      }
+  
+      for (const key in obj1) {
+        // check to see the type of the key, if it is an object, then we call this function recursively 
+        // otherwise we do simple comparison
+        if (typeof obj1[key] === 'object' && typeof obj2[key] === 'object') {
+          if (!this.objectContentsEqual(obj1[key], obj2[key])) {
+            return false; // any individual key not matching means the objects are different
+          }
+        }
+        else if (obj1[key] !== obj2[key]) {
+          return false; // any individual key not matching means the objects are different
+        }
+      }  
+    }
+
+    return true;
   }
 
   private callHook(detachedTree: DetachedRouteHandleExt, hookName: 'ngOnDetach' | 'ngOnAttach'): void {
@@ -232,7 +274,7 @@ interface DetachedRouteHandleExt extends DetachedRouteHandle {
 }
 
 @NgModule({
-  imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled' })],
+  imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled', onSameUrlNavigation: 'reload' })],
   exports: [RouterModule],
 })
 export class AppRoutingModule {
