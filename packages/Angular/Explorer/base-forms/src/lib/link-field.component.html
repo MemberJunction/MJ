@@ -8,7 +8,10 @@
             [(ngModel)]="RecordName" 
             kendoTextBox 
         />
-        <button kendoButton (click)="onClearClicked()">Clear</button>
+        <button kendoButton (click)="onClearClicked()" title="Clear" [ngClass]="UserCanCreateNewLinkedRecord ? '' : 'last-button-in-row'"><span class="fa-solid fa-delete-left"></span></button>
+        @if (UserCanCreateNewLinkedRecord) {
+            <button kendoButton (click)="onNewClicked()" title="Create New Record" class="last-button-in-row"><span class="fa-solid fa-plus"></span></button>
+        }
 
         <ul *ngIf="showMatchingRecords" class="matching-records">
             <li *ngFor="let record of RelatedEntityRecords" (click)="onRecordSelected(record)">

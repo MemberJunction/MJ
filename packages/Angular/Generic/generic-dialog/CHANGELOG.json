@@ -1,0 +1,20 @@
+{
+  "name": "@memberjunction/ng-generic-dialog",
+  "entries": [
+    {
+      "date": "Tue, 22 Oct 2024 14:57:08 GMT",
+      "version": "2.9.0",
+      "tag": "@memberjunction/ng-generic-dialog_v2.9.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-generic-dialog",
+            "commit": "440506fc5c400a2d41ea6be39d2b6a2c8760616c",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    }
+  ]
+}

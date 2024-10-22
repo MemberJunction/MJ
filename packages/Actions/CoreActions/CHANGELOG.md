@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/core-actions
 
-This log was last generated on Tue, 15 Oct 2024 17:01:03 GMT and should not be manually modified.
+This log was last generated on Tue, 22 Oct 2024 14:57:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.9.0
+
+Tue, 22 Oct 2024 14:57:08 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.9.0
+- Bump @memberjunction/core to v2.9.0
+- Bump @memberjunction/core-entities to v2.9.0
+- Bump @memberjunction/actions to v2.9.0
+- Bump @memberjunction/communication-engine to v2.9.0
+- Bump @memberjunction/external-change-detection to v2.9.0
+- Bump @memberjunction/ai-vector-sync to v2.9.0
+- Bump @memberjunction/content-autotagging to v2.9.0
 
 ## 2.8.0
 
