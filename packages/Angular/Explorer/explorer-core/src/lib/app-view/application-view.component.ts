@@ -36,14 +36,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     
     public NewItemOptions: NewItemOption[] = [
         {
-        Text: 'New View',
-        Description: 'Create a new User View',
-        Icon: 'folder',
-        Action: () => {
-          console.log('New User View');
-          this.createNewView();
-        }}
-      ];
+            Text: 'New View',
+            Description: 'Create a new User View',
+            Icon: 'folder',
+            Action: () => {
+                this.createNewView();
+            }
+        }];
 
     public ViewResourceTypeID!: string;
 
@@ -316,7 +315,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         //without a page refresh, but we'd need additonal logic to handle routing, e.g. back
         //button in the browser taking you to the last selected entity.
         //so its easier if we instead navigate to this page with an updated url and leverage angular's router
-        let folderID: string | null = this.selectedFolderID ? this.selectedFolderID.toString() : null;
+        let folderID: string | null = this.selectedFolderID;
         let url: string[] = ["/app", this.app.Name];
         let appEntityName: string | null = this.currentlySelectedAppEntity?.Name || null;
         if(appEntityName){
