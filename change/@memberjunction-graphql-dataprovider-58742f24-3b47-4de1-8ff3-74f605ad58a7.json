@@ -3,5 +3,5 @@
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/graphql-dataprovider",
   "email": "97354817+AN-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
+  "dependentChangeType": "minor"
 }
