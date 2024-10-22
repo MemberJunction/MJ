@@ -1,4 +1,4 @@
-INSERT INTO [__mj].[ResourceType]
+INSERT INTO [${flyway:defaultSchema}].[ResourceType]
            (
 			[ID],
 			[Name]
