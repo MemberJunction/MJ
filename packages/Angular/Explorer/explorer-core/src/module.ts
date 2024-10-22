@@ -77,6 +77,7 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
 import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
+import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 
 @NgModule({
   declarations: [
@@ -163,7 +164,8 @@ import { ResourceBrowserComponent } from './lib/resource-browser/resource-browse
     MJTabStripModule,
     EntityFormDialogModule,
     RecordSelectorModule,
-    ResourcePermissionsModule
+    ResourcePermissionsModule,
+    GenericDialogModule
   ],
   exports: [
     FormToolbarComponent,

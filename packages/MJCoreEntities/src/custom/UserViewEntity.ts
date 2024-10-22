@@ -128,6 +128,38 @@ export class UserViewEntityExtended extends UserViewEntity  {
     }
     private _cachedCanUserEdit: boolean = null
 
+
+    /**
+     * This property determines if the specified user can view the view at all.
+     */
+    public get UserCanView(): boolean {
+        if (this._cachedCanUserView === null) {
+            this._cachedCanUserView = this.CalculateUserCanView()
+        }
+        return this._cachedCanUserView;
+    }
+    private CalculateUserCanView(): boolean {
+        const md = new Metadata();
+        const bOwner = this.UserID === md.CurrentUser.ID;
+        if (bOwner) {
+            return true
+        }
+        else {
+            // not the owner, let's see if the user has permissions or not
+            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find((rt: any) => rt.Name === 'User Views');
+            if (!rt)
+                throw new Error('Resource Type User Views not found');
+
+            const permLevel = ResourcePermissionEngine.Instance.GetUserResourcePermissionLevel(rt.ID, this.ID, md.CurrentUser);
+            if (permLevel) // any permission level allows view access
+                return true;
+            else // perm level not found so return false
+                return false;
+        }
+    }
+    private _cachedCanUserView: boolean = null
+
+
     /**
      * This property determines if the specified user can delete the view object. All of the below assumes the user has base Delete permissions on the "User Views" entity.
      * The flow of the logic is:
@@ -257,7 +289,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
             }
 
             // now call our superclass to do the actual save()
-            if (super.Save(options)) {
+            if (await super.Save(options)) {
                 this.ResetCachedCanUserSettings();
                 return true;
             }            

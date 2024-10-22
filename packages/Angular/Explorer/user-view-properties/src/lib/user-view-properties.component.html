@@ -91,7 +91,7 @@
                                 <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
                                     <mj-find-record-dialog #findRecordDialog
                                         (RecordSelected)="onFindRecordSelected($event)"
-                                        (DialogClosed)="onFindRecordDialogClosed()"
+                                        (DialogClosed)="onFindRecordDialogClosed($event)"
                                     >
                                     </mj-find-record-dialog>
                                     <button kendoButton (click)="smartFilterPrompt_insertViewReference()" class="smart-filter-button" [disabled]="!UserCanEdit">

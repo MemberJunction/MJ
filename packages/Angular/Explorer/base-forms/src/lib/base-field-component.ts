@@ -132,11 +132,9 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
   }
 
   @ViewChild('markdown', { static: false }) markdown: MarkdownComponent | undefined;
-  private observer: MutationObserver | undefined;
 
   constructor(
     private renderer: Renderer2,
-    private cdr: ChangeDetectorRef
   ) {
     super();
   }
@@ -164,52 +162,4 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
       observer.observe(this.markdown.element.nativeElement, { childList: true });
     }
   }
-
-  // private tryApplyObserver(): void {
-  //     if (this.FieldInfo.Length === -1) {
-  //         // only do this for markdown fields (large fields)
-  //         if (this.markdown && !this.observer) {
-  //             this.applyObserver();
-  //         }
-  //         else if (!this.markdown) {
-  //             setTimeout(() => {
-  //                 this.cdr.detectChanges();
-  //                 this.tryApplyObserver();
-  //             }, 2000); // Retry after 50ms
-  //         }
-  //     }
-  //   }
-
-  //   private applyObserver(): void {
-  //     if (this.markdown) {
-  //       // Create a MutationObserver to watch for changes in the markdown component
-  //       this.observer = new MutationObserver((mutations) => {
-  //         mutations.forEach((mutation) => {
-  //           if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-  //             // Get the first child element inside the markdown component
-  //             const el = this.markdown?.element.nativeElement.firstChild as HTMLElement;
-  //             if (el) {
-  //               // Apply styles using Renderer2
-  //               this.renderer.setStyle(el, 'margin-top', '0');
-  //               this.renderer.setStyle(el, 'margin-bottom', '0');
-  //                 if (el.tagName === 'P')
-  //                     this.renderer.setStyle(el, 'font-size', '14px');
-
-  //             }
-  //           }
-  //         });
-  //       });
-
-  //       // Start observing the markdown component for child node additions
-  //       this.observer.observe(this.markdown.element.nativeElement, { childList: true });
-  //     }
-  //   }
-
-  // ngAfterViewInit(): void {
-  //     this.tryApplyObserver();
-  // }
-
-  // ngAfterViewChecked(): void {
-  //     this.tryApplyObserver();
-  // }
 }

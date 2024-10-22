@@ -98,8 +98,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     }
   }
 
-  public onFindRecordDialogClosed(event: any) {
-    if (this.findRecordDialog.SelectedRecord) {
+  public onFindRecordDialogClosed(okClicked: boolean) {
+    if (this.findRecordDialog.SelectedRecord && okClicked) {
       // a record was selected, so insert the text into the smart filter prompt
       const selectedRecord = this.findRecordDialog.SelectedRecord;
       let text: string = '';

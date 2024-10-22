@@ -8,7 +8,7 @@ import { BaseBrowserComponent } from '../base-browser-component/base-browser-com
 import {Location} from '@angular/common'; 
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
 import { BaseEvent, BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent, EventTypes } from '../../generic/Events.types';
-import { AvailableResourcesDialogComponent } from '@memberjunction/ng-resource-permissions';
+import { AvailableResourcesComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
   selector: 'mj-application-view',
@@ -18,7 +18,7 @@ import { AvailableResourcesDialogComponent } from '@memberjunction/ng-resource-p
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
-    @ViewChild('availableResourcesDialog') availableResourcesDialog!: AvailableResourcesDialogComponent;
+    @ViewChild('availableResourcesComponent') availableResourcesComponent!: AvailableResourcesComponent;
 
     @Input() public categoryEntityID!: string;
 
@@ -343,7 +343,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public async HandleLinkToSharedView(okClicked: Boolean) {
         this.LinkToSharedViewDialogVisible = false;
         if (okClicked) {
-            const resources = this.availableResourcesDialog.SelectedResources;
+            const resources = this.availableResourcesComponent.SelectedResources;
             const md = new Metadata();
             let success = true;
             for (const r of resources) {

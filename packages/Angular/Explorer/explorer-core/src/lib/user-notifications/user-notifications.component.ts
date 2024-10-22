@@ -3,6 +3,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { Metadata, TransactionGroupBase } from '@memberjunction/core';
 import { Router } from '@angular/router';
+import { SafeJSONParse } from '@memberjunction/global';
 
 @Component({
   selector: 'app-user-notifications',
@@ -68,7 +69,14 @@ export class UserNotificationsComponent implements AfterViewInit {
         url.push(routeSegment);
         url.push(notification.ResourceRecordID.toString());
         if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
-          queryString = notification.ResourceConfiguration;
+          if (rt.Name.trim().toLowerCase() === 'records') {
+            // special handling for records
+            const config = SafeJSONParse<any>(notification.ResourceConfiguration);
+            if (config && config.Entity)
+              queryString = `Entity=${config.Entity}`;
+          }
+          else 
+            queryString = notification.ResourceConfiguration;
         }
       }
     }
@@ -76,7 +84,8 @@ export class UserNotificationsComponent implements AfterViewInit {
       // we do NOT have a resource type or resource record id, but we do have a ResourceConfiguration
       // string, which means we might have information on how to navigate to what we want if we parse the config
       // HOME screen stuff is done this way
-      const config = JSON.parse(notification.ResourceConfiguration);
+
+      const config = SafeJSONParse<any>(notification.ResourceConfiguration);
       if (config) {
         switch (config.type?.trim().toLowerCase()) {
           case 'askskip':

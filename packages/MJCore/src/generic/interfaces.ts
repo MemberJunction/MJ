@@ -475,6 +475,18 @@ export type DatasetItemResultType = {
     EntityName: string;
     EntityID: string;
     Results: any[];
+    /**
+     * Optional, provides the latest update date for the results provided
+     */
+    LatestUpdateDate?: Date;
+    /**
+     * Optional, a message if this item failed to load
+     */
+    Status?: string;
+    /**
+     * Optional, if not provided Success is assumed to be true
+     */
+    Success?: boolean;
 }
 
 export type DatasetItemFilterType = {

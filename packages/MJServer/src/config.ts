@@ -61,6 +61,10 @@ const viewingSystemInfoSchema = z.object({
 
 const askSkipInfoSchema = z.object({
   organizationInfo: z.string().optional(),
+  entitiesToSendSkip: z.object({
+    excludeSchemas: z.array(z.string()).optional(),
+    includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
+  })
 });
 
 const configInfoSchema = z.object({

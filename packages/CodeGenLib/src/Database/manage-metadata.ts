@@ -5,6 +5,7 @@ import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logg
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
@@ -192,13 +193,14 @@ export class ManageMetadataBase {
       }
    }
    
-   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean}> {
+   protected async manageSingleVirtualEntityField(ds: DataSource, virtualEntity: any, veField: any, fieldSequence: number, makePrimaryKey: boolean): Promise<{success: boolean, updatedField: boolean, newFieldID: string | null}> {
       // this protected checks to see if the field exists in the entity definition, and if not, adds it
       // if it exist it updates the entity field to match the view's data type and nullability attributes
    
       // first, get the entity definition
       const md = new Metadata();
       const entity = md.EntityByName(virtualEntity.Name);
+      let newEntityFieldUUID = null;
       let didUpdate: boolean = false;
       if (entity) {
          const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
@@ -231,11 +233,12 @@ export class ManageMetadataBase {
          }
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
+            newEntityFieldUUID = this.createNewUUID();
             const sqlAdd = `INSERT INTO [${mj_core_schema()}].EntityField (
-                                      EntityID, Name, Type, AllowsNull, 
+                                      ID, EntityID, Name, Type, AllowsNull, 
                                       Length, Precision, Scale, 
                                       Sequence, IsPrimaryKey, IsUnique ) 
-                            VALUES (  '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0}, 
+                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0}, 
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
                                        ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0}
                                     )`;
@@ -243,7 +246,7 @@ export class ManageMetadataBase {
             didUpdate = true;
          }
       }
-      return {success: true, updatedField: didUpdate};
+      return {success: true, updatedField: didUpdate, newFieldID: newEntityFieldUUID};
    }
    
    
@@ -319,8 +322,9 @@ export class ManageMetadataBase {
                   // calculate the sequence by getting the count of existing relationships for the entity and adding 1 and then increment the count for future inserts in this loop
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
-                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
-                                          VALUES ('${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+                  const newEntityRelationshipUUID = this.createNewUUID();
+                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence) 
+                                          VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
                               `;
                   // now update the map for the relationship count
                   relationshipCountMap.set(f.EntityID, sequence);                                       
@@ -913,7 +917,7 @@ export class ManageMetadataBase {
     * @param n - the new field
     * @returns 
     */
-   protected getPendingEntityFieldINSERTSQL(n: any): string {
+   protected getPendingEntityFieldINSERTSQL(newEntityFieldUUID: string, n: any): string {
       const bDefaultInView: boolean = (n.FieldName?.trim().toLowerCase() === 'id' || 
                                        n.FieldName?.trim().toLowerCase() === 'name' || 
                                        n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
@@ -938,6 +942,7 @@ export class ManageMetadataBase {
       return `
       INSERT INTO [${mj_core_schema()}].EntityField
       (
+         ID,
          EntityID,
          Sequence,
          Name,
@@ -964,6 +969,7 @@ export class ManageMetadataBase {
       )
       VALUES
       (
+         '${newEntityFieldUUID}',
          '${n.EntityID}',
          ${n.Sequence},
          '${n.FieldName}',
@@ -1029,7 +1035,8 @@ export class ManageMetadataBase {
                if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                   // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities 
                   // that would have been created violate rules - such as not having an ID column, etc.
-                  const sSQLInsert = this.getPendingEntityFieldINSERTSQL(n);
+                  const newEntityFieldUUID = this.createNewUUID();
+                  const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
                   await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert new entity field`);
                   // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction   
                }
@@ -1125,8 +1132,13 @@ export class ManageMetadataBase {
                   await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
                   
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
-                  const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'` 
-                  await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                  // check to see if the ValueListType is already set to "List", if not, update it
+                  const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
+                  const checkResult = await ds.query(sSQLCheck);
+                  if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
+                     const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'` 
+                     await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                  }
                }
             }
          }
@@ -1354,6 +1366,10 @@ export class ManageMetadataBase {
    protected simpleNewEntityName(tableName: string): string {
       return this.convertCamelCaseToHaveSpaces(this.generatePluralName(tableName));
    }
+
+   protected createNewUUID(): string {
+      return uuidv4();
+   }
    
    protected async createNewEntity(ds: DataSource, newEntity: any, md: Metadata) {
       try {
@@ -1373,12 +1389,9 @@ export class ManageMetadataBase {
             }
    
             const isNewSchema = await this.isSchemaNew(ds, newEntity.SchemaName);
-            const sSQLInsert = this.createNewEntityInsertSQL(newEntityName, newEntity, suffix);
-            const newEntityResult = await this.LogSQLAndExecute(ds, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
-            const newEntityID = newEntityResult && newEntityResult.length > 0 ? newEntityResult[0].ID : null;
-            if (!newEntityID){
-               throw new Error(`Failed to create new entity ${newEntityName} for table ${newEntity.SchemaName}.${newEntity.TableName}`);
-            }
+            const newEntityID = this.createNewUUID();
+            const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix);
+            await this.LogSQLAndExecute(ds, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
 
             // if we get here we created a new entity safely, otherwise we get exception
 
@@ -1387,32 +1400,40 @@ export class ManageMetadataBase {
 
             // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if 
             // our config option is set to create new applications from new schemas, then create a new application for this schema
-            if (isNewSchema &&  configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
+            let appUUID: string = '';
+            if (isNewSchema && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
                // new schema and config option is to create a new application from the schema name so do that
                
-               if (!await this.applicationExists(ds, newEntity.SchemaName)) {
-                  await this.createNewApplication(ds, newEntity.SchemaName);                     
+               // check to see if the app already exists
+               appUUID = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               if (!appUUID || appUUID.length === 0 || appUUID.trim().length === 0) {
+                  // doesn't already exist, so create it
+                  appUUID = this.createNewUUID();
+                  await this.createNewApplication(ds, appUUID, newEntity.SchemaName);                     
                   await md.Refresh(); // refresh now since we've added a new application, not super efficient to do this for each new application but that won't happen super 
-                                      // often so not a huge deal, would be more efficient do this in batch after all new apps are created but taht would be an over optimization IMO
+                                      // often so not a huge deal, would be more efficient do this in batch after all new apps are created but that would be an over optimization IMO
                }
             }          
             else {
                // not a new schema, attempt to look up the application for this schema
-               await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               appUUID = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
             }        
 
-            if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
-               // we should add this entity to the application
-               const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
-               const app = md.Applications.find(a => a.Name.trim().toLowerCase() === appName.trim().toLowerCase());
-               if (app) {
+            if (appUUID && appUUID.length > 0) {
+               if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
+                  // only do this if the configuration setting is set to add new entities to applications for schema names
                   const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
-                                                            (ApplicationID, EntityID, Sequence) VALUES 
-                                                            ('${app.ID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${app.ID}'))`;
-                  this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ${appName}`);
+                                    (ApplicationID, EntityID, Sequence) VALUES 
+                                    ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                  this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                }
-               else
-                  LogError(`   >>>> ERROR: Unable to find Application ID for application ${appName} to add new entity ${newEntityName} to it`);
+               else {
+                  // this is NOT an error condition, we do have an application UUID, but the configuration setting is to NOT add new entities to applications for schema names
+               }
+            }
+            else {
+               // this is an error condition, we should have an application for this schema, if we don't, log an error, non fatal, but should be logged
+               LogError(`   >>>> ERROR: Unable to add new entity ${newEntityName} to an application because an Application record for schema ${newEntity.SchemaName} does not exist.`);
             }
 
             // next up, we need to check if we're configured to add permissions for new entities, and if so, add them
@@ -1451,8 +1472,8 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
    
-   protected async createNewApplication(ds: DataSource, appName: string): Promise<number>{
-      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (Name, Description) VALUES ('" + appName + "', 'Generated for Schema'); SELECT @@IDENTITY AS ID";
+   protected async createNewApplication(ds: DataSource, appID: string, appName: string): Promise<number>{
+      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema')";
       const result = await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
       return result && result.length > 0 ? result[0].ID : null;
    }
@@ -1463,18 +1484,18 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
    
-   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<number>{
+   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string>{
       const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${schemaName}'`;
       const result = await ds.query(sSQL);
       return result && result.length > 0 ? result[0].ID : null;
    }
    
-   protected createNewEntityInsertSQL(newEntityName: string, newEntity: any, newEntitySuffix: string): string {
+   protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
       const sSQLInsert = `    
-      DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
       INSERT INTO [${mj_core_schema()}].Entity (
+         ID,
          Name, 
          Description,
          NameSuffix,
@@ -1492,8 +1513,8 @@ export class ManageMetadataBase {
          ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', AllowDeleteAPI'}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', UserViewMaxRows'}
       ) 
-      OUTPUT INSERTED.[ID] INTO @InsertedRow
       VALUES (
+         '${newEntityUUID}',
          '${newEntityName}', 
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
@@ -1511,7 +1532,6 @@ export class ManageMetadataBase {
          ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowDeleteAPI ? '1' : '0')}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
       )
-      SELECT * FROM [__mj].vwEntities WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
    `;
    
       return sSQLInsert;

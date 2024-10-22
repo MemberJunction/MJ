@@ -252,21 +252,26 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * This is the best method to override if you want to change the actual processing of an entity event but do NOT want to modify the debouncing behavior.
      */
     protected async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
-        const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-        let refreshCount = 0;
-        for (const config of this.Configs) {
-            if (config.AutoRefresh && config.EntityName.trim().toLowerCase() === entityName) {
-                LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
-                await this.LoadSingleConfig(config, this._contextUser);
-                refreshCount++;
+        try {
+            const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+            let refreshCount = 0;
+            for (const config of this.Configs) {
+                if (config.AutoRefresh && config.Type === 'entity' && config.EntityName?.trim().toLowerCase() === entityName) {
+                    LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
+                    await this.LoadSingleConfig(config, this._contextUser);
+                    refreshCount++;
+                }
             }
+            if (refreshCount > 0) {
+                // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups 
+                // after we have loaded - for example the TemplateEngine takes the TemplateContents and TemplateParams and stuffs them
+                // into arrays in each template to make it easier to get Params/Contents for each Template. Such operations are common
+                // and need to be done after the initial load and after any refreshes.
+                await this.AdditionalLoading(this._contextUser);
+            }    
         }
-        if (refreshCount > 0) {
-            // we need to call AdditionalLoading here - because in many cases engine sub-classes do various kinds of data mashups 
-            // after we have loaded - for example the TemplateEngine takes the TemplateContents and TemplateParams and stuffs them
-            // into arrays in each template to make it easier to get Params/Contents for each Template. Such operations are common
-            // and need to be done after the initial load and after any refreshes.
-            await this.AdditionalLoading(this._contextUser);
+        catch (e) {
+            LogError(e);
         }
     }
     

@@ -18,6 +18,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 import { EntityCommunicationsModule } from '@memberjunction/ng-entity-communications';
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 @NgModule({
   declarations: [
@@ -38,7 +39,8 @@ import { EntityCommunicationsModule } from '@memberjunction/ng-entity-communicat
     InputsModule,
     EntityFormDialogModule,
     IndicatorsModule,
-    EntityCommunicationsModule
+    EntityCommunicationsModule,
+    ResourcePermissionsModule
   ],
   exports: [
     UserViewGridComponent
