@@ -214,9 +214,6 @@ INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
 /* SQL text to update ValueListType for entity field ID 7D91381D-ABC9-46DD-AA66-3E1909BE1CB2 */
 UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='7D91381D-ABC9-46DD-AA66-3E1909BE1CB2'
 
-/* SQL text to delete unneeded entity fields */
-EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
-
 /* SQL text to update existingg entity fields from schema */
 EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
 
