@@ -2,6 +2,81 @@
   "name": "@memberjunction/ng-explorer-settings",
   "entries": [
     {
+      "date": "Wed, 23 Oct 2024 22:49:59 GMT",
+      "version": "2.10.0",
+      "tag": "@memberjunction/ng-explorer-settings_v2.10.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.10.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 22 Oct 2024 14:57:08 GMT",
       "version": "2.9.0",
       "tag": "@memberjunction/ng-explorer-settings_v2.9.0",

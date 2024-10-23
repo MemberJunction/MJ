@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/templates",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "MemberJunction Templating Engine and Utilities - Used for any application that requires templating utility functionality. NOTE: this package does use Angular Universal for compilation but is not marked with the usual ng prefix because it is a server-side library and not used within Angular apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,13 +18,13 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.9.0",
-    "@memberjunction/templates-base-types": "2.9.0",
-    "@memberjunction/ai": "2.9.0",
-    "@memberjunction/aiengine": "2.9.0",
-    "@memberjunction/ai-groq": "2.9.0",
-    "@memberjunction/core-entities": "2.9.0",
-    "@memberjunction/global": "2.9.0",
+    "@memberjunction/core": "2.10.0",
+    "@memberjunction/templates-base-types": "2.10.0",
+    "@memberjunction/ai": "2.10.0",
+    "@memberjunction/aiengine": "2.10.0",
+    "@memberjunction/ai-groq": "2.10.0",
+    "@memberjunction/core-entities": "2.10.0",
+    "@memberjunction/global": "2.10.0",
     "nunjucks": "3.2.4"
   }
 }

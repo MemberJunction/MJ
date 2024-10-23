@@ -251,7 +251,7 @@ export class ResourceBrowserComponent {
    * Refresh the component from the database based on other current state variables.
    */
   public async Refresh() {
-    const views: Item[] = await this.LoadViews();
+    const views: Item[] = await this.LoadResources();
     const categories: Item[] = await this.LoadCategories();
 
     const items = [...categories, ...views];
@@ -259,7 +259,7 @@ export class ResourceBrowserComponent {
     this._items = sortedItems;
   }
 
-  private async LoadViews(): Promise<Item[]> {
+  private async LoadResources(): Promise<Item[]> {
     let results: Item[] = [];
 
     if(!this.ResourceType || !this.ResourceType.Entity){

@@ -2,6 +2,27 @@
   "name": "@memberjunction/ai-betty-bot",
   "entries": [
     {
+      "date": "Wed, 23 Oct 2024 22:49:59 GMT",
+      "version": "2.10.0",
+      "tag": "@memberjunction/ai-betty-bot_v2.10.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-betty-bot",
+            "comment": "Bump @memberjunction/ai to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-betty-bot",
+            "comment": "Bump @memberjunction/global to v2.10.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 22 Oct 2024 14:57:08 GMT",
       "version": "2.9.0",
       "tag": "@memberjunction/ai-betty-bot_v2.9.0",
