@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-form-toolbar",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "description": "MemberJunction: Angular Form Toolbar",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,13 +25,13 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/global": "2.9.0",
-    "@memberjunction/core": "2.9.0",
-    "@memberjunction/ng-shared": "2.9.0",
-    "@memberjunction/ng-base-forms": "2.9.0",
-    "@memberjunction/ng-ask-skip": "2.9.0",
-    "@memberjunction/ng-record-changes": "2.9.0",
-    "@memberjunction/ng-container-directives": "2.9.0",
+    "@memberjunction/global": "2.10.0",
+    "@memberjunction/core": "2.10.0",
+    "@memberjunction/ng-shared": "2.10.0",
+    "@memberjunction/ng-base-forms": "2.10.0",
+    "@memberjunction/ng-ask-skip": "2.10.0",
+    "@memberjunction/ng-record-changes": "2.10.0",
+    "@memberjunction/ng-container-directives": "2.10.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "ngx-markdown": "^18.0.0",
