@@ -1,8 +1,41 @@
 # Change Log - @memberjunction/ng-explorer-core
 
-This log was last generated on Tue, 15 Oct 2024 17:01:03 GMT and should not be manually modified.
+This log was last generated on Tue, 22 Oct 2024 14:57:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.9.0
+
+Tue, 22 Oct 2024 14:57:08 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.9.0
+- Bump @memberjunction/core to v2.9.0
+- Bump @memberjunction/entity-communications-client to v2.9.0
+- Bump @memberjunction/communication-types to v2.9.0
+- Bump @memberjunction/templates-base-types to v2.9.0
+- Bump @memberjunction/ng-compare-records to v2.9.0
+- Bump @memberjunction/ng-file-storage to v2.9.0
+- Bump @memberjunction/ng-record-changes to v2.9.0
+- Bump @memberjunction/ng-container-directives to v2.9.0
+- Bump @memberjunction/ng-user-view-grid to v2.9.0
+- Bump @memberjunction/ng-query-grid to v2.9.0
+- Bump @memberjunction/ng-user-view-properties to v2.9.0
+- Bump @memberjunction/ng-shared to v2.9.0
+- Bump @memberjunction/ng-tabstrip to v2.9.0
+- Bump @memberjunction/ng-ask-skip to v2.9.0
+- Bump @memberjunction/ng-auth-services to v2.9.0
+- Bump @memberjunction/ng-explorer-settings to v2.9.0
+- Bump @memberjunction/ng-base-forms to v2.9.0
+- Bump @memberjunction/ng-entity-form-dialog to v2.9.0
+- Bump @memberjunction/ng-record-selector to v2.9.0
+- Bump @memberjunction/ng-resource-permissions to v2.9.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.8.0
 

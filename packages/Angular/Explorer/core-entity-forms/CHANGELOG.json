@@ -2,6 +2,81 @@
   "name": "@memberjunction/ng-core-entity-forms",
   "entries": [
     {
+      "date": "Tue, 22 Oct 2024 14:57:08 GMT",
+      "version": "2.9.0",
+      "tag": "@memberjunction/ng-core-entity-forms_v2.9.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "commit": "440506fc5c400a2d41ea6be39d2b6a2c8760616c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core-entities to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-explorer-core to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-form-toolbar to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-timeline to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-join-grid to v2.9.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 15 Oct 2024 17:01:03 GMT",
       "version": "2.8.0",
       "tag": "@memberjunction/ng-core-entity-forms_v2.8.0",

@@ -1,3 +1,53 @@
+<div>
+    <mj-resource-browser
+    #resourceBrowserDashboard
+    ResourceTypeName="Dashboards"
+    [EnableCategories]="true"
+    [CurrentCategoryID]="selectedFolderID"
+    Title="Dashboards"
+    DisplayMode="Tile"
+    [NewItemOptions]="NewItemOptions"
+    (ResourceSelected)="onItemClick($event)"
+    (NavigateToParentEvent)="navigateToParentFolder()"
+    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
+    />
+    <kendo-dialog 
+    [title]="selectedDashboard ? 'Update Dashboard' : 'Create New Dashboard'" 
+    *ngIf="upsertDashboardDialogVisible" 
+    (close)="toggleUpsertDashboardDialog(false)"
+    [minWidth]="250"
+    [width]="450"
+    class="dialog-wrapper"
+  >
+  <div class="search">
+    <kendo-label text="Name">
+      <kendo-textbox [value]="upsertDashboardName" placeholder="Enter a name" (valueChange)="onUpsertDashboardNameKeyup($event)"/>
+    </kendo-label>
+  </div>
+  <br>
+  <div class="search">
+    <kendo-label text="Description">
+      <kendo-textbox [value]="upsertDashboardDescription" placeholder="Enter a Description" (valueChange)="onUpsertDashboardDescriptionKeyup($event)"/>
+    </kendo-label>
+  </div>
+  <kendo-dialog-actions class="popup-actions-btn">
+    @if(selectedDashboard){
+        <button class="cancel-btn" (click)="updateDashboard()" kendoButton themeColor="info">
+            Update
+        </button>
+    }
+    @else {
+        <button class="cancel-btn" (click)="createDashboard()" kendoButton themeColor="info">
+            Create
+        </button>
+    }
+    <button  class="yes-btn" (click)="toggleUpsertDashboardDialog(false)" kendoButton fillMode="outline" themeColor="info">
+      Cancel
+    </button>
+  </kendo-dialog-actions>
+    </kendo-dialog>
+</div>
+<!--
 <app-generic-browser-list 
     title="Dashboards" 
     itemType="dashboard" 
@@ -19,3 +69,4 @@
     [displayAsGrid]="displayAsGrid"
     (viewModeChangeEvent)="onViewModeChange($event)"
 />
+-->

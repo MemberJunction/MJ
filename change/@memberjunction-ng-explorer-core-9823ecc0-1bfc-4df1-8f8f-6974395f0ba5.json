@@ -1,7 +1,7 @@
 {
-  "type": "patch",
+  "type": "minor",
   "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/core",
+  "packageName": "@memberjunction/ng-explorer-core",
   "email": "155523863+JS-BC@users.noreply.github.com",
   "dependentChangeType": "patch"
 }

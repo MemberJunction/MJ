@@ -1,3 +1,17 @@
+<mj-resource-browser
+    #resourceBrowserLists
+    ResourceTypeName="Lists"
+    [EnableCategories]="true"
+    [EnableItemEdit]="true"
+    [EnableItemDelete]="true"
+    [CurrentCategoryID]="selectedFolderID"
+    Title="Lists"
+    DisplayMode="Tile"
+    [NewItemOptions]="NewItemOptions"
+    (ResourceSelected)="itemClick($event)"
+    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
+/>
+<!--
 <app-generic-browser-list 
 title="Lists"
 itemType="list"
@@ -20,6 +34,7 @@ resourceName = "List"
 (BeforeAddItemEvent)="onBeforeAddItemEvent($event)"
 (dropdownOptionClickEvent)="onDropdownOptionClick($event)"
 />
+-->
 <kendo-dialog
 title="Create New List"
 *ngIf="showCreateDialog"

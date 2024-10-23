@@ -2,6 +2,65 @@
   "name": "@memberjunction/ng-user-view-properties",
   "entries": [
     {
+      "date": "Tue, 22 Oct 2024 14:57:08 GMT",
+      "version": "2.9.0",
+      "tag": "@memberjunction/ng-user-view-properties_v2.9.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-properties",
+            "commit": "440506fc5c400a2d41ea6be39d2b6a2c8760616c",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/global to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/core to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/core-entities to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/ng-find-record to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/ng-resource-permissions to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-properties",
+            "comment": "Bump @memberjunction/ng-shared to v2.9.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 15 Oct 2024 17:01:03 GMT",
       "version": "2.8.0",
       "tag": "@memberjunction/ng-user-view-properties_v2.8.0",
