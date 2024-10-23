@@ -150,6 +150,7 @@ export class AskSkipResolver {
     messages.push({
       content: UserQuestion,
       role: 'user',
+      conversationDetailID: convoDetailEntity.ID,
     });
 
     return this.handleSimpleSkipPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
@@ -641,6 +642,7 @@ export class AskSkipResolver {
           const m: SkipMessage = {
             content: skipRole === 'system' ? outputMessage : r.Message,
             role: skipRole,
+            conversationDetailID: r.ID,
           };
           return m;
         });
@@ -950,6 +952,7 @@ export class AskSkipResolver {
         content: `Skip API Requested Data as shown below
                   ${JSON.stringify(apiResponse.dataRequest)}`,
         role: 'system', // user role of system because this came from Skip, we are simplifying the message for the next round if we need to send it back
+        conversationDetailID: convoDetailEntity.ID,
       });
 
       // check to see if apiResponse.dataRequest is an array, if not, see if it is a single item, and if not, then throw an error
@@ -1026,6 +1029,7 @@ export class AskSkipResolver {
                       ${JSON.stringify(executionErrors)}
                     `,
             role: 'user', // use user role becuase to the Skip API what we send it is "user"
+            conversationDetailID: convoDetailEntity.ID,
           });
         }
       } else {
