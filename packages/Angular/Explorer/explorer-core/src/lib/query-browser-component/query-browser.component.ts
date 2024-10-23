@@ -1,11 +1,11 @@
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
+import { Item } from '../../generic/Item.types';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
-import { QueryCategoryEntityType, QueryEntity } from '@memberjunction/core-entities';
-import { LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { QueryEntity } from '@memberjunction/core-entities';
+import { LogStatus, Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 
 @Component({
@@ -15,8 +15,6 @@ import { RegisterClass } from '@memberjunction/global';
 })
 @RegisterClass(BaseNavigationComponent, 'Queries')
 export class QueryBrowserComponent extends BaseBrowserComponent {
-
-  public NewItemOptions: NewItemOption[] = [];
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
     super();
@@ -58,9 +56,9 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
   public itemClick(item: Item) {
     let dataID: string = "";
 
-    if(item.Type === ItemType.Resource){
+    if(item.Type === "Entity"){
       let query: QueryEntity = item.Data as QueryEntity;
-      dataID = query.FirstPrimaryKey.Value;
+      dataID = query.ID.toString();
     }
 
     super.Navigate(item, this.router, dataID);

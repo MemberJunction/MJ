@@ -1,17 +1,3 @@
-<mj-resource-browser
-    #resourceBrowserQueries
-    ResourceTypeName="Reports"
-    [EnableCategories]="false"
-    [EnableItemEdit]="false"
-    [EnableItemDelete]="false"
-    [CurrentCategoryID]="selectedFolderID"
-    Title="Reports"
-    DisplayMode="Tile"
-    [NewItemOptions]="NewItemOptions"
-    (ResourceSelected)="itemClick($event)"
-    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
-/>
-<!--
 <app-generic-browser-list 
 title="Reports"
 itemType="report"
@@ -31,5 +17,4 @@ CategoryEntityName="Report Categories"
 (viewModeChangeEvent)="onViewModeChange($event)"
 (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
 />
--->
 <!-- creation of reports are disabled because they need a conversation ID before theyre made -->

@@ -1,13 +1,12 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
-import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
+import { Item } from '../../generic/Item.types';
 import { BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
 import { BaseEntity, EntityInfo, Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { ResourceBrowserComponent } from '../resource-browser/resource-browser.component';
 
 @Component({
   selector: 'mj-list-view',
@@ -16,9 +15,6 @@ import { ResourceBrowserComponent } from '../resource-browser/resource-browser.c
 })
 @RegisterClass(BaseNavigationComponent, 'Lists')
 export class ListViewComponent extends BaseBrowserComponent implements OnInit {
-
-    @ViewChild('resourceBrowserLists') resourceBrowser: ResourceBrowserComponent | null = null;
-    
     public showLoader :boolean = false;
     public showCreateLoader: boolean = false;
     public lists: ListEntity[] = [];
@@ -27,16 +23,6 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public sourceEntityNames: string[] = [];
     public entityNames: string[] = [];
     public dropdownItems: Record<'text', string>[] = [{text: "List"}];
-
-    public NewItemOptions: NewItemOption[] = [
-        {
-            Text: 'New View',
-            Description: 'Create a new User View',
-            Icon: 'folder',
-            Action: () => {
-                this.toggleCreateDialog(true);
-            }
-        }];
     
 
     //create dialog properties
@@ -76,18 +62,20 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public itemClick(item: Item) {
         let dataID: string = "";
     
-        if(item.Type === ItemType.Resource){
-            let list: ListEntity = <ListEntity>item.Data;
-            dataID = list.FirstPrimaryKey.Value;
+        if(item.Type === "Entity"){
+            let list: ListEntity = item.Data as ListEntity;
+            dataID = list.ID.toString();
         }
     
         this.router.navigate(["listdetails", dataID]);
+        //super.Navigate(item, this.router, dataID);
     }
     
     public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {}
 
     public onBeforeAddItemEvent(event: BeforeAddItemEvent): void {
         event.Cancel = true;
+        console.log("onBeforeAddItemEvent");
         this.toggleCreateDialog(true);
     }
 

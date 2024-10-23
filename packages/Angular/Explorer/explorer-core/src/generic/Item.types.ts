@@ -1,10 +1,4 @@
-import { BaseEntity } from "@memberjunction/core";
-
 export enum ItemType {
-    /**
-     * Folders represent any Category Entity 
-     * e.g. User View Categories, List Categories, Dashboard Categories, etc.
-     */
     Folder = "Folder",
     Entity = "Entity",
     Resource = "Resource",
@@ -70,7 +64,6 @@ export class Folder {
     public ParentFolderID?: string | null;
     public Name: string;
     public Description: string | null;
-    public CategoryEntity?: BaseEntity;
 
     constructor(id: string, folderName: string){
         this.ID = id;
@@ -87,10 +80,3 @@ export class TreeFolder extends Folder {
         this.EntityID = entityID;
     }
 }
-
-export class NewItemOption {
-    Text!: string;
-    Description?: string;
-    Icon?: string;
-    Action?: () => void;
-};

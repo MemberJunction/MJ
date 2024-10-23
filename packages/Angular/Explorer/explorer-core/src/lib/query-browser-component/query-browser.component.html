@@ -1,17 +1,3 @@
-<mj-resource-browser
-    #resourceBrowserQueries
-    ResourceTypeName="Queries"
-    [EnableCategories]="false"
-    [EnableItemEdit]="false"
-    [EnableItemDelete]="false"
-    [CurrentCategoryID]="selectedFolderID"
-    Title="Queries"
-    DisplayMode="Tile"
-    [NewItemOptions]="NewItemOptions"
-    (ResourceSelected)="itemClick($event)"
-    (EditItemEvent)="onBeforeUpdateItemEvent($event)"
-/>
-<!--
 <app-generic-browser-list 
 title="Queries" 
 itemType="query"
@@ -31,4 +17,3 @@ CategoryEntityName="Query Categories"
 (viewModeChangeEvent)="onViewModeChange($event)"
 (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
 />
--->

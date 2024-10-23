@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { ReportEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
-import { Item, NewItemOption } from '../../generic/Item.types';
+import { Item } from '../../generic/Item.types';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -16,8 +16,6 @@ import { RegisterClass } from '@memberjunction/global';
 export class ReportBrowserComponent extends BaseBrowserComponent {
   public reports: ReportEntity[] = [];
   public showLoader: boolean = false;
-
-  public NewItemOptions: NewItemOption[] = [];
 
   constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
     super();
