@@ -2,8 +2,6 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 *
-* GENERATED: 10/16/2024, 4:51:13 PM
-*
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
@@ -6395,6 +6393,16 @@ export class CompanyIntegrationRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: 'Status of the integration run. Possible values: Pending, In Progress, Success, Failed.'}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: 'Optional error log information for the integration run.'}) 
+    ErrorLog?: string;
+        
+    @Field({nullable: true, description: 'Optional configuration data in JSON format for the request that started the integration run for audit purposes.'}) 
+    ConfigData?: string;
+        
     @Field() 
     @MaxLength(200)
     Integration: string;
@@ -6440,6 +6448,15 @@ export class CreateCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     Comments?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ErrorLog?: string;
+
+    @Field({ nullable: true })
+    ConfigData?: string;
 }
     
 
@@ -6468,6 +6485,15 @@ export class UpdateCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     Comments?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ErrorLog?: string;
+
+    @Field({ nullable: true })
+    ConfigData?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

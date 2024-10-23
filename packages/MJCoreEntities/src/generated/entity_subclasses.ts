@@ -1969,6 +1969,28 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('In Progress'), z.literal('Success'), z.literal('Pending'), z.literal('Failed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * In Progress
+    *   * Success
+    *   * Pending
+    *   * Failed
+    * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
+    ErrorLog: z.string().nullish().describe(`
+        * * Field Name: ErrorLog
+        * * Display Name: Error Log
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional error log information for the integration run.`),
+    ConfigData: z.string().nullish().describe(`
+        * * Field Name: ConfigData
+        * * Display Name: Config Data
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -14509,6 +14531,52 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * In Progress
+    *   * Success
+    *   * Pending
+    *   * Failed
+    * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
+    */
+    get Status(): 'In Progress' | 'Success' | 'Pending' | 'Failed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'In Progress' | 'Success' | 'Pending' | 'Failed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ErrorLog
+    * * Display Name: Error Log
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional error log information for the integration run.
+    */
+    get ErrorLog(): string | null {
+        return this.Get('ErrorLog');
+    }
+    set ErrorLog(value: string | null) {
+        this.Set('ErrorLog', value);
+    }
+
+    /**
+    * * Field Name: ConfigData
+    * * Display Name: Config Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
+    */
+    get ConfigData(): string | null {
+        return this.Get('ConfigData');
+    }
+    set ConfigData(value: string | null) {
+        this.Set('ConfigData', value);
     }
 
     /**
