@@ -939,6 +939,23 @@ UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 	  actual.column_id IS NULL  
 )
 
+
+-- next delete the entity field values
+DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (
+	SELECT 
+	  ef.ID 
+	FROM 
+	  #ef_spDeleteUnneededEntityFields ef 
+	LEFT JOIN
+	  #actual_spDeleteUnneededEntityFields actual 
+	  ON
+	  ef.EntityID=actual.EntityID AND
+	  ef.Name = actual.EntityFieldName
+	WHERE 
+	  actual.column_id IS NULL  
+)
+
+
 -- now delete the entity fields themsevles
 DELETE FROM __mj.EntityField WHERE ID IN
 (
