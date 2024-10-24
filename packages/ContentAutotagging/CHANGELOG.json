@@ -2,6 +2,39 @@
   "name": "@memberjunction/content-autotagging",
   "entries": [
     {
+      "date": "Thu, 24 Oct 2024 15:33:07 GMT",
+      "version": "2.11.0",
+      "tag": "@memberjunction/content-autotagging_v2.11.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/ai to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/core-entities to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/content-autotagging",
+            "comment": "Bump @memberjunction/global to v2.11.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 23 Oct 2024 22:49:59 GMT",
       "version": "2.10.0",
       "tag": "@memberjunction/content-autotagging_v2.10.0",

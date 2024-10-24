@@ -1,8 +1,40 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Wed, 23 Oct 2024 22:49:59 GMT and should not be manually modified.
+This log was last generated on Thu, 24 Oct 2024 15:33:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.11.0
+
+Thu, 24 Oct 2024 15:33:07 GMT
+
+### Minor changes
+
+- Bump @memberjunction/actions to v2.11.0
+- Bump @memberjunction/ai to v2.11.0
+- Bump @memberjunction/ai-mistral to v2.11.0
+- Bump @memberjunction/ai-openai to v2.11.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.11.0
+- Bump @memberjunction/aiengine to v2.11.0
+- Bump @memberjunction/core to v2.11.0
+- Bump @memberjunction/core-actions to v2.11.0
+- Bump @memberjunction/core-entities to v2.11.0
+- Bump @memberjunction/data-context to v2.11.0
+- Bump @memberjunction/data-context-server to v2.11.0
+- Bump @memberjunction/doc-utils to v2.11.0
+- Bump @memberjunction/entity-communications-server to v2.11.0
+- Bump @memberjunction/external-change-detection to v2.11.0
+- Bump @memberjunction/global to v2.11.0
+- Bump @memberjunction/queue to v2.11.0
+- Bump @memberjunction/skip-types to v2.11.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.11.0
+- Bump @memberjunction/graphql-dataprovider to v2.11.0
+- Bump @memberjunction/storage to v2.11.0
+- Bump @memberjunction/templates to v2.11.0
+
+### Patches
+
+- Applying package updates [skip ci] (nico.ortiz@bluecypress.io)
 
 ## 2.10.0
 
