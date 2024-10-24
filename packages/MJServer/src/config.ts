@@ -64,7 +64,7 @@ const askSkipInfoSchema = z.object({
   entitiesToSendSkip: z.object({
     excludeSchemas: z.array(z.string()).optional(),
     includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
-  })
+  }).optional()
 });
 
 const configInfoSchema = z.object({
