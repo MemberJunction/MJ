@@ -1,39 +1,46 @@
--- Recompile base view, nothing changed but recompile pulls in the latest fields
-
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].vwCompanyIntegrationRuns
+DROP PROCEDURE IF EXISTS ${flyway:defaultSchema}.spRecompileAllViews
 GO
-CREATE VIEW [${flyway:defaultSchema}].vwCompanyIntegrationRuns
+CREATE PROCEDURE ${flyway:defaultSchema}.spRecompileAllViews
 AS
-SELECT
-    [cir].*,
-	[i].Name Integration,
-	[c].Name Company,
-    [u].[Name] AS [RunByUser]
-FROM
-    [${flyway:defaultSchema}].[CompanyIntegrationRun] AS [cir]
-INNER JOIN
-	[${flyway:defaultSchema}].[CompanyIntegration] AS [ci]
-  ON
-	[cir].[CompanyIntegrationID] = [ci].[ID]
-INNER JOIN 
-	[${flyway:defaultSchema}].[Company] AS [c]
-  ON
-	[ci].CompanyID = [c].ID
-INNER JOIN
-    [${flyway:defaultSchema}].[User] AS [u]
-  ON
-    [cir].[RunByUserID] = [u].[ID]
-INNER JOIN
-	[${flyway:defaultSchema}].[Integration] AS [i]
-  ON
-	[ci].[IntegrationID] = [i].[ID]
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ViewSchema NVARCHAR(128);
+    DECLARE @ViewName NVARCHAR(128);
+    DECLARE @FullViewName NVARCHAR(256);
+
+    -- Cursor to fetch all views with their schema names
+    DECLARE cur CURSOR FOR
+        SELECT s.name AS SchemaName, v.name AS ViewName
+        FROM sys.views v
+        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+		WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA'); -- Exclude system schemas
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @ViewSchema, @ViewName;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Construct the full view name with schema
+        SET @FullViewName = QUOTENAME(@ViewSchema) + '.' + QUOTENAME(@ViewName);
+        
+        -- Refresh the view
+        EXEC sp_refreshview @FullViewName;
+        
+        -- Fetch the next view
+        FETCH NEXT FROM cur INTO @ViewSchema, @ViewName;
+    END
+
+    -- Clean up
+    CLOSE cur;
+    DEALLOCATE cur;
+END
 GO
 
+-- call this as this migration needs to recompile some of the views
+EXEC [${flyway:defaultSchema}].spRecompileAllViews
 
-GRANT SELECT ON [${flyway:defaultSchema}].vwCompanyIntegrationRuns TO [cdp_Developer], [cdp_Integration]
-
-
-
+GO
 -----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: Company Integration Runs
