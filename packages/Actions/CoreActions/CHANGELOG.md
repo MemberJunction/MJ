@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/core-actions
 
-This log was last generated on Tue, 22 Oct 2024 14:57:08 GMT and should not be manually modified.
+This log was last generated on Wed, 23 Oct 2024 22:49:59 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.10.0
+
+Wed, 23 Oct 2024 22:49:59 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.10.0
+- Bump @memberjunction/core to v2.10.0
+- Bump @memberjunction/core-entities to v2.10.0
+- Bump @memberjunction/actions to v2.10.0
+- Bump @memberjunction/communication-engine to v2.10.0
+- Bump @memberjunction/external-change-detection to v2.10.0
+- Bump @memberjunction/ai-vector-sync to v2.10.0
+- Bump @memberjunction/content-autotagging to v2.10.0
 
 ## 2.9.0
 
