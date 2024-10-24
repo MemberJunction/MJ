@@ -37,8 +37,9 @@ BEGIN
 END
 GO
 
--- call this as this migration needs to recompile some of the views
-EXEC [${flyway:defaultSchema}].spRecompileAllViews
+-- recompiile these two base views 
+EXEC sp_refreshview '${flyway:defaultSchema}.vwCompanyIntegrationRuns'
+EXEC sp_refreshview '${flyway:defaultSchema}.vwDatasetItems'
 
 GO
 -----------------------------------------------------------------
