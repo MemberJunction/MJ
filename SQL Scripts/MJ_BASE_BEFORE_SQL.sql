@@ -1,5 +1,43 @@
+DROP PROCEDURE IF EXISTS __mj.spRecompileAllViews
+GO
+CREATE PROCEDURE __mj.spRecompileAllViews
+AS
+BEGIN
+    SET NOCOUNT ON;
 
+    DECLARE @ViewSchema NVARCHAR(128);
+    DECLARE @ViewName NVARCHAR(128);
+    DECLARE @FullViewName NVARCHAR(256);
 
+    -- Cursor to fetch all views with their schema names
+    DECLARE cur CURSOR FOR
+        SELECT s.name AS SchemaName, v.name AS ViewName
+        FROM sys.views v
+        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+		WHERE s.name NOT IN ('sys', 'INFORMATION_SCHEMA'); -- Exclude system schemas
+
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @ViewSchema, @ViewName;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Construct the full view name with schema
+        SET @FullViewName = QUOTENAME(@ViewSchema) + '.' + QUOTENAME(@ViewName);
+        
+        -- Refresh the view
+        EXEC sp_refreshview @FullViewName;
+        
+        -- Fetch the next view
+        FETCH NEXT FROM cur INTO @ViewSchema, @ViewName;
+    END
+
+    -- Clean up
+    CLOSE cur;
+    DEALLOCATE cur;
+END
+GO
+
+---------------------------
 DROP FUNCTION IF EXISTS __mj.GetProgrammaticName
 GO
 CREATE FUNCTION __mj.GetProgrammaticName(@input NVARCHAR(MAX))
@@ -938,6 +976,23 @@ UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 	WHERE 
 	  actual.column_id IS NULL  
 )
+
+
+-- next delete the entity field values
+DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (
+	SELECT 
+	  ef.ID 
+	FROM 
+	  #ef_spDeleteUnneededEntityFields ef 
+	LEFT JOIN
+	  #actual_spDeleteUnneededEntityFields actual 
+	  ON
+	  ef.EntityID=actual.EntityID AND
+	  ef.Name = actual.EntityFieldName
+	WHERE 
+	  actual.column_id IS NULL  
+)
+
 
 -- now delete the entity fields themsevles
 DELETE FROM __mj.EntityField WHERE ID IN

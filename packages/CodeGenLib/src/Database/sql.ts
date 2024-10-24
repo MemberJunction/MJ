@@ -122,7 +122,6 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
 
    // Build the dependency order tree, provide ALL entities for this process
    const entityLevelTree = this.buildEntityLevelsTree(md.Entities);
-
    // Process each level sequentially, but entities within a level in parallel
    for (const level of entityLevelTree) {
       // now filter out each LEVEL to only include entities that are not needed for recompilation
@@ -133,14 +132,19 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
         !e.VirtualEntity && 
         !ManageMetadataBase.newEntityList.includes(e.Name));
 
-      const levelFiles: string[] = [];
+      //const levelFiles: string[] = [];
+      let sqlCommand: string = '';
       for (const entity of l) {
-        levelFiles.push(...this.getBaseViewFiles(entity));
+        // OCT 24 2024 - changed to use sp_refreshview instead of executing the view files
+        // will remove old code shortly after testing
+        //levelFiles.push(...this.getBaseViewFiles(entity));
+        sqlCommand += `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';\n`;
       }
 
       // all files for this level are now in levelFiles, let's combine them and execute them
-      const combinedSQL = this.combineMultipleSQLFiles(levelFiles);
-      bSuccess = await this.executeBatchSQLScript(combinedSQL) && bSuccess;
+      //const combinedSQL = this.combineMultipleSQLFiles(levelFiles);
+      bSuccess = await this.executeSQLScript(ds, sqlCommand, false) && bSuccess;
+      //bSuccess = await this.executeBatchSQLScript(combinedSQL) && bSuccess;
     }
 
    if (!bSuccess) {
@@ -183,25 +187,34 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
  }
  
  public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
-   const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
-   const filePath = path.join(outputDir('SQL', true)!, file);
-   if (fs.existsSync(filePath)) {
-      const recompileResult = await this.executeSQLFile(filePath)
-      if (applyPermissions) {
-         // now apply permissions
-         const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
-         const permissionsFilePath = path.join(outputDir('SQL', true)!, permissionsFile);
-         if (fs.existsSync(permissionsFilePath)) {
-            return await this.executeSQLFile(permissionsFilePath) && recompileResult;
-         }
-      }  
-      else
-         return recompileResult;
-   }
-   else {
-      logError(`     Error Recompiling Base View: File ${filePath} does not exist`)
-   }
-   return false;
+  // just call EXEC sp_refreshview 'your_schema_name.your_view_name';
+  try {
+    await this.executeSQLScript(ds, `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';`, false);
+    return true;  
+  }
+  catch (e) {
+    logError(e as string);
+    return false;
+  }
+  // const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
+  //  const filePath = path.join(outputDir('SQL', true)!, file);
+  //  if (fs.existsSync(filePath)) {
+  //     const recompileResult = await this.executeSQLFile(filePath)
+  //     if (applyPermissions) {
+  //        // now apply permissions
+  //        const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+  //        const permissionsFilePath = path.join(outputDir('SQL', true)!, permissionsFile);
+  //        if (fs.existsSync(permissionsFilePath)) {
+  //           return await this.executeSQLFile(permissionsFilePath) && recompileResult;
+  //        }
+  //     }  
+  //     else
+  //        return recompileResult;
+  //  }
+  //  else {
+  //     logError(`     Error Recompiling Base View: File ${filePath} does not exist`)
+  //  }
+  //  return false;
  }
  
  public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {

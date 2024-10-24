@@ -82,6 +82,10 @@ export class SkipMessage {
      * The content of the message, either the user's input or the system's response
      */
     content: string;
+    /**
+     * The conversation detail ID for the message, used to track the message
+     */
+    conversationDetailID: string;
 }
 
 
