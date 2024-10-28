@@ -155,6 +155,7 @@ export class ResourceResolver implements Resolve<void> {
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
     let resourceType = route.params['resourceType'];
     const resourceRecordId = route.params['resourceRecordId'];
+    console.log(resourceType, resourceRecordId);
     if (resourceType !== undefined && resourceRecordId !== undefined) {
       resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType);
 
@@ -169,6 +170,9 @@ export class ResourceResolver implements Resolve<void> {
       const entityNameDecoded = decodeURIComponent(route.queryParams['Entity'] || route.queryParams['entity']);
       const md = new Metadata();
       switch (resourceType.trim().toLowerCase()) {
+        case 'lists':
+          code = EventCodes.ListClicked
+          break;
         case 'user views':
           code = EventCodes.ViewClicked;
           break;
