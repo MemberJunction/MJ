@@ -94,10 +94,7 @@ export class ManageMetadataBase {
          logError('   Error managing virtual entities');
          bSuccess = false;
       }
-   
-      // now - we need to tell our metadata object to refresh itself
-      await md.Refresh();
-
+      
       return bSuccess;
    }
    
