@@ -155,7 +155,6 @@ export class ResourceResolver implements Resolve<void> {
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
     let resourceType = route.params['resourceType'];
     const resourceRecordId = route.params['resourceRecordId'];
-    console.log(resourceType, resourceRecordId);
     if (resourceType !== undefined && resourceRecordId !== undefined) {
       resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType);
 

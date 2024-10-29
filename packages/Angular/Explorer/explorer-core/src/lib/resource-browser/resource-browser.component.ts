@@ -476,7 +476,6 @@ export class ResourceBrowserComponent {
   }
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
-    console.log("here");
     if(!this.selectedItem || !shouldDelete){
       LogError("Selected item is not set or shouldDelete is false");
       return;
@@ -484,7 +483,6 @@ export class ResourceBrowserComponent {
 
     this.deleteDialogOpened = false;
     let item: Item = this.selectedItem;
-    console.log(item.Type, this._currentDeleteOrUnlinkState);
     let success: boolean = false;
     if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
       success = await this.deleteFolder(item);
@@ -510,8 +508,6 @@ export class ResourceBrowserComponent {
       return false;
     }
 
-    console.log("here 2");
-
     const hasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
     if(hasChildren){
       this.sharedService.CreateSimpleNotification(`Unable to delete Folder ${folder.Name} because it has children`, "error", 2500);
@@ -519,7 +515,6 @@ export class ResourceBrowserComponent {
     }
 
     const categoryEntity = folder.CategoryEntity;
-    console.log("here 3");
     const deleteResult: boolean = await categoryEntity.Delete();
     if(!deleteResult){
       LogError(`Unable to delete folder ${folder.Name}`, undefined, categoryEntity.LatestResult);
@@ -537,8 +532,6 @@ export class ResourceBrowserComponent {
       LogError("Item Data is not set, cannot delete resource");
       return false;
     }
-
-    console.log("here 4");
 
     const deleteEvent: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
     this.DeleteItemEvent.emit(deleteEvent);
