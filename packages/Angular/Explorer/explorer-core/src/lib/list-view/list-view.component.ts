@@ -81,7 +81,6 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
             dataID = list.FirstPrimaryKey.Value;
         }
     
-        ///this.router.navigate(["listdetails", dataID]);
         this.router.navigate(['resource', 'list', dataID]);
     }
     

@@ -688,6 +688,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'notifications':
         url += `/notifications`;
         break;
+      case 'lists':
+        url += `/list/${data.ResourceRecordID}`;
+        break;
     }
 
     // SECOND, we need to, in some cases, append query params that the TAB had created, we don't know what those are, they could be anything. In the AfterViewInit() code above we cache

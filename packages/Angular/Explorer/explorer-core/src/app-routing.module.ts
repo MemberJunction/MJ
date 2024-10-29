@@ -243,7 +243,6 @@ const routes: Routes = [
   { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
   { path: 'lists', component: ListViewComponent, canActivate: [AuthGuard] },
   { path: 'lists/:folderID', component: ListViewComponent, canActivate: [AuthGuard] },
-  { path: 'listdetails/:listID', component: SingleListDetailComponent, canActivate: [AuthGuard] },
   {
     path: 'settings',
     component: SettingsComponent,

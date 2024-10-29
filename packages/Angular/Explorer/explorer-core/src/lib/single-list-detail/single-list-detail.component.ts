@@ -312,12 +312,12 @@ export class SingleListDetailComponent implements OnInit {
         this.loadList(this.listRecord!.ID);
     }
 
-    public onKeyup(Value: string): void {
+    public onListSearchValueChange(Value: string): void {
         this.filter = Value;
         this.filterItemsSubject.next(true);
     }
 
-    public onListRecordKeyup(Value: string): void {
+    public onListRecordDialogValueChange(Value: string): void {
         this.searchFilter = Value;
         this.filterListrecordsSubject.next(true);
     }
@@ -394,7 +394,8 @@ export class SingleListDetailComponent implements OnInit {
             return;
         }
 
-        this.listRecords = rvResult.Results.map((record: Record<string, any>) => {
+        this.listRecords = rvResult.Results.filter((record: Record<string, any>) => {
+        }).map((record: Record<string, any>) => {
             let result = { ID: record[primaryKeyName], Name: record[nameField!.Name] };
             return result;
         });
@@ -402,8 +403,34 @@ export class SingleListDetailComponent implements OnInit {
         this.fetchingListRecords = false;
     }
 
-    public addListRecord(listRecord: Record<'ID' | 'Name', string>): void {
-        
+    public async addListRecord(listRecord: Record<'ID' | 'Name', string>): Promise<void> {
+        if(!this.listRecord){
+            LogError("Error adding list record. List record is null");
+            this.sharedService.CreateSimpleNotification("Unable to add record to list");
+            return;
+        }
+
+        const md: Metadata = new Metadata();
+        const listEntity: ListDetailEntity = await md.GetEntityObject("List Details", md.CurrentUser);
+        listEntity.ListID = this.listRecord.ID;
+        listEntity.RecordID = listRecord.ID;
+
+        const saveResult = await listEntity.Save();
+        if(!saveResult){
+            LogError(`Error adding record ${listRecord.ID} to list ${this.listRecord.ID}`, undefined, listEntity.LatestResult);
+            
+            const alreadyExists: boolean = listEntity.LatestResult.Message.includes("already exists in List");
+            if(alreadyExists){
+                this.sharedService.CreateSimpleNotification("Record already exists in this list", 'error', 2500);
+                return;
+            }
+
+            this.sharedService.CreateSimpleNotification("Unable to add record to list", 'error', 2500);
+            return;
+        }
+
+        this.sharedService.CreateSimpleNotification("Unable to add record to list", 'success', 2500);
+
     }
 }
 

@@ -18,7 +18,7 @@
               type="text" 
               #searchInput 
               placeholder="Search in List" 
-              (keyup)="onKeyup(searchInput.value)"
+              (keyup)="onListSearchValueChange(searchInput.value)"
               [clearButton]="true"
               size="large"
               rounded="large"
@@ -154,8 +154,8 @@ class="dialog-wrapper"
     <div class="search-header">
         <kendo-textbox
             id="listRecordSearch"
-            (keyup)="onKeyup(searchInput.value)"
-            [placeholder]="'Search' + (listRecord ? listRecord.Entity : 'Records') + '...'"
+            (valueChange)="onListRecordDialogValueChange($event)"
+            [placeholder]="'Search ' + (listRecord ? listRecord.Entity : 'Records') + '...'"
             kendoTextBox
             [clearButton]="true"
             class="search-bar"
@@ -169,7 +169,7 @@ class="dialog-wrapper"
         @for(listRecord of listRecords; track listRecord){
             <div class="overflow-y-scroll">
                 <div class="list-item">
-                    <div class="list-text" [ngClass]="{'list-selected': selectedListRecords.includes(listRecord)}">
+                    <div class="list-text">
                         {{listRecord.Name}}
                     </div>
                     <button kendoButton class="btn-no-border" (click)="addListRecord(listRecord)">
