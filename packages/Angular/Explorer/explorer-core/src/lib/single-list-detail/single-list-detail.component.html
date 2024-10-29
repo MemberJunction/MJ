@@ -8,7 +8,7 @@
           textField="Text"
           themeColor="info">
             <span class="fa-solid fa-plus"></span>
-              Create New
+              Add to List
         </kendo-dropdownbutton> 
     </div>
     <div>
@@ -134,9 +134,9 @@ title="Select Views to Add"
 
 <kendo-dialog
 class="dialog-wrapper"
-[title]="'Select' + (listRecord ? listRecord.Entity : 'Records') + 'to Add to List'"
+[title]="'Select ' + (listRecord ? listRecord.Entity : 'Records') + ' to Add to List'"
 *ngIf="showAddSingleRecordsDialog"
-(close)="toggleAddFromViewDialog(false)"
+(close)="toggleAddRecordsDialog(false)"
 [minWidth]="250"
 [width]="650"
 [height]="550"
@@ -185,11 +185,8 @@ class="dialog-wrapper"
     }
 }
     <kendo-dialog-actions class="popup-actions-btn">
-        <button class="cancel-btn" (click)="addTolist()" [disabled]="showDialogLoader" kendoButton themeColor="info">
-            Done
-        </button>
-        <button  class="yes-btn" (click)="toggleAddFromViewDialog(false)" [disabled]="showDialogLoader" kendoButton fillMode="outline" themeColor="info">
-            Cancel
+        <button  class="yes-btn" (click)="toggleAddRecordsDialog(false)" [disabled]="showDialogLoader" kendoButton fillMode="outline" themeColor="info">
+            Close
         </button>
     </kendo-dialog-actions>
 </kendo-dialog>

@@ -18,8 +18,8 @@ export class SingleListDetailComponent implements OnInit {
 
     public listRecord: ListEntity | null = null;
     public showLoader: boolean = false;
-    public sourceGridData: BaseEntity[] = [];
-    public filteredGridData: BaseEntity[] = [];
+    public sourceGridData: Record<string, any>[] = [];
+    public filteredGridData: Record<string, any>[] = [];
     public showAddDialog: boolean = false;
     public showAddLoader: boolean = false;
     public showDialogLoader: boolean = false;
@@ -90,70 +90,58 @@ export class SingleListDetailComponent implements OnInit {
     }
 
     private async loadList(listID: string): Promise<void> {
-        const startTime: number = new Date().getTime();
-        if(listID){
-            this.ListID = listID;
-            this.showLoader = true;
-
-            const md: Metadata = new Metadata();
-            const rv: RunView = new RunView();
-
-            const listEntity: ListEntity = await md.GetEntityObject("Lists");
-            const loadResult = await listEntity.Load(listID);
-            if(!loadResult){
-                LogError("Error loading list with ID " + listID, undefined, listEntity.LatestResult);
-                return;
-            }
-
-            const rvEntityFields = await rv.RunView({
-                EntityName: "Entity Fields",
-                ExtraFilter: `EntityID = '${listEntity.EntityID}' AND DefaultInView = 1`,
-                ResultType: 'entity_object'
-            }, md.CurrentUser);
-
-            if(!rvEntityFields.Success){
-                LogError(`Error loading entity fields for list ${listEntity.Name}`, undefined, rvEntityFields.ErrorMessage);
-                return;
-            }
-
-            this.listRecord = listEntity;
-            
-            this.viewColumns = listEntity.EntityInfo.Fields.filter((field: EntityFieldInfo) => field.DefaultInView).map((field: EntityFieldInfo) => {
-                return {
-                  ID: field.ID,
-                  Name: field.CodeName,
-                  DisplayName: field.DisplayName,
-                  EntityField: field,
-                  hidden: false,
-                  orderIndex: field.Sequence,
-                  width: field.DefaultColumnWidth || 100,
-                } as ViewColumnInfo
-            });
-
-                                                            /*make sure there is an entity field linked*/
-            this.visibleColumns = this.viewColumns.filter(x => x.hidden === false && x.EntityField).sort((a,b) => {
-                const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
-                const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
-                return aOrder - bOrder;
-            });
-
-            const primaryKeyName: string = this.listRecord.EntityInfo.FirstPrimaryKey.Name;
-            const rvResult: RunViewResult = await rv.RunView({
-                EntityName: listEntity.Entity,
-                ExtraFilter: `${primaryKeyName} IN (SELECT [RecordID] FROM ${md.ConfigData.MJCoreSchemaName}.[vwListDetails] WHERE ListID = '${listEntity.ID}')`
-            }, md.CurrentUser);
-
-            if(!rvResult.Success){
-                LogError(`Error loading ${listEntity.Entity} records: ${rvResult.ErrorMessage}`);
-                return;
-            }
-
-            LogStatus(`Found ${rvResult.Results.length} records for list ${listEntity.Name}`);
-            this.sourceGridData = this.filteredGridData = rvResult.Results;
-            this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
-
-            this.showLoader = false;
+        if(!listID){
+            return;
         }
+
+        const startTime: number = new Date().getTime();
+        this.showLoader = true;
+
+        const md: Metadata = new Metadata();
+        const rv: RunView = new RunView();
+
+        this.listRecord = await md.GetEntityObject<ListEntity>("Lists");
+        const loadResult = await this.listRecord.Load(listID);
+        if(!loadResult){
+            LogError("Error loading list with ID " + listID, undefined, this.listRecord.LatestResult);
+            this.showLoader = false;
+            return;
+        }            
+    
+        this.viewColumns = this.listRecord.EntityInfo.Fields.filter((field: EntityFieldInfo) => field.DefaultInView).map((field: EntityFieldInfo) => {
+            return {
+                ID: field.ID,
+                Name: field.CodeName,
+                DisplayName: field.DisplayName,
+                EntityField: field,
+                hidden: false,
+                orderIndex: field.Sequence,
+                width: field.DefaultColumnWidth || 100,
+            } as ViewColumnInfo
+        });
+
+                                                        /*make sure there is an entity field linked*/
+        this.visibleColumns = this.viewColumns.filter(x => x.hidden === false && x.EntityField).sort((a,b) => {
+            const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
+            const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
+            return aOrder - bOrder;
+        });
+
+        const primaryKeyName: string = this.listRecord.EntityInfo.FirstPrimaryKey.Name;
+        const rvResult: RunViewResult<Record<string, any>> = await rv.RunView<Record<string, any>>({
+            EntityName: this.listRecord.Entity,
+            ExtraFilter: `${primaryKeyName} IN (SELECT [RecordID] FROM ${md.ConfigData.MJCoreSchemaName}.[vwListDetails] WHERE ListID = '${this.listRecord.ID}')`
+        }, md.CurrentUser);
+
+        if(!rvResult.Success){
+            LogError(`Error loading ${this.listRecord.Entity} records: ${rvResult.ErrorMessage}`);
+            this.showLoader = false;
+            return;
+        }
+
+        this.sourceGridData = this.filteredGridData = rvResult.Results;
+        this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
+        this.showLoader = false;
     }
 
     public pageChange(event: PageChangeEvent): void {
@@ -324,7 +312,12 @@ export class SingleListDetailComponent implements OnInit {
 
     private filterItems(filter: string): void {
 
-        if(!filter){
+        if(!filter || filter === "") {
+            this.filteredGridData = this.sourceGridData;
+            return;
+        }
+
+        if(!this.listRecord){
             return;
         }
 
@@ -333,8 +326,14 @@ export class SingleListDetailComponent implements OnInit {
         }
     
         const toLower: string = filter.toLowerCase();
-        this.filteredGridData = this.sourceGridData.filter((data: BaseEntity) => {
-            const name: string = data.Get("Name") || '';
+        const nameField: EntityFieldInfo | undefined = this.listRecord.EntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
+        if(!nameField){
+            LogError("Unable to filter list: No name field found");
+            return;
+        }
+
+        this.filteredGridData = this.sourceGridData.filter((data: Record<string, any>) => {
+            const name: string = data[nameField.Name];
             return name.toLowerCase().includes(toLower);
         });
     }
@@ -395,6 +394,8 @@ export class SingleListDetailComponent implements OnInit {
         }
 
         this.listRecords = rvResult.Results.filter((record: Record<string, any>) => {
+            const alreadyExits: boolean = this.sourceGridData.some((selectedRecord: Record<'ID' | 'Name', string>) => selectedRecord.ID === record[primaryKeyName]);
+            return !alreadyExits;
         }).map((record: Record<string, any>) => {
             let result = { ID: record[primaryKeyName], Name: record[nameField!.Name] };
             return result;
