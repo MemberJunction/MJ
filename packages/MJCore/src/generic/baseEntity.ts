@@ -10,6 +10,8 @@ import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 import { z } from 'zod';
 
+export const MJBaseEntityName: string = "__mj_BaseEntity__";
+
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
@@ -365,6 +367,16 @@ export abstract class BaseEntity<T = unknown> {
     private _resultHistory: BaseEntityResult[] = [];
 
     constructor(Entity: EntityInfo) {
+        this.SetEntityInfo(Entity);
+    }
+
+    /**
+     * Sets the EntityInfo property to the given Entity param and initializes the object.
+     * Note that this method should only be called once when the object is first created, 
+     * before calling any other methods on the object such as Load() or NewRecord().
+     * @param Entity 
+     */
+    public SetEntityInfo(Entity: EntityInfo): void {
         this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
         this.init();

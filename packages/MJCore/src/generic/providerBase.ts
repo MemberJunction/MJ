@@ -1,4 +1,4 @@
-import { BaseEntity } from "./baseEntity";
+import { BaseEntity, MJBaseEntityName } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -322,6 +322,17 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
         try {
+            if(entityName === MJBaseEntityName) {
+                /**
+                 * In this path, we're creating an instance of the BaseEntity class
+                 * and leaving the caller responsible for initializing the class with the right 
+                 * EntityInfo instance
+                 */
+                const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, MJBaseEntityName) 
+                await newObject.Config(contextUser);
+                return newObject;
+            }
+
             const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
             if (entity) {
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
@@ -329,7 +340,6 @@ export abstract class ProviderBase implements IMetadataProvider {
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
                     await newObject.Config(contextUser);
-
                     return newObject;
                 }
                 catch (e) {
@@ -337,12 +347,14 @@ export abstract class ProviderBase implements IMetadataProvider {
                     throw new Error(`Entity ${entityName} could not be instantiated via MJGlobal Class Factory.  Make sure you have registered the class reference with MJGlobal.Instance.ClassFactory.Register(). ALSO, make sure you call LoadGeneratedEntities() from the GeneratedEntities project within your project as tree-shaking sometimes removes subclasses and could be causing this error!`);
                 }
             }
-            else
+            else{
                 throw new Error(`Entity ${entityName} not found in metadata`);
-          } catch (ex) {
+            }
+        } 
+        catch (ex) {
             LogError(ex);
             return null;
-          }
+        }
     }
 
     /**

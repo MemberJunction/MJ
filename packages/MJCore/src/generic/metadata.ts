@@ -1,7 +1,7 @@
 import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
-import { BaseEntity } from "./baseEntity"
+import { BaseEntity, MJBaseEntityName } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
@@ -253,6 +253,25 @@ export class Metadata {
      */
     public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
         return await Metadata.Provider.GetEntityObject(entityName, contextUser);
+    }
+
+    /**
+     * Returns a newly created instance of the BaseEntity class, configured with the EntityInfo associated with the specified entityName.
+     * This is helpful in cases where the Entity you want to create a class of does not have a class registration in the ClassFactory.
+     * @param entityName - The name of the entity to populate the BaseEntity class with
+     * @param contextUser - The user to use for context. If null, the current user is used. This is mainly used on the server side, for browser based applications generally the context will be known
+     * @returns - a newly created instance of the BaseEntity class. Remember you still to call NewRecord() or SetMany() to get going from there.
+     */
+    public async GetBaseEntityObject(entityName: string, contextUser? : UserInfo): Promise<BaseEntity | null> {
+        const entityInfo: EntityInfo | undefined = this.EntityByName(entityName);
+        if(!entityInfo){
+            LogError(`Entity ${entityName} not found in Metadata`);
+            return null;
+        }
+
+        const baseEntity: BaseEntity = await this.GetEntityObject<BaseEntity>(MJBaseEntityName, contextUser);
+        baseEntity.SetEntityInfo(entityInfo);
+        return baseEntity;
     }
 
     /**
