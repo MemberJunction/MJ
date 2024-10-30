@@ -17,6 +17,7 @@ export class SingleListDetailComponent implements OnInit {
     @Input() public ListID: string = "";
 
     public listRecord: ListEntity | null = null;
+    private sourceEntityInfo: EntityInfo | null = null;
     public showLoader: boolean = false;
     public sourceGridData: Record<string, any>[] = [];
     public filteredGridData: Record<string, any>[] = [];
@@ -108,7 +109,9 @@ export class SingleListDetailComponent implements OnInit {
             return;
         }            
     
-        this.viewColumns = this.listRecord.EntityInfo.Fields.filter((field: EntityFieldInfo) => field.DefaultInView).map((field: EntityFieldInfo) => {
+        this.sourceEntityInfo = md.EntityByID(this.listRecord.EntityID);
+
+        this.viewColumns = this.sourceEntityInfo.Fields.filter((field: EntityFieldInfo) => field.DefaultInView).map((field: EntityFieldInfo) => {
             return {
                 ID: field.ID,
                 Name: field.CodeName,
@@ -127,7 +130,7 @@ export class SingleListDetailComponent implements OnInit {
             return aOrder - bOrder;
         });
 
-        const primaryKeyName: string = this.listRecord.EntityInfo.FirstPrimaryKey.Name;
+        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
         const rvResult: RunViewResult<Record<string, any>> = await rv.RunView<Record<string, any>>({
             EntityName: this.listRecord.Entity,
             ExtraFilter: `${primaryKeyName} IN (SELECT [RecordID] FROM ${md.ConfigData.MJCoreSchemaName}.[vwListDetails] WHERE ListID = '${this.listRecord.ID}')`
@@ -370,12 +373,17 @@ export class SingleListDetailComponent implements OnInit {
             return;
         }
 
+        if(!this.sourceEntityInfo){
+            LogError("Error loading list records. Source entity info is null");
+            return;
+        }
+
         this.fetchingListRecords = true;
 
-        const primaryKeyName: string = this.listRecord.EntityInfo.FirstPrimaryKey.Name;
+        const primaryKeyName: string = this.sourceEntityInfo.FirstPrimaryKey.Name;
 
         let filter: string | undefined = undefined;
-        const nameField: EntityFieldInfo | undefined = this.listRecord.EntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
+        const nameField: EntityFieldInfo | undefined = this.sourceEntityInfo.Fields.find((field: EntityFieldInfo) => field.IsNameField);
         if(nameField && this.searchFilter){
             filter = `${nameField.Name} LIKE '%${this.searchFilter}%'`;
         }
