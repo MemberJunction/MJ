@@ -1300,11 +1300,11 @@ export class AIPromptCategory_ {
     @MaxLength(510)
     Parent?: string;
         
-    @Field(() => [AIPromptCategory_])
-    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
-    
     @Field(() => [AIPrompt_])
     AIPrompts_CategoryIDArray: AIPrompt_[]; // Link to AIPrompts
+    
+    @Field(() => [AIPromptCategory_])
+    AIPromptCategories_ParentIDArray: AIPromptCategory_[]; // Link to AIPromptCategories
     
 }
 
@@ -1397,19 +1397,19 @@ export class AIPromptCategoryResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [AIPromptCategory_])
-    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIPrompt_])
     async AIPrompts_CategoryIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptCategory_])
+    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL));
         return result;
     }
         
@@ -6393,16 +6393,6 @@ export class CompanyIntegrationRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: 'Status of the integration run. Possible values: Pending, In Progress, Success, Failed.'}) 
-    @MaxLength(40)
-    Status: string;
-        
-    @Field({nullable: true, description: 'Optional error log information for the integration run.'}) 
-    ErrorLog?: string;
-        
-    @Field({nullable: true, description: 'Optional configuration data in JSON format for the request that started the integration run for audit purposes.'}) 
-    ConfigData?: string;
-        
     @Field() 
     @MaxLength(200)
     Integration: string;
@@ -6448,15 +6438,6 @@ export class CreateCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     Comments?: string;
-
-    @Field()
-    Status: string;
-
-    @Field({ nullable: true })
-    ErrorLog?: string;
-
-    @Field({ nullable: true })
-    ConfigData?: string;
 }
     
 
@@ -6485,15 +6466,6 @@ export class UpdateCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     Comments?: string;
-
-    @Field()
-    Status: string;
-
-    @Field({ nullable: true })
-    ErrorLog?: string;
-
-    @Field({ nullable: true })
-    ConfigData?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10516,11 +10488,11 @@ export class AIModel_ {
     @Field(() => [ContentType_])
     ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
-    @Field(() => [EntityAIAction_])
-    EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
-    
     @Field(() => [AIResultCache_])
     AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
+    
+    @Field(() => [EntityAIAction_])
+    EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
     
 }
 
@@ -10721,19 +10693,19 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIResultCache_])
     async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [EntityAIAction_])
+    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -13852,9 +13824,6 @@ export class DatasetItem_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true, description: 'Optional column to store a comma-delimited list of columns for the DatasetItem'}) 
-    Columns?: string;
         
     @Field() 
     @MaxLength(200)

@@ -81,21 +81,21 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   @ViewChild('topArea') topArea!: ElementRef;
   ngAfterViewInit(): void {
     this.setTabHeight();
+    //this.route.queryParams doesnt seem to be picking up the query params
+    // so we're going to get teh tab query param from the URLSearchParams class
+    const url: string = window.location.href;
+    const urlObj = new URL(url);
+    const tabName: string | null = urlObj.searchParams.get('tab');
+    // only do this if WE didn't invoke the browser URL update
+    if(tabName && !this._updatingBrowserUrl){
+      // Select the proper tab based on the tabName
+      this.tabComponent?.SelectTabByName(tabName);
+    }
 
-    this.route.queryParams.subscribe(params => {
-      if (!this._updatingBrowserUrl) {
-        // only do this if WE didn't invoke the browser URL update
-        const tabName = params['tab'];
-        if (tabName && tabName.length > 0) {
-          // Select the proper tab based on the tabName
-          this.tabComponent?.SelectTabByName(tabName);
-        }
-      }
-      // now resize after a pause to allow the UI to settle
-      setTimeout(() => {
-        this.sharedService.InvokeManualResize();
-      }, 250);  
-    });
+    // now resize after a pause to allow the UI to settle
+    setTimeout(() => {
+      this.sharedService.InvokeManualResize();
+    }, 250);  
 
     this.CalcTopAreaHeight();
   }
@@ -133,13 +133,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this._pendingRecords;
   }   
  
-  public onTabSelect(e: any) {
+  public onTabSelect(e: TabEvent) {
     this.sharedService.InvokeManualResize();
 
     // now that we've updated our state and re-sized, also update the browser URL to add the tab name as a query parameter to the URL
     this._updatingBrowserUrl = true;
     this.router.navigate([], { queryParams: { tab: e.tab?.Name }, queryParamsHandling: 'merge' });
-    this._updatingBrowserUrl = true;
+    this._updatingBrowserUrl = false;
   }
 
   public StartEditMode(): void {

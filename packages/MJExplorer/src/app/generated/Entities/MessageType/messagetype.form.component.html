@@ -1,0 +1,51 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Message Types" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Message Type Models" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '5E44433E-F36B-1410-8560-0041FA62858A'}">
+                        Message Type Models
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Message Type Models')"  
+                            [NewRecordValues]="NewRecordValues('Message Type Models')"
+                            [AllowLoad]="IsCurrentTab('Message Type Models')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Channel Message Types" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: '8244433E-F36B-1410-8560-0041FA62858A'}">
+                        Channel Message Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Channel Message Types')"  
+                            [NewRecordValues]="NewRecordValues('Channel Message Types')"
+                            [AllowLoad]="IsCurrentTab('Channel Message Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

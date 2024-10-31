@@ -8,7 +8,7 @@
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -59,6 +59,21 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
                             [NewRecordValues]="NewRecordValues('Action Libraries')"
                             [AllowLoad]="IsCurrentTab('Libraries')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Message Type Models" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 'BBDB7FE5-832C-4F7F-B921-D86314D5DD67'}">
+                        Message Type Models
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Message Type Models')"  
+                            [NewRecordValues]="NewRecordValues('Message Type Models')"
+                            [AllowLoad]="IsCurrentTab('Message Type Models')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

@@ -1969,28 +1969,6 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('In Progress'), z.literal('Success'), z.literal('Pending'), z.literal('Failed')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * In Progress
-    *   * Success
-    *   * Pending
-    *   * Failed
-    * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
-    ErrorLog: z.string().nullish().describe(`
-        * * Field Name: ErrorLog
-        * * Display Name: Error Log
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional error log information for the integration run.`),
-    ConfigData: z.string().nullish().describe(`
-        * * Field Name: ConfigData
-        * * Display Name: Config Data
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -3020,11 +2998,6 @@ export const DatasetItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Columns: z.string().nullish().describe(`
-        * * Field Name: Columns
-        * * Display Name: Columns
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional column to store a comma-delimited list of columns for the DatasetItem`),
     Dataset: z.string().describe(`
         * * Field Name: Dataset
         * * Display Name: Dataset
@@ -5877,7 +5850,7 @@ export const ListDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Complete'), z.literal('Error'), z.literal('Other')]).describe(`
+    Status: z.union([z.literal('Pending'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Active'), z.literal('Complete'), z.literal('Error'), z.literal('Other')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(30)
@@ -5885,9 +5858,9 @@ export const ListDetailSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Pending
-    *   * Active
     *   * Disabled
     *   * Rejected
+    *   * Active
     *   * Complete
     *   * Error
     *   * Other
@@ -7372,18 +7345,18 @@ export const ResourcePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
+    Status: z.union([z.literal('Requested'), z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
+    *   * Requested
     *   * Approved
     *   * Rejected
     *   * Revoked
-    *   * Requested
-    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.`),
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.`),
     ResourceType: z.string().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
@@ -14534,52 +14507,6 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     }
 
     /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * In Progress
-    *   * Success
-    *   * Pending
-    *   * Failed
-    * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
-    */
-    get Status(): 'In Progress' | 'Success' | 'Pending' | 'Failed' {
-        return this.Get('Status');
-    }
-    set Status(value: 'In Progress' | 'Success' | 'Pending' | 'Failed') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: ErrorLog
-    * * Display Name: Error Log
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional error log information for the integration run.
-    */
-    get ErrorLog(): string | null {
-        return this.Get('ErrorLog');
-    }
-    set ErrorLog(value: string | null) {
-        this.Set('ErrorLog', value);
-    }
-
-    /**
-    * * Field Name: ConfigData
-    * * Display Name: Config Data
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
-    */
-    get ConfigData(): string | null {
-        return this.Get('ConfigData');
-    }
-    set ConfigData(value: string | null) {
-        this.Set('ConfigData', value);
-    }
-
-    /**
     * * Field Name: Integration
     * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
@@ -17352,19 +17279,6 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Columns
-    * * Display Name: Columns
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional column to store a comma-delimited list of columns for the DatasetItem
-    */
-    get Columns(): string | null {
-        return this.Get('Columns');
-    }
-    set Columns(value: string | null) {
-        this.Set('Columns', value);
     }
 
     /**
@@ -24904,18 +24818,18 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Pending
-    *   * Active
     *   * Disabled
     *   * Rejected
+    *   * Active
     *   * Complete
     *   * Error
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {
+    get Status(): 'Pending' | 'Disabled' | 'Rejected' | 'Active' | 'Complete' | 'Error' | 'Other' {
         return this.Get('Status');
     }
-    set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other') {
+    set Status(value: 'Pending' | 'Disabled' | 'Rejected' | 'Active' | 'Complete' | 'Error' | 'Other') {
         this.Set('Status', value);
     }
 
@@ -29011,16 +28925,16 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
+    *   * Requested
     *   * Approved
     *   * Rejected
     *   * Revoked
-    *   * Requested
-    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
     */
-    get Status(): 'Approved' | 'Rejected' | 'Revoked' | 'Requested' {
+    get Status(): 'Requested' | 'Approved' | 'Rejected' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Approved' | 'Rejected' | 'Revoked' | 'Requested') {
+    set Status(value: 'Requested' | 'Approved' | 'Rejected' | 'Revoked') {
         this.Set('Status', value);
     }
 

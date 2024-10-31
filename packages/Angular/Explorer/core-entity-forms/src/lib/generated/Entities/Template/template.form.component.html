@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -48,7 +48,7 @@
 
                     <mj-tab Name="AI Prompts" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '64D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
+                        [Props]="{EntityRelationshipID: '6A44433E-F36B-1410-8560-0041FA62858A'}">
                         AI Prompts
                     </mj-tab>
                     <mj-tab-body>

@@ -642,7 +642,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // update the URL to reflect the current tab
 
     // FIRST, construct the base URL based on the resource type
-    const rt = this.sharedService.ResourceTypeByID(data.ResourceTypeID)
+    const rt = this.sharedService.ResourceTypeByID(data.ResourceTypeID);
     let url: string = '/resource';
     switch (rt?.Name.toLowerCase().trim()) {
       case 'user views':
@@ -689,10 +689,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // SECOND, we need to, in some cases, append query params that the TAB had created, we don't know what those are, they could be anything. In the AfterViewInit() code above we cache
-    //         these whenever they change for each tab.
+    // these whenever they change for each tab.
 
     // Split the URL into the path and existing query params
-    const [path, existingQuery] = url.split('?');
+    let [path, existingQuery] = url.split('?');
+
+    const currentURL: string = window.location.href;
+    const urlObj = new URL(currentURL);
+    //Remove Entity as existingQuery will have it
+    urlObj.searchParams.delete('Entity');
+    for (const [key, value] of urlObj.searchParams.entries()){
+      existingQuery = existingQuery ? existingQuery + `&${key}=${value}` : `${key}=${value}`;
+    }
 
     // Create a URLSearchParams object from the existing query params
     const queryParams = new URLSearchParams(existingQuery);
