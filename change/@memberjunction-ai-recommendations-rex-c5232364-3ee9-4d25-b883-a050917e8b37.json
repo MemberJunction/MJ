@@ -1,7 +1,7 @@
 {
-  "type": "patch",
+  "type": "minor",
   "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/skip-types",
+  "packageName": "@memberjunction/ai-recommendations-rex",
   "email": "nico.ortiz@bluecypress.io",
   "dependentChangeType": "patch"
 }

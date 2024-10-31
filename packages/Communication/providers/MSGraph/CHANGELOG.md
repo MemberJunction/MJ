@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/communication-ms-graph
 
-This log was last generated on Wed, 23 Oct 2024 22:49:59 GMT and should not be manually modified.
+This log was last generated on Thu, 24 Oct 2024 15:33:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.11.0
+
+Thu, 24 Oct 2024 15:33:07 GMT
+
+### Minor changes
+
+- Bump @memberjunction/communication-types to v2.11.0
+- Bump @memberjunction/ai to v2.11.0
+- Bump @memberjunction/ai-openai to v2.11.0
+- Bump @memberjunction/aiengine to v2.11.0
+- Bump @memberjunction/core to v2.11.0
+- Bump @memberjunction/core-entities to v2.11.0
+- Bump @memberjunction/global to v2.11.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.11.0
 
 ## 2.9.0
 

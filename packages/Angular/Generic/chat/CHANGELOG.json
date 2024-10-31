@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-chat",
   "entries": [
     {
+      "date": "Thu, 24 Oct 2024 15:33:07 GMT",
+      "version": "2.11.0",
+      "tag": "@memberjunction/ng-chat_v2.11.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-chat",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.11.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 23 Oct 2024 22:49:59 GMT",
       "version": "2.10.0",
       "tag": "@memberjunction/ng-chat_v2.10.0",
