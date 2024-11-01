@@ -1969,16 +1969,16 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('In Progress'), z.literal('Success'), z.literal('Pending'), z.literal('Failed')]).describe(`
+    Status: z.union([z.literal('Pending'), z.literal('In Progress'), z.literal('Success'), z.literal('Failed')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Pending
     *   * In Progress
     *   * Success
-    *   * Pending
     *   * Failed
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
     ErrorLog: z.string().nullish().describe(`
@@ -5877,18 +5877,18 @@ export const ListDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Complete'), z.literal('Error'), z.literal('Other')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Complete'), z.literal('Rejected'), z.literal('Pending'), z.literal('Error'), z.literal('Other')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(30)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
     *   * Disabled
-    *   * Rejected
     *   * Complete
+    *   * Rejected
+    *   * Pending
     *   * Error
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.`),
@@ -7372,18 +7372,18 @@ export const ResourcePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked'), z.literal('Requested')]).describe(`
+    Status: z.union([z.literal('Requested'), z.literal('Approved'), z.literal('Rejected'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
+    *   * Requested
     *   * Approved
     *   * Rejected
     *   * Revoked
-    *   * Requested
-    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.`),
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.`),
     ResourceType: z.string().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
@@ -14540,16 +14540,16 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Pending
     *   * In Progress
     *   * Success
-    *   * Pending
     *   * Failed
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
     */
-    get Status(): 'In Progress' | 'Success' | 'Pending' | 'Failed' {
+    get Status(): 'Pending' | 'In Progress' | 'Success' | 'Failed' {
         return this.Get('Status');
     }
-    set Status(value: 'In Progress' | 'Success' | 'Pending' | 'Failed') {
+    set Status(value: 'Pending' | 'In Progress' | 'Success' | 'Failed') {
         this.Set('Status', value);
     }
 
@@ -24903,19 +24903,19 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
     *   * Disabled
-    *   * Rejected
     *   * Complete
+    *   * Rejected
+    *   * Pending
     *   * Error
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {
+    get Status(): 'Active' | 'Disabled' | 'Complete' | 'Rejected' | 'Pending' | 'Error' | 'Other' {
         return this.Get('Status');
     }
-    set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other') {
+    set Status(value: 'Active' | 'Disabled' | 'Complete' | 'Rejected' | 'Pending' | 'Error' | 'Other') {
         this.Set('Status', value);
     }
 
@@ -29011,16 +29011,16 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
+    *   * Requested
     *   * Approved
     *   * Rejected
     *   * Revoked
-    *   * Requested
-    * * Description: Status of the resource permission request. Possible values are Pending, Approved, Rejected, Revoked, or Requested.
+    * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
     */
-    get Status(): 'Approved' | 'Rejected' | 'Revoked' | 'Requested' {
+    get Status(): 'Requested' | 'Approved' | 'Rejected' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: 'Approved' | 'Rejected' | 'Revoked' | 'Requested') {
+    set Status(value: 'Requested' | 'Approved' | 'Rejected' | 'Revoked') {
         this.Set('Status', value);
     }
 

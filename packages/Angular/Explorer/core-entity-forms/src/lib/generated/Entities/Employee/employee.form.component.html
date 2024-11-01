@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,36 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Deals" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '8292B42E-7086-4CF4-902D-1C9A8B20631A'}">
-                        Deals
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Deals')"  
-                            [NewRecordValues]="NewRecordValues('Deals')"
-                            [AllowLoad]="IsCurrentTab('Deals')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Activities" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'ACE9D034-4868-4BB9-87CE-3255B33F75DD'}">
-                        Activities
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Activities')"  
-                            [NewRecordValues]="NewRecordValues('Activities')"
-                            [AllowLoad]="IsCurrentTab('Activities')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="Users" 
                         [Visible]="record.IsSaved" 
                         [Props]="{EntityRelationshipID: 'B003A9F9-A02D-4DBD-89B3-49CE5E369D74'}">

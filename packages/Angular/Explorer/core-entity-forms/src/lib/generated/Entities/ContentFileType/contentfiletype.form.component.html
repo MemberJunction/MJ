@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -18,7 +18,7 @@
                     
                     <mj-tab Name="Content Sources" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'AEADFA8F-207C-EF11-8473-000D3A8AA177'}">
+                        [Props]="{EntityRelationshipID: '437E433E-F36B-1410-8560-0041FA62858A'}">
                         Content Sources
                     </mj-tab>
                     <mj-tab-body>
@@ -33,7 +33,7 @@
 
                     <mj-tab Name="Content Items" 
                         [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'ADADFA8F-207C-EF11-8473-000D3A8AA177'}">
+                        [Props]="{EntityRelationshipID: '3C7E433E-F36B-1410-8560-0041FA62858A'}">
                         Content Items
                     </mj-tab>
                     <mj-tab-body>
