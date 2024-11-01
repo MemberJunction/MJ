@@ -18,6 +18,7 @@
     "@memberjunction/core": "1.7.1",
     "@memberjunction/global": "1.7.1",
     "@memberjunction/core-entities": "1.7.1",
+    "@memberjunction/rex-recommendations": "1.7.1",
     "dotenv": "^16.4.1"
   },
   "devDependencies": {

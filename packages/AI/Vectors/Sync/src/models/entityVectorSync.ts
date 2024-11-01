@@ -15,6 +15,8 @@ import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
+import { RexRecommendationsProvider } from '@memberjunction/ai-recommendations-rex';
+import { RecommendationEngineBase } from '@memberjunction/ai-recommendations';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -631,5 +633,29 @@ export class EntityVectorSyncer extends VectorBase {
 
     // if we get here, we are good, otherwise we will have thrown an exception
     return true;
+  }
+  
+  public async Rex(): Promise<void> {
+      await RecommendationEngineBase.Instance.Config(false, super.CurrentUser);
+      let rex = new RexRecommendationsProvider(super.CurrentUser);
+
+      const request = {
+          ListID: '8E59846B-9298-EF11-88CF-002248306D26', 
+          CurrentUser: super.CurrentUser,
+          Options: {
+              type: 'person',
+              filters: [{
+                  type: "course",
+                  max_results: 5
+              },
+              {
+                  type: "person",
+                  max_results: 5
+              }], 
+              EntityDocumentID: '38D60434-948D-EF11-8473-002248306CAC'
+          }
+      };
+
+      const recommendations = await RecommendationEngineBase.Instance.Recommend(request);
   }
 }

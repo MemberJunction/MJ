@@ -46,32 +46,32 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return result;
         }
 
-        for (const [index, recommendation] of request.Recommendations.entries()) {
-            const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
-            if(!vectorID){
-                LogError(`No vector ID found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                result.AppendWarning(`No vector ID found for recommendation. Source Entity ID: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                continue;
-            }
-
-            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(request.Options, token, vectorID);
-            if(!recommendations){
-                LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                continue;
-            }
-
-            LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${request.Recommendations.length}`);
-            const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser);
-
-            // Save the results
-            const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);
-            if(!saveResult){
-                LogError("Not all recommendation items were successfully saved");
-                result.AppendError("Not all recommendation items were successfully saved");
-            }
+        const chunkSize = 100;
+        for(let i=0; i < request.Recommendations.length; i+=chunkSize){
+            const chunk = request.Recommendations.slice(i, i+chunkSize);
+            await Promise.all(chunk.map(async (recommendation: RecommendationEntity, index: number) => {
+                const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
+                if (!vectorID) {
+                    LogError(`No vector ID found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    result.AppendWarning(`No vector ID found for recommendation. Source Entity ID: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    return;
+                }
+                const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(request.Options, token, vectorID);
+                if (!recommendations) {
+                    LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    return;
+                }
+                LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${request.Recommendations.length}`);
+                const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser); 
+                // Save the results            
+                const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);            
+                if(!saveResult){                
+                    LogError("Not all recommendation items were successfully saved");                
+                    result.AppendError("Not all recommendation items were successfully saved");            
+                }        
+            }));
         }
-
         return result;
     }
 
@@ -263,13 +263,13 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         switch(data.type){
             case "course":
-                entityName = "Courses";
+                entityName = "Contents";
                 break;
             case "course_part":
                 entityName = "Course Parts";
                 break;
             case "person":
-                entityName = "Persons";
+                entityName = "Contributors";
                 break;
             default:
                 LogError(`Unknown entity type: ${data.type}`);

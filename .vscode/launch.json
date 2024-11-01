@@ -45,6 +45,13 @@
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {
+      "type": "node",
+      "request": "launch",
+      "name": "Rex",
+      "envFile": "${workspaceFolder}/test-vectorization/.env",
+      "program": "${workspaceFolder}/test-vectorization/src/index.js",
+    },
+    {
       "type": "chrome",
       "request": "launch",
       "name": "Launch Chrome against localhost",
