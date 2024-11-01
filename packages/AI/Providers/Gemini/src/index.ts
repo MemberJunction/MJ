@@ -9,13 +9,18 @@ import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
-    private static _gemini: GoogleGenerativeAI;
+    private _gemini: GoogleGenerativeAI;
 
     constructor(apiKey: string) {
         super(apiKey);
-        if (!GeminiLLM._gemini) {
-            GeminiLLM._gemini = new GoogleGenerativeAI(apiKey);
-        }
+        this._gemini = new GoogleGenerativeAI(apiKey);
+    }
+
+    /**
+     * Read only getter method to get the Gemini client instance
+     */
+    public get GeminiClient(): GoogleGenerativeAI {
+        return this._gemini;
     }
 
     protected geminiMessageSpacing(messages: Content[]): Content[] {
@@ -43,7 +48,7 @@ export class GeminiLLM extends BaseLLM {
             const config = {
                 temperature: params.temperature || 0.5,
             };
-            const model = GeminiLLM._gemini.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config}, {apiVersion: "v1beta"});
+            const model = this.GeminiClient.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config}, {apiVersion: "v1beta"});
             const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
             const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m))
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
