@@ -4,16 +4,21 @@ import { OpenAI } from "openai";
 
 @RegisterClass(Embeddings, 'OpenAIEmbedding')
 export class OpenAIEmbedding extends Embeddings {
-    static _openAI: OpenAI;
+    private _openAI: OpenAI;
 
     constructor(apiKey: string) {
         super(apiKey);
 
-        if (!OpenAIEmbedding._openAI){
-            OpenAIEmbedding._openAI = new OpenAI({
-                apiKey: apiKey,
-            });
-        }
+        this._openAI = new OpenAI({
+            apiKey: apiKey,
+        });
+    }
+
+    /**
+     * Read only getter method to get the OpenAI instance
+     */
+    public get OpenAI(): OpenAI {
+        return this._openAI;
     }
 
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
@@ -23,7 +28,7 @@ export class OpenAIEmbedding extends Embeddings {
         }
 
         try{
-            let response = await OpenAIEmbedding._openAI.embeddings.create(body);
+            let response = await this.OpenAI.embeddings.create(body);
 
             return {
                 object: response.object,
@@ -45,7 +50,7 @@ export class OpenAIEmbedding extends Embeddings {
         }
 
         try{
-            let response = await OpenAIEmbedding._openAI.embeddings.create(body);
+            let response = await this.OpenAI.embeddings.create(body);
 
             return {
                 object: response.object,
