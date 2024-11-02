@@ -556,9 +556,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
             // now for each newline add a series of tabs to map to the indentation we need for pretty formatting
             const componentCodeWithTabs = generateResults.TemplateOutput.split('\n').map(l => `                        ${l}`).join('\n')
 
-            const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '${relatedEntity.ID}'}">
+            const tabCode = `${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" [Visible]="record.IsSaved"> 
                         ${icon}${tabName}
                     </mj-tab>
                     <mj-tab-body>
