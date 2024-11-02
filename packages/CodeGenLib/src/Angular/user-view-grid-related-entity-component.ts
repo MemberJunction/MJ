@@ -20,9 +20,9 @@ export class UserViewGridRelatedEntityGenerator extends RelatedEntityDisplayComp
     }
     public async Generate(input: GenerationInput): Promise<GenerationResult> {
         const template = `<mj-user-view-grid 
-    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity}')"  
-    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity}')"
-    [AllowLoad]="IsCurrentTab('${input.TabName}')"  
+    [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"  
+    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
+    [AllowLoad]="IsCurrentTab('${input.TabName.trim()}')"  
     [EditMode]="GridEditMode()"  
     [BottomMargin]="GridBottomMargin">
 </mj-user-view-grid>`

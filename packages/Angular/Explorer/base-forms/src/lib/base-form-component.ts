@@ -241,11 +241,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Builds a RunViewParams object for a related entity based on the relationship between the current entity and the related entity
-   * @param relatedEntityName 
+   * @param relatedEntityName - the name of the entity that is related to the current entity where we're building the view params from
+   * @param relatedEntityJoinField - the name of the foreign key field in the current entity that links to the related entity, only required if there are multiple relationships between the entities
    * @returns 
    */
-  public BuildRelationshipViewParamsByEntityName(relatedEntityName: string): RunViewParams {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
+  public BuildRelationshipViewParamsByEntityName(relatedEntityName: string, relatedEntityJoinField?: string): RunViewParams {
+    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
     if (eri)
       return this.BuildRelationshipViewParams(eri);
     else
@@ -254,12 +255,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Looks up and returns the EntityRelationshipInfo object for the related entity name
-   * @param relatedEntityName 
+   * @param relatedEntityName - the name of the related entity to look up the relationship for
+   * @param relatedEntityJoinField - the name of the foreign key field in the current entity that links to the related entity, only required if there are multiple relationships between the entities
    * @returns 
    */
-  public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string): EntityRelationshipInfo | undefined {
+  public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
-      return (<BaseEntity>this.record).EntityInfo.RelatedEntities.find(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      const r = <BaseEntity>this.record;
+      const ret = r.EntityInfo.RelatedEntities.filter(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      // now if ret.length > 1, we need to find the one that matches the foreign key field name
+      if (ret.length > 1 && relatedEntityJoinField) {
+        const ret2 = ret.find(x => x.RelatedEntityJoinField.trim().toLowerCase() === relatedEntityJoinField.trim().toLowerCase());
+        if (ret2)
+          return ret2;
+      }
+      else if (ret.length === 1) {
+        return ret[0];
+      }
+      else
+        return undefined;
     }
     return undefined;
   }
