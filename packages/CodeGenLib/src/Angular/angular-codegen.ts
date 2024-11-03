@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
 import fs from 'fs';
 import path from 'path';
@@ -523,6 +523,41 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       
           return html;
       }
+
+      /**
+       * This method generates the tab name for a related entity tab. It will append the field's name(display name, if available) to the tab name if there are multiple tabs for the same related entity
+       * @param relatedEntity 
+       * @param sortedRelatedEntities 
+       * @returns 
+       */
+      protected generateRelatedEntityTabName(relatedEntity: EntityRelationshipInfo, sortedRelatedEntities: EntityRelationshipInfo[]): string {  
+        if (relatedEntity.DisplayName && relatedEntity.DisplayName.length > 0) {
+            // the metadata has a display name for the related entity, so use that without any changes
+            return relatedEntity.DisplayName;
+        }
+        else {
+            let tabName = relatedEntity.RelatedEntity;
+            
+            // check to see if we have > 1 related entities for this entity for the current RelatedEntityID 
+            const relationships = sortedRelatedEntities.filter(re => re.RelatedEntityID === relatedEntity.RelatedEntityID);
+            if (relationships.length > 1) {
+                // we have more than one related entity for this entity, so we need to append the field name to the tab name
+                let fkeyField = relatedEntity.RelatedEntityJoinField;
+                if (fkeyField) {
+                    // if the fkeyField has wrapping [] then remove them
+                    fkeyField = fkeyField.trim().replace('[', '').replace(']', '');
+    
+                    // let's get the actual entityInfo for the related entity so we can get the field and see if it has a display name
+                    const md = new Metadata();
+                    const re = md.EntityByID(relatedEntity.RelatedEntityID);
+                    const f = re.Fields.find(f => f.Name.trim().toLowerCase() === fkeyField.trim().toLowerCase());
+                    if (f)
+                        tabName += ` (${f.DisplayNameOrName})`
+                }
+            }
+            return tabName;    
+        }
+      }
       
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
         const md = new Metadata();
@@ -530,7 +565,8 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
         const sortedRelatedEntities = entity.RelatedEntities.filter(re => re.DisplayInForm).sort((a, b) => a.Sequence - b.Sequence); // only show related entities that are marked to display in the form and sort by sequence
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
-            const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
+            const tabName: string = this.generateRelatedEntityTabName(relatedEntity, sortedRelatedEntities)
+            
             let icon: string = '';
             switch (relatedEntity.DisplayIconType) {
                 case 'Custom':
