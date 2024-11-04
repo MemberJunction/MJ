@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Model Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'A0EABF53-2153-40A1-9E38-C5615295D86C'}">
+                    <mj-tab Name="AI Model Actions" [Visible]="record.IsSaved"> 
                         AI Model Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions','AIActionID')"  
                             [NewRecordValues]="NewRecordValues('AI Model Actions')"
                             [AllowLoad]="IsCurrentTab('AI Model Actions')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity AI Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '689D3459-B37A-4D46-8638-C74E21AAA00A'}">
+                    <mj-tab Name="Entity AI Actions" [Visible]="record.IsSaved"> 
                         Entity AI Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','AIActionID')"  
                             [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                             [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
                             [EditMode]="GridEditMode()"  

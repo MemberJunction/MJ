@@ -40,6 +40,12 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return result;
         }
 
+        if(!request.Options){
+            LogError("Options are required for Rex recommendations");
+            result.AppendError("Options are required for Rex recommendations")
+            return result;
+        }
+
         for (const [index, recommendation] of request.Recommendations.entries()) {
             const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
             if(!vectorID){
@@ -48,7 +54,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 continue;
             }
 
-            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(token, vectorID);
+            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(request.Options, token, vectorID);
             if(!recommendations){
                 LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
                 result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
@@ -191,7 +197,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
     }
 
-    protected async GetRecommendations(accessToken: string, vectorID: string): Promise<RecommendationResponse[] | null> {
+    protected async GetRecommendations(options: Record<string, any>, accessToken: string, vectorID: string): Promise<RecommendationResponse[] | null> {
         try{
             const config: AxiosRequestConfig = {
                 headers: {
@@ -202,23 +208,10 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             };
 
             const body = {
-                type: "person",
+                type: options.type,
                 source: "mj.pinecone",
                 id: vectorID,
-                filters: [
-                    {
-                        type: "course",
-                        max_results: 10
-                    },
-                    {
-                        type: "course_part",
-                        max_results: 10
-                    },
-                    {
-                        type: "person",
-                        max_results: 5
-                    }
-                ]
+                filters: options.filters
             };
     
             const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);

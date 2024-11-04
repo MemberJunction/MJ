@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Communication Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '12783D2D-1C08-4794-874C-28606E0664A1'}">
+                    <mj-tab Name="Communication Logs" [Visible]="record.IsSaved"> 
                         Communication Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderMessageTypeID')"  
                             [NewRecordValues]="NewRecordValues('Communication Logs')"
                             [AllowLoad]="IsCurrentTab('Communication Logs')"  
                             [EditMode]="GridEditMode()"  
