@@ -5,7 +5,7 @@ import { Subject, debounceTime } from 'rxjs';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, KeyValuePair, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { SharedService } from '@memberjunction/ng-shared';
-import { BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { BeforeDeleteItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'mj-resource-browser',
@@ -115,6 +115,11 @@ export class ResourceBrowserComponent {
    * Fires whenever the users clicks to edit an Item that is not a folder
    */
   @Output() public EditItemEvent: EventEmitter<BeforeUpdateItemEvent> = new EventEmitter<BeforeUpdateItemEvent>();
+
+  /**
+   * Fires whenever the users clicks to edit an Item that is not a folder
+   */
+  @Output() public DeleteItemEvent: EventEmitter<BeforeDeleteItemEvent> = new EventEmitter<BeforeDeleteItemEvent>();
 
   /**
    * The current Resource Type (BaseEntity derived class), automatically is populated after init based on the ResourceType string
@@ -472,12 +477,12 @@ export class ResourceBrowserComponent {
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
     if(!this.selectedItem || !shouldDelete){
+      LogError("Selected item is not set or shouldDelete is false");
       return;
     }
 
     this.deleteDialogOpened = false;
     let item: Item = this.selectedItem;
-
     let success: boolean = false;
     if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
       success = await this.deleteFolder(item);
@@ -524,6 +529,23 @@ export class ResourceBrowserComponent {
   private async deleteResource(item: Item): Promise<boolean> {
     let genericEntity: BaseEntity = <BaseEntity>item.Data;
     if(!genericEntity){
+      LogError("Item Data is not set, cannot delete resource");
+      return false;
+    }
+
+    const deleteEvent: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
+    this.DeleteItemEvent.emit(deleteEvent);
+
+    if(deleteEvent.Cancel){
+      //parent will handle deletion, so we can return early
+      return true;
+    }
+
+    const entity: BaseEntity = item.Data;
+    const deleteResult: boolean = await entity.Delete();
+    if(!deleteResult){
+      LogError(`Unable to delete ${item.Name}`, undefined, entity.LatestResult);
+      this.sharedService.CreateSimpleNotification(`Unable to delete ${item.Name}`, "error", 2500);
       return false;
     }
 

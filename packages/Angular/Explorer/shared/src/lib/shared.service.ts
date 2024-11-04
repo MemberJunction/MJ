@@ -103,6 +103,9 @@ export class SharedService {
   public get SearchResultsResourceType(): ResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
   }
+  public get ListResourceType(): ResourceTypeEntity {
+    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
+  }
   public ResourceTypeByID(id: string): ResourceTypeEntity | undefined {
     return SharedService._resourceTypes.find(rt => rt.ID === id);
   }
@@ -313,7 +316,9 @@ export class SharedService {
     { routeSegment: 'search', name: 'search results' },
     { routeSegment: 'report', name: 'reports' },
     { routeSegment: 'query', name: 'queries' },
-    { routeSegment: 'dashboard', name: 'dashboards' }
+    { routeSegment: 'dashboard', name: 'dashboards' },
+    { routeSegment: 'list', name: 'lists' },
+    
   ]
   /**
    * Maps a Resource Type record Name column to the corresponding route segment
@@ -362,7 +367,9 @@ export const EventCodes = {
   ViewNotifications: "ViewNotifications",
   PushStatusUpdates: "PushStatusUpdates",
   UserNotificationsUpdated: "UserNotificationsUpdated",
-  CloseCurrentTab: "CloseCurrentTab"
+  CloseCurrentTab: "CloseCurrentTab",
+  ListCreated: "ListCreated",
+  ListClicked: 'ListClicked'
 } as const;
 
 export type EventCodes = typeof EventCodes[keyof typeof EventCodes];
