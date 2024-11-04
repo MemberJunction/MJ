@@ -90,6 +90,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public get ConfigData(): GraphQLProviderConfigData { return GraphQLDataProvider._configData; }
 
 
+    /**
+     * This getter is not implemented for the GraphQLDataProvider class.
+     */
+    public get DatabaseConnection(): any {
+        throw new Error("DatabaseConnection not implemented for the GraphQLDataProvider");
+    }
+
     public GenerateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
           var r = (Math.random() * 16) | 0,
