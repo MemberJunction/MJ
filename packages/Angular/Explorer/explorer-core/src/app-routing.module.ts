@@ -169,6 +169,9 @@ export class ResourceResolver implements Resolve<void> {
       const entityNameDecoded = decodeURIComponent(route.queryParams['Entity'] || route.queryParams['entity']);
       const md = new Metadata();
       switch (resourceType.trim().toLowerCase()) {
+        case 'lists':
+          code = EventCodes.ListClicked
+          break;
         case 'user views':
           code = EventCodes.ViewClicked;
           break;
@@ -239,7 +242,6 @@ const routes: Routes = [
   { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
   { path: 'lists', component: ListViewComponent, canActivate: [AuthGuard] },
   { path: 'lists/:folderID', component: ListViewComponent, canActivate: [AuthGuard] },
-  { path: 'listdetails/:listID', component: SingleListDetailComponent, canActivate: [AuthGuard] },
   {
     path: 'settings',
     component: SettingsComponent,

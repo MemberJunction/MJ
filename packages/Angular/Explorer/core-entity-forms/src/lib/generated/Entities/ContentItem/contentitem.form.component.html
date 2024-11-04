@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Content Item Attributes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'AFADFA8F-207C-EF11-8473-000D3A8AA177'}">
+                    <mj-tab Name="Content Item Attributes" [Visible]="record.IsSaved"> 
                         Content Item Attributes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Item Attributes','ContentItemID')"  
                             [NewRecordValues]="NewRecordValues('Content Item Attributes')"
                             [AllowLoad]="IsCurrentTab('Content Item Attributes')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Content Item Tags" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'B0ADFA8F-207C-EF11-8473-000D3A8AA177'}">
+                    <mj-tab Name="Content Item Tags" [Visible]="record.IsSaved"> 
                         Content Item Tags
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Item Tags','ItemID')"  
                             [NewRecordValues]="NewRecordValues('Content Item Tags')"
                             [AllowLoad]="IsCurrentTab('Content Item Tags')"  
                             [EditMode]="GridEditMode()"  

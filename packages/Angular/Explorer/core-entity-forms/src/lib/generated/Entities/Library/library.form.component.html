@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'C64C5A4B-8445-43E9-BE3F-5F65A26CDCB9'}">
+                    <mj-tab Name="Actions" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Libraries','LibraryID')"  
                             [NewRecordValues]="NewRecordValues('Action Libraries')"
                             [AllowLoad]="IsCurrentTab('Actions')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '301DAB57-9DC2-4B81-BAA2-E038129F4BD9'}">
+                    <mj-tab Name="Items" [Visible]="record.IsSaved"> 
                         Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Library Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Library Items','LibraryID')"  
                             [NewRecordValues]="NewRecordValues('Library Items')"
                             [AllowLoad]="IsCurrentTab('Items')"  
                             [EditMode]="GridEditMode()"  

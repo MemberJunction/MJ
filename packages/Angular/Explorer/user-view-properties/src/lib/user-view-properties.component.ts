@@ -412,7 +412,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       //prevents this dialog from closing or responding to any events
       setTimeout(() => {
         this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
-    }, 100);
+      }, 100);
     }
     else{
       MJGlobal.Instance.RaiseEvent({

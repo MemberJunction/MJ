@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Communication Provider Message Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'E20CFB78-451B-4F39-B928-1B4BC25D6855'}">
+                    <mj-tab Name="Communication Provider Message Types" [Visible]="record.IsSaved"> 
                         Communication Provider Message Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Provider Message Types','CommunicationBaseMessageTypeID')"  
                             [NewRecordValues]="NewRecordValues('Communication Provider Message Types')"
                             [AllowLoad]="IsCurrentTab('Communication Provider Message Types')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Communication Message Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '07BB1050-0DA3-4A87-AEA9-C70A8F54E6AD'}">
+                    <mj-tab Name="Entity Communication Message Types" [Visible]="record.IsSaved"> 
                         Entity Communication Message Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Communication Message Types','BaseMessageTypeID')"  
                             [NewRecordValues]="NewRecordValues('Entity Communication Message Types')"
                             [AllowLoad]="IsCurrentTab('Entity Communication Message Types')"  
                             [EditMode]="GridEditMode()"  

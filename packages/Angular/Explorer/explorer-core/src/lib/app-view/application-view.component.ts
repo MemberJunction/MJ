@@ -372,7 +372,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 this.sharedService.CreateSimpleNotification('There was an error linking to the shared view(s). Please try again later or notify a system administrator.', 'error', 3500);
             }
         }
-    }
+    } 
 
 
     public createNewView() {

@@ -18,6 +18,7 @@ import { LayoutModule, TabStripModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -75,9 +76,10 @@ import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansi
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
-import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
 import { ResourceBrowserComponent } from './lib/resource-browser/resource-browser.component';
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
+import {SingleListDetailComponent} from './lib/single-list-detail/single-list-detail.component';
+import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 
 @NgModule({
   declarations: [
@@ -117,8 +119,9 @@ import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
+    ResourceBrowserComponent,
     SingleListDetailComponent,
-    ResourceBrowserComponent
+    ListDetailResource
   ],
   imports: [
     AppRoutingModule,
@@ -165,7 +168,8 @@ import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,
-    GenericDialogModule
+    GenericDialogModule,
+    ProgressBarModule
   ],
   exports: [
     FormToolbarComponent,
@@ -200,8 +204,8 @@ import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
     ExpansionPanelComponent,
     ApplicationViewComponent,
     ListViewComponent,
-    SingleListDetailComponent,
-    ResourceBrowserComponent
+    ResourceBrowserComponent,
+    ListDetailResource
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })
