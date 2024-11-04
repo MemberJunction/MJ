@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Queues" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '0D4F80DB-15AE-47B8-8F38-F390ED55452F'}">
+                    <mj-tab Name="Queues" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-folder-tree tab-header-icon"></span>Queues
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Queues')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Queues','QueueTypeID')"  
                             [NewRecordValues]="NewRecordValues('Queues')"
                             [AllowLoad]="IsCurrentTab('Queues')"  
                             [EditMode]="GridEditMode()"  

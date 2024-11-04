@@ -1428,13 +1428,36 @@ GO
 DROP PROC IF EXISTS __mj.spDeleteEntityWithCoreDependencies
 GO
 CREATE PROC __mj.spDeleteEntityWithCoreDependencies
-  @EntityID nvarchar(100)
+  @EntityID uniqueidentifier
 AS
 DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
+DELETE FROM __mj.EntitySetting WHERE EntityID = @EntityID
 DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
 DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
 DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
+DELETE FROM __mj.UserApplicationEntity WHERE EntityID = @EntityID
 DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
+DELETE FROM __mj.RecordChange WHERE EntityID = @EntityID
+DELETE FROM __mj.AuditLog WHERE EntityID=@EntityID
+DELETE FROM __mj.[Conversation] WHERE LinkedEntityID=@EntityID
+DELETE FROM __mj.ListDetail WHERE ListID IN (SELECT ID FROM __mj.List WHERE EntityID=@EntityID)
+DELETE FROM __mj.List WHERE EntityID=@EntityID
+
+DELETE FROM [__mj].[EntityDocument] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[CompanyIntegrationRecordMap] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[ResourceType] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[UserApplicationEntity] WHERE [EntityID] = @EntityID;
+
+UPDATE __mj.Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM __mj.DatasetItem WHERE EntityID=@EntityID)
+DELETE FROM [__mj].[DatasetItem] WHERE [EntityID] = @EntityID;
+
+DELETE FROM [__mj].[UserViewCategory] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[UserView] WHERE [EntityID] = @EntityID;
+
+DELETE FROM [__mj].[EntityAIAction] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
+DELETE FROM [__mj].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
+
 DELETE FROM __mj.Entity WHERE ID = @EntityID
 GO
 

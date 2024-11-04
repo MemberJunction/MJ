@@ -329,6 +329,16 @@ export class BaseEntityResult {
      * Timestamp when the operation ended
      */
     EndedAt: Date;
+
+    constructor(success?: boolean, message?: string, type? : 'create' | 'update' | 'delete') {
+        this.Success = success === undefined ? false : success;
+        this.Type = type === undefined ? 'create' : type;
+        this.Message = message === undefined ? '' : message;
+        this.Error = null;
+        this.Errors = [];
+        this.StartedAt = new Date();
+        this.EndedAt = new Date();
+    }
 } 
 
 /**

@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="User View Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6205FD13-8B4B-4FBB-BF68-0D71090EF338'}">
+                    <mj-tab Name="User View Categories" [Visible]="record.IsSaved"> 
                         User View Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User View Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('User View Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('User View Categories')"
                             [AllowLoad]="IsCurrentTab('User View Categories')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="User Views" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '3B52A07A-8CF9-4358-9AA0-AED6D5F30E15'}">
+                    <mj-tab Name="User Views" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-table-cells tab-header-icon"></span>User Views
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Views')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('User Views','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('User Views')"
                             [AllowLoad]="IsCurrentTab('User Views')"  
                             [EditMode]="GridEditMode()"  

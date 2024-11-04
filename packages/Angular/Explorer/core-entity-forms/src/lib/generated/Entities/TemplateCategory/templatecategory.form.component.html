@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Templates" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '31A0FE70-F2A2-4679-B794-2951B9331858'}">
+                    <mj-tab Name="Templates" [Visible]="record.IsSaved"> 
                         <span class="fa-regular fa-rectangle-list tab-header-icon"></span>Templates
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Templates')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Templates','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('Templates')"
                             [AllowLoad]="IsCurrentTab('Templates')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Template Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '7A981F77-98A7-4133-B13D-8EC82188E574'}">
+                    <mj-tab Name="Template Categories" [Visible]="record.IsSaved"> 
                         Template Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Template Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Template Categories')"
                             [AllowLoad]="IsCurrentTab('Template Categories')"  
                             [EditMode]="GridEditMode()"  
