@@ -1,39 +1,41 @@
-<div mjFillContainer class="wrapper">
-    @if(AllowNew) {
-        <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
-    }
+<div mjFillContainer class="wrapper scrollable">
     @if(isLoading) {
         <div>
             <kendo-loader></kendo-loader>
         </div>
     }
     @else {
-        <table class="grid">
-            <thead>
-                <tr>
-                    <th *ngFor="let c of Columns">
-                        {{ c }}
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr *ngFor="let r of records" (click)="selectRecord(undefined, r)">
-                    <td *ngFor="let c of Columns; let i = index">
-                        <span>{{ r.Get(c) }}</span>
-                        @if(i === 0 && (AllowDelete || AllowEdit)) {
-                            <span>
-                                @if (AllowEdit) {
-                                    <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)"></span>
-                                }
-                                @if (AllowDelete) {
-                                    <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)"></span>
-                                }
-                            </span>    
-                        }
-                    </td>
-                </tr>
-            </tbody>
-        </table>    
+        <div class="vertical-full-width">
+            @if(AllowNew) {
+                <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
+            }
+            <table class="grid">
+                <thead class="sticky-header">
+                    <tr>
+                        <th *ngFor="let c of Columns">
+                            {{ c }}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let r of records" (click)="selectRecord(undefined, r)">
+                        <td *ngFor="let c of Columns; let i = index">
+                            <span>{{ r.Get(c) }}</span>
+                            @if(i === 0 && (AllowDelete || AllowEdit)) {
+                                <span>
+                                    @if (AllowEdit) {
+                                        <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)"></span>
+                                    }
+                                    @if (AllowDelete) {
+                                        <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)"></span>
+                                    }
+                                </span>    
+                            }
+                        </td>
+                    </tr>
+                </tbody>
+            </table>  
+        </div>  
     }
 </div>
  
