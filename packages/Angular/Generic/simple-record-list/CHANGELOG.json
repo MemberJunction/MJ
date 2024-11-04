@@ -2,6 +2,59 @@
   "name": "@memberjunction/ng-simple-record-list",
   "entries": [
     {
+      "date": "Mon, 04 Nov 2024 23:07:22 GMT",
+      "version": "2.12.0",
+      "tag": "@memberjunction/ng-simple-record-list_v2.12.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-simple-record-list",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/core-entities to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/global to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/core to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-shared to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-simple-record-list",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.12.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 24 Oct 2024 15:33:07 GMT",
       "version": "2.11.0",
       "tag": "@memberjunction/ng-simple-record-list_v2.11.0",

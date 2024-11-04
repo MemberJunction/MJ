@@ -1,8 +1,29 @@
 # Change Log - @memberjunction/ng-base-forms
 
-This log was last generated on Thu, 24 Oct 2024 15:33:07 GMT and should not be manually modified.
+This log was last generated on Mon, 04 Nov 2024 23:07:22 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.12.0
+
+Mon, 04 Nov 2024 23:07:22 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.12.0
+- Bump @memberjunction/core to v2.12.0
+- Bump @memberjunction/ng-code-editor to v2.12.0
+- Bump @memberjunction/ng-shared to v2.12.0
+- Bump @memberjunction/ng-tabstrip to v2.12.0
+- Bump @memberjunction/ng-link-directives to v2.12.0
+- Bump @memberjunction/ng-container-directives to v2.12.0
+- Bump @memberjunction/ng-record-changes to v2.12.0
+- Bump @memberjunction/ng-base-types to v2.12.0
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.11.0
 

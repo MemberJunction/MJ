@@ -2,6 +2,35 @@
   "name": "@memberjunction/ai-gemini",
   "entries": [
     {
+      "date": "Mon, 04 Nov 2024 23:07:22 GMT",
+      "version": "2.12.0",
+      "tag": "@memberjunction/ai-gemini_v2.12.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-gemini",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/ai to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/global to v2.12.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 24 Oct 2024 15:33:07 GMT",
       "version": "2.11.0",
       "tag": "@memberjunction/ai-gemini_v2.11.0",
