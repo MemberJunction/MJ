@@ -109,7 +109,6 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
-        this._localMetadata = new AllMetadata(); // start with fresh metadata
 
         if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
@@ -117,6 +116,10 @@ export abstract class ProviderBase implements IMetadataProvider {
             // first, make sure we reset the flag to false so that if another call to this function happens
             // while we are waiting for the async call to finish, we dont do it again
             this._refresh = false;  
+            
+            // start with fresh metadata
+            this._localMetadata = new AllMetadata(); 
+
             this._cachedVisibleExplorerNavigationItems = null; // reset this so it gets rebuilt next time it is requested
 
             const start = new Date().getTime();
