@@ -1,4 +1,5 @@
 import { LoadDashboardResource } from "./dashboard-resource.component";
+import { LoadListDetailResource } from "./list-detail-resource.component";
 import { LoadQueryResource } from "./query-resource.component";
 import { LoadRecordResource } from "./record-resource.component";
 import { LoadReportResource } from "./report-resource.component";
@@ -13,4 +14,5 @@ export function LoadResourceWrappers()
     LoadRecordResource();
     LoadSearchResultsResource();
     LoadQueryResource();
+    LoadListDetailResource();
 }

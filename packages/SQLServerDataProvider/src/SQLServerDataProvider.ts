@@ -75,6 +75,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
+    /**
+     * SQL Server Data Provider implementation of this getter returns a TypeORM DataSource object
+     */
+    public get DatabaseConnection(): any {
+        return this._dataSource;
+    }
+
     protected get AllowRefresh(): boolean {
         return this._bAllowRefresh;
     }

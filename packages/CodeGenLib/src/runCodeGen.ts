@@ -1,7 +1,7 @@
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
-import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
+import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource, { MSSQLConnection } from "./Config/db-connection"
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
@@ -26,7 +26,7 @@ export class RunCodeGenBase {
     /**
      * This method is called to setup the data source for the code generation process. You can override this method to customize the data source setup process.
      */
-    public async setupDataSource() {
+    public async setupDataSource(): Promise<SQLServerDataProvider> {
         /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/
@@ -42,7 +42,8 @@ export class RunCodeGenBase {
         const pool = await MSSQLConnection(); // get the MSSQL connection pool
 
         const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 );
-        await setupSQLServerClient(config);
+        const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
+        return sqlServerProvider;
     }
 
     /**
@@ -55,7 +56,7 @@ export class RunCodeGenBase {
             const startTime = new Date();
             logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString());
             
-            await this.setupDataSource();
+            const provider: SQLServerDataProvider = await this.setupDataSource();
 
             await UserCache.Instance.Refresh(AppDataSource);
             const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
@@ -121,6 +122,10 @@ export class RunCodeGenBase {
                 const metadataSuccess = await manageMD.manageMetadata(AppDataSource); 
                 if (!metadataSuccess){
                     logError('ERROR managing metadata');
+                }
+                else{
+                    // now - we need to tell our metadata object to refresh itself
+                    await provider.Refresh();
                 }
     
                 /****************************************************************************************

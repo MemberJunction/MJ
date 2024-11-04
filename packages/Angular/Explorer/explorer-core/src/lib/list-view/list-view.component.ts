@@ -2,11 +2,11 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, EventCodes, ResourceData, SharedService } from '@memberjunction/ng-shared';
 import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
-import { BeforeAddItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
-import { BaseEntity, EntityInfo, Metadata } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BeforeAddItemEvent, BeforeDeleteItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
+import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ResourceBrowserComponent } from '../resource-browser/resource-browser.component';
 
 @Component({
@@ -30,8 +30,8 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
 
     public NewItemOptions: NewItemOption[] = [
         {
-            Text: 'New View',
-            Description: 'Create a new User View',
+            Text: 'New List',
+            Description: 'Create a new List',
             Icon: 'folder',
             Action: () => {
                 this.toggleCreateDialog(true);
@@ -61,7 +61,7 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     async ngOnInit(): Promise<void> {
         const md: Metadata = new Metadata();
         this.entities = md.Entities;
-        this.sourceEntityNames = this.entities.map(e => `${e.SchemaName}.${e.Name}`);
+        this.sourceEntityNames = this.entities.map(e => e.Name);
         this.sourceEntityNames = this.entityNames = this.sourceEntityNames.sort(function(a, b){
             const aName: string = a.toLowerCase();
             const bName: string = b.toLowerCase();
@@ -81,7 +81,7 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
             dataID = list.FirstPrimaryKey.Value;
         }
     
-        this.router.navigate(["listdetails", dataID]);
+        this.router.navigate(['resource', 'list', dataID]);
     }
     
     public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {}
@@ -89,6 +89,58 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     public onBeforeAddItemEvent(event: BeforeAddItemEvent): void {
         event.Cancel = true;
         this.toggleCreateDialog(true);
+    }
+
+    public async deleteList(event: BeforeDeleteItemEvent): Promise<void> {
+        event.Cancel = true;
+
+        this.showLoader = true;
+        const deleteListDetailsResult: boolean = await this.DeleteListDetails(event.Item.Data.FirstPrimaryKey.Value);
+        if(!deleteListDetailsResult){
+            this.sharedService.CreateSimpleNotification("Unable to delete list", "error", 2500);
+            this.showLoader = false;
+            return;
+        }
+
+        const listEntity: ListEntity = <ListEntity>event.Item.Data;
+        const deleteResult: boolean = await listEntity.Delete();
+        if(!deleteResult){
+            this.sharedService.CreateSimpleNotification("Error deleting list", "error", 2500);
+        }
+        else{
+            this.sharedService.CreateSimpleNotification("List deleted successfully", "success", 2500);
+        }
+
+        if(this.resourceBrowser && deleteResult){
+            this.resourceBrowser.Refresh();
+        }
+
+        this.showLoader = false;
+    }
+
+    private async DeleteListDetails(listID: string): Promise<boolean> {
+        const rv: RunView = new RunView();
+        const rvResult: RunViewResult = await rv.RunView({
+            EntityName: 'List Details',
+            ExtraFilter: `ListID = '${listID}'`,
+            ResultType: 'entity_object'
+        });
+
+        if(!rvResult.Success){
+            LogError("Error running view to delete list details", undefined, rvResult.ErrorMessage);
+            return false;
+        }
+
+        let success: boolean = true;
+        for(const entity of rvResult.Results){
+            const deleteResult: boolean = await entity.Delete();
+            if(!deleteResult){
+                LogError(`Error deleting list detail record ${entity.ID}`, undefined, entity.LatestResult);
+                success = false;
+            }
+        }
+
+        return success;
     }
 
     public toggleCreateDialog(show: boolean): void {
@@ -119,13 +171,23 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
         const saveResult: boolean = await listEntity.Save();
         this.showCreateLoader = false;
 
-        if(saveResult){
-            this.sharedService.CreateSimpleNotification("List created successfully", "success", 2000);
-            this.router.navigate(["listdetails", listEntity.ID]);
-        }
-        else{
+        if(!saveResult){
             this.sharedService.CreateSimpleNotification("Error creating list", "error", 2000);
+            return;
         }
+
+        this.sharedService.CreateSimpleNotification("List created successfully", "success", 2000);
+        this.router.navigate(["listdetails", listEntity.ID]);
+
+        MJGlobal.Instance.RaiseEvent({
+            event: MJEventType.ComponentEvent,
+            eventCode: EventCodes.ListCreated,
+            args: new ResourceData({ 
+                                    ResourceTypeID: this.sharedService.ListResourceType.ID,
+                                    ResourceRecordID: listEntity.FirstPrimaryKey.Value
+                                  }),
+            component: this
+          });
     }
 
     public onFilterChange(value: string): void {
@@ -133,7 +195,7 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     }
 
     public onSelectionChange(value: string): void {
-        this.selectedEntity = this.entities.find(e => `${e.SchemaName}.${e.Name}` === value) || null;
+        this.selectedEntity = this.entities.find(e => e.Name === value) || null;
     }
 
     public onDropdownOptionClick(option: DropdownOptionClickEvent): void {

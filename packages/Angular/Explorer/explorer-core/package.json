@@ -58,6 +58,7 @@
     "@progress/kendo-angular-charts": "16.2.0",
     "@progress/kendo-angular-indicators": "16.2.0",
     "@progress/kendo-angular-filter": "16.2.0",
+    "@progress/kendo-angular-progressbar": "16.2.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

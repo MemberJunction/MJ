@@ -138,3 +138,31 @@
     font-weight: 500;
     cursor: pointer;
 }
+
+.k-dropdown-button .k-button {
+    background: var(--border-blue);
+    color: var(--white-color);
+    font-size: 16px;
+    border: none;
+    padding: 8px 25px;
+    border-radius: 10px;
+}
+
+.k-dropdown-button .k-button .k-button-text .card-header-entity .add-item .k-button .k-button-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-cmn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    background: transparent;
+    border-radius: 8px;
+    border: 1px solid var(--gray-color);
+}
+
+.btn-cmn.active {
+    border: 1px solid var(--border-blue);
+}
