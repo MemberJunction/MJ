@@ -3,5 +3,5 @@
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/ai-recommendations-rex",
   "email": "nico.ortiz@bluecypress.io",
-  "dependentChangeType": "patch"
+  "dependentChangeType": "minor"
 }
