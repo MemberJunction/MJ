@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Communication Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'FE425879-DBC7-4C9E-AC78-61609B5C476A'}">
+                    <mj-tab Name="Communication Logs" [Visible]="record.IsSaved"> 
                         Communication Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Communication Logs','CommunicationProviderID')"  
                             [NewRecordValues]="NewRecordValues('Communication Logs')"
                             [AllowLoad]="IsCurrentTab('Communication Logs')"  
                             [EditMode]="GridEditMode()"  
@@ -31,9 +29,7 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Message Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '0BC657AB-B84E-4C5C-AEAC-F4DE8C998BE8'}">
+                    <mj-tab Name="Message Types" [Visible]="record.IsSaved"> 
                         Message Types
                     </mj-tab>
                     <mj-tab-body>

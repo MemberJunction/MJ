@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Result Cache" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6874433E-F36B-1410-883E-00D02208DC50'}">
+                    <mj-tab Name="AI Result Cache" [Visible]="record.IsSaved"> 
                         AI Result Cache
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIPromptID')"  
                             [NewRecordValues]="NewRecordValues('AI Result Cache')"
                             [AllowLoad]="IsCurrentTab('AI Result Cache')"  
                             [EditMode]="GridEditMode()"  

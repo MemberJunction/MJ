@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Action Contexts" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '1F6372E8-E919-4998-90A0-D83CA4984A4A'}">
+                    <mj-tab Name="Action Contexts" [Visible]="record.IsSaved"> 
                         Action Contexts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Contexts')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Contexts','ContextTypeID')"  
                             [NewRecordValues]="NewRecordValues('Action Contexts')"
                             [AllowLoad]="IsCurrentTab('Action Contexts')"  
                             [EditMode]="GridEditMode()"  

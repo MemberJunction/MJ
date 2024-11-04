@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Report Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '10C33A0F-08CB-42CA-AC52-11268CEB183F'}">
+                    <mj-tab Name="Report Categories" [Visible]="record.IsSaved"> 
                         Report Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Report Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Report Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Report Categories')"
                             [AllowLoad]="IsCurrentTab('Report Categories')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Reports" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '15930CBF-3740-4002-A689-397654F4D1CA'}">
+                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('Reports')"
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  

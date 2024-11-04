@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Recommendation Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '4540D15F-AFCA-48F5-A534-9AA3037E5EBB'}">
+                    <mj-tab Name="Recommendation Items" [Visible]="record.IsSaved"> 
                         Recommendation Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Recommendation Items','RecommendationID')"  
                             [NewRecordValues]="NewRecordValues('Recommendation Items')"
                             [AllowLoad]="IsCurrentTab('Recommendation Items')"  
                             [EditMode]="GridEditMode()"  

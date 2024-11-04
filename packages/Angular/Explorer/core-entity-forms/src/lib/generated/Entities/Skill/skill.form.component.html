@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Employee Skills" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '899F5C46-E7C4-4BBA-A5EE-3B38F858B06B'}">
+                    <mj-tab Name="Employee Skills" [Visible]="record.IsSaved"> 
                         Employee Skills
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Employee Skills','SkillID')"  
                             [NewRecordValues]="NewRecordValues('Employee Skills')"
                             [AllowLoad]="IsCurrentTab('Employee Skills')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Skills" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '77CE435D-282C-44C1-BFA1-433D9DFF1BFF'}">
+                    <mj-tab Name="Skills" [Visible]="record.IsSaved"> 
                         Skills
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Skills')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Skills','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Skills')"
                             [AllowLoad]="IsCurrentTab('Skills')"  
                             [EditMode]="GridEditMode()"  

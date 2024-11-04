@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Action Filters" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '05F4EDF1-7601-4195-8DB9-3EC1BC061D7C'}">
+                    <mj-tab Name="Entity Action Filters" [Visible]="record.IsSaved"> 
                         Entity Action Filters
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters','ActionFilterID')"  
                             [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                             [AllowLoad]="IsCurrentTab('Entity Action Filters')"  
                             [EditMode]="GridEditMode()"  

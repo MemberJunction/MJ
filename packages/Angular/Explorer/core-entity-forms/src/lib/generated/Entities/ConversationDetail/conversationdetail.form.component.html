@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Reports" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '4E27D0DB-5794-4B38-81D5-657B41FE102F'}">
+                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','ConversationDetailID')"  
                             [NewRecordValues]="NewRecordValues('Reports')"
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  

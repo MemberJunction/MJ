@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Conversation Details" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'AD24FBF2-E8AD-4E5B-B1D3-2B71D934A4AB'}">
+                    <mj-tab Name="Conversation Details" [Visible]="record.IsSaved"> 
                         Conversation Details
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ConversationID')"  
                             [NewRecordValues]="NewRecordValues('Conversation Details')"
                             [AllowLoad]="IsCurrentTab('Conversation Details')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Reports" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'A7583609-6644-4DDA-9F33-B552D6FC7714'}">
+                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','ConversationID')"  
                             [NewRecordValues]="NewRecordValues('Reports')"
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  

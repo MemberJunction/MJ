@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Field Values" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '607D0CB7-3A3B-4A99-B58F-4CB6B96070C0'}">
+                    <mj-tab Name="Entity Field Values" [Visible]="record.IsSaved"> 
                         Entity Field Values
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Field Values')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Field Values','EntityFieldID')"  
                             [NewRecordValues]="NewRecordValues('Entity Field Values')"
                             [AllowLoad]="IsCurrentTab('Entity Field Values')"  
                             [EditMode]="GridEditMode()"  

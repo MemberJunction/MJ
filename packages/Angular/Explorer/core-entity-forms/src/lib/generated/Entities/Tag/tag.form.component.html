@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Tags" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '2CE97D3F-7E14-4664-A848-2E6C61C147E0'}">
+                    <mj-tab Name="Tags" [Visible]="record.IsSaved"> 
                         Tags
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Tags')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Tags','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Tags')"
                             [AllowLoad]="IsCurrentTab('Tags')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Tagged Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '2DE10C17-E783-48E9-97F0-7EBB1FD94CF2'}">
+                    <mj-tab Name="Tagged Items" [Visible]="record.IsSaved"> 
                         Tagged Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Tagged Items','TagID')"  
                             [NewRecordValues]="NewRecordValues('Tagged Items')"
                             [AllowLoad]="IsCurrentTab('Tagged Items')"  
                             [EditMode]="GridEditMode()"  

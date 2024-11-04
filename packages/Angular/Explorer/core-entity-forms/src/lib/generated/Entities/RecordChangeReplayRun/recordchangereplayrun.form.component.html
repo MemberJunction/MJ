@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Record Changes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '5AE2C273-CB70-4EB4-A46E-156EDA537A3A'}">
+                    <mj-tab Name="Record Changes" [Visible]="record.IsSaved"> 
                         Record Changes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Record Changes')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','ReplayRunID')"  
                             [NewRecordValues]="NewRecordValues('Record Changes')"
                             [AllowLoad]="IsCurrentTab('Record Changes')"  
                             [EditMode]="GridEditMode()"  

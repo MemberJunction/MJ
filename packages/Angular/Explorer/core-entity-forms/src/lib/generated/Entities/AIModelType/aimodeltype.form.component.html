@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Models" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'CBF45E7C-BB43-45DF-A8AE-A97F5407C1E0'}">
+                    <mj-tab Name="AI Models" [Visible]="record.IsSaved"> 
                         AI Models
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Models')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Models','AIModelTypeID')"  
                             [NewRecordValues]="NewRecordValues('AI Models')"
                             [AllowLoad]="IsCurrentTab('AI Models')"  
                             [EditMode]="GridEditMode()"  

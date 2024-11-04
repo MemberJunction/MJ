@@ -16,31 +16,27 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Prompt Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '61D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
-                        AI Prompt Categories
+                    <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
+                        AI Prompts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories')"  
-                            [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
-                            [AllowLoad]="IsCurrentTab('AI Prompt Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','CategoryID')"  
+                            [NewRecordValues]="NewRecordValues('AI Prompts')"
+                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="AI Prompts" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6B74433E-F36B-1410-883E-00D02208DC50'}">
-                        AI Prompts
+                    <mj-tab Name="AI Prompt Categories" [Visible]="record.IsSaved"> 
+                        AI Prompt Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts')"  
-                            [NewRecordValues]="NewRecordValues('AI Prompts')"
-                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompt Categories','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('AI Prompt Categories')"
+                            [AllowLoad]="IsCurrentTab('AI Prompt Categories')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

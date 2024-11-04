@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Workspace Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'BB812A13-5542-4890-B2C9-1D5D8C5AE012'}">
+                    <mj-tab Name="Workspace Items" [Visible]="record.IsSaved"> 
                         Workspace Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Workspace Items','WorkSpaceID')"  
                             [NewRecordValues]="NewRecordValues('Workspace Items')"
                             [AllowLoad]="IsCurrentTab('Workspace Items')"  
                             [EditMode]="GridEditMode()"  

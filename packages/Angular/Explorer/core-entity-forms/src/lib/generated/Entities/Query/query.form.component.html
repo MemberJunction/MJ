@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Query Fields" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '489F1E84-1611-4B5D-BC00-792D4044BC32'}">
+                    <mj-tab Name="Query Fields" [Visible]="record.IsSaved"> 
                         Query Fields
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Fields')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Query Fields','QueryID')"  
                             [NewRecordValues]="NewRecordValues('Query Fields')"
                             [AllowLoad]="IsCurrentTab('Query Fields')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Data Context Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'DD61A3E7-69CF-434C-9648-C63051CDA523'}">
+                    <mj-tab Name="Data Context Items" [Visible]="record.IsSaved"> 
                         Data Context Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','QueryID')"  
                             [NewRecordValues]="NewRecordValues('Data Context Items')"
                             [AllowLoad]="IsCurrentTab('Data Context Items')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Query Permissions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6C83DCEA-5A2C-46C7-9294-C95BB00F60E7'}">
+                    <mj-tab Name="Query Permissions" [Visible]="record.IsSaved"> 
                         Query Permissions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Query Permissions','QueryID')"  
                             [NewRecordValues]="NewRecordValues('Query Permissions')"
                             [AllowLoad]="IsCurrentTab('Query Permissions')"  
                             [EditMode]="GridEditMode()"  
