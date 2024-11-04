@@ -192,7 +192,7 @@ export interface ILocalStorageProvider {
 export interface IMetadataProvider {
     get ProviderType(): ProviderType
 
-    DatabaseConnection(): any
+    get DatabaseConnection(): any
 
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
