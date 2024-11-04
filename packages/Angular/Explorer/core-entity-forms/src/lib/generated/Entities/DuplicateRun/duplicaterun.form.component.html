@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Duplicate Run Details" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'A7D9BA48-2B3D-46FE-B16D-4A5355462E37'}">
+                    <mj-tab Name="Duplicate Run Details" [Visible]="record.IsSaved"> 
                         Duplicate Run Details
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Details','DuplicateRunID')"  
                             [NewRecordValues]="NewRecordValues('Duplicate Run Details')"
                             [AllowLoad]="IsCurrentTab('Duplicate Run Details')"  
                             [EditMode]="GridEditMode()"  
