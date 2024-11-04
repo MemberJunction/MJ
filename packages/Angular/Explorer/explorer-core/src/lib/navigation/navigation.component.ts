@@ -224,6 +224,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.ViewClicked:
               case EventCodes.ViewClicked:
               case EventCodes.RunSearch:
+              case EventCodes.ListCreated:
+              case EventCodes.ListClicked:
                   // another component requested that we add something to our tab structure
                 this.AddOrSelectTab(<ResourceData>event.args);
                 break;
@@ -685,6 +687,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         break;
       case 'notifications':
         url += `/notifications`;
+        break;
+      case 'lists':
+        url += `/list/${data.ResourceRecordID}`;
         break;
     }
 
