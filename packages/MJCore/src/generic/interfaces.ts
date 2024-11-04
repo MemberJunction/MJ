@@ -192,6 +192,8 @@ export interface ILocalStorageProvider {
 export interface IMetadataProvider {
     get ProviderType(): ProviderType
 
+    DatabaseConnection(): any
+
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
     get Entities(): EntityInfo[]
