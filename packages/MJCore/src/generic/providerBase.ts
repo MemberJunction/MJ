@@ -92,6 +92,12 @@ export abstract class ProviderBase implements IMetadataProvider {
      */
     public abstract get ProviderType(): ProviderType;
 
+    /**
+     * For providers that have ProviderType==='Database', this property will return an object that represents the underlying database connection. For providers where 
+     * ProviderType==='Network' this property will throw an exception.
+     */
+    public abstract get DatabaseConnection(): any;
+
     public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
