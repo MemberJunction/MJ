@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Reports" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'DAED01F3-48B6-4495-A027-5ECB644F2342'}">
+                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','DataContextID')"  
                             [NewRecordValues]="NewRecordValues('Reports')"
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Data Context Items" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'E18422AE-8706-49CB-A47A-D47D5DADCE68'}">
+                    <mj-tab Name="Data Context Items" [Visible]="record.IsSaved"> 
                         Data Context Items
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Data Context Items','DataContextID')"  
                             [NewRecordValues]="NewRecordValues('Data Context Items')"
                             [AllowLoad]="IsCurrentTab('Data Context Items')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Conversations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '99C2E9BD-B939-EF11-86D4-000D3A4E707E'}">
+                    <mj-tab Name="Conversations" [Visible]="record.IsSaved"> 
                         <span class="fa-regular fa-comments tab-header-icon"></span>Conversations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Conversations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Conversations','DataContextID')"  
                             [NewRecordValues]="NewRecordValues('Conversations')"
                             [AllowLoad]="IsCurrentTab('Conversations')"  
                             [EditMode]="GridEditMode()"  

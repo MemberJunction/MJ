@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Record Merge Deletion Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '47F10751-8C7D-40D9-8C99-BD9D1D382E38'}">
+                    <mj-tab Name="Record Merge Deletion Logs" [Visible]="record.IsSaved"> 
                         Record Merge Deletion Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Merge Deletion Logs','RecordMergeLogID')"  
                             [NewRecordValues]="NewRecordValues('Record Merge Deletion Logs')"
                             [AllowLoad]="IsCurrentTab('Record Merge Deletion Logs')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Duplicate Run Detail Matches" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6D7C04CD-65B4-4C15-BEF5-CF48B39A5E82'}">
+                    <mj-tab Name="Duplicate Run Detail Matches" [Visible]="record.IsSaved"> 
                         Duplicate Run Detail Matches
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches','RecordMergeLogID')"  
                             [NewRecordValues]="NewRecordValues('Duplicate Run Detail Matches')"
                             [AllowLoad]="IsCurrentTab('Duplicate Run Detail Matches')"  
                             [EditMode]="GridEditMode()"  
