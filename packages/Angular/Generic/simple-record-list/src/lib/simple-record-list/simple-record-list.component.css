@@ -61,4 +61,21 @@ table tr {
 table tr:hover {
     background-color: #e7f4ff; /* Light blue for even rows */
 }
+
+.sticky-header {
+    position: sticky;
+    top: 0;
+}
+
+.scrollable {
+    display: flex;
+    overflow-y: scroll;
+    max-height: 95%;
+}
+
+.vertical-full-width {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
  
