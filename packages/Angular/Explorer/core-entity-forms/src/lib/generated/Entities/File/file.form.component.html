@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="File Entity Record Links" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'B1DB22D4-9DCF-497E-B33D-B070E67DE291'}">
+                    <mj-tab Name="File Entity Record Links" [Visible]="record.IsSaved"> 
                         File Entity Record Links
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('File Entity Record Links','FileID')"  
                             [NewRecordValues]="NewRecordValues('File Entity Record Links')"
                             [AllowLoad]="IsCurrentTab('File Entity Record Links')"  
                             [EditMode]="GridEditMode()"  

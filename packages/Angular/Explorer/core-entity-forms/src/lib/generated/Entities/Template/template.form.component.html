@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Template Contents" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'CDD61E0C-31AE-4068-BA4D-00E7672D9EE6'}">
+                    <mj-tab Name="Template Contents" [Visible]="record.IsSaved"> 
                         Template Contents
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Template Contents')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Contents','TemplateID')"  
                             [NewRecordValues]="NewRecordValues('Template Contents')"
                             [AllowLoad]="IsCurrentTab('Template Contents')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Template Params" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '66CB4FC4-BD66-4325-B1BF-85707475A25C'}">
+                    <mj-tab Name="Template Params" [Visible]="record.IsSaved"> 
                         Template Params
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"  
                             [NewRecordValues]="NewRecordValues('Template Params')"
                             [AllowLoad]="IsCurrentTab('Template Params')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="AI Prompts" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '64D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
+                    <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
                         AI Prompts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"  
                             [NewRecordValues]="NewRecordValues('AI Prompts')"
                             [AllowLoad]="IsCurrentTab('AI Prompts')"  
                             [EditMode]="GridEditMode()"  
@@ -61,14 +55,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Documents" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '334567F3-3E3B-EF11-86D4-0022481D1B23'}">
+                    <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
                         Entity Documents
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"  
                             [NewRecordValues]="NewRecordValues('Entity Documents')"
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  

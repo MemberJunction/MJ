@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Audit Log Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '2E03D09E-AFFF-481B-8484-42649DD67A9F'}">
+                    <mj-tab Name="Audit Log Types" [Visible]="record.IsSaved"> 
                         Audit Log Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Audit Log Types')"
                             [AllowLoad]="IsCurrentTab('Audit Log Types')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Audit Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '12BCF651-04DF-49C7-917D-BF978E0BF8E1'}">
+                    <mj-tab Name="Audit Logs" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuditLogTypeName')"  
                             [NewRecordValues]="NewRecordValues('Audit Logs')"
                             [AllowLoad]="IsCurrentTab('Audit Logs')"  
                             [EditMode]="GridEditMode()"  

@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Query Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'EB16A56B-077C-45D6-8F75-3B442A27DE2E'}">
+                    <mj-tab Name="Query Categories" [Visible]="record.IsSaved"> 
                         Query Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Query Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Query Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Query Categories')"
                             [AllowLoad]="IsCurrentTab('Query Categories')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Queries" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '6A2BBF1D-E050-4F7A-9DFA-4DBBA5964192'}">
+                    <mj-tab Name="Queries" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-clipboard-question tab-header-icon"></span>Queries
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Queries')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Queries','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('Queries')"
                             [AllowLoad]="IsCurrentTab('Queries')"  
                             [EditMode]="GridEditMode()"  

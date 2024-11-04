@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Documents" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '40AC053A-48B1-466B-AB38-3854F4FF6A72'}">
+                    <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
                         Entity Documents
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','ID')"  
                             [NewRecordValues]="NewRecordValues('Entity Documents')"
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Vector Indexes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '4A57C439-774F-4A62-A1F6-4A8FAB36C9FE'}">
+                    <mj-tab Name="Vector Indexes" [Visible]="record.IsSaved"> 
                         Vector Indexes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','VectorDatabaseID')"  
                             [NewRecordValues]="NewRecordValues('Vector Indexes')"
                             [AllowLoad]="IsCurrentTab('Vector Indexes')"  
                             [EditMode]="GridEditMode()"  

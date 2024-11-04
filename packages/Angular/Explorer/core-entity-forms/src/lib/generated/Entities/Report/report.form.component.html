@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Report Snapshots" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '96C04B1F-9F2A-4F6B-8C3B-F465ADD9E01D'}">
+                    <mj-tab Name="Report Snapshots" [Visible]="record.IsSaved"> 
                         Report Snapshots
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Report Snapshots')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Report Snapshots','ReportID')"  
                             [NewRecordValues]="NewRecordValues('Report Snapshots')"
                             [AllowLoad]="IsCurrentTab('Report Snapshots')"  
                             [EditMode]="GridEditMode()"  

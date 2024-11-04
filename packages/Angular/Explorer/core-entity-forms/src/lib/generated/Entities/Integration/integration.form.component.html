@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="URL Formats" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'F41D6A94-A9D8-46C5-A96D-1E61C497E19E'}">
+                    <mj-tab Name="URL Formats" [Visible]="record.IsSaved"> 
                         URL Formats
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Integration URL Formats','IntegrationID')"  
                             [NewRecordValues]="NewRecordValues('Integration URL Formats')"
                             [AllowLoad]="IsCurrentTab('URL Formats')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Company Integrations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '99448653-DBD1-4722-AE01-79A97A3AE574'}">
+                    <mj-tab Name="Company Integrations" [Visible]="record.IsSaved"> 
                         Company Integrations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Company Integrations','IntegrationName')"  
                             [NewRecordValues]="NewRecordValues('Company Integrations')"
                             [AllowLoad]="IsCurrentTab('Company Integrations')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Record Changes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'ABF1C3B6-8952-4C59-8505-B0E0EFAF5FEA'}">
+                    <mj-tab Name="Record Changes" [Visible]="record.IsSaved"> 
                         Record Changes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Record Changes')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Record Changes','IntegrationID')"  
                             [NewRecordValues]="NewRecordValues('Record Changes')"
                             [AllowLoad]="IsCurrentTab('Record Changes')"  
                             [EditMode]="GridEditMode()"  

@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Action Invocations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '53706E1C-6F45-4E3E-8920-0CA971FF3056'}">
+                    <mj-tab Name="Entity Action Invocations" [Visible]="record.IsSaved"> 
                         Entity Action Invocations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Invocations','EntityActionID')"  
                             [NewRecordValues]="NewRecordValues('Entity Action Invocations')"
                             [AllowLoad]="IsCurrentTab('Entity Action Invocations')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Action Filters" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '36FBF954-CA04-488D-90B2-A154C5287203'}">
+                    <mj-tab Name="Entity Action Filters" [Visible]="record.IsSaved"> 
                         Entity Action Filters
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Filters','EntityActionID')"  
                             [NewRecordValues]="NewRecordValues('Entity Action Filters')"
                             [AllowLoad]="IsCurrentTab('Entity Action Filters')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Action Params" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'DAC91C7C-DD9E-4513-B408-BB1086DE911C'}">
+                    <mj-tab Name="Entity Action Params" [Visible]="record.IsSaved"> 
                         Entity Action Params
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Action Params','EntityActionID')"  
                             [NewRecordValues]="NewRecordValues('Entity Action Params')"
                             [AllowLoad]="IsCurrentTab('Entity Action Params')"  
                             [EditMode]="GridEditMode()"  

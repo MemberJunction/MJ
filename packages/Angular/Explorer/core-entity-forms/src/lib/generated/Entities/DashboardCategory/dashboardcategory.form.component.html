@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Dashboard Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '8AEFCEA9-6D9D-49E8-B3ED-53D280168265'}">
+                    <mj-tab Name="Dashboard Categories" [Visible]="record.IsSaved"> 
                         Dashboard Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboard Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboard Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Dashboard Categories')"
                             [AllowLoad]="IsCurrentTab('Dashboard Categories')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Dashboards" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '87178D44-5BCC-49FD-9936-64172907F400'}">
+                    <mj-tab Name="Dashboards" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-table-columns tab-header-icon"></span>Dashboards
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboards')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('Dashboards')"
                             [AllowLoad]="IsCurrentTab('Dashboards')"  
                             [EditMode]="GridEditMode()"  
