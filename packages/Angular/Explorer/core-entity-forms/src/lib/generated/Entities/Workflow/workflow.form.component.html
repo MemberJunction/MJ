@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Reports" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'FB957F29-EA8B-4A4F-944D-1F8D73955AC5'}">
+                    <mj-tab Name="Reports" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-chart-line tab-header-icon"></span>Reports
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Reports')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Reports','OutputWorkflowID')"  
                             [NewRecordValues]="NewRecordValues('Reports')"
                             [AllowLoad]="IsCurrentTab('Reports')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Workflow Runs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '65EB838F-F461-4196-AD9E-BDFAA777B0C3'}">
+                    <mj-tab Name="Workflow Runs" [Visible]="record.IsSaved"> 
                         Workflow Runs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Workflow Runs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Workflow Runs','WorkflowName')"  
                             [NewRecordValues]="NewRecordValues('Workflow Runs')"
                             [AllowLoad]="IsCurrentTab('Workflow Runs')"  
                             [EditMode]="GridEditMode()"  

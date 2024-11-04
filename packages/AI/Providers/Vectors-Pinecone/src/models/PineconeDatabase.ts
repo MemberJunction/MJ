@@ -12,25 +12,24 @@ export type BaseMetadata = {
     TemplateID: string,
 }
 
-@RegisterClass(VectorDBBase, "PineconeDatabase", 1)
+@RegisterClass(VectorDBBase, "PineconeDatabase")
 export class PineconeDatabase extends VectorDBBase {
 
-    static _pinecone: Pinecone;
-    static _defaultIndex: Index<RecordMetadata> = null;
+    private _pinecone: Pinecone;
+    private _defaultIndex: Index<RecordMetadata> = null;
     
     constructor(apiKey: string){
         super(apiKey);
-        if(!PineconeDatabase._pinecone){
-            PineconeDatabase._pinecone = new Pinecone({
-                apiKey: apiKey
-            });
-        }
+        this._pinecone = new Pinecone({
+            apiKey: apiKey
+        });
     }
+
     protected get apiKey(): string {
         throw new Error('Method not implemented.');
     }
     
-    get pinecone(): Pinecone { return PineconeDatabase._pinecone; }
+    get pinecone(): Pinecone { return this._pinecone; }
 
     public async getIndexDescription(params: BaseRequestParams): Promise<IndexDescription> {
         const description: IndexDescription = await this.pinecone.describeIndex(params.id);
@@ -38,14 +37,14 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async getDefaultIndex(): Promise<Index<RecordMetadata>> {
-        if(PineconeDatabase._defaultIndex){
-            return PineconeDatabase._defaultIndex;
+        if(this._defaultIndex){
+            return this._defaultIndex;
         }
 
         if(pineconeDefaultIndex){
             let defaultIndex = this.pinecone.Index(pineconeDefaultIndex);
             if(defaultIndex){
-                PineconeDatabase._defaultIndex = defaultIndex;
+                this._defaultIndex = defaultIndex;
                 return defaultIndex;
             }
         }
@@ -53,8 +52,8 @@ export class PineconeDatabase extends VectorDBBase {
         const indexList = await this.listIndexes();
         if(indexList && indexList.indexes && indexList.indexes.length > 0){
             const indexName: string = indexList.indexes[0].name;
-            PineconeDatabase._defaultIndex = this.pinecone.index(indexName);
-            return PineconeDatabase._defaultIndex;
+            this._defaultIndex = this.pinecone.index(indexName);
+            return this._defaultIndex;
         }
 
         LogStatus("Attempted to fetch default index but none were found");

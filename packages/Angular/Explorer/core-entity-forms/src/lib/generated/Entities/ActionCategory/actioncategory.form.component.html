@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Action Categories" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'F7D216ED-93E3-48EF-A46E-50B7F8506B52'}">
+                    <mj-tab Name="Action Categories" [Visible]="record.IsSaved"> 
                         Action Categories
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Categories')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Categories','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Action Categories')"
                             [AllowLoad]="IsCurrentTab('Action Categories')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '03987A91-3AEF-4803-AFF7-E707B6E362DA'}">
+                    <mj-tab Name="Actions" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-bolt tab-header-icon"></span>Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Actions','CategoryID')"  
                             [NewRecordValues]="NewRecordValues('Actions')"
                             [AllowLoad]="IsCurrentTab('Actions')"  
                             [EditMode]="GridEditMode()"  

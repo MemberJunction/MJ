@@ -3,16 +3,27 @@ import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionMessageParam } from "openai/resources";
 
+/**
+ * OpenAI implementation of the BaseLLM class
+ */
 @RegisterClass(BaseLLM, 'OpenAILLM')
 export class OpenAILLM extends BaseLLM {
-    static _openAI: OpenAI;
+    private _openAI: OpenAI;
 
     constructor(apiKey: string) {
         super(apiKey);
-        if (!OpenAILLM._openAI)
-            OpenAILLM._openAI = new OpenAI({
-                apiKey: apiKey,
-            });
+
+        // now create the OpenAI instance
+        this._openAI = new OpenAI({
+            apiKey: apiKey,
+        });
+    }
+
+    /**
+     * Read only getter method to get the OpenAI instance
+     */
+    public get OpenAI(): OpenAI {
+        return this._openAI;
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
@@ -20,7 +31,7 @@ export class OpenAILLM extends BaseLLM {
 
 
         const startTime = new Date();
-        const result = await OpenAILLM._openAI.chat.completions.create({
+        const result = await this.OpenAI.chat.completions.create({
             model: params.model,
             messages: messages,
             temperature: params.temperature,
@@ -59,7 +70,7 @@ export class OpenAILLM extends BaseLLM {
 
 
         const startTime = new Date();
-        const result = await OpenAILLM._openAI.chat.completions.create({
+        const result = await this.OpenAI.chat.completions.create({
             model: params.model,
             messages: messages
         });
@@ -87,6 +98,16 @@ export class OpenAILLM extends BaseLLM {
         });
     }
 
+    /**
+     * Utility method to map a MemberJunction role to OpenAI role
+     *  - system maps to system
+     *  - user maps to user
+     *  - assistant maps to assistant
+     *  - anything else throws an error
+     * While the above is a direct 1:1 mapping, it is possible that OpenAI may have more roles in the future and this method will need to be updated for flexibility
+     * @param role 
+     * @returns 
+     */
     public ConvertMJToOpenAIRole(role: string) {//}: ChatCompletionRequestMessageRoleEnum {
         switch (role.trim().toLowerCase()) {
             case 'system':

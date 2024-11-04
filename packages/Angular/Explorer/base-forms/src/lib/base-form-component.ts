@@ -81,21 +81,21 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   @ViewChild('topArea') topArea!: ElementRef;
   ngAfterViewInit(): void {
     this.setTabHeight();
+    //this.route.queryParams doesnt seem to be picking up the query params
+    // so we're going to get teh tab query param from the URLSearchParams class
+    const url: string = window.location.href;
+    const urlObj = new URL(url);
+    const tabName: string | null = urlObj.searchParams.get('tab');
+    // only do this if WE didn't invoke the browser URL update
+    if(tabName && !this._updatingBrowserUrl){
+      // Select the proper tab based on the tabName
+      this.tabComponent?.SelectTabByName(tabName);
+    }
 
-    this.route.queryParams.subscribe(params => {
-      if (!this._updatingBrowserUrl) {
-        // only do this if WE didn't invoke the browser URL update
-        const tabName = params['tab'];
-        if (tabName && tabName.length > 0) {
-          // Select the proper tab based on the tabName
-          this.tabComponent?.SelectTabByName(tabName);
-        }
-      }
-      // now resize after a pause to allow the UI to settle
-      setTimeout(() => {
-        this.sharedService.InvokeManualResize();
-      }, 250);  
-    });
+    // now resize after a pause to allow the UI to settle
+    setTimeout(() => {
+      this.sharedService.InvokeManualResize();
+    }, 250);  
 
     this.CalcTopAreaHeight();
   }
@@ -133,13 +133,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this._pendingRecords;
   }   
  
-  public onTabSelect(e: any) {
+  public onTabSelect(e: TabEvent) {
     this.sharedService.InvokeManualResize();
 
     // now that we've updated our state and re-sized, also update the browser URL to add the tab name as a query parameter to the URL
     this._updatingBrowserUrl = true;
     this.router.navigate([], { queryParams: { tab: e.tab?.Name }, queryParamsHandling: 'merge' });
-    this._updatingBrowserUrl = true;
+    this._updatingBrowserUrl = false;
   }
 
   public StartEditMode(): void {
@@ -241,11 +241,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Builds a RunViewParams object for a related entity based on the relationship between the current entity and the related entity
-   * @param relatedEntityName 
+   * @param relatedEntityName - the name of the entity that is related to the current entity where we're building the view params from
+   * @param relatedEntityJoinField - the name of the foreign key field in the current entity that links to the related entity, only required if there are multiple relationships between the entities
    * @returns 
    */
-  public BuildRelationshipViewParamsByEntityName(relatedEntityName: string): RunViewParams {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
+  public BuildRelationshipViewParamsByEntityName(relatedEntityName: string, relatedEntityJoinField?: string): RunViewParams {
+    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
     if (eri)
       return this.BuildRelationshipViewParams(eri);
     else
@@ -254,12 +255,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /**
    * Looks up and returns the EntityRelationshipInfo object for the related entity name
-   * @param relatedEntityName 
+   * @param relatedEntityName - the name of the related entity to look up the relationship for
+   * @param relatedEntityJoinField - the name of the foreign key field in the current entity that links to the related entity, only required if there are multiple relationships between the entities
    * @returns 
    */
-  public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string): EntityRelationshipInfo | undefined {
+  public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
-      return (<BaseEntity>this.record).EntityInfo.RelatedEntities.find(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      const r = <BaseEntity>this.record;
+      const ret = r.EntityInfo.RelatedEntities.filter(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      // now if ret.length > 1, we need to find the one that matches the foreign key field name
+      if (ret.length > 1 && relatedEntityJoinField) {
+        const ret2 = ret.find(x => x.RelatedEntityJoinField.trim().toLowerCase() === relatedEntityJoinField.trim().toLowerCase());
+        if (ret2)
+          return ret2;
+      }
+      else if (ret.length === 1) {
+        return ret[0];
+      }
+      else
+        return undefined;
     }
     return undefined;
   }

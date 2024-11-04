@@ -1,24 +1,30 @@
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
+import { MessageParam } from "@anthropic-ai/sdk/resources";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
     SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
-    static _anthropic; 
-
+    private _anthropic: Anthropic;
 
     constructor(apiKey: string) {
         super(apiKey);
-        if (!AnthropicLLM._anthropic) 
-            AnthropicLLM._anthropic = new Anthropic({apiKey});
+        this._anthropic = new Anthropic({apiKey});
     }
 
-    protected anthropicMessageFormatting(messages: ChatMessage[]): ChatMessage[] {
+    /**
+     * Read only getter method to get the Anthropic client instance
+     */
+    public get AnthropicClient(): Anthropic {
+        return this._anthropic;
+    }
+
+    protected anthropicMessageFormatting(messages: ChatMessage[]): MessageParam[] {
         // this method is simple, it makes sure that we alternate messages between user and assistant, otherwise Anthropic will
         // have a problem. If we find two user messages in a row, we insert an assistant message between them with just "OK"
-        const result: ChatMessage[] = [];
+        const result: MessageParam[] = [];
         let lastRole = "assistant";
         for (let i = 0; i < messages.length; i++) {
             if (messages[i].role === lastRole) {
@@ -27,17 +33,38 @@ export class AnthropicLLM extends BaseLLM {
                     content: "OK"
                 });
             }
-            result.push(messages[i]);
+            result.push({
+                role: this.ConvertMJToAnthropicRole(messages[i].role),
+                content: messages[i].content
+            });
             lastRole = messages[i].role;
         }
         return result;
+    }
+
+    /**
+     * Utility method to map a MemberJunction role to OpenAI role
+     *  - user maps to user
+     *  - assistant maps to assistant
+     *  - anything else maps to user
+     * While the above is a direct 1:1 mapping, it is possible that OpenAI may have more roles in the future and this method will need to be updated for flexibility
+     * @param role 
+     * @returns 
+     */
+    public ConvertMJToAnthropicRole(role: ChatMessageRole): 'assistant' | 'user' { 
+        switch (role) {
+            case 'assistant':
+                return 'assistant';
+            default:
+                return 'user'; // default is user
+        }
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
         let result: any = null;
         try {
-            result = await AnthropicLLM._anthropic.messages.create({
+            result = await this.AnthropicClient.messages.create({
                 model: params.model,
                 max_tokens: params.maxOutputTokens, 
                 system: params.messages.find(m => m.role === "system").content,
@@ -102,8 +129,8 @@ ${HUMAN_PROMPT} the following is the user message to process
 ${GetUserMessageFromChatParams(params)}`
         
         const startTime = new Date();            
-        const sample = await AnthropicLLM._anthropic
-        .complete({
+        const sample = await this.AnthropicClient.completions 
+        .create({
           prompt: sPrompt,
           stop_sequences: [HUMAN_PROMPT],
           max_tokens_to_sample: 2000,
@@ -112,7 +139,7 @@ ${GetUserMessageFromChatParams(params)}`
         })        
         const endTime = new Date();
 
-        const success = sample && sample.completion;
+        const success: boolean = sample && sample.completion?.length > 0;
         let summaryText = null;
         if (success)
             summaryText = sample.completion;
