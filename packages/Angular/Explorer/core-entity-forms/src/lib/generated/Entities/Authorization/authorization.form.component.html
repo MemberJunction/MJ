@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Authorization Roles" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '45687631-5B9D-45DD-9279-4F05A910F05F'}">
+                    <mj-tab Name="Authorization Roles" [Visible]="record.IsSaved"> 
                         Authorization Roles
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Authorization Roles','AuthorizationID')"  
                             [NewRecordValues]="NewRecordValues('Authorization Roles')"
                             [AllowLoad]="IsCurrentTab('Authorization Roles')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Action Authorizations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '2D7F5B83-0245-4857-8601-8FAC85596B5F'}">
+                    <mj-tab Name="Action Authorizations" [Visible]="record.IsSaved"> 
                         Action Authorizations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Action Authorizations','AuthorizationID')"  
                             [NewRecordValues]="NewRecordValues('Action Authorizations')"
                             [AllowLoad]="IsCurrentTab('Action Authorizations')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Authorizations" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'BF04A8A1-FA3C-4680-87C5-A1FEF8CE5EF9'}">
+                    <mj-tab Name="Authorizations" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-shield-halved tab-header-icon"></span>Authorizations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Authorizations')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Authorizations','ParentID')"  
                             [NewRecordValues]="NewRecordValues('Authorizations')"
                             [AllowLoad]="IsCurrentTab('Authorizations')"  
                             [EditMode]="GridEditMode()"  
@@ -61,14 +55,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Audit Logs" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '55E0E8BE-F9BA-4E7B-A7DD-DB84F4EA1250'}">
+                    <mj-tab Name="Audit Logs" [Visible]="record.IsSaved"> 
                         <span class="fa-solid fa-fingerprint tab-header-icon"></span>Audit Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Logs','AuthorizationName')"  
                             [NewRecordValues]="NewRecordValues('Audit Logs')"
                             [AllowLoad]="IsCurrentTab('Audit Logs')"  
                             [EditMode]="GridEditMode()"  
@@ -76,14 +68,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Audit Log Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'AD19291C-4C43-488D-B19B-E07B6F76C94D'}">
+                    <mj-tab Name="Audit Log Types" [Visible]="record.IsSaved"> 
                         Audit Log Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Audit Log Types','AuthorizationName')"  
                             [NewRecordValues]="NewRecordValues('Audit Log Types')"
                             [AllowLoad]="IsCurrentTab('Audit Log Types')"  
                             [EditMode]="GridEditMode()"  

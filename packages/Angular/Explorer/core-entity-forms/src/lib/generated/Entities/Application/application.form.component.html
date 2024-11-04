@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Application Settings" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '333FB200-C08B-4AC2-B247-5955C29250AB'}">
+                    <mj-tab Name="Application Settings" [Visible]="record.IsSaved"> 
                         Application Settings
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings','ApplicationID')"  
                             [NewRecordValues]="NewRecordValues('Application Settings')"
                             [AllowLoad]="IsCurrentTab('Application Settings')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="User Applications" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '732ED20A-8DE6-4FA6-9CBE-7367C1842C68'}">
+                    <mj-tab Name="User Applications" [Visible]="record.IsSaved"> 
                         User Applications
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('User Applications')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('User Applications','ApplicationID')"  
                             [NewRecordValues]="NewRecordValues('User Applications')"
                             [AllowLoad]="IsCurrentTab('User Applications')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entities" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'F0557530-4768-4C74-850D-9582671BDB4B'}">
+                    <mj-tab Name="Entities" [Visible]="record.IsSaved"> 
                         Entities
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities','ApplicationID')"  
                             [NewRecordValues]="NewRecordValues('Application Entities')"
                             [AllowLoad]="IsCurrentTab('Entities')"  
                             [EditMode]="GridEditMode()"  
