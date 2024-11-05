@@ -1,8 +1,19 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
-This log was last generated on Thu, 24 Oct 2024 15:33:07 GMT and should not be manually modified.
+This log was last generated on Mon, 04 Nov 2024 23:07:22 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.12.0
+
+Mon, 04 Nov 2024 23:07:22 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/core to v2.12.0
+- Bump @memberjunction/core-entities to v2.12.0
+- Bump @memberjunction/global to v2.12.0
 
 ## 2.11.0
 

@@ -2,6 +2,39 @@
   "name": "@memberjunction/ai-recommendations-rex",
   "entries": [
     {
+      "date": "Mon, 04 Nov 2024 23:07:22 GMT",
+      "version": "2.12.0",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.12.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "nico.ortiz@bluecypress.io",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.12.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 24 Oct 2024 15:33:07 GMT",
       "version": "2.11.0",
       "tag": "@memberjunction/ai-recommendations-rex_v2.11.0",

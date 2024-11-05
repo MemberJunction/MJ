@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/actions
 
-This log was last generated on Thu, 24 Oct 2024 15:33:07 GMT and should not be manually modified.
+This log was last generated on Mon, 04 Nov 2024 23:07:22 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.12.0
+
+Mon, 04 Nov 2024 23:07:22 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.12.0
+- Bump @memberjunction/core to v2.12.0
+- Bump @memberjunction/core-entities to v2.12.0
+- Bump @memberjunction/ai to v2.12.0
+- Bump @memberjunction/aiengine to v2.12.0
+- Bump @memberjunction/doc-utils to v2.12.0
 
 ## 2.11.0
 
