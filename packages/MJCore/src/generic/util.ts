@@ -199,6 +199,29 @@ export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]):
 }
 
 /**
+ * Splits the given list into batches of the given batch size then runs the given callback on each batch
+ * @param list - The list to operate on
+ * @param batchSize - The size of each batch
+ * @param params - Parameters to pass to the callback
+ * @param callback - The callback to run on each batch
+ * @returns A promise that resolves to an array of the results from each callback
+ */
+export async function BatchListAsync<T>(list: any[], batchSize: number, params: Record<string, any>, callback: (element: any, params: Record<string, any>) => Promise<T>): Promise<T[]> {
+    let allResults: T[] = [];
+
+    for (let i = 0; i < list.length; i += batchSize) {
+        const batch = list.slice(i, i + batchSize);
+        const results: T[] = await Promise.all(batch.map(async (element: any) => {
+            return await callback(element, params);
+        }));
+
+        allResults = allResults.concat(results);
+    }
+
+    return allResults;
+}
+
+/**
  * The DBMS may store the default value for a column with extra parens, for example ((1)) or (getdate()) or (('Pending')) or (('Active')) and in addition for unicode characters
  * it may prefix the value with an N, for example N'Active'. This function will strip out the extra parens and the N prefix if it exists and return the actual default value
  * @param storedDefaultValue - The default value as stored in the DBMS 
