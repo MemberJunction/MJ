@@ -14,3 +14,5 @@ export const configFile = env.get('CONFIG_FILE').asString();
 export const mjCoreSchema = env.get('MJ_CORE_SCHEMA').default('__mj').asString();
 
 export const graphqlPort = env.get('GRAPHQL_PORT').default('4000').asPortNumber();
+
+export const currentUserEmail = env.get('CURRENT_USER_EMAIL').asString();

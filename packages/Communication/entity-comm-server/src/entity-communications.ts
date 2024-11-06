@@ -278,4 +278,71 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         // if we get here, we are good, otherwise we will have thrown an exception
         return true;
     }
+
+    private async GetRecordsByListID<T>(listID: string, currentUser?: UserInfo): Promise<T[]> {
+        const rv: RunView = new RunView();
+        const md: Metadata = new Metadata();
+    
+        const rvListDetailsResult = await rv.RunViews([
+            { /* Getting the List to get the entity name */
+                EntityName: 'Lists',
+                ExtraFilter: `ID = '${listID}'`,
+                ResultType: 'simple'
+            },
+            { /* Getting the List Details to get the record IDs */
+                EntityName: 'List Details',
+                ExtraFilter: `ListID = '${listID}'`,
+                ResultType: 'simple',
+                IgnoreMaxRows: true,
+            }
+        ], currentUser);
+    
+        const listViewResult = rvListDetailsResult[0];
+        if(!listViewResult.Success) {
+          throw new Error(`Error getting list with ID: ${listID}: ${listViewResult.ErrorMessage}`);
+        }
+    
+        if(listViewResult.Results.length == 0) {
+          throw new Error(`No list found with ID: ${listID}`);
+        }
+    
+        const list: ListEntityType = listViewResult.Results[0];
+        const entityName: string = list.Entity;
+        LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
+    
+        const entityID: string = list.EntityID;
+        const entity: EntityInfo = md.Entities.find((e) => e.ID == entityID);
+        const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
+    
+        const listDetailsResult = rvListDetailsResult[1];
+        if(!listDetailsResult.Success) {
+          throw new Error(`Error getting list details for listID: ${listID}: ${listDetailsResult.ErrorMessage}`);
+        }
+    
+        //list is empty, just exit early
+        if(listDetailsResult.Results.length == 0) {
+          return [];
+        }
+    
+        const recordIDs: string = listDetailsResult.Results.map((ld: ListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
+        const rvEntityResult: RunViewResult<T> = await rv.RunView<T>({
+          EntityName: entityName,
+          ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
+          IgnoreMaxRows: true
+        }, currentUser);
+    
+        if(!rvEntityResult.Success) {
+          throw new Error(`Error getting entity records for listID: ${listID}: ${rvEntityResult.ErrorMessage}`);
+        }
+
+        return rvEntityResult.Results;
+    }
+}
+
+export type ATDParams = {
+    ListID: string,
+    CurrentUser?: UserInfo,
+    RecommendedEntityID: string,
+    RecommendationID: string,
+    Message: Message
 }
