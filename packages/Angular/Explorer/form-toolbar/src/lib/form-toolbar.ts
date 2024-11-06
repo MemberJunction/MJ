@@ -192,20 +192,4 @@ export class FormToolbarComponent implements OnInit {
             SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 2000);
         }
     }
-
-    public async BatchListAsync<T>(list: any[], batchSize: number, params: Record<string, any>, callback: (element: any, params: Record<string, any>) => Promise<T>): Promise<T[]> {
-        batchSize = batchSize || 100;
-        let allResults: T[] = [];
-
-        for (let i = 0; i < list.length; i += batchSize) {
-            const batch = list.slice(i, i + batchSize);
-            const results: T[] = await Promise.all(batch.map(async (element: any) => {
-                return await callback(element, params);
-            }));
-
-            allResults = allResults.concat(results);
-        }
-
-        return allResults;
-    }
 }
