@@ -5,13 +5,16 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
          EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
          RecordDependency,
          BaseEntityEvent,
-         CompositeKey} from '@memberjunction/core';
+         CompositeKey,
+         RunView,
+         RunViewResult} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
+import { ListEntity } from '@memberjunction/core-entities';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -544,6 +547,29 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     //   })
     //   console.log(mergeResult);
     // }
+  }
+
+  public async GetListsCanAddTo(): Promise<ListEntity[]> {
+    if(!this.record){
+      LogError('Unable to fetch List records: Record not found');
+      return [];
+    }
+
+    const rv: RunView = new RunView();
+    const md: Metadata = new Metadata();
+
+    const rvResult: RunViewResult<ListEntity> = await rv.RunView({
+      EntityName: 'Lists',
+      ExtraFilter: `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.record.EntityInfo.ID}'`,
+      ResultType: 'entity_object'
+    });
+
+    if(!rvResult.Success){
+      LogError('Error running view to fetch lists', undefined, rvResult.ErrorMessage);
+      return [];
+    }
+
+    return rvResult.Results;
   }
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
