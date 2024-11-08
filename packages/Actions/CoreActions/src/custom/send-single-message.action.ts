@@ -1,4 +1,5 @@
-import { ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { Message } from "@memberjunction/communication-types";
