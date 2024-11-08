@@ -1,1 +1,1 @@
-export type ModifyDataParams = Record<string, unknown> & { SourceRecord: Record<string, any> };
+export type DataModifierParams = Record<string, any> & { SourceRecord: Record<string, any> };

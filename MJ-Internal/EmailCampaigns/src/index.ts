@@ -1,8 +1,19 @@
 import { CampaignHander } from "./classes/CampaignHandler";
-import { LogError, UserInfo } from "@memberjunction/core";
+import { UserInfo } from "@memberjunction/core";
 import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
 import { AppDataSource } from './db';
+import { LoadAGUDataModifier } from "./ClientSpecific/AGUDataModifier";
+import { LoadProvider } from "@memberjunction/communication-sendgrid";
+import { LoadMessageBuilder } from "./classes/MessageBuilder";
+import { LoadAGUMessageBuilder } from "./ClientSpecific/MessageBuilders/AGUMessageBuilder";
 import * as Config from './Config';
+
+LoadMessageBuilder();
+LoadAGUMessageBuilder();
+
+LoadAGUDataModifier();
+LoadAGUDataModifier();
+LoadProvider();
 
 async function Run(): Promise<void> {
 
@@ -19,6 +30,7 @@ async function Run(): Promise<void> {
     }
 
     const ch: CampaignHander = new CampaignHander();
+    await ch.Config(user);
     await ch.SendEmails({
         ListID: '8E59846B-9298-EF11-88CF-002248306D26',
         ListBatchSize: 5,

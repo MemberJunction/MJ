@@ -19,11 +19,10 @@ export type SendEmailsParams = {
      * recommendations and recommendation items to use
      */
     RecommendationRunID: string,
-
     /**
      * The UserInfo object to use
      */
-    CurrentUser?: UserInfo
+    CurrentUser: UserInfo
 };
 
 export type GetListRecordsParams = {
