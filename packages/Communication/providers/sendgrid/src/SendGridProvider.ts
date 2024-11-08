@@ -11,7 +11,18 @@ import { LogError, LogStatus } from "@memberjunction/core";
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
-        
+
+        message.ProcessedHTMLBody = message.ProcessedHTMLBody.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
+        const date = new Date();
+        fs.writeFileSync(`C:/Development/MemberJunction/MJ-Internal/EmailCampaigns/TestEmails/SampleEmailBodyTest${date.getUTCMilliseconds()}.html`, message.ProcessedHTMLBody);
+        return {
+            Message: message,
+            Success: true,
+            Error: ''
+        };
+
+        /*
         const from: string = message.From
         // hook up with sendgrid and send stuff
         sgMail.setApiKey(__API_KEY);
@@ -73,6 +84,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 Error: error.message
             };
         }
+        */
     }
 
     public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
