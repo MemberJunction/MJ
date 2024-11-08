@@ -25,8 +25,17 @@ export abstract class BaseSingleton<T> {
         }
     }
 
-    protected static getInstance<T extends BaseSingleton<any>>(this: new () => T): T {
-        const key = BaseSingleton._globalKeyPrefix + (this as Function).name; // use the class name as the key
+    /**
+     * Returns the singleton instance of the class. If the instance does not exist, it is created and stored in the Global Object Store.
+     * If className is provided it will be used as part of the key in the Global Object Store, otherwise the actual class name will be used.
+     * NOTE: the class name used by default is the lowest level of the object hierarchy, so if you have a class that extends another class, the lowest
+     * level class name will be used.
+     * @param this 
+     * @param className 
+     * @returns 
+     */
+    protected static getInstance<T extends BaseSingleton<any>>(this: new () => T, className?: string): T {
+        const key = BaseSingleton._globalKeyPrefix + (className || (this as Function).name); // use the class name as the key
         const g = GetGlobalObjectStore();
         if (!g[key]) {
             g[key] = new this();

@@ -1,10 +1,11 @@
 import { BaseEngine, BaseEnginePropertyConfig, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { ScheduledActionEntityExtended, ScheduledActionParamEntity } from "@memberjunction/core-entities";
-import { ActionEngine, ActionEntityServerEntity, ActionParam, ActionResult } from "@memberjunction/actions";
+import { ActionEntityExtended, ActionParam, ActionResult } from "@memberjunction/actions-base";
 import * as cronParser from 'cron-parser';
 import { SafeJSONParse } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { LoadVectorizeEntityAction } from "@memberjunction/core-actions";
+import { ActionEngineServer, ActionEntityServerEntity } from "@memberjunction/actions";
 
 LoadVectorizeEntityAction();
 
@@ -54,16 +55,16 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
      * an array of zero to many ActionResult objects.
      */
     public async ExecuteScheduledActions(contextUser: UserInfo): Promise<ActionResult[]> {
-        await ActionEngine.Instance.Config(false, contextUser);
+        await ActionEngineServer.Instance.Config(false, contextUser);
         await this.Config(false, contextUser);
 
         const results: ActionResult[] = [];
         const now = new Date();
         for (const scheduledAction of this.ScheduledActions) {
             if (ScheduledActionEngine.IsActionDue(scheduledAction, now)) {
-                const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+                const action: ActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
                 const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
-                const result = await ActionEngine.Instance.RunAction({
+                const result = await ActionEngineServer.Instance.RunAction({
                     Action: action,
                     ContextUser: contextUser,
                     Filters: [],
@@ -80,7 +81,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
      * an array of zero to many ActionResult objects.
      */
      public async ExecuteScheduledAction(actionName: string, contextUser: UserInfo): Promise<ActionResult> {
-        await ActionEngine.Instance.Config(false, contextUser);
+        await ActionEngineServer.Instance.Config(false, contextUser);
         await this.Config(false, contextUser);
 
         const scheduledAction = this.ScheduledActions.find(sa => sa.Name === actionName);
@@ -92,9 +93,9 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
         const now = new Date();
         const canRun: boolean = scheduledAction.CronExpression ? ScheduledActionEngine.IsActionDue(scheduledAction, now) : true;
         if (canRun) {
-            const action: ActionEntityServerEntity = ActionEngine.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
+            const action: ActionEntityExtended = ActionEngineServer.Instance.Actions.find(a => a.ID === scheduledAction.ActionID);
             const params: ActionParam[] = await this.MapScheduledActionParamsToActionParams(scheduledAction);
-            const result = await ActionEngine.Instance.RunAction({
+            const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: contextUser,
                 Filters: [],
@@ -106,7 +107,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
 
     protected async MapScheduledActionParamsToActionParams(scheduledAction: ScheduledActionEntityExtended): Promise<ActionParam[]> {
         const returnValues: ActionParam[] = [];
-        const allParams = ActionEngine.Instance.ActionParams;
+        const allParams = ActionEngineServer.Instance.ActionParams;
         for (const sap of scheduledAction.Params) {
             const param = allParams.find(p => p.ID === sap.ActionParamID);
             let value: any = null;

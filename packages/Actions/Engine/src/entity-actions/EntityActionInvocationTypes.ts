@@ -1,8 +1,8 @@
 import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
-import { EntityActionInvocationParams, EntityActionResult } from "./EntityActionEngine";
-import { ActionEngine, ActionParam, ActionResult } from "../generic/ActionEngine";
 import { ActionParamEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
 import { BaseEntity } from "@memberjunction/core";
+import { ActionParam, ActionResult, EntityActionInvocationParams, EntityActionResult } from "@memberjunction/actions-base";
+import { ActionEngineServer } from "../generic/ActionEngine";
 
 /**
  * Base class for invocation of any entity action invocation type
@@ -136,17 +136,17 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         if (this.ValidateParams(params)) {
             // now do the work
             // get the class that is derived from BaseAction for the Action Name
-            await ActionEngine.Instance.Config(false, params.ContextUser);
+            await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
             // prepare the variables for the action
-            const action = ActionEngine.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
             const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
             const filters = params.EntityAction.Filters.map(f => {
-                const filter = ActionEngine.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
+                const filter = ActionEngineServer.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
                 return filter;
             })
             
-            const result = await ActionEngine.Instance.RunAction({
+            const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: filters,
@@ -190,10 +190,10 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
         if (this.ValidateParams(params)) {
             // now do the work
             // get the class that is derived from BaseAction for the Action Name
-            await ActionEngine.Instance.Config(false, params.ContextUser);
+            await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
             // prepare the variables for the action
-            const action = ActionEngine.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
 
             // get the priority sub-class for the SingleRecord invocation type that we need now
             const invocationInstance = MJGlobal.Instance.ClassFactory.CreateInstance<EntityActionInvocationBase>(EntityActionInvocationBase, 'SingleRecord'); // get the single record class
@@ -236,16 +236,16 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
         // for this type of invocation we need to validate that the EntityObject is not null
         if (this.ValidateParams(params)) {
             // make sure the action engine is good to go, the below won't do anything if it was already configured
-            await ActionEngine.Instance.Config(false, params.ContextUser);
+            await ActionEngineServer.Instance.Config(false, params.ContextUser);
 
-            const action = ActionEngine.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
             const internalParams = await this.MapParams(action.Params, params.EntityAction.Params, params.EntityObject);
             
-            const result = await ActionEngine.Instance.RunAction({
+            const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
                 Filters: params.EntityAction.Filters.map(f => {
-                    const filter = ActionEngine.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
+                    const filter = ActionEngineServer.Instance.ActionFilters.find(fi => fi.ID === f.ActionFilterID);
                     return filter;
                 }),
                 Params: internalParams

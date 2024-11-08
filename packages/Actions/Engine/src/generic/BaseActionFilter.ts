@@ -1,5 +1,5 @@
 import { ActionFilterEntity } from "@memberjunction/core-entities";
-import { RunActionParams } from "./ActionEngine";
+import { RunActionParams } from "@memberjunction/actions-base";
 
 /**
  * This is the base class for executing filters to determine if an action should be run. The CodeGen tool generates sub-classes of this class for each Action Filter in the system. The code injected into the
