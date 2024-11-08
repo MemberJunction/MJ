@@ -1,4 +1,6 @@
-import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
+import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
+import { BaseAction } from "@memberjunction/actions";
+
 import { RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
 import { EntityDocumentEntity } from "@memberjunction/core-entities";
