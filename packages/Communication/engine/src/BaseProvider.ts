@@ -82,7 +82,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
 
         if (this.SubjectTemplate) {
             // process the subject template
-            const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('Text');
+            const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('HTML');
             if (subjectContent) {
                 const result = await TemplateEngineServer.Instance.RenderTemplate(this.SubjectTemplate, subjectContent, this.ContextData);
                 if (result && result.Success) {

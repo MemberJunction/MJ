@@ -1,8 +1,8 @@
 import { LogError, RunView, UserInfo } from "@memberjunction/core";
-import { DataModifier } from "../classes/DataModifier";
+import { DataModifier } from "../../classes/DataModifier";
 import { RegisterClass } from "@memberjunction/global";
 import { MessageRecipient } from "@memberjunction/communication-types";
-import { DataModifierParams } from "../models/DataModifier.types";
+import { DataModifierParams } from "../../models/DataModifier.types";
 
 @RegisterClass(DataModifier, 'AGUDataModifier')
 export class AGUDataModifier extends DataModifier {
@@ -24,7 +24,6 @@ export class AGUDataModifier extends DataModifier {
             //we have most of the data we need in the contributors list, but we're missing 
             //the profile link for each person. We'll fetch that data from another view
             const customerIDs: string = contributors.map((contributor: Contributor) => `'${contributor.CustomerID}'`).join(',');
-            console.log(`Fetching 2024 presenter data for customerIDs: ${customerIDs}`);
             const rvPresenterResult = await rv.RunView<Presenter>({
                 EntityName: 'Presenter _2024_Emails',
                 ExtraFilter: `Customer_ID IN (${customerIDs})`
@@ -34,7 +33,6 @@ export class AGUDataModifier extends DataModifier {
                 LogError(`Error fetching 2024 presenter data: ${rvPresenterResult.ErrorMessage}`);
             }
 
-            console.log(`Fetched ${rvPresenterResult.Results.length} 2024 presenters, with the source having ${data.Contributors.length} recommendations`);
             for(const presenter of rvPresenterResult.Results) {
                 const contributor: Contributor | undefined = contributors.find((contributor: Contributor) => contributor.CustomerID === presenter.Customer_ID);
                 if(!contributor) {
@@ -76,6 +74,7 @@ export class AGUDataModifier extends DataModifier {
 }
 
 export function LoadAGUDataModifier(): void {
+
 }
 
 type Contributor = {

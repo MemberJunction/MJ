@@ -2,10 +2,10 @@ import { CampaignHander } from "./classes/CampaignHandler";
 import { UserInfo } from "@memberjunction/core";
 import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
 import { AppDataSource } from './db';
-import { LoadAGUDataModifier } from "./ClientSpecific/AGUDataModifier";
+import { LoadAGUDataModifier } from "./Clients/AGU/AGUDataModifier";
 import { LoadProvider } from "@memberjunction/communication-sendgrid";
 import { LoadMessageBuilder } from "./classes/MessageBuilder";
-import { LoadAGUMessageBuilder } from "./ClientSpecific/MessageBuilders/AGUMessageBuilder";
+import { LoadAGUMessageBuilder } from "./Clients/AGU/AGUMessageBuilder";
 import * as Config from './Config';
 
 LoadMessageBuilder();
