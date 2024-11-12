@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="Entity Permissions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '1FA13340-C7BB-4F59-A2EF-552D6B05B344'}">
+                    <mj-tab Name="Entity Permissions" [Visible]="record.IsSaved"> 
                         Entity Permissions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Permissions','ReadRLSFilterID')"  
                             [NewRecordValues]="NewRecordValues('Entity Permissions')"
                             [AllowLoad]="IsCurrentTab('Entity Permissions')"  
                             [EditMode]="GridEditMode()"  

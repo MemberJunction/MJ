@@ -150,6 +150,7 @@ export class AskSkipResolver {
     messages.push({
       content: UserQuestion,
       role: 'user',
+      conversationDetailID: convoDetailEntity.ID,
     });
 
     return this.handleSimpleSkipPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
@@ -380,7 +381,8 @@ export class AskSkipResolver {
     // narrower in scope than our native MJ metadata
     // don't pass the mj_core_schema entities by default, but allow flexibilty 
     // to include specific entities from the MJAPI config.json
-    const includedEntities = configInfo.askSkip.entitiesToSendSkip.includeEntitiesFromExcludedSchemas.map((e) => e.trim().toLowerCase());
+    
+    const includedEntities = (configInfo.askSkip?.entitiesToSendSkip?.includeEntitiesFromExcludedSchemas ?? []).map((e) => e.trim().toLowerCase());
     const md = new Metadata();
     return md.Entities.filter((e) => e.SchemaName !== mj_core_schema || includedEntities.includes(e.Name.trim().toLowerCase())).map((e) => {
       const ret: SkipEntityInfo = {
@@ -641,6 +643,7 @@ export class AskSkipResolver {
           const m: SkipMessage = {
             content: skipRole === 'system' ? outputMessage : r.Message,
             role: skipRole,
+            conversationDetailID: r.ID,
           };
           return m;
         });
@@ -950,6 +953,7 @@ export class AskSkipResolver {
         content: `Skip API Requested Data as shown below
                   ${JSON.stringify(apiResponse.dataRequest)}`,
         role: 'system', // user role of system because this came from Skip, we are simplifying the message for the next round if we need to send it back
+        conversationDetailID: convoDetailEntity.ID,
       });
 
       // check to see if apiResponse.dataRequest is an array, if not, see if it is a single item, and if not, then throw an error
@@ -1026,6 +1030,7 @@ export class AskSkipResolver {
                       ${JSON.stringify(executionErrors)}
                     `,
             role: 'user', // use user role becuase to the Skip API what we send it is "user"
+            conversationDetailID: convoDetailEntity.ID,
           });
         }
       } else {

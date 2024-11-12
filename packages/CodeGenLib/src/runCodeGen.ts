@@ -1,7 +1,7 @@
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
-import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
+import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource, { MSSQLConnection } from "./Config/db-connection"
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './Config/config';
@@ -14,7 +14,7 @@ import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovi
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { ActionEngine } from '@memberjunction/actions';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
 
 /**
@@ -26,7 +26,7 @@ export class RunCodeGenBase {
     /**
      * This method is called to setup the data source for the code generation process. You can override this method to customize the data source setup process.
      */
-    public async setupDataSource() {
+    public async setupDataSource(): Promise<SQLServerDataProvider> {
         /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/
@@ -42,7 +42,8 @@ export class RunCodeGenBase {
         const pool = await MSSQLConnection(); // get the MSSQL connection pool
 
         const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 );
-        await setupSQLServerClient(config);
+        const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
+        return sqlServerProvider;
     }
 
     /**
@@ -55,7 +56,7 @@ export class RunCodeGenBase {
             const startTime = new Date();
             logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString());
             
-            await this.setupDataSource();
+            const provider: SQLServerDataProvider = await this.setupDataSource();
 
             await UserCache.Instance.Refresh(AppDataSource);
             const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
@@ -121,6 +122,10 @@ export class RunCodeGenBase {
                 const metadataSuccess = await manageMD.manageMetadata(AppDataSource); 
                 if (!metadataSuccess){
                     logError('ERROR managing metadata');
+                }
+                else{
+                    // now - we need to tell our metadata object to refresh itself
+                    await provider.Refresh();
                 }
     
                 /****************************************************************************************
@@ -241,11 +246,11 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
             const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-            await ActionEngine.Instance.Config(false, currentUser)
+            await ActionEngineServer.Instance.Config(false, currentUser)
             if (coreActionsOutputDir) {
                 logStatus('Generating CORE Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-                if (! await actionsGenerator.generateActions(ActionEngine.Instance.CoreActions, coreActionsOutputDir))  
+                if (! await actionsGenerator.generateActions(ActionEngineServer.Instance.CoreActions, coreActionsOutputDir))  
                     logError('Error generating CORE Actions code');
             }
     
@@ -253,7 +258,7 @@ export class RunCodeGenBase {
             if (actionsOutputDir) {
                 logStatus('Generating Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-                if (! await actionsGenerator.generateActions(ActionEngine.Instance.NonCoreActions, actionsOutputDir))
+                if (! await actionsGenerator.generateActions(ActionEngineServer.Instance.NonCoreActions, actionsOutputDir))
                     logError('Error generating Actions code');
             }
             else

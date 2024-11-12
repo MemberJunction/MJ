@@ -99,12 +99,12 @@ export class ProcessedMessageServer extends ProcessedMessage {
             else {
                 return {
                     Success: false,
-                    Message: 'SubjectTemplate does not have a Text option and this is required for processing the subject of the message.'
+                    Message: 'SubjectTemplate does not have an associated HTML Template Content option and this is required for processing the subject of the message.'
                 }
             }
         }
         else {
-            this.ProcessedSubject = this.Subject;
+            this.ProcessedSubject = this.Subject || '';
         }
 
         return {

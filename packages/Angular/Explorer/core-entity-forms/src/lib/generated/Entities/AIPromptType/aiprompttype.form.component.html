@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Prompts" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '7174433E-F36B-1410-883E-00D02208DC50'}">
+                    <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
                         AI Prompts
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TypeID')"  
                             [NewRecordValues]="NewRecordValues('AI Prompts')"
                             [AllowLoad]="IsCurrentTab('AI Prompts')"  
                             [EditMode]="GridEditMode()"  

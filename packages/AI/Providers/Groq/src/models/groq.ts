@@ -2,33 +2,35 @@ import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, Clas
 import { RegisterClass } from '@memberjunction/global';
 import Groq from 'groq-sdk';
 
+/**
+ * Groq implementation of the BaseLLM class
+ */
 @RegisterClass(BaseLLM, "GroqLLM")
 export class GroqLLM extends BaseLLM {
-    static _client: Groq;
+    private _client: Groq;
     constructor(apiKey: string) {
         super(apiKey);
-        if (!GroqLLM._client){
-            GroqLLM._client = new Groq({ apiKey: apiKey });
-        }
+        this._client = new Groq({ apiKey: apiKey });
     }
 
-    public get client(): Groq {return GroqLLM._client;}
+    /**
+     * Read only getter method to get the Groq client instance
+     */
+    public get GroqClient(): Groq {
+        return this._client;
+    }
+
+    /**
+     * Read only getter method to get the Groq client instance, deprecated
+     * @deprecated
+     */
+    public get client(): Groq {
+        return this.GroqClient;
+    }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
 
-
-        // const completion = await groq.chat.completions.create({
-        //     messages: [
-        //         {
-        //             role: "user",
-        //             content: "Explain the importance of low latency LLMs"
-        //         }
-        //     ],
-        //     model: "mixtral-8x7b-32768"
-        // }).then((chatCompletion)=>{
-        //     process.stdout.write(chatCompletion.choices[0]?.message?.content || "");
-        // });
 
         const chatResponse = await this.client.chat.completions.create({
             model: params.model,

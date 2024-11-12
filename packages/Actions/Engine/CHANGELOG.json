@@ -2,6 +2,186 @@
   "name": "@memberjunction/actions",
   "entries": [
     {
+      "date": "Mon, 04 Nov 2024 23:07:22 GMT",
+      "version": "2.12.0",
+      "tag": "@memberjunction/actions_v2.12.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/global to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core-entities to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/ai to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/aiengine to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/doc-utils to v2.12.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Thu, 24 Oct 2024 15:33:07 GMT",
+      "version": "2.11.0",
+      "tag": "@memberjunction/actions_v2.11.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/global to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core-entities to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/ai to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/aiengine to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/doc-utils to v2.11.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 23 Oct 2024 22:49:59 GMT",
+      "version": "2.10.0",
+      "tag": "@memberjunction/actions_v2.10.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/global to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core-entities to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/ai to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/aiengine to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/doc-utils to v2.10.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 22 Oct 2024 14:57:08 GMT",
+      "version": "2.9.0",
+      "tag": "@memberjunction/actions_v2.9.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/global to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core-entities to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/ai to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/aiengine to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/doc-utils to v2.9.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 15 Oct 2024 17:01:03 GMT",
       "version": "2.8.0",
       "tag": "@memberjunction/actions_v2.8.0",

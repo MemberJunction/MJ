@@ -26,7 +26,8 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { ActionResult, EntityActionEngine } from "@memberjunction/actions";
+import { EntityActionEngineServer } from "@memberjunction/actions";
+import { ActionResult } from "@memberjunction/actions-base";
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -73,6 +74,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * SQL Server Data Provider implementation of this getter returns a TypeORM DataSource object
+     */
+    public get DatabaseConnection(): any {
+        return this._dataSource;
     }
 
     protected get AllowRefresh(): boolean {
@@ -1186,7 +1194,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
         // use the EntityActionEngine for this
         try {
-            const engine = EntityActionEngine.Instance;
+            const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
             const newRecord = entity.IsSaved ? false : true;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';

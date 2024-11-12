@@ -5,15 +5,13 @@ import { ChatCompletionResponseChoice, ListModelsResponse } from '../generic/mis
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
-    static _client: MistralClient;
+    private _client: MistralClient;
     constructor(apiKey: string) {
         super(apiKey);
-        if (!MistralLLM._client){
-            MistralLLM._client = new MistralClient({ apiKey });
-        }
+        this._client = new MistralClient({ apiKey });
     }
 
-    public get client(): MistralClient {return MistralLLM._client;}
+    public get client(): MistralClient {return this._client;}
 
     public async ChatCompletion(params: MistralChatParams): Promise<ChatResult>{
         const startTime = new Date();

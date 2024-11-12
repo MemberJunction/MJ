@@ -2,6 +2,594 @@
   "name": "@memberjunction/ng-explorer-core",
   "entries": [
     {
+      "date": "Mon, 04 Nov 2024 23:07:22 GMT",
+      "version": "2.12.0",
+      "tag": "@memberjunction/ng-explorer-core_v2.12.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/global to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/core to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/communication-types to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/templates-base-types to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-file-storage to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-changes to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-query-grid to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-properties to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-shared to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-ask-skip to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-auth-services to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-explorer-settings to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-selector to v2.12.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-resource-permissions to v2.12.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "22739407664e08f23aa8a64bb71bcfdfadca2ac3",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Thu, 24 Oct 2024 15:33:07 GMT",
+      "version": "2.11.0",
+      "tag": "@memberjunction/ng-explorer-core_v2.11.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/global to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/core to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/communication-types to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/templates-base-types to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-file-storage to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-changes to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-query-grid to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-properties to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-shared to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-ask-skip to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-auth-services to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-explorer-settings to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-selector to v2.11.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-resource-permissions to v2.11.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Wed, 23 Oct 2024 22:49:59 GMT",
+      "version": "2.10.0",
+      "tag": "@memberjunction/ng-explorer-core_v2.10.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "941659762fb0ed26ab6b7311ece191109ab30ef8",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "941659762fb0ed26ab6b7311ece191109ab30ef8",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/global to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/core to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/communication-types to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/templates-base-types to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-file-storage to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-changes to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-query-grid to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-properties to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-shared to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-ask-skip to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-auth-services to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-explorer-settings to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-selector to v2.10.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-resource-permissions to v2.10.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Tue, 22 Oct 2024 14:57:08 GMT",
+      "version": "2.9.0",
+      "tag": "@memberjunction/ng-explorer-core_v2.9.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "440506fc5c400a2d41ea6be39d2b6a2c8760616c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "440506fc5c400a2d41ea6be39d2b6a2c8760616c",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/global to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/core to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/communication-types to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/templates-base-types to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-compare-records to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-file-storage to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-changes to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-query-grid to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-user-view-properties to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-shared to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-ask-skip to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-auth-services to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-explorer-settings to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-record-selector to v2.9.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-core",
+            "comment": "Bump @memberjunction/ng-resource-permissions to v2.9.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 15 Oct 2024 17:01:03 GMT",
       "version": "2.8.0",
       "tag": "@memberjunction/ng-explorer-core_v2.8.0",

@@ -1,32 +1,30 @@
-<app-generic-browser-list 
-title="Lists"
-itemType="list"
-iconName="graph" 
-[items]="items"
-[extraDropdownOptions]="dropdownItems"
-addText="Create New List"
-ItemEntityName="Lists"
-CategoryEntityName="List Categories" 
-resourceName = "List"
-(itemClickEvent)="itemClick($event)"
-(AfterAddFolderEvent)="onEvent($event)"
-(AfterAddItemEvent)="onEvent($event)"
-(AfterDeleteItemEvent)="onEvent($event)"
-(AfterDeleteFolderEvent)="onEvent($event)"
-[selectedFolderID]="selectedFolderID"
-[showLoader]="showLoader"
-(viewModeChangeEvent)="onViewModeChange($event)"
-(BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
-(BeforeAddItemEvent)="onBeforeAddItemEvent($event)"
-(dropdownOptionClickEvent)="onDropdownOptionClick($event)"
-/>
+@if(showLoader){
+    <kendo-loader type="converging-spinner"></kendo-loader>
+}
+@else {
+    <mj-resource-browser
+        #resourceBrowserLists
+        ResourceTypeName="Lists"
+        [EnableCategories]="true"
+        [EnableItemEdit]="true"
+        [EnableItemDelete]="true"
+        [CurrentCategoryID]="selectedFolderID"
+        Title="Lists"
+        DisplayMode="Tile"
+        [NewItemOptions]="NewItemOptions"
+        (ResourceSelected)="itemClick($event)"
+        (EditItemEvent)="onBeforeUpdateItemEvent($event)"
+        (DeleteItemEvent)="deleteList($event)"
+        (NavigateToParentEvent)="navigateToParentFolder()"
+    />
+}
 <kendo-dialog
 title="Create New List"
 *ngIf="showCreateDialog"
 (close)="toggleCreateDialog(false)"
 [minWidth]="250"
 [width]="650"
-[height]="550"
+[height]="400"
 >
     @if(showCreateLoader){
         <kendo-loader type="converging-spinner"></kendo-loader>

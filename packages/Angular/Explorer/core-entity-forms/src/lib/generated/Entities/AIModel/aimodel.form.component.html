@@ -2,7 +2,7 @@
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
 
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
                     
                     <mj-tab Name="Details">
                         Details
@@ -16,14 +16,12 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AI Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '24996A46-F936-4A43-A7EA-2558CAE9612F'}">
+                    <mj-tab Name="AI Actions" [Visible]="record.IsSaved"> 
                         AI Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Actions','DefaultModelID')"  
                             [NewRecordValues]="NewRecordValues('AI Actions')"
                             [AllowLoad]="IsCurrentTab('AI Actions')"  
                             [EditMode]="GridEditMode()"  
@@ -31,14 +29,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity Documents" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '1D2B1E7C-8687-43E3-ADDF-3920FE15E262'}">
+                    <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
                         Entity Documents
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','AIModelID')"  
                             [NewRecordValues]="NewRecordValues('Entity Documents')"
                             [AllowLoad]="IsCurrentTab('Entity Documents')"  
                             [EditMode]="GridEditMode()"  
@@ -46,14 +42,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="AI Model Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'C4B5759A-40F3-4C20-9B12-A2F40A176C24'}">
+                    <mj-tab Name="AI Model Actions" [Visible]="record.IsSaved"> 
                         AI Model Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Model Actions','AIModelID')"  
                             [NewRecordValues]="NewRecordValues('AI Model Actions')"
                             [AllowLoad]="IsCurrentTab('AI Model Actions')"  
                             [EditMode]="GridEditMode()"  
@@ -61,14 +55,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Vector Indexes" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '57722FAC-059C-4827-9301-BBF769AC4FF5'}">
+                    <mj-tab Name="Vector Indexes" [Visible]="record.IsSaved"> 
                         Vector Indexes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Vector Indexes','EmbeddingModelID')"  
                             [NewRecordValues]="NewRecordValues('Vector Indexes')"
                             [AllowLoad]="IsCurrentTab('Vector Indexes')"  
                             [EditMode]="GridEditMode()"  
@@ -76,14 +68,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Content Types" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: 'A5ADFA8F-207C-EF11-8473-000D3A8AA177'}">
+                    <mj-tab Name="Content Types" [Visible]="record.IsSaved"> 
                         Content Types
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Content Types')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Content Types','AIModelID')"  
                             [NewRecordValues]="NewRecordValues('Content Types')"
                             [AllowLoad]="IsCurrentTab('Content Types')"  
                             [EditMode]="GridEditMode()"  
@@ -91,14 +81,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Entity AI Actions" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '1486CB4C-71BB-4E9E-B384-8531645E502F'}">
+                    <mj-tab Name="Entity AI Actions" [Visible]="record.IsSaved"> 
                         Entity AI Actions
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('Entity AI Actions','AIModelID')"  
                             [NewRecordValues]="NewRecordValues('Entity AI Actions')"
                             [AllowLoad]="IsCurrentTab('Entity AI Actions')"  
                             [EditMode]="GridEditMode()"  
@@ -106,14 +94,12 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="AI Result Cache" 
-                        [Visible]="record.IsSaved" 
-                        [Props]="{EntityRelationshipID: '63D6B0B0-BF59-EF11-991A-000D3A9D8BF3'}">
+                    <mj-tab Name="AI Result Cache" [Visible]="record.IsSaved"> 
                         AI Result Cache
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Result Cache','AIModelID')"  
                             [NewRecordValues]="NewRecordValues('AI Result Cache')"
                             [AllowLoad]="IsCurrentTab('AI Result Cache')"  
                             [EditMode]="GridEditMode()"  

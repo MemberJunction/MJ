@@ -1,17 +1,17 @@
-import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
-import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { CleanJSON, MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
-import { ActionEngine, ActionLibrary, GeneratedCode } from "./ActionEngine";
 import { BaseLLM, ChatMessage, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { DocumentationEngine, LibraryEntityExtended, LibraryItemEntityExtended } from "@memberjunction/doc-utils";
+import { ActionEngineBase, ActionEntityExtended, ActionLibrary, GeneratedCode } from "@memberjunction/actions-base";
 
 /**
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity.
  */
 @RegisterClass(BaseEntity, 'Actions') // high priority make sure this class is used ahead of other things
-export class ActionEntityServerEntity extends ActionEntity {
+export class ActionEntityServerEntity extends ActionEntityExtended {
     constructor(Entity: EntityInfo) {
         super(Entity); // call super
 
@@ -27,50 +27,6 @@ export class ActionEntityServerEntity extends ActionEntity {
         return 'OpenAI';
     }
 
-    /**
-     * Generates a programatically friendly name for the name of the Action.
-     */
-    public get ProgrammaticName(): string {
-        return CodeNameFromString(this.Name);
-    }
-
-    /**
-     * Returns true if this action is a core MemberJunction framework action, false otherwise.
-     */
-    public get IsCoreAction(): boolean {
-        return this.Category?.trim().toLowerCase() === ActionEngine.Instance.CoreCategoryName.trim().toLowerCase();
-    }
-
-    private _resultCodes: ActionResultCodeEntity[] = null;
-    /**
-     * Provides a list of possible result codes for this action.
-     */
-    public get ResultCodes(): ActionResultCodeEntity[] {
-        if (!this._resultCodes) {
-            // load the result codes
-            this._resultCodes = ActionEngine.Instance.ActionResultCodes.filter(c => c.ActionID === this.ID);
-        }
-        return this._resultCodes;
-    }
-
-    private _params: ActionParamEntity[] = null;
-    public get Params(): ActionParamEntity[] {
-        if (!this._params) {
-            // load the inputs
-            this._params = ActionEngine.Instance.ActionParams.filter(i => i.ActionID === this.ID);
-        }
-        return this._params;
-    }
-
-    private _libs: ActionLibraryEntity[] = null;
-    public get Libraries(): ActionLibraryEntity[] {
-        if (!this._libs) {
-            // load the inputs
-            this._libs = ActionEngine.Instance.ActionLibraries.filter(l => l.ActionID === this.ID);
-        }
-        return this._libs;
-    }
-
 
     /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
@@ -80,7 +36,7 @@ export class ActionEntityServerEntity extends ActionEntity {
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // make sure the ActionEngine is configured
-        await ActionEngine.Instance.Config(false, this.ContextCurrentUser);
+        await ActionEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
 
         let newCodeGenerated: boolean = false;

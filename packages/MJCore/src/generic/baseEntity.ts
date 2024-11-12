@@ -329,7 +329,17 @@ export class BaseEntityResult {
      * Timestamp when the operation ended
      */
     EndedAt: Date;
-}
+
+    constructor(success?: boolean, message?: string, type? : 'create' | 'update' | 'delete') {
+        this.Success = success === undefined ? false : success;
+        this.Type = type === undefined ? 'create' : type;
+        this.Message = message === undefined ? '' : message;
+        this.Error = null;
+        this.Errors = [];
+        this.StartedAt = new Date();
+        this.EndedAt = new Date();
+    }
+} 
 
 /**
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
@@ -340,7 +350,15 @@ export class BaseEntityEvent {
      * The type of event that is being raised. transaction_ready is used to indicate that a transaction is ready to be submitted for execution. The TransactionGroup class uses this to know that all async preprocessing is done and it can now submit the transaction.
      */
     type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other';
+
+    /**
+     * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
+     */
     payload: any;
+
+    /**
+     * The BaseEntity object that is raising the event.
+     */
     baseEntity: BaseEntity;
 }
 

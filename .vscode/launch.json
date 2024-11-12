@@ -49,8 +49,12 @@
       "request": "launch",
       "name": "Launch Chrome against localhost",
       "url": "http://localhost:4200",
-      "webRoot": "${workspaceFolder}/packages/MJExplorer",
-      "sourceMaps": true
+      "sourceMaps": true,
+      "webRoot": "${workspaceFolder}/packages",
+      "skipFiles": ["!@memberjunction/**", "<node_internals>/**/*.js", "${workspaceFolder}/node_modules/**/*.js"],
+      "sourceMapPathOverrides": {
+        "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
+      }
     }
   ]
 }
