@@ -4,5 +4,4 @@ export * from './generic/ActionEngine';
 export * from './generic/ActionEntity.server';
 
 export * from './entity-actions/EntityActionEngine';
-export * from './entity-actions/EntityActionEntity.server';
 export * from './entity-actions/EntityActionInvocationTypes';

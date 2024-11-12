@@ -21,6 +21,7 @@
   "dependencies": {
     "@memberjunction/global": "2.12.0",
     "@memberjunction/core": "2.12.0",
+    "@memberjunction/actions-base": "2.12.0",
     "@memberjunction/core-entities": "2.12.0",
     "@memberjunction/ai": "2.12.0",
     "@memberjunction/aiengine": "2.12.0",

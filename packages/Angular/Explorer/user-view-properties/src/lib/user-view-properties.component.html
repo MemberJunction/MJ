@@ -204,12 +204,14 @@
                                     ></kendo-textarea>  
                                 }
                                 @else {
+                                    <span>SQL Text Where Clause:</span>
+                                    <br>
                                     <kendo-textarea
-                                        [readonly]="true"
+                                        [readonly]="false"
                                         [rows]="7"
                                         [(ngModel)]="record.WhereClause"
                                         resizable="vertical"
-                                        class="advanced-tab-details"
+                                        class="advanced-tab-details smart-filter-prompt"
                                     ></kendo-textarea>
                                 }
                             </ng-template>

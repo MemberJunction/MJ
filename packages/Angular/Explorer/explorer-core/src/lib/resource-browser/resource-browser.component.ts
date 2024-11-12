@@ -280,11 +280,11 @@ export class ResourceBrowserComponent {
       filter += `(${this.ItemFilter})`;
     }
     if(this.UserIDFieldName){
-      let base: string = this.ItemFilter ? "AND": "";
+      let base: string = this.ItemFilter ? "AND ": " ";
       filter += `${base}([${this.UserIDFieldName}] = '${md.CurrentUser.ID}')`;
     }
     if(this.CurrentCategoryID && this.CategoryIDFieldName){
-      let base: string = (this.ItemFilter || this.UserIDFieldName) ? "AND": "";
+      let base: string = (this.ItemFilter || this.UserIDFieldName) ? "AND ": " ";
       filter += `${base}([${this.CategoryIDFieldName}] = '${this.CurrentCategoryID}')`;
     }
     
