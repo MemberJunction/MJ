@@ -1,9 +1,10 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { BaseEntity, CompositeKey, Metadata, RecordDependency } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, Metadata, RecordDependency, RunView } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { ListDetailEntity, ListEntity } from '@memberjunction/core-entities';
 
 
 @Component({
@@ -27,6 +28,11 @@ export class FormToolbarComponent implements OnInit {
     public get CurrentlyDisabled(): boolean {
         return this.Disabled && this._currentlyDisabled;
     }
+
+    public listDialogVisible: boolean = false;
+    public showListDialogLoader: boolean = false;
+    public availableLists: ListEntity[] = [];
+    public selectedLists: ListEntity[] = [];
 
     /**
      * Internal property that changes over time based on the state of the record being managed. Don't access this directly, use the CurrentlyDisabled property instead.
@@ -128,6 +134,38 @@ export class FormToolbarComponent implements OnInit {
     
     public toggleDeleteDialog(show: boolean): void {
         this._deleteDialogVisible = show;
+    }
+
+    public async toggleListDialog(show: boolean): Promise<void> {
+        this.listDialogVisible = show;
+
+        if(show){
+            this.availableLists = [];
+            this.availableLists = await this.form.GetListsCanAddTo();
+        }
+    }
+
+    public async addRecordToList(list: ListEntity): Promise<void> {
+        this.toggleListDialog(false);
+        
+        const md: Metadata = new Metadata();
+        
+        const listDetailEntity: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", md.CurrentUser);
+        listDetailEntity.NewRecord();
+        listDetailEntity.ListID = list.ID;
+        listDetailEntity.RecordID = this.form.record.FirstPrimaryKey.Value;
+
+        const saveResult: boolean = await listDetailEntity.Save();
+        if(!saveResult){
+            LogError(`Error adding record to list ${list.Name}`, undefined, listDetailEntity.LatestResult);
+        }
+
+        if(saveResult){
+            SharedService.Instance.CreateSimpleNotification("Record added to list successfully", "success", 2500);
+        }
+        else{
+            SharedService.Instance.CreateSimpleNotification(`Failed to add record to list`, "error", 2500);
+        }
     }
     
     public async deleteRecord(): Promise<void> {
