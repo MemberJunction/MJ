@@ -63,4 +63,15 @@ export type RecommendationResponse = {
     source: string,
     type: string, 
     vector_id: string
-}
+};
+
+export type GetRecommendationParams = {
+    Options: Record<string, any>, 
+    AccessToken: string, 
+    VectorID: string
+};
+
+export type GetRecommendationResults = {
+    Recommendations: RecommendationResponse[] | null,
+    ErrorMessage?: string
+};

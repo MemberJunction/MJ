@@ -69,32 +69,6 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return result;
     }
 
-    /**
-     * This method actually calls the Rex API for each individual recommendation and gets a list of items back.
-     * @param recommendation 
-     */
-    protected async CallRexAPI(recommendation: RecommendationEntity): Promise<RecommendationItemEntity[]> {
-        const items: RecommendationItemEntity[] = [];
-        try {
-            const apiResult = await fetch(`https://rexapi.rasa.io/recommendations/${recommendation.ID}`);
-            const apiItems = await apiResult.json();
-            const md = new Metadata();
-            
-            for (const apiItem of apiItems) {
-                const item = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items");
-                item.RecommendationID = recommendation.ID;
-                item.DestinationEntityID = apiItem.DestinationEntityId;
-                item.DestinationEntityRecordID = apiItem.DestinationEntityRecordID;
-                item.MatchProbability = this.ClampScore(apiItem.MatchProbability, this.MinProbability, this.MaxProbability);
-                items.push(item);
-            }
-            return items;
-        }
-        catch (e) {
-            LogError(e);
-        }
-    }
-
     private async GetVectorID(recommendation: RecommendationEntity, entityDocumentID: string, currentUser?: UserInfo): Promise<string | null> {
         const rv: RunView = new RunView();
 
@@ -202,9 +176,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             };
 
             const body = {
-                type: "person",
                 source: "mj.pinecone",
-                id: vectorID,
                 filters: [
                     {
                         type: "course",
@@ -321,25 +293,6 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
 
         return probability;
-    }
-
-    private async GetEmbeddingTest(request: RecommendationRequest, accessToken: string): Promise<void> {
-        const vectorID: string = await this.GetVectorID(request.Recommendations[0], request.Options.EntityDocumentID, request.CurrentUser);
-        if(vectorID){
-            const embeddingParams: GetEmbeddingParams = {
-                AccessToken: accessToken,
-                EntityID: vectorID,
-                EntityType: "person",
-                Source: "mj.pinecone",
-                ExcludeEmbeddings: false,
-            }
-    
-            let result = await this.GetEmbedding(embeddingParams);
-            console.log("Embedding result:", result);
-        }
-        else{
-            console.log("No vector ID found for recommendation");
-        }
     }
 }
 
