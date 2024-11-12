@@ -1,10 +1,8 @@
-import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
+import {BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { VectorizeEntityAction } from "@memberjunction/core-actions";
 import { AutotagLocalFileSystem, AutotagRSSFeed, AutotagWebsite } from '@memberjunction/content-autotagging';
-import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
-import { EntityDocumentEntity } from "@memberjunction/core-entities";
-import { LogStatus } from "@memberjunction/core";
+import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
 /**
  * 
