@@ -1,3 +1,4 @@
+import * as Config from './Config';
 import { CampaignHander } from "./classes/CampaignHandler";
 import { UserInfo } from "@memberjunction/core";
 import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
@@ -6,7 +7,7 @@ import { LoadAGUDataModifier } from "./Clients/AGU/AGUDataModifier";
 import { LoadProvider } from "@memberjunction/communication-sendgrid";
 import { LoadMessageBuilder } from "./classes/MessageBuilder";
 import { LoadAGUMessageBuilder } from "./Clients/AGU/AGUMessageBuilder";
-import * as Config from './Config';
+import { LoadRexRecommendationsProvider } from "@memberjunction/ai-recommendations-rex";
 
 LoadMessageBuilder();
 LoadAGUMessageBuilder();
@@ -15,8 +16,9 @@ LoadAGUDataModifier();
 LoadAGUDataModifier();
 LoadProvider();
 
-async function Run(): Promise<void> {
+LoadRexRecommendationsProvider();
 
+async function Init(): Promise<UserInfo> {
     const config = new SQLServerProviderConfigData(AppDataSource, Config.CurrentUserEmail, Config.mjCoreSchema, 5000);
     const userCache: UserCache = new UserCache();
 
@@ -29,14 +31,30 @@ async function Run(): Promise<void> {
         throw new Error(`Error: could not find user with email ${Config.CurrentUserEmail}`);
     }
 
+    return user;
+}
+
+async function Run(): Promise<void> {
+    const user: UserInfo = await Init();
     const ch: CampaignHander = new CampaignHander();
+
     await ch.Config(user);
+    /*
     await ch.SendEmails({
         ListID: '8E59846B-9298-EF11-88CF-002248306D26',
         ListBatchSize: 5,
-        MaxListRecords: 20,
+        MaxListRecords: 5,
         RecommendationRunID: '7AE7B91E-8E9C-EF11-88CF-002248306D26',
         CurrentUser: user
+    });
+    */
+
+    await ch.GetRecommendations({
+        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        CurrentUser: user,
+        ContextData: {
+            EntityDocumentID: '38D60434-948D-EF11-8473-002248306CAC'
+        }
     });
 }
 

@@ -1,6 +1,6 @@
 import { LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { GetDataParams } from "../models/RelatedDataHandler.types";
-import { RecommendationEntityType, RecommendationItemEntity } from "@memberjunction/core-entities";
+import { RecommendationEntityType, RecommendationItemEntity, RecommendationItemEntityType } from "@memberjunction/core-entities";
 
 export class RelatedDatahandler {
     public async GetData(params: GetDataParams): Promise<Record<string, any>> {
@@ -41,16 +41,18 @@ export class RelatedDatahandler {
         const recommendations: RecommendationEntityType[] = rvResults[1].Results;
 
         //Next, Get the recommended items
-        const rvRecommendationItems = await rv.RunView<RecommendationItemEntity>({
+        const rvRecommendationItems = await rv.RunView<RecommendationItemEntityType>({
             EntityName: 'Recommendation Items',
             ExtraFilter: `RecommendationID IN ('${recommendations.map(recommendation => recommendation.ID).join(",")}')`,
-            ResultType: 'entity_object'
         }, params.CurrentUser);
 
 
         if(!rvRecommendationItems.Success) {
             throw new Error(`Error getting recommendation items for ${params.SourceRecordEntityName} record with ID: ${params.RecordID}: ${rvRecommendationItems.ErrorMessage}`);
         }
+
+        console.log(`Found ${rvRecommendationItems.Results.length} recommendation items`);
+        console.log(rvRecommendationItems.Results);
 
         //Finally, get the record each recommendation item points to
         for(const recommendationItem of rvRecommendationItems.Results){
@@ -64,11 +66,16 @@ export class RelatedDatahandler {
                 continue;
             }
 
-            if(!results[recommendationItem.DestinationEntity] || !results[recommendationItem.DestinationEntity].length){
-                results[recommendationItem.DestinationEntity] = [];
+            if(recommendationItem.DestinationEntity){
+                if(!results[recommendationItem.DestinationEntity] || !results[recommendationItem.DestinationEntity].length){
+                    results[recommendationItem.DestinationEntity] = [];
+                }
+    
+                results[recommendationItem.DestinationEntity].push(...rvEntityResult.Results);
             }
-
-            results[recommendationItem.DestinationEntity].push(...rvEntityResult.Results);
+            else{
+                LogError(`Recommendation Item ${recommendationItem.ID} has no DestinationEntity`);
+            }
         }
 
         return results;

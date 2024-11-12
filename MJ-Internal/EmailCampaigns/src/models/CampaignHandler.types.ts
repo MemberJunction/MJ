@@ -31,3 +31,9 @@ export type GetListRecordsParams = {
     Offset: number,
     CurrentUser?: UserInfo
 }
+
+export type GetRecommendationsParams = {
+    ListID: string,
+    ContextData?: Record<string, any>,
+    CurrentUser: UserInfo
+}

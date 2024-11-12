@@ -1,6 +1,6 @@
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ListDetailEntityType, ListEntity, ListEntityType } from "@memberjunction/core-entities";
-import { GetListRecordsParams, SendEmailsParams } from '../models/CampaignHandler.types';
+import { GetListRecordsParams, GetRecommendationsParams, SendEmailsParams } from '../models/CampaignHandler.types';
 import { RelatedDatahandler } from './RelatedDataHandler';
 import { Message, MessageRecipient } from "@memberjunction/communication-types";
 import { MJGlobal } from '@memberjunction/global';
@@ -9,6 +9,7 @@ import { dataModifierClassName, messageBuilderClassName } from '../Config';
 import { CommunicationEngine  } from '@memberjunction/communication-engine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { MessageBuilder } from './MessageBuilder';
+import { RecommendationEngineBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
 
 export class CampaignHander {
   private dataModifier: DataModifier;
@@ -20,6 +21,7 @@ export class CampaignHander {
   public async Config(currentUser: UserInfo): Promise<void> {
     await CommunicationEngine.Instance.Config(false, currentUser);
     await TemplateEngineServer.Instance.Config(false, currentUser);
+    await RecommendationEngineBase.Instance.Config(false, currentUser);
   }
 
   public async SendEmails(params: SendEmailsParams): Promise<void> {
@@ -80,6 +82,17 @@ export class CampaignHander {
         fetchNextBatch = false;
       }
     }
+  }
+
+  public async GetRecommendations(params: GetRecommendationsParams): Promise<RecommendationResult> {
+    const recommendationParams: RecommendationRequest = {
+      ListID: params.ListID,
+      CurrentUser: params.CurrentUser,
+      Options: params.ContextData
+    };
+
+    const results: RecommendationResult = await RecommendationEngineBase.Instance.Recommend(recommendationParams);
+    return results;
   }
 
   private async GetList(listID: string, currentUser? :UserInfo): Promise<ListEntity> {

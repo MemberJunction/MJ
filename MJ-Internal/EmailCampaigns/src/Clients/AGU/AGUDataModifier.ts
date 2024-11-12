@@ -33,6 +33,8 @@ export class AGUDataModifier extends DataModifier {
                 LogError(`Error fetching 2024 presenter data: ${rvPresenterResult.ErrorMessage}`);
             }
 
+            console.log(`Found ${rvPresenterResult.Results.length} presenters from ${contributors.length} contributors`);
+            console.log(customerIDs);
             for(const presenter of rvPresenterResult.Results) {
                 const contributor: Contributor | undefined = contributors.find((contributor: Contributor) => contributor.CustomerID === presenter.Customer_ID);
                 if(!contributor) {
