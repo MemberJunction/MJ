@@ -3,10 +3,10 @@
     "autoCreateNewUsers": true,
     "newUserLimitedToAuthorizedDomains": false,
     "newUserAuthorizedDomains": [],
-    "newUserRoles": ["developer"],
+    "newUserRoles": ["UI"],
     "updateCacheWhenNotFound": true,
     "updateCacheWhenNotFoundDelay": 5000,
-    "contextUserForNewUserCreation": "fill.in.user.email.here@whatever.com"
+    "contextUserForNewUserCreation": "not.set@nowhere.com"
   },
   "databaseSettings": {
     "connectionTimeout": 45000,
