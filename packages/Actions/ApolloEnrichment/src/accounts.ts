@@ -1,9 +1,10 @@
-import { ActionParam, ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
+import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
 import { BaseEntity, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import axios, { AxiosResponse } from "axios";
 import { AccountEntityFieldNames, AccountTechnologyEntityFieldNames, ContactEducationHistoryEntityFieldNames, ContactEntityFieldNames, OrganizationEnrichmentOrgainzation, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFieldNames, TechnologyMap } from "./generic/apollo.types";
+import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
 // ApolloEnrichContact this Action would use the www.apollo.io enrichment service and enrich a "contact" type of record. The parameters to this Action would be:
 // EntityName - entity in question that contacts "contact" types of records
