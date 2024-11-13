@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BaseNavigationComponent, EventCodes, ResourceData, SharedService } from '@memberjunction/ng-shared';
-import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
+import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BeforeAddItemEvent, BeforeDeleteItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
 import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
@@ -74,14 +74,16 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
     }
 
     public itemClick(item: Item) {
-        let dataID: string = "";
-    
         if(item.Type === ItemType.Resource){
             let list: ListEntity = <ListEntity>item.Data;
-            dataID = list.FirstPrimaryKey.Value;
+            const dataID: string = list.FirstPrimaryKey.Value;
+            this.router.navigate(['resource', 'list', dataID]);
         }
-    
-        this.router.navigate(['resource', 'list', dataID]);
+        else if(item.Type === ItemType.Folder){
+            const folder: Folder = item.Data;
+            const route: string[] = [this.routeName, folder.ID.toString()];
+            this.router.navigate(route, {queryParams: {viewMode: this.viewMode}});
+        }
     }
     
     public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {}
@@ -202,6 +204,32 @@ export class ListViewComponent extends BaseBrowserComponent implements OnInit {
         if(option.Text === "Create List"){
             this.toggleCreateDialog(true);
         }
+    }
+
+    public async navigateToParentFolder(): Promise<void> {
+        if (this.selectedFolderID) {
+            const rv = new RunView();
+            const parentResult = await rv.RunView({
+                EntityName: "List Categories",
+                ExtraFilter: `ID='${this.selectedFolderID}'`,
+            });
+
+            if (parentResult && parentResult.Success && parentResult.Results.length > 0) {
+                this.selectedFolderID = parentResult.Results[0].ParentID;
+                this.navigateToCurrentPage();
+            }
+        }
+    }
+
+    private navigateToCurrentPage(): void{
+        let folderID: string | null = this.selectedFolderID;
+        let url: string[] = ["/lists"];
+        
+        if(folderID){
+            url.push(`${folderID}`);
+        }
+
+        this.router.navigate(url, {queryParams: {viewMode: this.viewMode}});
     }
 } 
 

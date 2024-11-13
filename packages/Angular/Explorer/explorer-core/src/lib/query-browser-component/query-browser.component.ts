@@ -42,7 +42,6 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
         let resourceFilter: string = `${categoryFilter}`;
     
         let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = '${this.selectedFolderID}'` : `ParentID IS NULL`;
-        LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
         await this.LoadData({
             sortItemsAfterLoad: true, 
             categoryItemFilter: resourceCategoryFilter, 
