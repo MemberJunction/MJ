@@ -1,5 +1,6 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
+import { LogError } from "./logging";
 import { Metadata } from "./metadata";
 
 /**
@@ -31,31 +32,35 @@ export class UserInfo extends BaseInfo {
     EmployeeSupervisor: string = null
     EmployeeSupervisorEmail: string = null
 
-
     private _UserRoles: UserRoleInfo[] = []
     public get UserRoles(): UserRoleInfo[] {
         return this._UserRoles;
     } 
 
     constructor (md: IMetadataProvider, initData: any = null) {
-        super()
-        this.copyInitData(initData)
-        if (initData) 
-            this.SetupUserRoles(md, initData.UserRoles || initData._UserRoles)
+        super();
+        this.copyInitData(initData);
+        if (initData){
+            const userRoles: UserRoleInfo[] = initData.UserRoles || initData._UserRoles;
+            this.SetupUserRoles(md, userRoles);
+        }
     }
 
     public SetupUserRoles(md: IMetadataProvider, userRoles: UserRoleInfo[]) {
         if (userRoles) {
             const mdRoles = md.Roles;
             this._UserRoles=  [];
-            for (let i = 0; i < userRoles.length; i++) {
-                // 
-                const uri = new UserRoleInfo(userRoles[i])
-                this._UserRoles.push(uri)
-    
-                const match = mdRoles.find(r => r.ID == uri.RoleID) 
-                if (match)
-                    uri._setRole(match)
+            for(const userRole of userRoles){
+                const roleInfo: UserRoleInfo = new UserRoleInfo(userRole);
+                this._UserRoles.push(roleInfo);
+
+                const match: RoleInfo | undefined = mdRoles.find(r => r.ID == roleInfo.RoleID) 
+                if (match){
+                    roleInfo._setRole(match);
+                }
+                else{
+                    LogError(`User ${this.Email} has a role that does not exist in the system: ${roleInfo.Role} ID: ${roleInfo.RoleID}`)
+                }
             }
         }
     }

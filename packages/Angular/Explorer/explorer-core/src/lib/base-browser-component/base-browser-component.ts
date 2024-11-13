@@ -45,7 +45,6 @@ export class BaseBrowserComponent extends BaseNavigationComponent {
         //filter for the folders
         let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = '${this.selectedFolderID}'` : `ParentID IS NULL`;
         resourceCategoryFilter += ` AND UserID = '${md.CurrentUser.ID}'`;
-        LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
         await this.LoadData({
             sortItemsAfterLoad: true, 
             categoryItemFilter: resourceCategoryFilter, 

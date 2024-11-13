@@ -68,6 +68,11 @@
     @if (form.isHistoryDialogOpen) {
         <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
     }
+    @if(!form.EditMode){
+        <button kendoButton (click)="toggleListDialog(true)" title="Add this record to a list">
+            <span class="fa-solid fa-plus"></span>
+        </button> 
+    }
     <kendo-dialog 
     [minWidth]="450"
     [width]="650"
@@ -87,4 +92,37 @@
         </button>
       </kendo-dialog-actions>
     </kendo-dialog>
+
+    <kendo-dialog
+    class="dialog-wrapper"
+    title="Select List to Add Record To"
+    *ngIf="listDialogVisible"
+    (close)="toggleListDialog(false)"
+    [minWidth]="250"
+    [width]="650"
+    [height]="550"
+    >
+    <hr>
+    @for(list of availableLists; track list){
+        <div class="overflow-y-scroll">
+            <div class="list-item">
+                <div class="list-text">
+                    {{list.Name}}
+                </div>
+                <button kendoButton class="btn-no-border" (click)="addRecordToList(list)">
+                    <div class="btn-margin-right">
+                        <span class="fa-solid fa-plus"></span>
+                        Add
+                    </div>
+                </button>
+            </div>
+            <hr>
+        </div>
+    }
+    <kendo-dialog-actions class="popup-actions-btn">
+        <button  class="yes-btn" (click)="toggleListDialog(false)" kendoButton fillMode="outline" themeColor="info">
+            Close
+        </button>
+    </kendo-dialog-actions>
+</kendo-dialog>
 </div>

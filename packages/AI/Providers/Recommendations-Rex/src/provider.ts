@@ -1,10 +1,10 @@
 import { RecommendationProviderBase, RecommendationRequest, RecommendationResult } from "@memberjunction/ai-recommendations";
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
-import { EntityRecordDocumentEntityType, RecommendationEntity, RecommendationItemEntity } from "@memberjunction/core-entities";
+import { EntityRecordDocumentEntityType, ListDetailEntity, ListEntity, RecommendationEntity, RecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
 import * as Config from "./config";
-import { GetEmbeddingParams, RasaResponse, RasaTokenResponse, RecommendationResponse } from "./generic/models";
+import { GetEmbeddingParams, GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse } from "./generic/models";
 
 /**
  * This class implements the API calls to the rasa.io Rex Recommendation engine and will save results into the MJ Recommendations/Recommendation Items tables.
@@ -54,7 +54,14 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 continue;
             }
 
-            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(request.Options, token, vectorID);
+            const GetRecommendationParams: GetRecommendationParams = {
+                AccessToken: token,
+                VectorID: vectorID,
+                Options: request.Options,
+                ErrorListID: request.ErrorListID,
+                CurrentUser: request.CurrentUser
+            };
+            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(GetRecommendationParams);
             if(!recommendations){
                 LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
                 result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
@@ -162,56 +169,21 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
     }
 
-    private async GetEmbedding(params: GetEmbeddingParams): Promise<any> {
+    protected async GetRecommendations(params: GetRecommendationParams): Promise<RecommendationResponse[] | null> {
         try{
             const config: AxiosRequestConfig = {
                 headers: {
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json',
                     'rasa-token': params.AccessToken
-                },
-                data: {
-                    type: params.EntityType,
-                    source: params.Source,
-                    id: params.EntityID
-                }
-            };
-
-            const excludeEmbeddings: number = params.ExcludeEmbeddings ? 1 : 0;
-    
-            const response: AxiosResponse<RasaResponse<any>> = await axios.get<RasaResponse<any>>(`${Config.REX_RECOMMEND_HOST}/embed?embeddings=${excludeEmbeddings}`, config);
-            let data: RasaResponse<any> = response.data;
-            console.log("Rex embedding data:", data);
-            return null;
-        }
-        catch(ex){
-            if(isAxiosError(ex)){
-                const axiosError: AxiosError = ex;
-                console.log("Error getting Rex embedding:", axiosError);
-                return null;
-            }
-            else{
-                LogError(`Error getting Rex embedding: ${ex}`);
-                return null;
-            }
-        }
-    }
-
-    protected async GetRecommendations(options: Record<string, any>, accessToken: string, vectorID: string): Promise<RecommendationResponse[] | null> {
-        try{
-            const config: AxiosRequestConfig = {
-                headers: {
-                    'Cache-Control': 'no-cache',
-                    'Content-Type': 'application/json',
-                    'rasa-token': accessToken
                 }
             };
 
             const body = {
-                type: options.type,
+                type: params.Options.type,
                 source: "mj.pinecone",
-                id: vectorID,
-                filters: options.filters
+                id: params.VectorID,
+                filters: params.Options
             };
     
             const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
@@ -224,14 +196,16 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
         catch(ex){
             if(isAxiosError(ex)){
-                const axiosError: AxiosError = ex;
-                console.log("Error getting Rex recommendation:", axiosError);
-                return null;
+                const axiosError: AxiosError<RasaResponse> = ex;
+                const rasaError = axiosError.response.data;
+                console.log("Error getting Rex recommendation:", rasaError);
+                if(params.ErrorListID){
+                    const errorMessage: string = JSON.stringify(rasaError);
+                    await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
+                }
             }
             else{
-                const rasaError: RasaResponse<any> = ex.request.data;
-                LogError(`Error getting Rex recommendation: ${rasaError.metadata.errors}`);
-                return null;
+                LogError(`Error getting Rex recommendation:`, undefined, ex);
             }
         }
     }
@@ -316,22 +290,21 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return probability;
     }
 
-    private async GetEmbeddingTest(request: RecommendationRequest, accessToken: string): Promise<void> {
-        const vectorID: string = await this.GetVectorID(request.Recommendations[0], request.Options.EntityDocumentID, request.CurrentUser);
-        if(vectorID){
-            const embeddingParams: GetEmbeddingParams = {
-                AccessToken: accessToken,
-                EntityID: vectorID,
-                EntityType: "person",
-                Source: "mj.pinecone",
-                ExcludeEmbeddings: false,
-            }
-    
-            let result = await this.GetEmbedding(embeddingParams);
-            console.log("Embedding result:", result);
+    private async AddRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
+        const md: Metadata = new Metadata();
+        const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>("List Details", currentUser);
+        
+        listDetail.NewRecord();
+        listDetail.ListID = listID;
+        listDetail.RecordID = recordID;
+        listDetail.AdditionalData = errorMessage;
+
+        const saveResult: boolean = await listDetail.Save();
+        if(!saveResult){
+            LogError(`Error saving error list detail for record ${recordID}`, undefined, listDetail.LatestResult);
         }
         else{
-            console.log("No vector ID found for recommendation");
+            LogStatus(`Error logged to list detail record ${recordID}`);
         }
     }
 }

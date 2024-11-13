@@ -56,3 +56,10 @@
     font-size: smaller;
     color: black;
 }
+
+.list-item {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 5px;
+    align-items: center;
+}

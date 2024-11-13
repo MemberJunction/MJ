@@ -1,4 +1,6 @@
-export type RasaResponse<T> = {
+import { UserInfo } from "@memberjunction/core";
+
+export type RasaResponse<T = Record<string, any>> = {
     code: number,
     status_code: number,
     metadata: {
@@ -63,4 +65,17 @@ export type RecommendationResponse = {
     source: string,
     type: string, 
     vector_id: string
-}
+};
+
+export type GetRecommendationParams = {
+    Options: Record<string, any>, 
+    AccessToken: string, 
+    VectorID: string,
+    ErrorListID: string,
+    CurrentUser?: UserInfo
+};
+
+export type GetRecommendationResults = {
+    Recommendations: RecommendationResponse[] | null,
+    ErrorMessage?: string
+};
