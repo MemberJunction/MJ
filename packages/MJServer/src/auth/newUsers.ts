@@ -1,4 +1,4 @@
-import { LogError, Metadata } from "@memberjunction/core";
+import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config.js";
@@ -6,49 +6,73 @@ import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string) {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<UserEntity | null> {
         try {
-            const md = new Metadata();
-            const contextUser = UserCache.Instance.Users.find(u => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase())
-            if (!contextUser) {
-                LogError(`Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, if you've not specified this on your config.json you must do so. This is the user that is contextually used for creating a new user record dynamically.`);
-                return undefined;
-            }
-            const u = <UserEntity>await md.GetEntityObject('Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
-            u.NewRecord();
-            u.Name = email;
-            u.IsActive = true;
-            u.FirstName = firstName;
-            u.LastName = lastName;
-            u.Email = email;
-            u.Type = 'User';
-            u.LinkedRecordType = linkedRecordType;
-            if (linkedEntityId)
-                u.LinkedEntityID = linkedEntityId;
-            if (linkedEntityRecordId)
-                u.LinkedEntityRecordID = linkedEntityRecordId;
+            let contextUser: UserInfo | null = null;
 
-            if (await u.Save()) {
+            const contextUserForNewUserCreation: string = configInfo?.userHandling?.contextUserForNewUserCreation;
+            if(contextUserForNewUserCreation){
+                contextUser = UserCache.Instance.UserByName(contextUserForNewUserCreation);
+            }
+
+            if (!contextUser) {
+                LogError(`Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, using an existing user with the Owner role instead`);
+
+                contextUser = UserCache.Users.find(user => user.Type.trim().toLowerCase() ==='owner')!;
+                if (!contextUser) {
+                    LogError(`No existing users found in the database with the Owner role, cannot create a new user`);
+                    return null;
+                }
+            }
+
+            const md: Metadata = new Metadata();
+            const user = await md.GetEntityObject<UserEntity>('Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
+            user.NewRecord();
+            user.Name = email;
+            user.IsActive = true;
+            user.FirstName = firstName;
+            user.LastName = lastName;
+            user.Email = email;
+            user.Type = 'User';
+            user.LinkedRecordType = linkedRecordType;
+
+            if (linkedEntityId){
+                user.LinkedEntityID = linkedEntityId;
+            }
+
+            if (linkedEntityRecordId){
+                user.LinkedEntityRecordID = linkedEntityRecordId;
+            }
+
+            const saveResult: boolean = await user.Save();
+            if(!saveResult){
+                LogError(`Failed to create new user ${firstName} ${lastName} ${email}:`, undefined, user.LatestResult);
+                return null;
+            }
+
+            if(configInfo.userHandling && configInfo.userHandling.newUserRoles){
                 // user created, now create however many roles we need to create for this user based on the config settings
-                const ur = await md.GetEntityObject<UserRoleEntity>('User Roles', contextUser);
-                let bSuccess: boolean = true;
+                LogStatus(`User ${user.Email} created, assigning roles`);
                 for (const role of configInfo.userHandling.newUserRoles) {
-                    ur.NewRecord();
-                    ur.UserID = u.ID;
-                    const roleID = md.Roles.find(r => r.Name === role)?.ID;
-                    ur.RoleID = roleID;
-                    bSuccess = bSuccess && await ur.Save();
-                }
-                if (!bSuccess) {
-                    LogError(`Failed to create roles for newly created user ${firstName} ${lastName} ${email}`);
-                    return undefined;
+                    const userRoleEntity: UserRoleEntity = await md.GetEntityObject<UserRoleEntity>('User Roles', contextUser);
+                    userRoleEntity.NewRecord();
+                    userRoleEntity.UserID = user.ID;
+                    const userRole = md.Roles.find(r => r.Name === role);
+
+                    if (!userRole) {
+                        LogError(`Role ${role} not found in the database, cannot assign to new user ${user.Name}`);
+                        continue;
+                    }
+
+                    userRoleEntity.RoleID = userRole.ID;
+                    const roleSaveResult: boolean = await userRoleEntity.Save();
+                    if(!roleSaveResult){
+                        LogError(`Failed to assign role ${role} to new user ${user.Name}:`, undefined, userRoleEntity.LatestResult);
+                    }
                 }
             }
-            else {
-                LogError(`Failed to create new user ${firstName} ${lastName} ${email}`);
-                return undefined;
-            }
-            return u;
+
+            return user;
         }
         catch (e) {
             LogError(e);
