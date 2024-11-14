@@ -60,11 +60,11 @@ async function Run(): Promise<void> {
             type: 'person',
             filters: [
                 {
-                    type: "persons",
+                    type: "person",
                     max_results: 6
                 },
                 {
-                    type: "courses",
+                    type: "course",
                     max_results: 5
                 }
             ]
