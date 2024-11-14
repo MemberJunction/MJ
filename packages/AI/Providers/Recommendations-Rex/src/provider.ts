@@ -51,8 +51,22 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         for(let i = 0; i < recommendationList.length; i += Config.REX_BATCH_SIZE){
             const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
 
+            const recordDocuments: EntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
+            if(!recordDocuments){
+                LogError(`Error getting entity record documents for batch ${batchCount + 1}`);
+                result.AppendError(`Error getting entity record documents for batch ${batchCount + 1}`);
+                continue;
+            }
+
             await Promise.all(batch.map(async (recommendation: RecommendationEntity, index: number) => {
-                const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
+                const recordDocument: EntityRecordDocumentEntityType | undefined = recordDocuments.find(rd => rd.RecordID == recommendation.SourceEntityRecordID);
+                if(!recordDocument){
+                    LogError(`No record document found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    result.AppendWarning(`No record document found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    return;
+                }
+
+                const vectorID: string = recordDocument.VectorID;
                 if(!vectorID){
                     LogError(`No vector ID found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
                     result.AppendWarning(`No vector ID found for recommendation. Source Entity ID: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
@@ -91,26 +105,27 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return result;
     }
 
-    private async GetVectorID(recommendation: RecommendationEntity, entityDocumentID: string, currentUser?: UserInfo): Promise<string | null> {
+    private async GetEntityRecordDocuments(recommendations: RecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<EntityRecordDocumentEntityType[] | null> {
         const rv: RunView = new RunView();
+
+        //assuming all recommendations have the same source entity ID
+        const entityID: string = recommendations[0].SourceEntityID;
+        const recordIDs: string = recommendations.map(r => `'${r.SourceEntityRecordID}'`).join(",");
 
         const rvVectorResult: RunViewResult<EntityRecordDocumentEntityType> = await rv.RunView<EntityRecordDocumentEntityType>({
             EntityName: "Entity Record Documents",
             ExtraFilter: `EntityDocumentID = '${entityDocumentID}'
-                AND EntityID = '${recommendation.SourceEntityID}'
-                AND RecordID = '${recommendation.SourceEntityRecordID}'`
+                AND EntityID = '${entityID}'
+                AND RecordID IN (${recordIDs})`,
+            MaxRows: Config.REX_BATCH_SIZE
         }, currentUser);
 
         if(!rvVectorResult.Success) {
-            LogError(`Error getting vector ID for recommendation: ${recommendation.ID}: ${rvVectorResult.ErrorMessage}`);
+            LogError(`Error getting vector IDs for recommendation batch: ${rvVectorResult.ErrorMessage}`);
             return null;
         }
 
-        if(rvVectorResult.Results.length == 0) {
-            return null;
-        }
-
-        return rvVectorResult.Results[0].VectorID;
+        return rvVectorResult.Results;
     }
 
     private async GetAccessToken(): Promise<string | null> {
@@ -166,7 +181,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 type: params.Options.type,
                 source: "mj.pinecone",
                 id: params.VectorID,
-                filters: params.Options
+                filters: params.Options.filters
             };
     
             const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
