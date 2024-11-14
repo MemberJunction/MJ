@@ -232,18 +232,17 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<ListEntity | null> {
     const md: Metadata = new Metadata();
     const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists', currentUser);
-    list.NewRecord();
     list.Name = `Recommendation Run ${recommendationRunID} Errors`;
     list.EntityID = entityID;
     list.UserID = currentUser ? currentUser.ID : super.ContextUser.ID;
 
     const saveResult: boolean = await list.Save();
     if(!saveResult) {
-      LogStatus(`Error saving Recommendation Error List entity: `, undefined, list.LatestResult);
+      LogError(`Error saving Recommendation Error List entity: `, undefined, list.LatestResult);
       return null;
     }
     else{
-      LogError(`Error list created for recommendation run: ${recommendationRunID}. List ID: ${list.ID}`);
+      LogStatus(`Error list created for recommendation run: ${recommendationRunID}. List ID: ${list.ID}`);
     }
 
     return list;
