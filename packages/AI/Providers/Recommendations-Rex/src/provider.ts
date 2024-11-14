@@ -46,66 +46,49 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return result;
         }
 
-        for (const [index, recommendation] of request.Recommendations.entries()) {
-            const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
-            if(!vectorID){
-                LogError(`No vector ID found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                result.AppendWarning(`No vector ID found for recommendation. Source Entity ID: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                continue;
-            }
+        const recommendationList = request.Recommendations;
+        const batchCount: number = 0;
+        for(let i = 0; i < recommendationList.length; i += Config.REX_BATCH_SIZE){
+            const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
 
-            const GetRecommendationParams: GetRecommendationParams = {
-                AccessToken: token,
-                VectorID: vectorID,
-                Options: request.Options,
-                ErrorListID: request.ErrorListID,
-                CurrentUser: request.CurrentUser
-            };
-            const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(GetRecommendationParams);
-            if(!recommendations){
-                LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
-                continue;
-            }
+            await Promise.all(batch.map(async (recommendation: RecommendationEntity, index: number) => {
+                const vectorID: string = await this.GetVectorID(recommendation, entityDocumentID, request.CurrentUser);
+                if(!vectorID){
+                    LogError(`No vector ID found for recommendation. Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    result.AppendWarning(`No vector ID found for recommendation. Source Entity ID: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    return;
+                }
+    
+                const GetRecommendationParams: GetRecommendationParams = {
+                    AccessToken: token,
+                    VectorID: vectorID,
+                    Options: request.Options,
+                    ErrorListID: request.ErrorListID,
+                    CurrentUser: request.CurrentUser
+                };
+    
+                const recommendations: RecommendationResponse[] | null = await this.GetRecommendations(GetRecommendationParams);
+                if(!recommendations){
+                    LogError(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    result.AppendWarning(`Error getting recommendations for recommendation: Source Entity: ${recommendation.SourceEntityID}, Source Entity Record ID: ${recommendation.SourceEntityRecordID}`);
+                    return;
+                }
+    
+                LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${batch.length} of batch ${batchCount + 1}`);
+                const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser);
+    
+                // Save the results
+                const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);
+                if(!saveResult){
+                    LogError("Not all recommendation items were successfully saved");
+                    result.AppendError("Not all recommendation items were successfully saved");
+                }
+            }));
 
-            LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${request.Recommendations.length}`);
-            const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser);
-
-            // Save the results
-            const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);
-            if(!saveResult){
-                LogError("Not all recommendation items were successfully saved");
-                result.AppendError("Not all recommendation items were successfully saved");
-            }
+            LogStatus(`Batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)} completed`);
         }
 
         return result;
-    }
-
-    /**
-     * This method actually calls the Rex API for each individual recommendation and gets a list of items back.
-     * @param recommendation 
-     */
-    protected async CallRexAPI(recommendation: RecommendationEntity): Promise<RecommendationItemEntity[]> {
-        const items: RecommendationItemEntity[] = [];
-        try {
-            const apiResult = await fetch(`https://rexapi.rasa.io/recommendations/${recommendation.ID}`);
-            const apiItems = await apiResult.json();
-            const md = new Metadata();
-            
-            for (const apiItem of apiItems) {
-                const item = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items");
-                item.RecommendationID = recommendation.ID;
-                item.DestinationEntityID = apiItem.DestinationEntityId;
-                item.DestinationEntityRecordID = apiItem.DestinationEntityRecordID;
-                item.MatchProbability = this.ClampScore(apiItem.MatchProbability, this.MinProbability, this.MaxProbability);
-                items.push(item);
-            }
-            return items;
-        }
-        catch (e) {
-            LogError(e);
-        }
     }
 
     private async GetVectorID(recommendation: RecommendationEntity, entityDocumentID: string, currentUser?: UserInfo): Promise<string | null> {
@@ -150,7 +133,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             const response: AxiosResponse<RasaResponse<RasaTokenResponse>> = await axios.post<RasaResponse<RasaTokenResponse>>(`${Config.REX_API_HOST}/tokens`, body, config);
             let data: RasaResponse<RasaTokenResponse> = response.data;
             if(!response || data.results.length == 0){
-                console.log("No token returned from Rex API");
+                LogError("No token returned from Rex API");
                 return null;
             }
 
@@ -159,7 +142,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         catch(ex){
             if(isAxiosError(ex)){
                 const axiosError: AxiosError = ex;
-                console.log("Error getting Rex access token:", axiosError);
+                LogError("Error getting Rex access token:", undefined, axiosError);
                 return null;
             }
             else{
@@ -198,7 +181,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             if(isAxiosError(ex)){
                 const axiosError: AxiosError<RasaResponse> = ex;
                 const rasaError = axiosError.response.data;
-                console.log("Error getting Rex recommendation:", rasaError);
+                LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);
                     await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
@@ -211,10 +194,9 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
     }
 
     protected async ConvertRecommendationsToItemEntities(recommendationEntity: RecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo): Promise<RecommendationItemEntity[]> {
-        const md = new Metadata();
-        const entities: RecommendationItemEntity[] = [];
+        const md = new Metadata();        
 
-        for (const recommendation of recommendations) {
+        const entities: RecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
             const entity: RecommendationItemEntity = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items", currentUser);
             let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation);
 
@@ -223,9 +205,9 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             entity.DestinationEntityID = data.entityID;
             entity.DestinationEntityRecordID = recommendation.id;
             entity.MatchProbability = this.ClampScore(recommendation.score, this.MinProbability, this.MaxProbability);
-            
-            entities.push(entity);
-        }
+
+            return entity;
+        }));
 
         return entities;
     }
@@ -237,13 +219,13 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         switch(data.type){
             case "course":
-                entityName = "Courses";
+                entityName = "Contents";
                 break;
             case "course_part":
                 entityName = "Course Parts";
                 break;
             case "person":
-                entityName = "Persons";
+                entityName = "Contributors";
                 break;
             default:
                 LogError(`Unknown entity type: ${data.type}`);
@@ -251,7 +233,13 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         };
 
         const md: Metadata = new Metadata();
-        const entity: EntityInfo = md.Entities.find(e => e.Name == entityName);
+        const entity: EntityInfo | undefined = md.EntityByName(entityName);
+        
+        if(!entity){
+            LogError(`Error getting entity info for entity ${entityName}`);
+            return { entityID, recordID };
+        }
+
         entityID = entity.ID;
         
         //IDs of external records arent helpful,
@@ -262,7 +250,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             //all have a single primary key named "ID",
             //so a simple split call grabbing the second
             //element will get the ID.
-            const IDSplit = data.id.split("|");
+            const IDSplit = data.id.split("-");
             if(IDSplit.length > 1){
                 recordID = IDSplit[1];
             }
