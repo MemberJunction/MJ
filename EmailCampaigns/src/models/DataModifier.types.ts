@@ -1,0 +1,1 @@
+export type DataModifierParams = Record<string, any> & { SourceRecord: Record<string, any> };

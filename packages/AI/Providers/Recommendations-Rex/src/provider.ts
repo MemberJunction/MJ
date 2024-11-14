@@ -183,7 +183,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 type: params.Options.type,
                 source: "mj.pinecone",
                 id: params.VectorID,
-                filters: params.Options
+                filters: params.Options.filters
             };
     
             const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
@@ -198,14 +198,14 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             if(isAxiosError(ex)){
                 const axiosError: AxiosError<RasaResponse> = ex;
                 const rasaError = axiosError.response.data;
-                console.log("Error getting Rex recommendation:", rasaError);
+                console.log("Error getting Rex recommendation, rasaError:", rasaError);
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);
                     await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
                 }
             }
             else{
-                LogError(`Error getting Rex recommendation:`, undefined, ex);
+                LogError(`Error getting Rex recommendation:`, undefined, ex.response.data);
             }
         }
     }
@@ -237,13 +237,13 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         switch(data.type){
             case "course":
-                entityName = "Courses";
+                entityName = "Contents";
                 break;
             case "course_part":
                 entityName = "Course Parts";
                 break;
             case "person":
-                entityName = "Persons";
+                entityName = "Contributors";
                 break;
             default:
                 LogError(`Unknown entity type: ${data.type}`);
