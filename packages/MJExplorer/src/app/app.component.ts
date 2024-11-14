@@ -24,6 +24,7 @@ export class AppComponent implements OnInit {
   public HasError = false;
   public ErrorMessage: any = '';
   public environment = environment;
+  public subHeaderText: string = "Welcome back! Please log in to your account.";
 
   @ViewChild(NavigationComponent, { static: false }) nav!: NavigationComponent;
 
@@ -107,13 +108,31 @@ export class AppComponent implements OnInit {
       }
     }, (err: any) => {
       LogError('Error Logging In: ' + err);
+      if(err.name){
+        if(err.name === 'BrowserAuthError') {
+          //if we're using MSAL, then its likely the user has no active accounts
+          //signed in
+          this.subHeaderText = "Welcome back! Please log in to your account.";
+        }
+        else if(err.name === 'InteractionRequiredAuthError'){
+          //if we're using MSAL, then its likely the user has previously 
+          //signed in, but the auth token/session has expired
+          this.subHeaderText = "Your session has expired. Please log in to your account.";
+        }
+      }
+
+      this.authBase.authenticated = false;
     });
   
     const isAuth = await this.authBase.isAuthenticated()
     isAuth.pipe(take(1)) /* only do this for the first message */
       .subscribe((loggedIn: any) => {
         if (!loggedIn) {
-          this.authBase.login(); 
+          //this.authBase.login(); 
+
+          //Instead of kicking off the login process,
+          //just display the login screen to the user
+          this.authBase.authenticated = false;
         }
       });  
 

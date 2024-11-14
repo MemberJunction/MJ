@@ -2,7 +2,7 @@ import { AfterViewInit, AfterViewChecked, ChangeDetectorRef, Component, Input, V
 import { Router } from '@angular/router';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, MJAPISkipResult } from '@memberjunction/skip-types';
 import { SharedService, HtmlListType } from '@memberjunction/ng-shared';
-import { Metadata, RunView } from '@memberjunction/core';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -218,33 +218,58 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
 
   public async doRefreshReport() {
     try {
-      if (this.ReportEntity && this.ReportEntity.ID.length > 0) {
-        const gql = `query ExecuteAskSkipRunScript($dataContextId: String!, $scriptText: String!) {
-          ExecuteAskSkipRunScript(DataContextId: $dataContextId, ScriptText: $scriptText) {
-            Success
-            Status
-            Result
-            ConversationId
-            UserMessageConversationDetailId
-            AIMessageConversationDetailId
-          }
-        }`;
-        const result = await GraphQLDataProvider.ExecuteGQL(gql, {
-          dataContextId: this.ReportEntity.DataContextID,
-          scriptText: this.SkipData?.scriptText,
-        });
 
-        const resultObj = <MJAPISkipResult>result.ExecuteAskSkipRunScript;
-        if (resultObj.Success) {
-          // it worked, refresh the report here
-          const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
-          this.ReportEntity.Configuration = JSON.stringify(newSkipData);
-          await this.ReportEntity.Save();
-          this.SkipData = newSkipData; // this drives binding to chart and table and so forth for a refresh
-        }
-        return result;
+      if(!this.SkipData){
+        this.sharedService.CreateSimpleNotification('No data to refresh', 'error', 2500);
+        return;
       }
-    } catch (err) {
+
+      if(!this.ReportEntity || !this.ReportEntity.ID){
+        this.sharedService.CreateSimpleNotification('No report to refresh', 'error', 2500);
+        return
+      }
+
+      this.sharedService.CreateSimpleNotification('Refreshing report...', 'info', 2500);
+
+      const gql: string = `query ExecuteAskSkipRunScript($dataContextId: String!, $scriptText: String!) {
+        ExecuteAskSkipRunScript(DataContextId: $dataContextId, ScriptText: $scriptText) {
+          Success
+          Status
+          Result
+          ConversationId
+          UserMessageConversationDetailId
+          AIMessageConversationDetailId
+        }
+      }`;
+
+      const result: {ExecuteAskSkipRunScript: MJAPISkipResult} = await GraphQLDataProvider.ExecuteGQL(gql, {
+        dataContextId: this.ReportEntity.DataContextID,
+        scriptText: this.SkipData?.scriptText,
+      });
+
+      const resultObj: MJAPISkipResult = result.ExecuteAskSkipRunScript;
+      if(!resultObj.Success){
+        LogError('Error refreshing report: resultObj.Success was false');
+        this.sharedService.CreateSimpleNotification('Error refreshing report', 'error', 2500);
+        return;
+      }
+
+      // it worked, refresh the report here
+      const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
+      this.SkipData = newSkipData; // this drives binding to chart and table and so forth for a refresh
+      this.ReportEntity.Configuration = JSON.stringify(newSkipData);
+
+      const saveResult: boolean = await this.ReportEntity.Save();
+      if(!saveResult){
+        LogError('Error refreshing report: failed to save report entity', undefined, this.ReportEntity.LatestResult);
+        this.sharedService.CreateSimpleNotification('Error refreshing report', 'error', 2500);
+      }
+      else{
+        this.sharedService.CreateSimpleNotification('Report refreshed', 'success', 2500);
+      }
+    } 
+    catch (err) {
+      this.sharedService.CreateSimpleNotification('Error refreshing report', 'error', 2500);
       console.error(err);
     }
   }

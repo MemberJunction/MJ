@@ -82,7 +82,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
 
         if (this.SubjectTemplate) {
             // process the subject template
-            const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('Text');
+            const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('HTML');
             if (subjectContent) {
                 const result = await TemplateEngineServer.Instance.RenderTemplate(this.SubjectTemplate, subjectContent, this.ContextData);
                 if (result && result.Success) {
@@ -99,12 +99,12 @@ export class ProcessedMessageServer extends ProcessedMessage {
             else {
                 return {
                     Success: false,
-                    Message: 'SubjectTemplate does not have a Text option and this is required for processing the subject of the message.'
+                    Message: 'SubjectTemplate does not have an associated HTML Template Content option and this is required for processing the subject of the message.'
                 }
             }
         }
         else {
-            this.ProcessedSubject = this.Subject;
+            this.ProcessedSubject = this.Subject || '';
         }
 
         return {

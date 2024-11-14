@@ -51,6 +51,17 @@ export class RecommendationRequest {
      * Additional options to pass to the provider
      */
     Options?: Record<string, any>;
+
+    /**
+     * If true, creates a list that will contain additional informaton regarding errors
+     * that may occur during the recommendation run
+     */
+    CreateErrorList?: boolean;
+
+    /**
+     * The ID of the error list, if one was created
+     */
+    ErrorListID?: string;
 }
   
 /**

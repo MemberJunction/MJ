@@ -3,9 +3,10 @@ import jwksClient from 'jwks-rsa';
 import { auth0Domain, auth0WebClientID, configInfo, tenantID, webClientID } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataSource } from 'typeorm';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
+import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
 
 export { TokenExpiredError } from './tokenExpiredError.js';
 
@@ -120,15 +121,22 @@ export const verifyUserRecord = async (
       if (passesDomainCheck) {
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
-        const newUserCreator: NewUserBase = <NewUserBase>MJGlobal.Instance.ClassFactory.CreateInstance(NewUserBase); // this will create the object that handles creating the new user for us
-        const newUser = await newUserCreator.createNewUser(firstName, lastName, email);
+        const newUserCreator: NewUserBase = MJGlobal.Instance.ClassFactory.CreateInstance<NewUserBase>(NewUserBase); // this will create the object that handles creating the new user for us
+        const newUser: UserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
-          const initData: any = newUser.GetAll();
+          const md: Metadata = new Metadata();
+
+          const initData: UserEntityType & {UserRoles: {UserID: string, RoleName: string, RoleID: string}[] } = newUser.GetAll();
+          
           initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
-            return { UserID: initData.ID, RoleName: role };
+            const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);
+            const roleID: string = roleInfo ? roleInfo.ID : "";
+            
+            return { UserID: initData.ID, RoleName: role, RoleID: roleID };
           });
+
           user = new UserInfo(Metadata.Provider, initData);
           UserCache.Instance.Users.push(user);
           console.warn(`   >>> New user ${email} created successfully!`);
@@ -139,6 +147,7 @@ export const verifyUserRecord = async (
         );
       }
     }
+
     if (!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
       // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
       console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);

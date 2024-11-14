@@ -2,7 +2,6 @@ import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, Messag
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired,  } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
-import fs from 'fs';
 import { LogError, LogStatus } from "@memberjunction/core";
 
 /**
@@ -19,7 +18,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
             to: message.To,
             from: {
                 email: from,
-                name: "ATD Education"
+                name: message.FromName
             },
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,

@@ -60,6 +60,14 @@
                     </button>    
                 }
 
+                @if (ShowEntityActionButtons && EntityActions && EntityActions.length > 0) {
+                    @for (action of EntityActions; track action) {
+                        <button (click)="doEntityAction(action)" kendoButton class="k-button-solid-base list-button">
+                            {{action.Action}}
+                        </button>
+                    }
+                }
+
                 @if(showRefreshButton){
                     <button kendoButton class="list-button" (click)="RefreshFromSavedParams()">
                         <span class="fa-solid fa-arrows-rotate"></span>

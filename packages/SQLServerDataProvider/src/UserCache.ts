@@ -52,17 +52,24 @@ export class UserCache {
         LogError(err); 
       }
     }
+
     static get Instance(): UserCache {
       if (!UserCache._instance) {
         UserCache._instance = new UserCache();
       }
       return UserCache._instance;
     }
+
     public get Users(): UserInfo[] {
       return this._users;
     }
+
     static get Users(): UserInfo[] {
       return UserCache.Instance.Users; 
+    }
+
+    public UserByName(name: string): UserInfo | undefined {
+      return UserCache.Users.find(u => u.Name === name);
     }
   }
   
