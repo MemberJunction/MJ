@@ -40,17 +40,21 @@ async function Run(): Promise<void> {
 
     await ch.Config(user);
 
-    /*
     await ch.SendEmails({
         ListID: '8E59846B-9298-EF11-88CF-002248306D26',
-        ListBatchSize: 20,
-        MaxListRecords: 20,
-        RecommendationRunIDs: ['7AE7B91E-8E9C-EF11-88CF-002248306D26', '018C8869-74A0-EF11-88CF-002248306D26', '6B622ACF-3AA1-EF11-88CF-002248306D26'],
+        ListBatchSize: 1,
+        MaxListRecords: 1,
+        
+        RecommendationRunIDs: [
+            '850BACBF-B8A2-EF11-88CF-002248306D26',
+             'DCBCB17F-CDA2-EF11-88CF-002248306D26'
+        ],
         CurrentUser: user,
         TestEmail: "linda@memberjunction.com"
+        //TestEmail: "jonathan@memberjunction.com"
     });
-    */
 
+    /*
     await ch.GetRecommendations({
         ListID: '8E59846B-9298-EF11-88CF-002248306D26',
         CurrentUser: user,
@@ -61,15 +65,16 @@ async function Run(): Promise<void> {
             filters: [
                 {
                     type: "person",
-                    max_results: 6
+                    max_results: 15
                 },
                 {
                     type: "course",
-                    max_results: 5
+                    max_results: 15
                 }
             ]
         }
     });
+    */
 
     /*
     await ch.CreateEntityDocumentTemplate({
@@ -89,13 +94,21 @@ async function Run(): Promise<void> {
         CurrentUser: user
     });
     */
+
+    /*
+    await ch.UpdateTemplateContent({
+        FilePath: "C:/Users/Ridleh/Downloads/AGUTemplate.htm",
+        TemplateContentID: 'F9BFDDA2-7491-EF11-88CF-002248306D26',
+        CurrentUser: user
+    });
+    */
 }
 
 
 Run().then(() => { 
-    console.log('Emails sent!');
+    console.log('All done!');
     process.exit(0);
 }).catch((error) => {   
-    console.error('Error sending emails:', error);
+    console.error('An error occured:', error);
     process.exit(1);
 });

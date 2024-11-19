@@ -1,6 +1,6 @@
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, TransactionGroupBase, UserInfo } from '@memberjunction/core';
 import { EntityDocumentEntity, ListDetailEntity, ListDetailEntityType, ListEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity } from "@memberjunction/core-entities";
-import { CreateEntityDocumentParams, CreateEntityDocumentTemplateParams, CreateEntityDocumentTemplateResults, CreateListParams, GetListRecordsParams, GetRecommendationsParams, SendEmailsParams } from '../models/CampaignHandler.types';
+import { CreateEntityDocumentParams, CreateEntityDocumentTemplateParams, CreateEntityDocumentTemplateResults, CreateListParams, GetListRecordsParams, GetRecommendationsParams, SendEmailsParams, UpsertTemplateContentParams } from '../models/CampaignHandler.types';
 import { RelatedDatahandler } from './RelatedDataHandler';
 import { Message, MessageRecipient } from "@memberjunction/communication-types";
 import { MJGlobal } from '@memberjunction/global';
@@ -10,6 +10,7 @@ import { CommunicationEngine  } from '@memberjunction/communication-engine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { MessageBuilder } from './MessageBuilder';
 import { RecommendationEngineBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
+import * as fs from 'fs';
 
 export class CampaignHander {
   private dataModifier: DataModifier;
@@ -33,7 +34,7 @@ export class CampaignHander {
     const batchSize: number = params.ListBatchSize || 100;
 
     let fetchNextBatch: boolean = true;
-    let offset: number = 0;
+    let offset: number = params.StartingOffset || 0;
 
     const list: ListEntity = await this.GetList(params.ListID, params.CurrentUser);
     if(!list) {
@@ -328,6 +329,36 @@ export class CampaignHander {
     if(!transactionResult) {
       LogError(transaction);
       throw new Error(`List created, but an error occured submitting transaction`);
+    }
+  }
+
+  public async UpdateTemplateContent(params: UpsertTemplateContentParams): Promise<void> {
+    const md: Metadata = new Metadata();
+    const rv: RunView = new RunView();
+
+    let templateContent: TemplateContentEntity = await md.GetEntityObject("Template Contents", params.CurrentUser);
+    const loadResult: boolean = await templateContent.Load(params.TemplateContentID);
+
+    if(!loadResult) {
+      LogError(templateContent.LatestResult);
+      throw new Error(`Error loading template content with ID: ${params.TemplateContentID}`);
+    }
+
+    if(params.TemplateText){
+      templateContent.TemplateText = params.TemplateText;
+    }
+    else if(params.FilePath){
+      const fileText: string = fs.readFileSync(params.FilePath, 'utf8');
+      templateContent.TemplateText = fileText;
+    }
+
+    const saveResult: boolean = await templateContent.Save();
+    if(!saveResult) {
+      LogError("Failed to update template content");
+      LogError(templateContent.LatestResult);
+    }
+    else{
+      LogStatus(`Template ${templateContent.ID} successfully updated`);
     }
   }
 

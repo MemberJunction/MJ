@@ -40,11 +40,12 @@ export class RelatedDatahandler {
         }
 
         const recommendations: RecommendationEntityType[] = rvResults[1].Results;
-
+        const filterstirng: string = `RecommendationID IN (${recommendations.map(recommendation => `'${recommendation.ID}'`).join(", ")})`; 
+        
         //Next, Get the recommended items
         const rvRecommendationItems = await rv.RunView<RecommendationItemEntityType>({
             EntityName: 'Recommendation Items',
-            ExtraFilter: `RecommendationID IN ('${recommendations.map(recommendation => recommendation.ID).join(",")}')`,
+            ExtraFilter: filterstirng,
         }, params.CurrentUser);
 
 

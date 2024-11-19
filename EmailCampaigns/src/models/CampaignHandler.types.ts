@@ -10,6 +10,7 @@ export type SendEmailsParams = {
      * The number of records to process in a single batch.
      */
     ListBatchSize?: number,
+    StartingOffset?: number,
     /**
      * The total number of list records to process. Mostly for testing purposes.
      */
@@ -75,5 +76,12 @@ export type CreateListParams = {
     ListDescription?: string,
     EntityName: string,
     Filter?: string,
+    CurrentUser: UserInfo
+};
+
+export type UpsertTemplateContentParams = {
+    TemplateContentID: string,
+    FilePath?: string,
+    TemplateText?: string,
     CurrentUser: UserInfo
 };

@@ -1,5 +1,5 @@
 import { RecommendationEntity, RecommendationItemEntity } from '@memberjunction/core-entities';
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, TransactionGroupBase, UserInfo } from '@memberjunction/core';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
 
 /**
@@ -40,14 +40,19 @@ export abstract class RecommendationProviderBase {
       return false;
     }
 
-    let allSaved: boolean = true;
-    for (const item of items) {
+    let allSaved = true;
+    for(const item of items) {
       item.RecommendationID = recommendation.ID;
-      const saveResult: boolean = await item.Save();
-      if(!saveResult) {
-        LogError(`Error saving recommendation item for recommendation ${recommendation.ID}`, undefined, item.LatestResult);
-        allSaved = false;
-      }
+        const saveResult: boolean = await item.Save();
+
+        if(!saveResult) {
+          LogError(`Error saving recommendation item: `, undefined, item.LatestResult);
+          allSaved = false;
+        }
+    }
+    
+    if(!allSaved) {
+      LogError(`Error saving recommendation items, please check logs`);
     }
 
     return allSaved;

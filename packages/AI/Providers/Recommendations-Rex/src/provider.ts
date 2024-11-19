@@ -15,10 +15,6 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
     MinProbability: number = 0;
     MaxProbability: number = 1;
 
-    PeronsEntityID: string = "";
-    CoursesEntityID: string = "";
-    CoursePartsEntityID: string = "";
-
     public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
 
         // Rex handles each request one record at a time:
@@ -47,9 +43,10 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
 
         const recommendationList = request.Recommendations;
-        const batchCount: number = 0;
+        let batchCount: number = 0;
         for(let i = 0; i < recommendationList.length; i += Config.REX_BATCH_SIZE){
             const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
+            LogStatus(`Processing batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)}`);
 
             const recordDocuments: EntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
             if(!recordDocuments){
@@ -99,6 +96,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 }
             }));
 
+            batchCount++;
             LogStatus(`Batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)} completed`);
         }
 
@@ -130,6 +128,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
     private async GetAccessToken(): Promise<string | null> {
         try{
+            LogStatus("Getting Rex access token");
+
             const config: AxiosRequestConfig = {
                 auth: {
                     username: Config.REX_USERNAME,

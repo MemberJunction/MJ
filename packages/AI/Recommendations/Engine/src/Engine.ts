@@ -32,8 +32,6 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
     super.TryThrowIfNotLoaded();
 
-    console.log('CreateErrorList? :', request.CreateErrorList);
-
     let provider: RecommendationProviderEntity = request.Provider;
     if (!provider){
       if(this.RecommendationProviders.length == 0) {
@@ -55,13 +53,6 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
 
     const recommendations: RecommendationEntity[] = await this.GetRecommendationEntities(request);
     LogStatus(`Processing ${recommendations.length} recommendations`);
-
-    if(recommendations.length == 0) {
-      return {
-        Success: true,
-        ErrorMessage: 'No records found to get recommendations for',
-      } as any;
-    }
     
     request.Recommendations = recommendations;
 
