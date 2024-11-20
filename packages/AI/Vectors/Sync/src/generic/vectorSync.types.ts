@@ -19,6 +19,7 @@ export type VectorizeEntityParams = {
      */
     batchCount?: number;
     options?: any;
+    dataHandlerClassName?: string;
 }
 
 export type VectorizeEntityResponse = {

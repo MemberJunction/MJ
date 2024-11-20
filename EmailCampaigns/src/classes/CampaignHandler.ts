@@ -11,6 +11,8 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { MessageBuilder } from './MessageBuilder';
 import { RecommendationEngineBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
 import * as fs from 'fs';
+import { EntityVectorSyncer, VectorizeEntityParams } from '@memberjunction/ai-vector-sync';
+import { AIEngine } from '@memberjunction/aiengine';
 
 export class CampaignHander {
   private dataModifier: DataModifier;
@@ -23,6 +25,7 @@ export class CampaignHander {
     await CommunicationEngine.Instance.Config(false, currentUser);
     await TemplateEngineServer.Instance.Config(false, currentUser);
     await RecommendationEngineBase.Instance.Config(false, currentUser);
+    await AIEngine.Instance.Config(false, currentUser);
   }
 
   public async SendEmails(params: SendEmailsParams): Promise<void> {
@@ -31,6 +34,7 @@ export class CampaignHander {
       throw new Error('params.CurrentUser is required.');
     }
 
+    const md: Metadata = new Metadata();
     const batchSize: number = params.ListBatchSize || 100;
 
     let fetchNextBatch: boolean = true;
@@ -57,10 +61,15 @@ export class CampaignHander {
       const listRecords: Record<string, any>[] = await this.GetRecordsByListID(getListParams);
       LogStatus(`Processing batch ${offset + 1}. Batch size: ${listRecords.length}`);
 
+      const entityInfo: EntityInfo | undefined = md.EntityByName(list.Entity);
+      if(!entityInfo){
+        throw new Error(`Entity with name ${list.Entity} not found.`);
+      }
+
       const allData: Record<string, any>[] = await Promise.all(listRecords.map(async (record) => {
         const relatedData = await rdh.GetData({
           SourceRecordEntityName: list.Entity,
-          RecordID: record.ID,
+          RecordID: record[entityInfo.FirstPrimaryKey.Name],
           RecommendationRunIDs: params.RecommendationRunIDs,
           CurrentUser: params.CurrentUser
         });
@@ -294,10 +303,11 @@ export class CampaignHander {
     list.Name = params.ListName
     list.Description = params.ListDescription || '';
     list.EntityID = entity.ID;
+    list.UserID = params.CurrentUser.ID;
 
     const saveResult: boolean = await list.Save();
     if(!saveResult) {
-      LogError(list.LatestResult);
+      LogError("Error saving list: ", undefined, list.LatestResult);
       throw new Error(`Error saving list`);
     }
 
@@ -307,7 +317,8 @@ export class CampaignHander {
     const rv: RunView = new RunView();
     const rvResult = await rv.RunView({
       EntityName: entity.Name,
-      ExtraFilter: params.Filter
+      ExtraFilter: params.Filter,
+      IgnoreMaxRows: true
     }, params.CurrentUser);
 
     if(!rvResult.Success) {
@@ -315,20 +326,25 @@ export class CampaignHander {
       throw new Error(`Error getting list details: ${rvResult.ErrorMessage}`);
     }
 
-    const transaction: TransactionGroupBase = await md.CreateTransactionGroup();
+    LogStatus(`Adding ${rvResult.Results.length} records to list: ${list.Name}`);
 
-    await Promise.all(rvResult.Results.map(async (record) => {
-      const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details', params.CurrentUser);
-      listDetail.ListID = list.ID;
-      listDetail.RecordID = record.ID;
-      listDetail.TransactionGroup = transaction;
-      listDetail.Save(); //no need to await, its within a transaction group
-    }));
+    const batchSize: number = params.BatchSize || 25;
+    let currentBatch: number = 1;
+    for(let i = 0; i < rvResult.Results.length; i += batchSize) {
+      LogStatus(`Processing batch ${currentBatch} of ${rvResult.Results.length / batchSize}`);
 
-    const transactionResult: boolean = await transaction.Submit();
-    if(!transactionResult) {
-      LogError(transaction);
-      throw new Error(`List created, but an error occured submitting transaction`);
+      const batch: any[] = rvResult.Results.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (record) => {
+        const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details', params.CurrentUser);
+        listDetail.ListID = list.ID;
+        listDetail.RecordID = record[entity.FirstPrimaryKey.Name];
+        const saveResult: boolean = await listDetail.Save(); //no need to await, its within a transaction group
+        if(!saveResult) {
+          LogError("Error saving list detail: ", undefined, listDetail.LatestResult);
+        }
+      }));
+
+      currentBatch++;
     }
   }
 
@@ -360,6 +376,28 @@ export class CampaignHander {
     else{
       LogStatus(`Template ${templateContent.ID} successfully updated`);
     }
+  }
+
+  public async VectorizeRecords(params: VectorizeEntityParams, currentUser: UserInfo): Promise<void> {
+    let vectorizer = new EntityVectorSyncer();
+    vectorizer.CurrentUser = currentUser;
+    
+    let entityDocument = await vectorizer.GetEntityDocument(params.entityDocumentID);
+    if (!entityDocument) {
+      throw new Error(`No active Entity Document found for entity ${params.entityID}`);
+    }
+
+    const request: VectorizeEntityParams = {
+      entityID: entityDocument.EntityID,
+      entityDocumentID: entityDocument.ID,
+      batchCount: params.batchCount || 100,
+      options: params.options,
+      listID: params.listID,
+      dataHandlerClassName: params.dataHandlerClassName
+    };
+
+    console.log('vectorizing entity...');
+    await vectorizer.VectorizeEntity(request, currentUser);
   }
 
   private async GetList(listID: string, currentUser? :UserInfo): Promise<ListEntity> {

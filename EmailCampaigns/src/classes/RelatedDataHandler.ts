@@ -1,4 +1,4 @@
-import { LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { GetDataParams } from "../models/RelatedDataHandler.types";
 import { RecommendationEntityType, RecommendationItemEntityType } from "@memberjunction/core-entities";
 
@@ -8,13 +8,18 @@ export class RelatedDatahandler {
         const rv: RunView = new RunView();
 
         let results: Record<string, any> = {};
+
+        const sourceEntityInfo: EntityInfo | undefined = md.EntityByName(params.SourceRecordEntityName);
+        if(!sourceEntityInfo){
+            throw new Error(`Error: Could not find entity ${params.SourceRecordEntityName}`);
+        }
         
         const recommendationRunIDs: string = params.RecommendationRunIDs.map((recommendationRunID: string) => `'${recommendationRunID}'`).join(",");
         const rvResults = await rv.RunViews([
             //First, get the source record 
             {
                 EntityName: params.SourceRecordEntityName,
-                ExtraFilter: `ID = '${params.RecordID}'`,
+                ExtraFilter: `${sourceEntityInfo.FirstPrimaryKey.Name} = '${params.RecordID}'`,
             },
             //Next, get the recommendations tied to the source records
             {
@@ -55,9 +60,25 @@ export class RelatedDatahandler {
 
         //Finally, get the record each recommendation item points to
         for(const recommendationItem of rvRecommendationItems.Results){
+            const DestinationEntityInfo: EntityInfo | undefined = md.EntityByName(recommendationItem.DestinationEntity);
+            if(!DestinationEntityInfo){
+                LogError(`Error: Could not find entity ${recommendationItem.DestinationEntity}`);
+                continue;
+            }
+
+            //PRODUCT_CODE|8636||PRODUCT_NAME|CHEST SEEK Pulmonary Medicine: 33rd Edition
+            const keys: string[] = recommendationItem.DestinationEntityRecordID.split("||");
+            const keyValues: Record<string, string> = {};
+            keys.forEach((key: string) => {
+                const keyParts: string[] = key.split("|");
+                keyValues[keyParts[0]] = keyParts[1];
+            });
+
+            const filterString: string = Object.keys(keyValues).map((key: string) => `${key} = '${keyValues[key]}'`).join(" AND ");
+
             const rvEntityResult = await rv.RunView({
                 EntityName: recommendationItem.DestinationEntity,
-                ExtraFilter: `ID = '${recommendationItem.DestinationEntityRecordID}'`
+                ExtraFilter: filterString
             }, params.CurrentUser);
 
             if(!rvEntityResult.Success) {

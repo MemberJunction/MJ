@@ -8,6 +8,10 @@ import { LoadAGUMessageBuilder } from "./clients/AGU/AGUMessageBuilder";
 import { CampaignHander } from "./classes/CampaignHandler";
 import { LoadMessageBuilder } from "./classes/MessageBuilder";
 import { AppDataSource } from './db';
+import { LoadCHESTVectorRelatedDataHandler } from './clients/CHEST/CHESTVectorRelatedDataHandler';
+import { LoadCHESTMessageBuilder } from './clients/CHEST/CHESTMessageBuilder';
+import { LoadCHESTDataModifier } from './clients/CHEST/CHESTDataModifier';
+import {LoadOpenAILLM} from '@memberjunction/ai-openai';
 
 LoadMessageBuilder();
 LoadAGUMessageBuilder();
@@ -17,6 +21,11 @@ LoadAGUDataModifier();
 LoadProvider();
 
 LoadRexRecommendationsProvider();
+LoadCHESTVectorRelatedDataHandler();
+LoadCHESTMessageBuilder();
+LoadCHESTDataModifier();
+
+LoadOpenAILLM();
 
 async function Init(): Promise<UserInfo> {
     const config = new SQLServerProviderConfigData(AppDataSource, Config.CurrentUserEmail, Config.mjCoreSchema, 5000);
@@ -40,19 +49,55 @@ async function Run(): Promise<void> {
 
     await ch.Config(user);
 
+    /*
+    const filter: string = `[MEMBER_TERMINATE_DATE] IS NULL
+  AND SUBSTRING(CONVERT(VARCHAR,[MEMBER_EXPIRE_DATE],112),1,6) BETWEEN 202412 and 202502
+  AND EDW_SNOWFLAKE_DATA_DELETE_FLAG= 'false'
+  AND MEMBER_AUTO_RENEW_FLAG='false'`;
+    await ch.CreateList({
+        ListName: "Chest Contacts",
+        EntityName: "VW_CONTACTs",
+        Filter: filter,
+        BatchSize: 25,
+        CurrentUser: user
+    });
+    */
+
+    /*
+    await ch.VectorizeRecords({
+        entityID: '168AF8CE-BEEF-4B9E-892C-71D69DED7A09',
+        entityDocumentID: '8FD31D21-19A2-EF11-88CD-6045BD325BD0',
+        batchCount: 100,
+        options: {},
+        listID: '716F9EF6-E6A6-EF11-88D0-002248450A5B',
+        dataHandlerClassName: 'VectorRelatedDataHandlerBase'
+    }, user);
+    */
+
+    await ch.UpdateTemplateContent({
+        FilePath: "C:/Development/MemberJunction/EmailCampaigns/html/CHEST.htm",
+        TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
+        CurrentUser: user
+    });
+
+    
     await ch.SendEmails({
-        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
-        ListBatchSize: 1,
-        MaxListRecords: 1,
+        //ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        ListID: '716F9EF6-E6A6-EF11-88D0-002248450A5B', //CHEST
+        ListBatchSize: 5,
+        MaxListRecords: 5,
         
         RecommendationRunIDs: [
-            '850BACBF-B8A2-EF11-88CF-002248306D26',
-             'DCBCB17F-CDA2-EF11-88CF-002248306D26'
+            'AB4D8ECA-6AA7-EF11-88D0-002248450A5B'
         ],
         CurrentUser: user,
         TestEmail: "linda@memberjunction.com"
         //TestEmail: "jonathan@memberjunction.com"
+        //TestEmail: 'info@sidecarglobal.com'
+        //TestEmail: 'jstfelix.02@gmail.com'
     });
+    
+    
 
     /*
     await ch.GetRecommendations({
@@ -97,11 +142,12 @@ async function Run(): Promise<void> {
 
     /*
     await ch.UpdateTemplateContent({
-        FilePath: "C:/Users/Ridleh/Downloads/AGUTemplate.htm",
-        TemplateContentID: 'F9BFDDA2-7491-EF11-88CF-002248306D26',
+        FilePath: "C:/Development/MemberJunction/EmailCampaigns/html/CHEST.htm",
+        TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
         CurrentUser: user
     });
     */
+    
 }
 
 

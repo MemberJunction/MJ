@@ -76,6 +76,7 @@ export type CreateListParams = {
     ListDescription?: string,
     EntityName: string,
     Filter?: string,
+    BatchSize?: number,
     CurrentUser: UserInfo
 };
 

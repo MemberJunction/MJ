@@ -15,6 +15,7 @@ import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
+import { VectorRelatedDataHandlerBase } from '../generic/RelatedDataHandler';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -125,6 +126,11 @@ export class EntityVectorSyncer extends VectorBase {
       this.UpsertEntityRecordDocumentRecords(chunk as EmbeddingData, super.CurrentUser).then(() => callback(null)).catch(callback);
     }});
 
+    let dataHandler: VectorRelatedDataHandlerBase | null = null;
+    if(params.dataHandlerClassName){
+      dataHandler = MJGlobal.Instance.ClassFactory.CreateInstance<VectorRelatedDataHandlerBase>(VectorRelatedDataHandlerBase, params.dataHandlerClassName);
+    }
+
     const getData = async (): Promise<void> => {
       let pageNumber = 0;
       let hasMore = true;
@@ -139,7 +145,7 @@ export class EntityVectorSyncer extends VectorBase {
 
         if(params.listID){
           const coreSchema: string = md.ConfigData.MJCoreSchemaName;
-          pageRecordRequest.Filter = `ID IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
+          pageRecordRequest.Filter = `${entity.FirstPrimaryKey.Name} IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
         }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
@@ -150,6 +156,12 @@ export class EntityVectorSyncer extends VectorBase {
         
         for(const record of recordsPage){
           const templateData: { [key: string]: unknown } = await this.GetTemplateData(entity, record, template, relatedData);
+          
+          if(dataHandler){
+            const relatedData: Record<string, any> = await dataHandler.GetRelatedData(record, templateData, super.CurrentUser);
+            Object.assign(templateData, relatedData);
+          }
+
           //we need a reference to this record's ID for the upsert worker
           templateData.__mj_recordID = record[entity.FirstPrimaryKey.Name];
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${record[key.Name]}`).join("||");
