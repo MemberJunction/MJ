@@ -1,8 +1,30 @@
 # Change Log - @memberjunction/codegen-lib
 
-This log was last generated on Mon, 04 Nov 2024 23:07:22 GMT and should not be manually modified.
+This log was last generated on Wed, 20 Nov 2024 19:21:35 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.12.1
+
+Wed, 20 Nov 2024 19:21:35 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v2.13.0
+- Bump @memberjunction/core to v2.13.0
+- Bump @memberjunction/actions to v2.13.0
+- Bump @memberjunction/core-entities to v2.13.0
+- Bump @memberjunction/global to v2.13.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.13.0
 
 ## 2.12.0
 
