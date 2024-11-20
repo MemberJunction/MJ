@@ -5,7 +5,7 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { DataSource } from 'typeorm';
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase } from '../Config/config';
+import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -705,12 +705,21 @@ export class SQLCodeGenBase {
         for (const f of entity.Fields) {
             if (f.RelatedEntity && f.RelatedEntity.length > 0) {
                 // we have an fkey, so generate the create index
-                const indexName = `IX_${entity.BaseTableCodeName}_${f.CodeName}`; // use code names in case the table and/or field names have special characters or spaces/etc
+                let indexName = `IDX_AUTO_MJ_FKEY_${entity.BaseTableCodeName}_${f.CodeName}`; // use code names in case the table and/or field names have special characters or spaces/etc
+                if (indexName.length > MAX_INDEX_NAME_LENGTH)
+                    indexName = indexName.substring(0, MAX_INDEX_NAME_LENGTH); // truncate to max length if necessary
 
                 if (sOutput.length > 0)
-                    sOutput += '\n'; // do this way so we don't end up with a trailing newline at end of the string/file
+                    sOutput += '\n\n'; // do this way so we don't end up with a trailing newline at end of the string/file
 
-                sOutput += `DROP INDEX IF EXISTS [${entity.SchemaName}].[${entity.BaseTable}].${indexName};\nCREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
+                sOutput += `-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = '${indexName}' 
+    AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
+)
+CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`
             }
         }
         return sOutput;
