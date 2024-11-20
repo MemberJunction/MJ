@@ -253,6 +253,15 @@ export function getSettingValue(settingName: string, defaultValue?: any): any {
         return defaultValue;
 }
 
+export function autoIndexForeignKeys(): boolean {
+    const keyName = 'auto_index_foreign_keys';
+    const setting = getSetting(keyName);
+    if (setting)
+        return <boolean>setting.value;
+    else
+        return false;
+}
+
 export function mj_core_schema(): string {
     return getSetting('mj_core_schema').value;
 }

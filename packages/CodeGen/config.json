@@ -19,6 +19,10 @@
         {
             "name": "skip_database_generation",
             "value": false
+        },
+        {
+            "name": "auto_index_foreign_keys",
+            "value": true
         }
     ],
     "logging": {

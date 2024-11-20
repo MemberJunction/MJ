@@ -5,7 +5,7 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { DataSource } from 'typeorm';
-import { configInfo, customSqlScripts, dbDatabase } from '../Config/config';
+import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase } from '../Config/config';
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -310,6 +310,18 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
+            // Indexes for Fkeys for the table
+            if (!onlyPermissions){
+                const indexSQL = autoIndexForeignKeys() ? this.generateIndexesForForeignKeys(ds, entity) : ''; // if autoIndexForeignKeys is true, generate the indexes, otherwise, just add a blank string to the header
+                const s = this.generateSingleEntitySQLFileHeader(entity, 'Index for Foreign Keys') + indexSQL; 
+                if (writeFiles) {
+                    const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('index', entity.SchemaName, entity.BaseTable, false, true));
+                    fs.writeFileSync(filePath, s)
+                    files.push(filePath);
+                }
+                sRet += s + '\nGO\n';
+            }
+
             // BASE VIEW
             if (!onlyPermissions && entity.BaseViewGenerated && !entity.VirtualEntity) {
                 // generate the base view
@@ -491,6 +503,13 @@ export class SQLCodeGenBase {
     }
 
 
+    /**
+     * Deprecated - do not use
+     * @deprecated
+     * @param ds 
+     * @param entity 
+     * @returns 
+     */
     public async generateEntitySQL(ds: DataSource, entity: EntityInfo): Promise<string> {
         let sOutput: string = ''
         if (entity.BaseViewGenerated && !entity.VirtualEntity)
@@ -673,6 +692,28 @@ export class SQLCodeGenBase {
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 `
+    }
+
+    /**
+     * Generates the SQL for creating indexes for the foreign keys in the entity
+     * @param ds 
+     * @param entity 
+     */
+    generateIndexesForForeignKeys(ds: DataSource, entity: EntityInfo): string {
+        // iterate through all of the fields in the entity that are foreign keys and generate an index for each one
+        let sOutput: string = ''; 
+        for (const f of entity.Fields) {
+            if (f.RelatedEntity && f.RelatedEntity.length > 0) {
+                // we have an fkey, so generate the create index
+                const indexName = `IX_${entity.BaseTableCodeName}_${f.CodeName}`; // use code names in case the table and/or field names have special characters or spaces/etc
+
+                if (sOutput.length > 0)
+                    sOutput += '\n'; // do this way so we don't end up with a trailing newline at end of the string/file
+
+                sOutput += `DROP INDEX IF EXISTS [${entity.SchemaName}].[${entity.BaseTable}].${indexName};\nCREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
+            }
+        }
+        return sOutput;
     }
 
     async generateBaseView(ds: DataSource, entity: EntityInfo): Promise<string> {
