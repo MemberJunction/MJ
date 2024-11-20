@@ -34,13 +34,18 @@ export class SQLUtilityBase {
  * @param schema 
  * @param objectName 
  */
-public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function', 
+public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function' | 'index', 
                                     schema: string, 
                                     objectName: string, 
                                     isPermissions: boolean,
                                     isGenerated: boolean): string {
-                  
-   return path.join(schema, `${objectName}.${type}${type==='full_text_search_function' ? '.fulltext' : ''}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
+   let extraText: string = '';
+   switch (type) {
+    case 'full_text_search_function':
+      extraText = '.fulltext';
+      break;
+   }
+   return path.join(schema, `${objectName}.${type}${extraText}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
 }
 
 /**
