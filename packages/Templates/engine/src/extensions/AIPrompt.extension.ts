@@ -83,7 +83,6 @@ export class AIPromptExtension extends TemplateExtensionBase {
         AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
                 let model: AIModelEntityExtended = null;
-                console.log(config);
                 if(config.AIModel) {
                     model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() == config.AIModel.toLowerCase());
                 }
