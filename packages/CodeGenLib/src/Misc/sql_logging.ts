@@ -99,7 +99,7 @@ export class SQLLogging {
     */
     public static async LogSQLAndExecute(ds: DataSource, query: string, description?: string): Promise<any> {
         SQLLogging.appendToSQLLogFile(query, description);
-        return ds.query(query);
+        return await ds.query(query);
     }
 
   

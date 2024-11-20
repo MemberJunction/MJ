@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection, RunViewResult } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity, ResourcePermissionEngine, EntityActionEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -22,6 +22,7 @@ import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingComplet
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
+import { EntityActionEngineBase } from '@memberjunction/actions-base';
 
 
 export type GridRowClickedEvent = {
@@ -67,6 +68,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
    * If set to true, the Create New Record button will be displayed if the user is allowed to create new records for the entity being shown. If set to false, the Create New Record button will be hidden.
    */
   @Input() ShowCreateNewRecordButton: boolean = true;
+
+  /**
+   * If set to true, any Actions that are linked to the displayed entity via EntityActions that have an InvocationContext for Views will be shown.
+   */
+  @Input() ShowEntityActionButtons: boolean = true;
+
   /**
    * If set to true, and if the entity being displayed supports communication, the communication button will be displayed. If set to false, the communication button will be hidden.
    */
@@ -145,6 +152,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public listEntities: ListEntity[] = [];
   public selectedListEntities: ListEntity[] = [];
   public listEntitySearch: string = '';
+
+  public EntityActions: EntityActionEntity[] = [];
 
   public get PendingRecords(): GridPendingRecordItem[] {
     return this._pendingRecords;
@@ -682,6 +691,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     await TemplateEngineBase.Instance.Config(false);
     await EntityCommunicationsEngineClient.Instance.Config(false);
     await CommunicationEngineBase.Instance.Config(false);
+    await EntityActionEngineBase.Instance.Config(false);
 
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
@@ -784,7 +794,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   
         this.skip = 0;
         this.virtualLoadData();
-        
+
+        this.LoadEntityActions();
       }
 
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
@@ -792,6 +803,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     else {
       LogError("Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter)")
+    }
+  }
+
+  /**
+   * Load up the entity action metadata for the current entity the view is displaying
+   */
+  protected LoadEntityActions() {
+    if (this._entityInfo) {
+      this.EntityActions = EntityActionEngineBase.Instance.GetActionsByEntityNameAndInvocationType(this._entityInfo.Name, 'View', 'Active');
     }
   }
 
@@ -1059,6 +1079,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return;
 
     this.showTemplatePreviewDialog = true;
+  }
+
+  /**
+   * This method will invoke the selected action
+   * @param action 
+   */
+  public async doEntityAction(action: EntityActionEntity) {
+    // temporarily just display a message with Sharedservice
+    SharedService.Instance.CreateSimpleNotification(`Action: ${action.Action} was clicked. Invocation is not yet implemented`, 'info', 2500);
   }
 
 

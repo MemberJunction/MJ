@@ -14,7 +14,7 @@ import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovi
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { ActionEngine } from '@memberjunction/actions';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
 
 /**
@@ -246,11 +246,11 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
             const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-            await ActionEngine.Instance.Config(false, currentUser)
+            await ActionEngineServer.Instance.Config(false, currentUser)
             if (coreActionsOutputDir) {
                 logStatus('Generating CORE Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-                if (! await actionsGenerator.generateActions(ActionEngine.Instance.CoreActions, coreActionsOutputDir))  
+                if (! await actionsGenerator.generateActions(ActionEngineServer.Instance.CoreActions, coreActionsOutputDir))  
                     logError('Error generating CORE Actions code');
             }
     
@@ -258,7 +258,7 @@ export class RunCodeGenBase {
             if (actionsOutputDir) {
                 logStatus('Generating Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-                if (! await actionsGenerator.generateActions(ActionEngine.Instance.NonCoreActions, actionsOutputDir))
+                if (! await actionsGenerator.generateActions(ActionEngineServer.Instance.NonCoreActions, actionsOutputDir))
                     logError('Error generating Actions code');
             }
             else

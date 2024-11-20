@@ -280,11 +280,11 @@ export class ResourceBrowserComponent {
       filter += `(${this.ItemFilter})`;
     }
     if(this.UserIDFieldName){
-      let base: string = this.ItemFilter ? "AND": "";
+      let base: string = this.ItemFilter ? "AND ": " ";
       filter += `${base}([${this.UserIDFieldName}] = '${md.CurrentUser.ID}')`;
     }
     if(this.CurrentCategoryID && this.CategoryIDFieldName){
-      let base: string = (this.ItemFilter || this.UserIDFieldName) ? "AND": "";
+      let base: string = (this.ItemFilter || this.UserIDFieldName) ? "AND ": " ";
       filter += `${base}([${this.CategoryIDFieldName}] = '${this.CurrentCategoryID}')`;
     }
     
@@ -307,7 +307,7 @@ export class ResourceBrowserComponent {
   }
 
   private async LoadCategories(): Promise<Item[]> {
-    if(!this.EnableCategories || !this.CategoryEntityID){
+    if(!this.EnableCategories){
       return [];
     }
 
@@ -316,10 +316,17 @@ export class ResourceBrowserComponent {
     }
 
     const md = new Metadata();
-    let filter: string = `UserID = '${md.CurrentUser.ID}' AND EntityID = '${this.CategoryEntityID}'`;
-    if(this.CurrentCategoryID){
-      filter += ` AND ParentID = '${this.CurrentCategoryID}'`;
+    const categoryEntity: EntityInfo = md.EntityByName(this.ResourceType.CategoryEntity);
+    if(!categoryEntity){
+      LogError(`Category Entity ${this.ResourceType.CategoryEntity} not found`);
+      return [];
     }
+
+    const hasEntityIDField: boolean = categoryEntity.Fields.some(field => field.Name === "EntityID");
+    
+    let filter: string = `UserID = '${md.CurrentUser.ID}'`;
+    filter += this.CurrentCategoryID ? ` AND ParentID = '${this.CurrentCategoryID}' ` : " AND ParentID IS NULL ";
+    filter += hasEntityIDField ? ` AND EntityID = '${this.ResourceType.EntityID}'` : "";
 
     const rv: RunView = new RunView();
     const rvResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
@@ -403,12 +410,6 @@ export class ResourceBrowserComponent {
   public async createFolder(): Promise<void> {
     if(!this.ResourceType.CategoryEntity){
       LogError("ResourceType.CategoryEntity is not set, cannot create folder");
-      this.sharedService.CreateSimpleNotification("Unable to create folder", "error", 1500);
-      return;
-    }
-
-    if(!this.CategoryEntityID){
-      LogError("CategoryEntityID is not set, cannot create folder");
       this.sharedService.CreateSimpleNotification("Unable to create folder", "error", 1500);
       return;
     }

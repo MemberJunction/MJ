@@ -40,6 +40,11 @@ export class Message {
     public From: string;
 
     /**
+     * The name of the sender, typically the display name of the email address
+     */
+    public FromName?: string;
+
+    /**
      * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social 
      * media provider, it might be a user's social media handle
      */

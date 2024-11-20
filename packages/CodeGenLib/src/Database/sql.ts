@@ -34,13 +34,18 @@ export class SQLUtilityBase {
  * @param schema 
  * @param objectName 
  */
-public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function', 
+public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function' | 'index', 
                                     schema: string, 
                                     objectName: string, 
                                     isPermissions: boolean,
                                     isGenerated: boolean): string {
-                  
-   return path.join(schema, `${objectName}.${type}${type==='full_text_search_function' ? '.fulltext' : ''}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
+   let extraText: string = '';
+   switch (type) {
+    case 'full_text_search_function':
+      extraText = '.fulltext';
+      break;
+   }
+   return path.join(schema, `${objectName}.${type}${extraText}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
 }
 
 /**
@@ -195,26 +200,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
   catch (e) {
     logError(e as string);
     return false;
-  }
-  // const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
-  //  const filePath = path.join(outputDir('SQL', true)!, file);
-  //  if (fs.existsSync(filePath)) {
-  //     const recompileResult = await this.executeSQLFile(filePath)
-  //     if (applyPermissions) {
-  //        // now apply permissions
-  //        const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
-  //        const permissionsFilePath = path.join(outputDir('SQL', true)!, permissionsFile);
-  //        if (fs.existsSync(permissionsFilePath)) {
-  //           return await this.executeSQLFile(permissionsFilePath) && recompileResult;
-  //        }
-  //     }  
-  //     else
-  //        return recompileResult;
-  //  }
-  //  else {
-  //     logError(`     Error Recompiling Base View: File ${filePath} does not exist`)
-  //  }
-  //  return false;
+  } 
  }
  
  public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {

@@ -2,7 +2,7 @@
 
 
 import { Metadata, RunView, BaseEntity } from "@memberjunction/core";
-import { ActionResult } from "./ActionEngine";
+import { ActionResult } from "@memberjunction/actions-base";
 
     async function test(params: any) {
         // Create an instance of Metadata to interact with entities.
