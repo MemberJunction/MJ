@@ -156,8 +156,15 @@ export class SQLCodeGenBase {
                     for (const f of files) {
                         const fullPath = path.join(directory, f);
                         if (fs.existsSync(fullPath)) {
-                            if (!await this.SQLUtilityObject.executeSQLFile(fullPath))
-                                innerSuccess = false; // we keep going, just note that something failed
+                            const fileBuffer = fs.readFileSync(fullPath);
+                            const fileContents = fileBuffer.toString();
+                            try {
+                                await ds.query(fileContents);                            
+                            }
+                            catch (e: any) {
+                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${e}`);
+                                innerSuccess = false;
+                            }
                         }
                         else {
                             // we don't have the file, so we can't execute it, but we should log it as an error
