@@ -262,6 +262,11 @@ export function autoIndexForeignKeys(): boolean {
         return false;
 }
 
+/**
+ * Maximum length of the name of an index
+ */
+export const MAX_INDEX_NAME_LENGTH = 128;
+
 export function mj_core_schema(): string {
     return getSetting('mj_core_schema').value;
 }
