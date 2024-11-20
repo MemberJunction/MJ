@@ -155,7 +155,7 @@ export class ManageMetadataBase {
                if (removeList.length > 0) {
                   const sqlRemove = `DELETE FROM [${mj_core_schema()}].EntityField WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
                   // this removes the fields that shouldn't be there anymore
-                  this.LogSQLAndExecute(ds, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
+                  await this.LogSQLAndExecute(ds, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
                   bUpdated = true;
                }
 
@@ -699,7 +699,7 @@ export class ManageMetadataBase {
             EXEC('ALTER TABLE [${entity.SchemaName}].[${entity.BaseTable}] DROP CONSTRAINT ' + @constraintName);
          END
          `;  
-         this.LogSQLAndExecute(ds, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);   
+         await this.LogSQLAndExecute(ds, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);   
       }
       catch (e) {
          logError(e as string);
@@ -1422,7 +1422,7 @@ export class ManageMetadataBase {
                   const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
                                     (ApplicationID, EntityID, Sequence) VALUES 
                                     ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
-                  this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
+                  await this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                }
                else {
                   // this is NOT an error condition, we do have an application UUID, but the configuration setting is to NOT add new entities to applications for schema names
@@ -1603,6 +1603,6 @@ export class ManageMetadataBase {
     * @returns - The result of the query execution.
     */
    private async LogSQLAndExecute(ds: DataSource, query: string, description?: string): Promise<any> {
-      SQLLogging.LogSQLAndExecute(ds, query, description);
+      return SQLLogging.LogSQLAndExecute(ds, query, description);
    }
 }
