@@ -2,6 +2,45 @@
   "name": "@memberjunction/ng-record-selector",
   "entries": [
     {
+      "date": "Wed, 20 Nov 2024 19:21:35 GMT",
+      "version": "2.13.0",
+      "tag": "@memberjunction/ng-record-selector_v2.13.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-selector",
+            "comment": "Bump @memberjunction/core-entities to v2.13.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-selector",
+            "comment": "Bump @memberjunction/global to v2.13.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-selector",
+            "comment": "Bump @memberjunction/core to v2.13.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-selector",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.13.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-selector",
+            "comment": "Bump @memberjunction/ng-shared to v2.13.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 04 Nov 2024 23:07:22 GMT",
       "version": "2.12.0",
       "tag": "@memberjunction/ng-record-selector_v2.12.0",

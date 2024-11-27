@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ng-explorer-core",
-  "email": "nico.ortiz@bluecypress.io",
-  "dependentChangeType": "patch"
-}
