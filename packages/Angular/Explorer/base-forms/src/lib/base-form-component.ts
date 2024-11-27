@@ -374,7 +374,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           }
         }
         else {
-          this.sharedService.CreateSimpleNotification('Validation Errors\n' + valResults.Errors.map(x => x.Message).join('\n'), 'warning', 10000);
+          this.sharedService.CreateSimpleNotification('Validation Errors\n' + valResults.Errors.map(x => x.Message).join('\n'), 'warning', 5000);
         }
       }
 
