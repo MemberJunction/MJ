@@ -760,7 +760,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entity.Fields.forEach(f => {
                     let val = null;
                     if (f.OldValue !== null && f.OldValue !== undefined) {
-                        if (typeof f.OldValue !== 'string')
+                        if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
+                            val = f.OldValue.getTime().toString();
+                        else if (f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean)
+                            val = f.OldValue === true ? "1" : "0";
+                        else if (typeof f.OldValue !== "string")
                             val = f.OldValue.toString();
                         else
                             val = f.OldValue;
