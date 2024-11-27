@@ -24,7 +24,7 @@
     "@memberjunction/global": "2.13.0",
     "@memberjunction/core-entities": "2.13.0",
     "@memberjunction/sqlserver-dataprovider": "2.13.0",
-    "@memberjunction/codegen-lib": "2.12.1",
+    "@memberjunction/codegen-lib": "2.13.0",
     "@types/axios": "^0.14.0",
     "@types/mssql": "^9.1.5",
     "axios": "^1.6.7",
