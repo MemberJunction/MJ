@@ -30,7 +30,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
-          ref: next          
 
       - name: Set up node
         uses: actions/setup-node@v4
