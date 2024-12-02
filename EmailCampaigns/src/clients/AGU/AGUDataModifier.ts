@@ -72,7 +72,6 @@ export class AGUDataModifier extends DataModifier {
         }
 
         console.log(sourcePerson.Email);
-        console.log(contextData);
         const messageRecipient: MessageRecipient = {
             To: sourcePerson.Email,
             FullName: data.SourceRecord.Name,

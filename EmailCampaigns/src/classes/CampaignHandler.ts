@@ -375,6 +375,9 @@ export class CampaignHander {
     }
     else{
       LogStatus(`Template ${templateContent.ID} successfully updated`);
+
+      //update the template engine
+      await TemplateEngineServer.Instance.Config(true, params.CurrentUser);
     }
   }
 

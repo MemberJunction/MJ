@@ -246,6 +246,15 @@
                                                                 Why it's a great fit:
                                                             </span>
                                                             <div>
+                                                               {% AIPrompt %}
+                                                                  <!--!{"AIModel": "GPT 4o mini", "AllowFormatting": true}!-->
+                                                                  Create three personalized bullets that are within 15-20 words in HTML Format about the following product:
+                                                                  Name: {{ Product.PRODUCT_NAME }}
+
+                                                                  That highlights the product and gets {{ Person.First_NAME }} inticed to by it.
+                                                                  Be sure to NOT mention their name in each bullet point.
+
+                                                               {% endAIPrompt %}
                                                             </div>
                                                             <br />
                                                             <br />

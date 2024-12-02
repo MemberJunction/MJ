@@ -74,22 +74,34 @@ async function Run(): Promise<void> {
     }, user);
     */
 
+    /*/
     await ch.UpdateTemplateContent({
         FilePath: "C:/Development/MemberJunction/EmailCampaigns/html/CHEST.htm",
         TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
         CurrentUser: user
     });
+    */
+
+    /*
+    await ch.UpdateTemplateContent({
+        FilePath: "C:/Users/Ridleh/Downloads/AGUTemplate.htm",
+        TemplateContentID: 'F9BFDDA2-7491-EF11-88CF-002248306D26',
+        CurrentUser: user
+    });
+    */
 
     
     await ch.SendEmails({
-        //ListID: '8E59846B-9298-EF11-88CF-002248306D26',
-        ListID: '716F9EF6-E6A6-EF11-88D0-002248450A5B', //CHEST
-        ListBatchSize: 5,
-        MaxListRecords: 5,
-        
+        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        //ListID: '716F9EF6-E6A6-EF11-88D0-002248450A5B', //CHEST
+        ListBatchSize: 3,
+        MaxListRecords: 3,
+        StartingOffset: 6,
         RecommendationRunIDs: [
-            'AB4D8ECA-6AA7-EF11-88D0-002248450A5B'
+            //'AB4D8ECA-6AA7-EF11-88D0-002248450A5B' //CHEST
+            'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
         ],
+
         CurrentUser: user,
         TestEmail: "linda@memberjunction.com"
         //TestEmail: "jonathan@memberjunction.com"
