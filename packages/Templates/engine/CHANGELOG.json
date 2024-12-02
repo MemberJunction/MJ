@@ -2,6 +2,63 @@
   "name": "@memberjunction/templates",
   "entries": [
     {
+      "date": "Wed, 27 Nov 2024 20:42:53 GMT",
+      "version": "2.13.1",
+      "tag": "@memberjunction/templates_v2.13.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/templates",
+            "commit": "f5810a6f920df8ee0b4f4b140df5d720e718de25",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/core to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/templates-base-types to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/ai to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/aiengine to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/ai-groq to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/core-entities to v2.13.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/templates",
+            "comment": "Bump @memberjunction/global to v2.13.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 20 Nov 2024 19:21:35 GMT",
       "version": "2.13.0",
       "tag": "@memberjunction/templates_v2.13.0",

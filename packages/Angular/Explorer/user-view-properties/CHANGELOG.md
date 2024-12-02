@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
-This log was last generated on Wed, 20 Nov 2024 19:21:35 GMT and should not be manually modified.
+This log was last generated on Wed, 27 Nov 2024 20:42:53 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.1
+
+Wed, 27 Nov 2024 20:42:53 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.13.1
+- Bump @memberjunction/core to v2.13.1
+- Bump @memberjunction/core-entities to v2.13.1
+- Bump @memberjunction/ng-base-forms to v2.13.1
+- Bump @memberjunction/ng-find-record to v2.13.1
+- Bump @memberjunction/ng-resource-permissions to v2.13.1
+- Bump @memberjunction/ng-shared to v2.13.1
 
 ## 2.13.0
 
