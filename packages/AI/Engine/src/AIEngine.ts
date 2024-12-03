@@ -86,18 +86,76 @@ export class AIEngine extends BaseEngine<AIEngine> {
 
     /**
      * Convenience method to returns the highest power model for a given vendor and model type. Loads the metadata if not already loaded.
-     * @param vendorName 
-     * @param modelType 
+     * @param vendorName - if set to null, undefined, or an empty string, then all models of the specified type are considered
+     * @param modelType - the type of model to consider
      * @param contextUser required on the server side
      * @returns 
      */
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
-        await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-        const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
-                                                   m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase())  
-        // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
-        models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
-        return models[0];
+        try {
+            await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+            const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
+                                                                (vendorName && vendorName.length > 0 ? m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase() : true)); // if vendorname is not provided, then we get all models of the specified type 
+            // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
+            models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
+            return models[0];    
+        }
+        catch (e) {
+            LogError(e); // force logging to help debug scenario here
+            throw e; 
+        }
+    }
+
+    /**
+     * Convenience method to return the highest power LLM model for a given vendor. Loads the metadata if not already loaded.
+     * @param vendorName - if provided, filters to only consider models from the specified vendor, otherwise considers all models
+     * @param contextUser 
+     * @returns 
+     */
+    public async GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
+        return await this.GetHighestPowerModel(vendorName, 'LLM', contextUser);
+    }
+
+    /**
+     * Executes a simple completion task using the provided parameters. The underlying code uses the MJ AI BaseLLM and related class infrastructure to execute the task. 
+     * This is simply a convenience method to make it easier to execute a completion task without having to deal with the underlying infrastructure. For more control,
+     * use the underlying classes directly.
+     * @param userPrompt 
+     * @param contextUser 
+     * @param systemPrompt 
+     * @param model - optional, if not provided, @GetHighestPowerLLM will be called to get the highest power LLM model
+     * @param apiKey 
+     * @returns 
+     */
+    public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: AIModelEntityExtended, apiKey?: string): Promise<string> {
+        try {
+            if (!userPrompt || userPrompt.length === 0)
+                throw new Error('User prompt not provided.');
+
+            await AIEngine.Instance.Config(false, contextUser);
+            const modelToUse = model ? model : await this.GetHighestPowerLLM(null, contextUser);
+            const apiKeyToUse = apiKey ? apiKey : GetAIAPIKey(modelToUse.DriverClass);   
+            const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, modelToUse.DriverClass, apiKeyToUse)
+
+            const messages = [];
+            if (systemPrompt && systemPrompt.length > 0)
+                messages.push({ role: 'system', content: systemPrompt });
+            messages.push({ role: 'user', content: userPrompt });
+
+            const result = await modelInstance.ChatCompletion({
+                messages: messages,
+                model: modelToUse.APIName
+            })
+            if (result && result.success) {
+                return result.data.choices[0].message.content;
+            }
+            else
+                throw new Error(`Error executing LLM model ${modelToUse.Name} : ${result.errorMessage}`);
+        }
+        catch (e) {
+            LogError(e);
+            throw e;
+        }
     }
 
     public get Prompts(): AIPromptEntity[] {
