@@ -65,6 +65,13 @@ jobs:
             echo "::error::The version to be published ($NEXT_VERSION) does not match the expected version ($EXPECTED_NEXT_VERSION)"
             exit 1
           fi
+          MJ_PACKAGE_COUNT=$(grep --exclude-dir node_modules  --include package.json -R '"name": "@memberjunction/' | wc -l)
+          NEXT_VERSION_PACKAGE_COUNT=$(grep --exclude-dir node_modules  --include package.json -R '"version": "'$NEXT_VERSION'"' | wc -l)
+          if [ "$MJ_PACKAGE_COUNT" != "$NEXT_VERSION_PACKAGE_COUNT" ]; then
+            echo "::error::One or more packages would not be published with the expected next version ($EXPECTED_NEXT_VERSION)"
+            grep --exclude-dir node_modules  --include package.json -RL '"version": "'$NEXT_VERSION'"' | xargs grep '"name": "@memberjunction/'
+            exit 1
+          fi
           git reset --hard HEAD
 
       - name: Install dependencies
