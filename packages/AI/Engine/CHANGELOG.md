@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/aiengine
 
-This log was last generated on Wed, 27 Nov 2024 20:42:53 GMT and should not be manually modified.
+This log was last generated on Tue, 03 Dec 2024 23:30:43 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.2
+
+Tue, 03 Dec 2024 23:30:43 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/core to v2.13.2
+- Bump @memberjunction/global to v2.13.2
+- Bump @memberjunction/core-entities to v2.13.2
+- Bump @memberjunction/ai to v2.13.2
 
 ## 2.13.1
 
