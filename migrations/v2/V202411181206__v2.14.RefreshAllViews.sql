@@ -1,0 +1,1 @@
+exec ${flyway:defaultSchema}.spRecompileAllViews
