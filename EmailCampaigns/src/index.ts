@@ -85,13 +85,11 @@ async function Run(): Promise<void> {
     });
     */
 
-    /*
     await ch.UpdateTemplateContent({
-        FilePath: "C:/Users/Ridleh/Downloads/email 1.html",
+        FilePath: "C:/Users/Ridleh/Downloads/email 2.html",
         TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
         CurrentUser: user
     });
-    */
 
     /*
     await ch.SendEmails({
@@ -114,7 +112,7 @@ async function Run(): Promise<void> {
     */
     
 
-    
+    /*
     await ch.GetRecommendations({
         ListID: '8764FA2C-B8B1-EF11-88D0-002248450A5B',
         CurrentUser: user,
@@ -130,7 +128,7 @@ async function Run(): Promise<void> {
             ]
         }
     });
-     
+    */
 
     /*
     await ch.CreateEntityDocumentTemplate({
