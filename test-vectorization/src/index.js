@@ -10,7 +10,7 @@ import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 
-const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
+const SYSTEM_USER_ID = "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E";
 
 const config = new SQLServerProviderConfigData(AppDataSource, '', '__mj', 5000);
 
@@ -22,22 +22,28 @@ LoadOpenAILLM();
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
-const params = {
-  EntityID: "5F248F34-2837-EF11-86D4-6045BDEE16E6", // Accounts
-  EntityDocumentID: "A4AECCEC-6A37-EF11-86D4-000D3A4E707E",
+const params = {  
+  EntityID: "168AF8CE-BEEF-4B9E-892C-71D69DED7A09",    
+  EntityDocumentID: "8FD31D21-19A2-EF11-88CD-6045BD325BD0"
 };
 
 const md = new Metadata();
-const systemUser = new UserInfo(sqlServerDataProvider, {
-  ID: SYSTEM_USER_ID,
-  Name: 'Jonathan Stfelix',
-  Email: 'jonathan.stfelix@bluecypress.io',
-  UserRoles: [
-    { UserID: SYSTEM_USER_ID, RoleName: 'UI', RoleID: 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' }, 
-    { UserID: SYSTEM_USER_ID, RoleName: 'Developer', RoleID: 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
-    { UserID: SYSTEM_USER_ID, RoleName: 'Integration', RoleID: 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' }
-  ],
-});
+const systemUser = new UserInfo(sqlServerDataProvider, {  
+  ID: SYSTEM_USER_ID,  
+  Name: 'Nico Ortiz de Zarate',  
+  Email: 'nico@memberjunction.com',  
+  UserRoles: [    
+    { UserID: SYSTEM_USER_ID, 
+      RoleName: 'UI', 
+      RoleID: 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' },     
+      { UserID: SYSTEM_USER_ID, 
+        RoleName: 'Developer', 
+        RoleID: 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' },    
+        { UserID: SYSTEM_USER_ID, 
+          RoleName: 'Integration', 
+          RoleID: 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' }  
+        ]
+      });
 
 let vectorizer = new EntityVectorSyncer();
 //await vectorizer.Config(false, systemUser);
@@ -50,14 +56,15 @@ if (!entityDocument) {
   throw new Error(`No active Entity Document found for entity ${params.EntityID}`);
 }
 
-//for testing
 /** @type {import('@memberjunction/ai-vector-sync').VectorSyncRequest} */
-const request = {
+const request = {  
   entityID: entityDocument.EntityID,
-  entityDocumentID: entityDocument.ID,
+  entityDocumentID: entityDocument.ID,  
+  listID: 'DC530117-C4B1-EF11-88D0-002248450A5B', 
+  // CHEST product list  
   batchCount: 20,
-  options: {},
-};
+  options: {}
+  };
 
 console.log(request);
 

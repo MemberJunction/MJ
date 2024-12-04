@@ -4,6 +4,7 @@ import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
 import { AIModelEntityExtended } from "@memberjunction/core-entities";
+import * as nunjucks from 'nunjucks';
 // TODO: Add type defs based on nunjucks classes used for extensions
 type Parser = any;
 type Nodes = any;
@@ -83,12 +84,11 @@ export class AIPromptExtension extends TemplateExtensionBase {
         AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
             try {
                 let model: AIModelEntityExtended = null;
-                console.log(config);
                 if(config.AIModel) {
                     model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() == config.AIModel.toLowerCase());
                 }
                 else{
-                    model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
+                    model = await AIEngine.Instance.GetHighestPowerModel('OpenAI', 'llm', this.ContextUser);
                 }
                 
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
@@ -110,7 +110,11 @@ export class AIPromptExtension extends TemplateExtensionBase {
                 if (llmResult && llmResult.success) {
                     let response = llmResult.data.choices[0].message.content;
                     response = response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-
+                    
+                    if(config && config.AllowFormatting){
+                        response = new nunjucks.runtime.SafeString(response);
+                    }
+                    
                     callBack(null, response);
                 }
             }

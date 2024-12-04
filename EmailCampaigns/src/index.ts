@@ -50,12 +50,16 @@ async function Run(): Promise<void> {
     await ch.Config(user);
 
     /*
-    const filter: string = `[MEMBER_TERMINATE_DATE] IS NULL
-  AND SUBSTRING(CONVERT(VARCHAR,[MEMBER_EXPIRE_DATE],112),1,6) BETWEEN 202412 and 202502
-  AND EDW_SNOWFLAKE_DATA_DELETE_FLAG= 'false'
-  AND MEMBER_AUTO_RENEW_FLAG='false'`;
+    const filter: string = `EMAIL in (
+	select RecordID from __mj.vwListDetails
+	where ListID = '8764FA2C-B8B1-EF11-88D0-002248450A5B'
+	and RecordID not in (
+		select SourceEntityRecordID from __mj.vwRecommendations
+		where RecommendationRunID = '1F1E9997-C2B1-EF11-88D0-002248450A5B'
+	)
+)`;
     await ch.CreateList({
-        ListName: "Chest Contacts",
+        ListName: "Remaining 60 day Contacts Part 3",
         EntityName: "VW_CONTACTs",
         Filter: filter,
         BatchSize: 25,
@@ -69,12 +73,11 @@ async function Run(): Promise<void> {
         entityDocumentID: '8FD31D21-19A2-EF11-88CD-6045BD325BD0',
         batchCount: 100,
         options: {},
-        listID: '716F9EF6-E6A6-EF11-88D0-002248450A5B',
-        dataHandlerClassName: 'VectorRelatedDataHandlerBase'
+        listID: '1DCECEC7-15B1-EF11-88D0-002248450A5B'
     }, user);
     */
 
-    /*/
+    /*
     await ch.UpdateTemplateContent({
         FilePath: "C:/Development/MemberJunction/EmailCampaigns/html/CHEST.htm",
         TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
@@ -84,22 +87,22 @@ async function Run(): Promise<void> {
 
     /*
     await ch.UpdateTemplateContent({
-        FilePath: "C:/Users/Ridleh/Downloads/AGUTemplate.htm",
-        TemplateContentID: 'F9BFDDA2-7491-EF11-88CF-002248306D26',
+        FilePath: "C:/Users/Ridleh/Downloads/email 1.html",
+        TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
         CurrentUser: user
     });
     */
 
-    
+    /*
     await ch.SendEmails({
-        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
-        //ListID: '716F9EF6-E6A6-EF11-88D0-002248450A5B', //CHEST
+        //ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        ListID: '1DCECEC7-15B1-EF11-88D0-002248450A5B', //CHEST
         ListBatchSize: 3,
         MaxListRecords: 3,
-        StartingOffset: 6,
+        StartingOffset: 5,
         RecommendationRunIDs: [
-            //'AB4D8ECA-6AA7-EF11-88D0-002248450A5B' //CHEST
-            'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
+            '85B48D1B-24B1-EF11-88D0-002248450A5B' //CHEST
+            //'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
         ],
 
         CurrentUser: user,
@@ -108,30 +111,26 @@ async function Run(): Promise<void> {
         //TestEmail: 'info@sidecarglobal.com'
         //TestEmail: 'jstfelix.02@gmail.com'
     });
-    
+    */
     
 
-    /*
+    
     await ch.GetRecommendations({
-        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        ListID: '8764FA2C-B8B1-EF11-88D0-002248450A5B',
         CurrentUser: user,
-        CreateErrorList: true,
+        CreateErrorList: false,
         ContextData: {
-            EntityDocumentID: '38D60434-948D-EF11-8473-002248306CAC',
+            EntityDocumentID: '8FD31D21-19A2-EF11-88CD-6045BD325BD0',
             type: 'person',
             filters: [
                 {
-                    type: "person",
-                    max_results: 15
-                },
-                {
                     type: "course",
-                    max_results: 15
+                    max_results: 3
                 }
             ]
         }
     });
-    */
+     
 
     /*
     await ch.CreateEntityDocumentTemplate({

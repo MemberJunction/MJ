@@ -395,8 +395,7 @@ export class CampaignHander {
       entityDocumentID: entityDocument.ID,
       batchCount: params.batchCount || 100,
       options: params.options,
-      listID: params.listID,
-      dataHandlerClassName: params.dataHandlerClassName
+      listID: params.listID
     };
 
     console.log('vectorizing entity...');

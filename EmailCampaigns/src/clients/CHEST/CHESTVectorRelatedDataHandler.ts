@@ -1,9 +1,7 @@
 import { RegisterClass } from "@memberjunction/global";
-import { VectorRelatedDataHandlerBase } from "@memberjunction/ai-vector-sync";
 import { LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 
-@RegisterClass(VectorRelatedDataHandlerBase, "VectorRelatedDataHandlerBase")
-export class CHESTVectorRelatedDataHandler extends VectorRelatedDataHandlerBase {
+export class CHESTVectorRelatedDataHandler {
 
     public async GetRelatedData(sourceRecord: Record<string, any>, contextData: Record<string, any>, currentUser: UserInfo): Promise<Record<string, any>> {
         const md: Metadata = new Metadata();

@@ -153,8 +153,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     LogStatus(`Getting recommendations for list: ${list.Name}. Entity: ${entityName}`);
 
     const entityID: string = list.EntityID;
-    const entity: EntityInfo = md.Entities.find((e) => e.ID == entityID);
-    const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
+    const entityInfo: EntityInfo = md.Entities.find((e) => e.ID == entityID);
+    const needsQuotes: string = entityInfo.FirstPrimaryKey.NeedsQuotes? "'" : '';
 
     const listDetailsResult = rvListDetailsResult[1];
     if(!listDetailsResult.Success) {
@@ -169,7 +169,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     const recordIDs: string = listDetailsResult.Results.map((ld: ListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
     const rvEntityResult = await rv.RunView({
       EntityName: entityName,
-      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
+      ExtraFilter: `${entityInfo.FirstPrimaryKey.Name} IN (${recordIDs})`,
       IgnoreMaxRows: true,
     }, currentUser);
 
@@ -182,7 +182,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       const recommendationEntity: RecommendationEntity = await md.GetEntityObject<RecommendationEntity>('Recommendations', currentUser);
       recommendationEntity.NewRecord();
       recommendationEntity.SourceEntityID = entityID;
-      recommendationEntity.SourceEntityRecordID = entity.ID;
+      recommendationEntity.SourceEntityRecordID = entity[entityInfo.FirstPrimaryKey.Name];
       recommendations.push(recommendationEntity);
     }
 

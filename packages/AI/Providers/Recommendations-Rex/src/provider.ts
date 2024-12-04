@@ -108,7 +108,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         //assuming all recommendations have the same source entity ID
         const entityID: string = recommendations[0].SourceEntityID;
-        const recordIDs: string = recommendations.map(r => `'${r.SourceEntityRecordID}'`).join(",");
+        const recordIDs: string = recommendations.map(r => `'${r.SourceEntityRecordID}'`).join(', ');
 
         const rvVectorResult: RunViewResult<EntityRecordDocumentEntityType> = await rv.RunView<EntityRecordDocumentEntityType>({
             EntityName: "Entity Record Documents",
@@ -196,7 +196,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             if(isAxiosError(ex)){
                 const axiosError: AxiosError<RasaResponse> = ex;
                 const rasaError = axiosError.response.data;
-                LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
+                LogError("Error getting Rex recommendation, rasaError:");
+                console.log(JSON.stringify(rasaError, null, 4));
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);
                     await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
@@ -234,7 +235,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         switch(data.type){
             case "course":
-                entityName = "Contents";
+                entityName = "Live Product Attributes";
                 break;
             case "course_part":
                 entityName = "Course Parts";

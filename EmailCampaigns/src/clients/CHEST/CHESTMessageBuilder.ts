@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
 import { Message } from "@memberjunction/communication-types";
-import { UserInfo } from "@memberjunction/core";
+import { LogStatus, UserInfo } from "@memberjunction/core";
 import { MessageBuilder } from "../../classes/MessageBuilder";
 import { sendgridDomain } from "../../Config";
 import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
@@ -10,6 +10,8 @@ import { CommunicationEngine } from "@memberjunction/communication-engine";
 @RegisterClass(MessageBuilder, 'CHESTMessageBuilder')
 export class CHESTMessageBuilder implements MessageBuilder {
     public async GetMessage(currentUser: UserInfo): Promise<Message> {
+
+        LogStatus("From Email: " + sendgridDomain);
 
         const sendGrid = CommunicationEngine.Instance.Providers.find(p => p.Name === "SendGrid")
         if (!sendGrid){

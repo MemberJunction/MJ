@@ -395,7 +395,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
                             const entity: BaseEntity = await md.GetEntityObject(item.EntityName, contextUser);
-                            entity.SetMany(entityData);
+                            entity.SetMany(entityData, true, false);
                             entities.push(entity);
                         }
 

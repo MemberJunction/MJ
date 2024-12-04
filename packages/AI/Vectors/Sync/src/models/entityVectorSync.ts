@@ -114,7 +114,7 @@ export class EntityVectorSyncer extends VectorBase {
     //archiver worker handles upserting the vectors into the vector database
     const archiver = new BatchWorker({ 
       workerFile: resolve(__dirname, 'workers/UpsertVectors.js'), 
-      batchSize: 4,
+      batchSize: 3,
       contextUser: super.CurrentUser, 
       workerContext
     });
@@ -149,6 +149,11 @@ export class EntityVectorSyncer extends VectorBase {
         }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
+        if(recordsPage.length === 0){
+          hasMore = false;
+          break;
+        }
+
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
         const items: Record<string, any>[] = [];
 
@@ -265,7 +270,8 @@ export class EntityVectorSyncer extends VectorBase {
     const aiModelEntity: AIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
     const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
-    const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
+    //const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
+    const vectorDBAPIKey: string = 'pcsk_4LxTAE_8srAo9Go7nkbhgXJSbiEVvZY2S7txVdy2ju3RUMKJEPMMkn8gcnwZiTbd5f4A6w'; 
 
     if (!embeddingAPIKey) {
       throw Error(`No API Key found for AI Model ${aiModelEntity.DriverClass}`);
