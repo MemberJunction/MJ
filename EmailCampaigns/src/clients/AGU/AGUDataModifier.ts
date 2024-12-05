@@ -12,21 +12,23 @@ export class AGUDataModifier extends DataModifier {
         let contextData: Record<string, any> = {
             Persons: [],
             Abstracts: [],
+            Person: data.SourceRecord
         };
 
-        if(data.Contents){
-            contextData.Abstracts = data.Contents;
+        if(data.Content){
+            const abstracts: Record<string, any>[] = await this.GetAbstracts(data, currentUser);
+            contextData.Abstracts = abstracts;
         }
 
-        if(data.Contributors) {
-            const contributors: Contributor[] = data.Contributors;
+        if(data.Contributor) {
+            const contributors: Contributor[] = data.Contributor;
 
             //we have most of the data we need in the contributors list, but we're missing 
             //the profile link for each person. We'll fetch that data from another view
             const customerIDs: string = contributors.map((contributor: Contributor) => `'${contributor.CustomerID}'`).join(',');
             const rvPresenterResult = await rv.RunView<Presenter>({
                 EntityName: 'Presenter _2024_Emails',
-                ExtraFilter: `Customer_ID IN (${customerIDs})`
+                ExtraFilter: `Customer_ID IN ( SELECT Customer_ID from Abstracts_Presenters_2024_December where Customer_ID IN (${customerIDs}))`
             }, currentUser);
 
             if(!rvPresenterResult.Success) {
@@ -62,6 +64,7 @@ export class AGUDataModifier extends DataModifier {
         }
 
         const sourcePerson: Presenter = rvSourcePersonResult.Results[0];
+        //contextData.Person = sourcePerson;
 
         const filteredData: Record<string, any> = await this.FilterRecommendations(data.SourceRecord.ID, contextData.Persons, contextData.Abstracts, currentUser);
         if(filteredData.Contributors){
@@ -71,7 +74,6 @@ export class AGUDataModifier extends DataModifier {
             contextData.Abstracts = filteredData.Contents;
         }
 
-        console.log(sourcePerson.Email);
         const messageRecipient: MessageRecipient = {
             To: sourcePerson.Email,
             FullName: data.SourceRecord.Name,
@@ -79,6 +81,34 @@ export class AGUDataModifier extends DataModifier {
         };
 
         return messageRecipient;
+    }
+
+    private async GetAbstracts(data: DataModifierParams, currentUser?: UserInfo): Promise<Record<string, any>[]> {
+        const rv: RunView = new RunView();
+
+        const contentIDs: string = data.Content.map((content: Record<string, any>) => `'${content.ContentID}'`).join(', ');
+        const rvContentResult = await rv.RunView({
+            EntityName: 'Contents',
+            //TODO - Improve. The nested query kills performance
+            ExtraFilter: `ContentID IN ( SELECT Content_ID from [dbo].[Abstracts_2024_December] where Content_ID in (${contentIDs}))`
+        }, currentUser);
+
+        if(!rvContentResult.Success) {
+            LogError(`Error fetching Abstracts:`, undefined, rvContentResult.ErrorMessage);
+            return [];
+        }
+
+        if(rvContentResult.Results.length === 0) {
+            LogError(`No Abstracts found for source person ${data.SourceRecord.ID}`);
+            return [];
+        }
+
+        if(rvContentResult.Results.length > 5){
+            const filteredList = rvContentResult.Results.slice(5).slice(0,5);
+            return filteredList;
+        }
+
+        return rvContentResult.Results;
     }
 
     private async FilterRecommendations(sourceRecordID: string, contributors: Record<string, any>[], contents: Record<string, any>[], currentUser?: UserInfo): Promise<Record<string, any>> {

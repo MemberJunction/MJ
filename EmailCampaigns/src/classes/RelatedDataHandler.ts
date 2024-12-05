@@ -66,15 +66,23 @@ export class RelatedDatahandler {
                 continue;
             }
 
-            //PRODUCT_CODE|8636||PRODUCT_NAME|CHEST SEEK Pulmonary Medicine: 33rd Edition
-            const keys: string[] = recommendationItem.DestinationEntityRecordID.split("||");
-            const keyValues: Record<string, string> = {};
-            keys.forEach((key: string) => {
-                const keyParts: string[] = key.split("|");
-                keyValues[keyParts[0]] = keyParts[1];
-            });
+            const needsQuotes: string = DestinationEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
+            let filterString: string = "";
 
-            const filterString: string = Object.keys(keyValues).map((key: string) => `${key} = '${keyValues[key]}'`).join(" AND ");
+            if(recommendationItem.DestinationEntityRecordID.includes("||")){
+                //PRODUCT_CODE|8636||PRODUCT_NAME|CHEST SEEK Pulmonary Medicine: 33rd Edition
+                const keys: string[] = recommendationItem.DestinationEntityRecordID.split("||");
+                const keyValues: Record<string, string> = {};
+                keys.forEach((key: string) => {
+                    const keyParts: string[] = key.split("|");
+                    keyValues[keyParts[0]] = keyParts[1];
+                });
+
+                filterString = Object.keys(keyValues).map((key: string) => `${key} = ${needsQuotes}${keyValues[key]}${needsQuotes}`).join(" AND ");
+            }
+            else{
+                filterString = `${DestinationEntityInfo.FirstPrimaryKey.Name} = ${needsQuotes}${recommendationItem.DestinationEntityRecordID}${needsQuotes}`;
+            }
 
             const rvEntityResult = await rv.RunView({
                 EntityName: recommendationItem.DestinationEntity,

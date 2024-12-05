@@ -85,22 +85,22 @@ async function Run(): Promise<void> {
     });
     */
 
+    /*
     await ch.UpdateTemplateContent({
-        FilePath: "C:/Users/Ridleh/Downloads/email 2.html",
-        TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
+        FilePath: "C:/Users/Ridleh/Downloads/AGUTemplate.htm",
+        TemplateContentID: 'F9BFDDA2-7491-EF11-88CF-002248306D26', //AGU
         CurrentUser: user
     });
+    */
 
-    /*
     await ch.SendEmails({
-        //ListID: '8E59846B-9298-EF11-88CF-002248306D26',
-        ListID: '1DCECEC7-15B1-EF11-88D0-002248450A5B', //CHEST
-        ListBatchSize: 3,
-        MaxListRecords: 3,
-        StartingOffset: 5,
+        ListID: '8E59846B-9298-EF11-88CF-002248306D26',
+        //ListID: '1DCECEC7-15B1-EF11-88D0-002248450A5B', //CHEST
+        ListBatchSize: 5,
+        MaxListRecords: 5,
         RecommendationRunIDs: [
-            '85B48D1B-24B1-EF11-88D0-002248450A5B' //CHEST
-            //'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
+            //'85B48D1B-24B1-EF11-88D0-002248450A5B' //CHEST
+            'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
         ],
 
         CurrentUser: user,
@@ -109,7 +109,6 @@ async function Run(): Promise<void> {
         //TestEmail: 'info@sidecarglobal.com'
         //TestEmail: 'jstfelix.02@gmail.com'
     });
-    */
     
 
     /*

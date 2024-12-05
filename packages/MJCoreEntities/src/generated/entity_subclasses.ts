@@ -5877,19 +5877,19 @@ export const ListDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Active'), z.literal('Rejected'), z.literal('Disabled'), z.literal('Complete'), z.literal('Pending'), z.literal('Error'), z.literal('Other')]).describe(`
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Complete'), z.literal('Rejected'), z.literal('Error'), z.literal('Disabled'), z.literal('Other')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(30)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Active
-    *   * Rejected
-    *   * Disabled
-    *   * Complete
     *   * Pending
+    *   * Active
+    *   * Complete
+    *   * Rejected
     *   * Error
+    *   * Disabled
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.`),
     AdditionalData: z.string().nullish().describe(`
@@ -24903,19 +24903,19 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Active
-    *   * Rejected
-    *   * Disabled
-    *   * Complete
     *   * Pending
+    *   * Active
+    *   * Complete
+    *   * Rejected
     *   * Error
+    *   * Disabled
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
-    get Status(): 'Active' | 'Rejected' | 'Disabled' | 'Complete' | 'Pending' | 'Error' | 'Other' {
+    get Status(): 'Pending' | 'Active' | 'Complete' | 'Rejected' | 'Error' | 'Disabled' | 'Other' {
         return this.Get('Status');
     }
-    set Status(value: 'Active' | 'Rejected' | 'Disabled' | 'Complete' | 'Pending' | 'Error' | 'Other') {
+    set Status(value: 'Pending' | 'Active' | 'Complete' | 'Rejected' | 'Error' | 'Disabled' | 'Other') {
         this.Set('Status', value);
     }
 
