@@ -53,13 +53,14 @@ export class CommunicationEngine extends CommunicationEngineBase {
             throw new Error(`Failed to start communication run.`);
 
         const results: MessageResult[] = [];
-        for (const r of recipients) {
+
+        await Promise.all(recipients.map(async (r) => {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
             messageCopy.ContextData = r.ContextData;
             const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly);
             results.push(result);
-        }
+        }));
 
         if (!await this.EndRun(run))
             throw new Error(`Failed to end communication run.`);

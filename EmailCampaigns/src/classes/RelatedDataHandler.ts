@@ -4,7 +4,8 @@ import { RecommendationEntityType, RecommendationItemEntityType } from "@memberj
 
 export class RelatedDatahandler {
     public async GetData(params: GetDataParams): Promise<Record<string, any>> {
-        const md: Metadata = new Metadata();
+        try{
+            const md: Metadata = new Metadata();
         const rv: RunView = new RunView();
 
         let results: Record<string, any> = {};
@@ -107,5 +108,10 @@ export class RelatedDatahandler {
         }
 
         return results;
+        }
+        catch(ex){
+            LogError(ex.message);
+            return null;
+        }
     }
 }

@@ -26,10 +26,14 @@ export class AGUMessageBuilder implements MessageBuilder {
 
         const msg: Message = new Message();
 
+        let date: Date = new Date(0);
+        date.setUTCSeconds(1733515200);
+
         msg.From = sendgridDomain;
         msg.MessageType = email;
         msg.HTMLBodyTemplate = bodyTemplate;
         msg.SubjectTemplate = subjectTemplate;
+        msg.SendAt = date
 
         return msg;
     }

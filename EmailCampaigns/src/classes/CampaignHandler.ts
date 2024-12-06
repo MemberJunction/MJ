@@ -40,7 +40,8 @@ export class CampaignHander {
     let fetchNextBatch: boolean = true;
     let offset: number = params.StartingOffset || 0;
 
-    const list: ListEntity = await this.GetList(params.ListID, params.CurrentUser);
+    const {List, TotalRecords} = await this.GetList(params.ListID, params.CurrentUser);
+    const list: ListEntity = List;
     if(!list) {
       throw new Error(`No list found with ID: ${params.ListID}`);
     }
@@ -58,14 +59,21 @@ export class CampaignHander {
         CurrentUser: params.CurrentUser
       };
 
-      const listRecords: Record<string, any>[] = await this.GetRecordsByListID(getListParams);
-      LogStatus(`Processing batch ${offset + 1}. Batch size: ${listRecords.length}`);
+      const listRecords : Record<string, any>[] = await this.GetRecordsByListID(getListParams);
+      if(!listRecords || listRecords.length === 0) {
+        LogStatus(`No records found for list in batch ${offset + 1}: ${list.Name}`);
+        fetchNextBatch = false;
+        continue;
+      }
+
+      LogStatus(`|--> Processing batch ${offset + 1} of ${TotalRecords / batchSize}. Batch size: ${listRecords.length}`);
 
       const entityInfo: EntityInfo | undefined = md.EntityByName(list.Entity);
       if(!entityInfo){
         throw new Error(`Entity with name ${list.Entity} not found.`);
       }
 
+      LogStatus("    |---> Fetching data...");
       const allData: Record<string, any>[] = await Promise.all(listRecords.map(async (record) => {
         const relatedData = await rdh.GetData({
           SourceRecordEntityName: list.Entity,
@@ -77,8 +85,13 @@ export class CampaignHander {
         return relatedData;
       }));
 
+      LogStatus("    |---> Getting Message Recipients...");
       const recipients: MessageRecipient[] = [];
       await Promise.all(allData.map(async (data: any) => {
+        if(!data){
+          return;
+        }
+        
         const recipient: MessageRecipient | null = await this.dataModifier.GetMessageRecipient(data, params.CurrentUser);
         if(recipient) {
 
@@ -90,6 +103,7 @@ export class CampaignHander {
         }
       }));
 
+      LogStatus("    |---> Sending Messages...");
       await CommunicationEngine.Instance.SendMessages("SendGrid", "Email", message, recipients, false);
 
       offset++;
@@ -402,27 +416,41 @@ export class CampaignHander {
     await vectorizer.VectorizeEntity(request, currentUser);
   }
 
-  private async GetList(listID: string, currentUser? :UserInfo): Promise<ListEntity> {
+  private async GetList(listID: string, currentUser? :UserInfo): Promise<{List: ListEntity, TotalRecords: number }> {
+    try{
       const rv: RunView = new RunView();
 
-      const rvListResult = await rv.RunView<ListEntity>({
+      const rvListResult = await rv.RunViews([
+        {
           EntityName: 'Lists',
           ExtraFilter: `ID = '${listID}'`,
           ResultType: 'entity_object'
-      }, currentUser);
+        },
+        {
+          //we just want to know the total number of records
+          EntityName: 'List Details',
+          ExtraFilter: `ListID = '${listID}'`,
+        }
+    ], currentUser);
   
-      if(!rvListResult.Success) {
-        throw new Error(`Error getting list with ID: ${listID}: ${rvListResult.ErrorMessage}`);
+      if(!rvListResult[0].Success) {
+        throw new Error(`Error getting list with ID: ${listID}: ${rvListResult[0].ErrorMessage}`);
       }
   
-      if(rvListResult.Results.length == 0) {
+      if(rvListResult[0].Results.length == 0) {
         throw new Error(`No list found with ID: ${listID}`);
       }
   
-      return rvListResult.Results[0];
+      return {List: rvListResult[0].Results[0], TotalRecords: rvListResult[1].TotalRowCount};
+    }
+    catch(ex){
+      LogError(ex);
+      return {List: null, TotalRecords: 0};
+    }
   }
 
   private async GetRecordsByListID<T>(params: GetListRecordsParams): Promise<T[]> {
+    try{
       const rv: RunView = new RunView();
       const md: Metadata = new Metadata();
   
@@ -462,6 +490,11 @@ export class CampaignHander {
       }
 
       return rvEntityResult.Results;
+    }
+    catch(ex){
+      LogError(ex);
+      return [];
+    }  
   }
 
   private GetDataModifier(): DataModifier {

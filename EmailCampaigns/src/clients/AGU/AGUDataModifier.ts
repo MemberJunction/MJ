@@ -7,7 +7,8 @@ import { DataModifierParams } from "../../models/DataModifier.types";
 @RegisterClass(DataModifier, 'AGUDataModifier')
 export class AGUDataModifier extends DataModifier {
     public async GetMessageRecipient(data: DataModifierParams, currentUser?: UserInfo): Promise<MessageRecipient | null> {
-        const rv: RunView = new RunView();
+        try{
+            const rv: RunView = new RunView();
 
         let contextData: Record<string, any> = {
             Persons: [],
@@ -81,6 +82,11 @@ export class AGUDataModifier extends DataModifier {
         };
 
         return messageRecipient;
+        }
+        catch(ex){
+            LogError(`Error getting message recipient: ${ex.message}`);
+            return null;
+        }
     }
 
     private async GetAbstracts(data: DataModifierParams, currentUser?: UserInfo): Promise<Record<string, any>[]> {

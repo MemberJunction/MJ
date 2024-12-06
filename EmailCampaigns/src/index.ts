@@ -79,7 +79,7 @@ async function Run(): Promise<void> {
 
     /*
     await ch.UpdateTemplateContent({
-        FilePath: "C:/Development/MemberJunction/EmailCampaigns/html/CHEST.htm",
+        FilePath: "C:/Users/Ridleh/Downloads/CHESTTemplate.htm",
         TemplateContentID: 'C6CEC0D1-50A1-EF11-88CD-6045BD325BD0',
         CurrentUser: user
     });
@@ -96,18 +96,20 @@ async function Run(): Promise<void> {
     await ch.SendEmails({
         ListID: '8E59846B-9298-EF11-88CF-002248306D26',
         //ListID: '1DCECEC7-15B1-EF11-88D0-002248450A5B', //CHEST
-        ListBatchSize: 5,
-        MaxListRecords: 5,
+        ListBatchSize: 50,
+        StartingOffset: 77,
         RecommendationRunIDs: [
             //'85B48D1B-24B1-EF11-88D0-002248450A5B' //CHEST
             'DCBCB17F-CDA2-EF11-88CF-002248306D26' //AGU
         ],
 
         CurrentUser: user,
-        TestEmail: "linda@memberjunction.com"
+        //TestEmail: 'monitoring.runme.0.all@previews.emailonacid.com',
+        //TestEmail: "linda@memberjunction.com"
         //TestEmail: "jonathan@memberjunction.com"
         //TestEmail: 'info@sidecarglobal.com'
         //TestEmail: 'jstfelix.02@gmail.com'
+        //TestEmail: 'test-1qpi5nhum@srv1.mail-tester.com'
     });
     
 
