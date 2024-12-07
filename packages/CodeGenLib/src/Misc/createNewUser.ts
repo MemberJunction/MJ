@@ -1,6 +1,6 @@
 import { Metadata, UserInfo } from "@memberjunction/core";
 import { NewUserSetup } from "../Config/config";
-import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
+import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
@@ -56,6 +56,48 @@ export class CreateNewUserBase {
                                 }
                                 else {
                                     logError("   Failed to create User Role: " + roleName);
+                                }
+                            }
+
+                            // Create UserApplication records if specified in the config
+                            if (newUserSetup.CreateUserApplicationRecords) {
+                                for (let i = 0; i < newUserSetup.UserApplications.length; i++) {
+                                    const applicationName = newUserSetup.UserApplications[i];
+                                    const applicationID = md.Applications.find(a => a.Name === applicationName)?.ID;
+                                    if (!applicationID) {
+                                        logError("   Application not found: " + applicationName + ", skipping");
+                                        continue;
+                                    }
+                                    const userApplication = <UserApplicationEntity>await md.GetEntityObject('User Applications', currentUser);
+                                    userApplication.NewRecord();
+                                    userApplication.UserID = user.ID;
+                                    userApplication.ApplicationID = applicationID;
+                                    userApplication.IsActive = true;
+                                    userApplication.SortOrder = i + 1;
+                                    if (await userApplication.Save()) {
+                                        logStatus("   Created User Application: " + applicationName);
+
+                                        // Create UserApplicationEntity records if specified in the config
+                                        if (newUserSetup.IncludeAllUserApplicationEntities) {
+                                            const applicationEntities = md.ApplicationEntities.filter(ae => ae.ApplicationID === applicationID);
+                                            for (let j = 0; j < applicationEntities.length; j++) {
+                                                const userApplicationEntity = <UserApplicationEntityEntity>await md.GetEntityObject('User Application Entities', currentUser);
+                                                userApplicationEntity.NewRecord();
+                                                userApplicationEntity.UserApplicationID = userApplication.ID;
+                                                userApplicationEntity.EntityID = applicationEntities[j].EntityID;
+                                                userApplicationEntity.SortOrder = j + 1;
+                                                if (await userApplicationEntity.Save()) {
+                                                    logStatus("   Created User Application Entity: " + applicationEntities[j].EntityID);
+                                                }
+                                                else {
+                                                    logError("   Failed to create User Application Entity: " + applicationEntities[j].EntityID);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        logError("   Failed to create User Application: " + applicationName);
+                                    }
                                 }
                             }
     
