@@ -2,7 +2,7 @@ import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config.js";
-import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
+import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
 export class NewUserBase {
@@ -68,6 +68,48 @@ export class NewUserBase {
                     const roleSaveResult: boolean = await userRoleEntity.Save();
                     if(!roleSaveResult){
                         LogError(`Failed to assign role ${role} to new user ${user.Name}:`, undefined, userRoleEntity.LatestResult);
+                    }
+                }
+            }
+
+            // Create UserApplication records if specified in the config
+            if (configInfo.newUserSetup?.CreateUserApplicationRecords) {
+                for (let i = 0; i < configInfo.newUserSetup.UserApplications.length; i++) {
+                    const applicationName = configInfo.newUserSetup.UserApplications[i];
+                    const applicationID = md.Applications.find(a => a.Name === applicationName)?.ID;
+                    if (!applicationID) {
+                        LogError("   Application not found: " + applicationName + ", skipping");
+                        continue;
+                    }
+                    const userApplication = <UserApplicationEntity>await md.GetEntityObject('User Applications', contextUser);
+                    userApplication.NewRecord();
+                    userApplication.UserID = user.ID;
+                    userApplication.ApplicationID = applicationID;
+                    userApplication.IsActive = true;
+                    userApplication.SortOrder = i + 1;
+                    if (await userApplication.Save()) {
+                        LogStatus("   Created User Application: " + applicationName);
+
+                        // Create UserApplicationEntity records if specified in the config
+                        if (configInfo.newUserSetup.IncludeAllUserApplicationEntities) {
+                            const applicationEntities = md.ApplicationEntities.filter(ae => ae.ApplicationID === applicationID);
+                            for (let j = 0; j < applicationEntities.length; j++) {
+                                const userApplicationEntity = <UserApplicationEntityEntity>await md.GetEntityObject('User Application Entities', contextUser);
+                                userApplicationEntity.NewRecord();
+                                userApplicationEntity.UserApplicationID = userApplication.ID;
+                                userApplicationEntity.EntityID = applicationEntities[j].EntityID;
+                                userApplicationEntity.SortOrder = j + 1;
+                                if (await userApplicationEntity.Save()) {
+                                    LogStatus("   Created User Application Entity: " + applicationEntities[j].EntityID);
+                                }
+                                else {
+                                    LogError("   Failed to create User Application Entity: " + applicationEntities[j].EntityID);
+                                }
+                            }
+                        }
+                    }
+                    else {
+                        LogError("   Failed to create User Application: " + applicationName);
                     }
                 }
             }

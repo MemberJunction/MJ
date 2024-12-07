@@ -75,6 +75,9 @@ export type NewUserSetup = {
     Email: string;
     Roles: string[];
     IsComplete: boolean;
+    CreateUserApplicationRecords: boolean;
+    UserApplications: string[];
+    IncludeAllUserApplicationEntities: boolean;
 }
 
 
@@ -188,6 +191,14 @@ export function initializeConfig(workingDirectory: string): ConfigInfo {
     const configPath = path.join(workingDirectory, configFileName);
     const configData = fs.readFileSync(configPath, 'utf-8');
     configInfo = JSON.parse(configData);
+
+    // Initialize new fields in newUserSetup
+    if (configInfo.newUserSetup) {
+        configInfo.newUserSetup.CreateUserApplicationRecords = configInfo.newUserSetup.CreateUserApplicationRecords ?? false;
+        configInfo.newUserSetup.UserApplications = configInfo.newUserSetup.UserApplications ?? [];
+        configInfo.newUserSetup.IncludeAllUserApplicationEntities = configInfo.newUserSetup.IncludeAllUserApplicationEntities ?? true;
+    }
+
     return configInfo;
 }
 
