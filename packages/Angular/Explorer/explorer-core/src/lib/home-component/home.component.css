@@ -41,3 +41,9 @@
 .sky-blue {
     color: var(--sky-blue);
 }
+
+.float-bottom {
+    position: fixed;
+    bottom: 20px;
+    z-index: 1000;
+}
