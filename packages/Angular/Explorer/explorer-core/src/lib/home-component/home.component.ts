@@ -38,12 +38,6 @@ export class HomeComponent extends BaseNavigationComponent {
     const rv: RunView = new RunView();
     const md: Metadata = new Metadata();
 
-    const entityInfo = md.EntityByID("5BF75308-AA1F-4F6D-AFA3-8E8603F97DC7");
-    if(!entityInfo){
-        LogError("Error getting entity info for entity with id", undefined, "5BF75308-AA1F-4F6D-AFA3-8E8603F97DC7");
-        return "";
-    }
-
     const rvResult = await rv.RunView<flyway_schema_historyEntityType>({
         EntityName: 'flyway _schema _histories',
         OrderBy: "installed_on desc"
