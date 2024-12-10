@@ -71,11 +71,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 const md = new Metadata();
                 const rv = new RunView();
 
-                this.app = md.Applications.find(a => a.Name === appName);
+                const appNameToLower: string = appName.toLowerCase();
+                this.app = md.Applications.find(a => a.Name.toLowerCase() === appNameToLower);
 
                 // if we get here and we have a blank app, problem
-                if (!this.app)
+                if (!this.app){
                     throw new Error(`Application ${appName} not found`);
+                }
 
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
