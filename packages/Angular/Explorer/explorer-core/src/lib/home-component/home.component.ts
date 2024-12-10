@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { flyway_schema_historyEntityType } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
@@ -11,8 +12,15 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
 })
 @RegisterClass(BaseNavigationComponent, 'Home')
 export class HomeComponent extends BaseNavigationComponent {
+
+  public versionString: string;
+
   constructor(public sharedService: SharedService, private router: Router) { 
     super();
+    this.versionString = "";
+    this.getVersionString().then(version => {
+      this.versionString = version;
+    });
   }
 
   public md = new Metadata();
@@ -22,5 +30,49 @@ export class HomeComponent extends BaseNavigationComponent {
     this.router.navigate([route]).catch(err => {
       console.error('Navigation error:', err);
     });
+
+
+  }
+
+  private async getVersionString(): Promise<string> {
+    const rv: RunView = new RunView();
+    const md: Metadata = new Metadata();
+
+    const rvResult = await rv.RunView<flyway_schema_historyEntityType>({
+        EntityName: 'flyway _schema _histories',
+        OrderBy: "installed_on desc"
+    });
+
+    if(!rvResult.Success){
+        LogError("Error getting version string", undefined, rvResult.ErrorMessage);
+        return "";
+    }
+
+    const latestSchema = rvResult.Results[0];
+    let description: string | undefined = latestSchema.description;
+    if(description){
+        if(description[0] === 'v'){
+            description = description.substring(1);
+        }
+
+        let index: number = 0;
+        for(const char of description){
+            //if it is a number or a dot, keep going
+            if(char === '.' || (char >= '0' && char <= '9')){
+                index++;
+            }
+            else{
+              if(description[index - 1] === '.'){
+                index--;
+              }
+              break;
+            }
+        }
+
+        return `Version ${description.substring(0, index)}`;
+    }
+    else{
+        return `Version ${latestSchema.version}`;
+    }
   }
 }
