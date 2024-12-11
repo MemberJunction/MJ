@@ -1,4 +1,5 @@
 import { confirm, input, select } from '@inquirer/prompts';
+import * as recast from 'recast';
 import { Command, Flags } from '@oclif/core';
 import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import * as fs from 'fs-extra';
@@ -65,7 +66,7 @@ export default class Install extends Command {
 
     this.checkNodeVersion();
     this.checkAvailableDiskSpace(2);
-    this.verifyDirs(CODEGEN_DIR, GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);
+    this.verifyDirs(GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);
 
     this.userConfig = await this.getUserConfiguration();
 
@@ -74,17 +75,18 @@ export default class Install extends Command {
       this.logJson({ userConfig: this.userConfig, flags: this.flags });
     }
 
-    // if the user asked for a new user via our config file, need to push that info down to the CodeGen config.json file
-    if (this.userConfig.createNewUser === 'Y') {
-      this.log('   Setting up config.json...');
-      await this.updateConfigNewUserSetup(
-        CODEGEN_DIR,
-        this.userConfig.userName,
-        this.userConfig.userFirstName,
-        this.userConfig.userLastName,
-        this.userConfig.userEmail
-      );
-    }
+    // TODO: Remove this
+    // // if the user asked for a new user via our config file, need to push that info down to the CodeGen config.json file
+    // if (this.userConfig.createNewUser === 'Y') {
+    //   this.log('   Setting up config.json...');
+    //   await this.updateConfigNewUserSetup(
+    //     CODEGEN_DIR,
+    //     this.userConfig.userName,
+    //     this.userConfig.userFirstName,
+    //     this.userConfig.userLastName,
+    //     this.userConfig.userEmail
+    //   );
+    // }
 
     //*******************************************************************
     // Process GeneratedEntities
@@ -98,7 +100,7 @@ export default class Install extends Command {
     //*******************************************************************
     this.log('\nProcessing CodeGen...');
     this.log('   Updating ');
-    this.log('   Setting up .env and config.json...');
+    this.log('   Setting up .env and mj.config.js...');
     const codeGenENV = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
 DB_PORT=${this.userConfig.dbPort}
@@ -119,9 +121,6 @@ MJ_CORE_SCHEMA='__mj'
 AI_VENDOR_API_KEY__OpenAILLM='${this.userConfig.openAIAPIKey}'
 AI_VENDOR_API_KEY__MistralLLM='${this.userConfig.mistralAPIKey}'
 AI_VENDOR_API_KEY__AnthropicLLM='${this.userConfig.anthropicAPIKey}'
-
-#CONFIG_FILE is the name of the file that has the configuration parameters for CodeGen
-CONFIG_FILE='config.json'
 `;
     fs.writeFileSync(path.join(CODEGEN_DIR, '.env'), codeGenENV);
 
@@ -227,7 +226,7 @@ CONFIG_FILE='config.json'
 
     if (!userConfig) {
       this.log(
-        '\n>>> Please answer the following questions to setup the .env files for CodeGen. After this process you can manually edit the .env file in CodeGen as desired.'
+        '\n>>> Please answer the following questions to setup the .env files for CodeGen. After this process you can manually edit the .env file as desired.'
       );
       const dbUrl = await input({
         message: 'Enter the database server hostname:',
@@ -445,32 +444,57 @@ CONFIG_FILE='config.json'
   }
 
   /**
-   * Updates newUserSetup in the config.json file.
-   * @param {string} dirPath - The path to the directory containing the config.json file.
+   * Updates newUserSetup in the mj.config.js file.
    * @param {string} userName - The new UserName to set.
    * @param {string} firstName - The new FirstName to set.
    * @param {string} lastName - The new LastName to set.
    * @param {string} email - The new Email to set.
    */
-  async updateConfigNewUserSetup(dirPath: string, userName?: string, firstName?: string, lastName?: string, email?: string) {
+  async updateConfigNewUserSetup(userName?: string, firstName?: string, lastName?: string, email?: string) {
     try {
-      const configFilePath = path.join(dirPath, 'config.json');
+      // Read the mj.config.js file
+      const configFileContent = await fs.readFile('mj.config.js', 'utf8');
 
-      // Read the config.json file
-      const data = await fs.readFile(configFilePath, 'utf8');
-      const config = JSON.parse(data);
+      // Parse the content into an AST
+      const ast = recast.parse(configFileContent);
 
-      // Update the newUserSetup object
-      if (!config.newUserSetup) config.newUserSetup = {};
+      // Modify the AST
+      const n = recast.types.namedTypes;
+      const b = recast.types.builders;
+      recast.types.visit(ast, {
+        visitObjectExpression(path) {
+          const properties = path.node.properties;
 
-      config.newUserSetup.UserName = userName;
-      config.newUserSetup.FirstName = firstName;
-      config.newUserSetup.LastName = lastName;
-      config.newUserSetup.Email = email;
+          // Check if newUserSetup key exists
+          const newUserSetupProperty = properties.find(
+            (prop) => n.Property.check(prop) && n.Identifier.check(prop.key) && prop.key.name === 'newUserSetup'
+          );
 
-      // Write the updated configuration back to config.json
-      await fs.writeFile(configFilePath, JSON.stringify(config, null, 2), 'utf8');
-      this.log(`      Updated config.json in ${dirPath}`);
+          const newUserSetupValue = b.objectExpression([
+            b.property('init', b.identifier('userName'), b.literal(userName || '')),
+            b.property('init', b.identifier('firstName'), b.literal(firstName || '')),
+            b.property('init', b.identifier('lastName'), b.literal(lastName || '')),
+            b.property('init', b.identifier('email'), b.literal(email || '')),
+          ]);
+
+          if (newUserSetupProperty && newUserSetupProperty.type === 'Property') {
+            // Overwrite the existing newUserSetup key with an object
+            newUserSetupProperty.value = newUserSetupValue;
+          } else {
+            // Add a new newUserSetup key
+            properties.push(b.property('init', b.identifier('newUserSetup'), newUserSetupValue));
+          }
+
+          return false; // Stop traversing this path
+        },
+      });
+
+      // Serialize the AST back to a string
+      const updatedConfigFileContent = recast.prettyPrint(ast).code;
+
+      // Write the updated content back to the file
+      await fs.writeFile('mj.config.js', updatedConfigFileContent);
+      this.log(`      Updated mj.config.js`);
     } catch (err) {
       this.logToStderr('Error:', err);
     }
