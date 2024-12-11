@@ -4,7 +4,7 @@ import { FlywayConfig } from 'node-flyway/dist/types/types';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
-const explorer = cosmiconfigSync('mj');
+const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 const result = explorer.search(process.cwd());
 
 const mjConfigSchema = z.object({

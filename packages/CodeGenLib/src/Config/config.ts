@@ -3,7 +3,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
 
-const explorer = cosmiconfigSync('mj');
+const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 const configSearchResult = explorer.search(process.cwd());
 
 export type SettingInfo = z.infer<typeof settingInfoSchema>;

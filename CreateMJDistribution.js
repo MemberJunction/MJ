@@ -206,9 +206,9 @@ async function createMJDistribution() {
   archive.append(installConfigJson, { name: 'install.config.json' });
 
   // Add the distribution default config file to the root of the zip
-  console.log('Adding distribution.config.js to zip file...');
-  const distributionConfig = fs.readFileSync('distribution.config.js', 'utf8');
-  archive.append(distributionConfig, { name: 'mj.config.js' });
+  console.log('Adding distribution.config.cjs to zip file...');
+  const distributionConfig = fs.readFileSync('distribution.config.cjs', 'utf8');
+  archive.append(distributionConfig, { name: 'mj.config.cjs' });
 
   // Finalize the archive
   console.log('Finalizing creation of zip file...');

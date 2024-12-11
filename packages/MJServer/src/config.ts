@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 
-const explorer = cosmiconfigSync('mj');
+const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
@@ -44,27 +44,30 @@ const configInfoSchema = z.object({
   dbPort: z.number({ coerce: true }).default(1433),
   dbUsername: z.string(),
   dbPassword: z.string(),
-  dbTrustServerCertificate: z.enum(['Y', 'N']).default('Y'),
+  dbTrustServerCertificate: z
+    .enum(['Y', 'N'])
+    .or(z.coerce.boolean().transform((v) => (v ? 'Y' : 'N')))
+    .default('Y'),
   dbInstanceName: z.string().optional(),
   graphqlPort: z.coerce.number().default(4000),
 
-  ___codeGenAPIURL: z.string(),
+  ___codeGenAPIURL: z.string().optional(),
   ___codeGenAPIPort: z.coerce.number().optional().default(3999),
   ___codeGenAPISubmissionDelay: z.coerce.number().optional().default(5000),
   graphqlRootPath: z.string().optional().default('/'),
-  webClientID: z.string(),
-  tenantID: z.string(),
-  enableIntrospection: z.boolean().optional().default(false),
+  webClientID: z.string().optional(),
+  tenantID: z.string().optional(),
+  enableIntrospection: z.coerce.boolean().optional().default(false),
   websiteRunFromPackage: z.coerce.number().optional(),
   userEmailMap: z
     .string()
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
-  ___skipAPIurl: z.string(),
-  ___skipAPIOrgId: z.string(),
-  auth0Domain: z.string(),
-  auth0WebClientID: z.string(),
-  auth0ClientSecret: z.string(),
+  ___skipAPIurl: z.string().optional(),
+  ___skipAPIOrgId: z.string().optional(),
+  auth0Domain: z.string().optional(),
+  auth0WebClientID: z.string().optional(),
+  auth0ClientSecret: z.string().optional(),
   mjCoreSchema: z.string(),
 });
 
@@ -108,5 +111,5 @@ export function loadConfig() {
     throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
   }
 
-  return configInfoSchema.parse(JSON.parse(configSearchResult.config));
+  return configInfoSchema.parse(configSearchResult.config);
 }

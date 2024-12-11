@@ -88,7 +88,7 @@ export default class Install extends Command {
     //*******************************************************************
     this.log('\nProcessing Config...');
     this.log('   Updating ');
-    this.log('   Setting up .env and mj.config.js...');
+    this.log('   Setting up .env and mj.config.cjs...');
     const dotenvContent = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
 DB_PORT=${this.userConfig.dbPort}
@@ -107,7 +107,7 @@ OUTPUT_CODE='${this.userConfig.dbDatabase}'
 MJ_CORE_SCHEMA='__mj'
 
 # If using Advanced Generation or the MJAI library, populate this with the API key for the AI vendor you are using
-# Also, you need to configure the settings under advancedGeneration in the mj.config.js file, including choosing the vendor.
+# Also, you need to configure the settings under advancedGeneration in the mj.config.cjs file, including choosing the vendor.
 AI_VENDOR_API_KEY__OpenAILLM='${this.userConfig.openAIAPIKey}'
 AI_VENDOR_API_KEY__MistralLLM='${this.userConfig.mistralAPIKey}'
 AI_VENDOR_API_KEY__AnthropicLLM='${this.userConfig.anthropicAPIKey}'
@@ -417,7 +417,7 @@ ASK_SKIP_ORGANIZATION_ID = 1
   }
 
   /**
-   * Updates newUserSetup in the mj.config.js file.
+   * Updates newUserSetup in the mj.config.cjs file.
    * @param {string} userName - The new UserName to set.
    * @param {string} firstName - The new FirstName to set.
    * @param {string} lastName - The new LastName to set.
@@ -425,8 +425,8 @@ ASK_SKIP_ORGANIZATION_ID = 1
    */
   async updateConfigNewUserSetup(userName?: string, firstName?: string, lastName?: string, email?: string) {
     try {
-      // Read the mj.config.js file
-      const configFileContent = await fs.readFile('mj.config.js', 'utf8');
+      // Read the mj.config.cjs file
+      const configFileContent = await fs.readFile('mj.config.cjs', 'utf8');
 
       // Parse the content into an AST
       const ast = recast.parse(configFileContent);
@@ -466,8 +466,8 @@ ASK_SKIP_ORGANIZATION_ID = 1
       const updatedConfigFileContent = recast.prettyPrint(ast).code;
 
       // Write the updated content back to the file
-      await fs.writeFile('mj.config.js', updatedConfigFileContent);
-      this.log(`      Updated mj.config.js`);
+      await fs.writeFile('mj.config.cjs', updatedConfigFileContent);
+      this.log(`      Updated mj.config.cjs`);
     } catch (err) {
       this.logToStderr('Error:', err);
     }
