@@ -2,60 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 
-async function handleCodeGenDirectory(dir, normalizedDir, archive) {
-  console.log(`   Handling CodeGen directory...`);
-
-  const configFilePath = `${dir}/config.json`;
-  const configFileOutputPath = `${normalizedDir}/config.json`;
-  const configFileContent = fs.readFileSync(configFilePath, 'utf8');
-  const configJson = JSON.parse(configFileContent);
-
-  if (configJson.output) {
-    configJson.output = configJson.output.filter(
-      (item) =>
-        item.type &&
-        item.type.trim().toLowerCase() !== 'coreentitysubclasses' &&
-        item.type.trim().toLowerCase() !== 'coreactionsubclasses' &&
-        item.type.trim().toLowerCase() !== 'graphqlcoreentityresolvers' &&
-        item.type.trim().toLowerCase() !== 'angularcoreentities'
-    ); // remove these as we don't want people using MJ to ever generated this stuff.
-
-    // next up, we add "__mj" to the list of exclude schemas as we don't want people using MJ to ever generate stuff in the __mj schema.
-    // Add "__mj" to the "excludeSchemas" array
-    if (configJson.excludeSchemas) {
-      configJson.excludeSchemas.push('__mj');
-    } else {
-      configJson.excludeSchemas = ['__mj'];
-    }
-
-    // next up, we need to remove one level of directory from output path if our type = DBSchemaJSON or type = SQL
-    configJson.output.forEach((item) => {
-      if (item.type && (item.type.trim().toLowerCase() === 'dbschemajson' || item.type.trim().toLowerCase() === 'sql')) {
-        item.directory = item.directory.split('/').slice(1).join('/');
-      }
-    });
-  }
-  if (configJson.commands) {
-    configJson.commands = configJson.commands.filter(
-      (item) =>
-        !item.workingDirectory ||
-        (!item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities') &&
-          !item.workingDirectory.trim().toLowerCase().includes('../actions/coreactions') &&
-          !item.workingDirectory.trim().toLowerCase().includes('../mjserver') &&
-          !item.workingDirectory.trim().toLowerCase().includes('../angular/explorer/core-entity-forms'))
-    ); // remove this as we don't want people using MJ to ever generate this stuff.
-  }
-  if (configJson.customSQLScripts) {
-    // find the one that has ../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql and remove one level of the directory
-    const mjBaseBeforeSQL = configJson.customSQLScripts.find((item) => item.scriptFile === '../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql');
-    if (mjBaseBeforeSQL) {
-      mjBaseBeforeSQL.scriptFile = mjBaseBeforeSQL.scriptFile.split('/').slice(1).join('/');
-    }
-  }
-
-  archive.append(JSON.stringify(configJson, null, 2), { name: configFileOutputPath });
-}
-
 async function handleMJExplorerDirectory(dir, normalizedDir, archive) {
   console.log(`   Handling MJ Explorer directory...`);
   const configFilePath = `${dir}/angular.json`;
@@ -189,7 +135,6 @@ async function createMJDistribution() {
   const directories = [
     'migrations',
     'SQL Scripts',
-    'packages/CodeGen',
     'packages/MJAPI',
     'packages/MJExplorer',
     'packages/GeneratedEntities',
@@ -212,10 +157,8 @@ async function createMJDistribution() {
       // FOR SQL Scripts we ONLY do this function
       await handleSQLScriptsDirectory(dir, normalizedDir, archive);
     } else {
-      // For everything else, we do the general approach but in some cases we pre-process the files for CodeGen/MJExplorer
-      if (normalizedDir === 'CodeGen') {
-        await handleCodeGenDirectory(dir, normalizedDir, archive);
-      } else if (normalizedDir === 'MJExplorer') {
+      // For everything else, we do the general approach but in some cases we pre-process the files for MJExplorer
+      if (normalizedDir === 'MJExplorer') {
         await handleMJExplorerDirectory(dir, normalizedDir, archive);
       }
 
@@ -235,9 +178,9 @@ async function createMJDistribution() {
             'internal_only/**',
             'package-lock.json',
             '.env',
+            'mj.config.js',
             '*.output.txt',
             '.*', // This will ignore all files that start with a dot
-            normalizedDir === 'CodeGen' ? 'config.json' : '', // Ignore the original config.json when adding files from CodeGen
             normalizedDir === 'MJExplorer' ? 'angular.json' : '', // Ignore the original angular.json when adding files from MJExplorer
             normalizedDir === 'MJExplorer' ? 'src/environments/**' : '', // Ignore the original envrioment files when adding files from MJExplorer
             normalizedDir === 'MJExplorer' ? 'kendo-ui-license.txt' : '', // Don't want to include this!
@@ -261,6 +204,11 @@ async function createMJDistribution() {
   console.log('Adding install.config.json to zip file...');
   const installConfigJson = fs.readFileSync('install.config.json', 'utf8');
   archive.append(installConfigJson, { name: 'install.config.json' });
+
+  // Add the distribution default config file to the root of the zip
+  console.log('Adding distribution.config.js to zip file...');
+  const distributionConfig = fs.readFileSync('distribution.config.js', 'utf8');
+  archive.append(distributionConfig, { name: 'mj.config.js' });
 
   // Finalize the archive
   console.log('Finalizing creation of zip file...');

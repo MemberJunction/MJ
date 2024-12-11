@@ -16,7 +16,7 @@ const mjConfigSchema = z.object({
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbTrustServerCertificate: z.enum(['Y', 'N']).default('Y'),
   coreSchema: z.string().optional().default('__mj'),
-  cleanDisabled: z.boolean().default(true),
+  cleanDisabled: z.boolean().optional().default(true),
 });
 
 const parsedConfig = mjConfigSchema.safeParse(result?.config);
