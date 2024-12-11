@@ -180,6 +180,7 @@ async function createMJDistribution() {
             '.env',
             'mj.config.js',
             '*.output.txt',
+            '*.log',
             '.*', // This will ignore all files that start with a dot
             normalizedDir === 'MJExplorer' ? 'angular.json' : '', // Ignore the original angular.json when adding files from MJExplorer
             normalizedDir === 'MJExplorer' ? 'src/environments/**' : '', // Ignore the original envrioment files when adding files from MJExplorer

@@ -23,7 +23,7 @@ const codegenConfig = {
   ],
   logging: {
     log: true,
-    logFile: 'codegen.output.txt',
+    logFile: 'codegen.output.log',
     console: true,
   },
   newEntityDefaults: {
@@ -193,6 +193,10 @@ const codegenConfig = {
 
 /** @type {MJServerConfig} */
 const mjServerConfig = {
+  /**
+   * MJAPI Configuration (previously config.json)
+   */
+
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,

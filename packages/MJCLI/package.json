@@ -57,6 +57,7 @@
     "@oclif/plugin-warn-if-update-available": "^3.0.16",
     "cosmiconfig": "9.0.0",
     "dotenv": "16.4.5",
+    "fast-glob": "^3.3.2",
     "figlet": "^1.7.0",
     "fs-extra": "^11.2.0",
     "node-flyway": "0.0.11",

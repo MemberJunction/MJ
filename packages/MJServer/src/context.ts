@@ -61,7 +61,7 @@ export const getUserPayload = async (
       authCache.set(token, true);
     }
 
-    const email = payload?.email ? userEmailMap[payload?.email] ?? payload?.email : payload?.preferred_username; // temporary fix to check preferred_username if email is not present
+    const email = payload?.email ? ((userEmailMap ?? {})[payload?.email] ?? payload?.email) : payload?.preferred_username; // temporary fix to check preferred_username if email is not present
     const fullName = payload?.name;
     const firstName = payload?.given_name || fullName?.split(' ')[0];
     const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
