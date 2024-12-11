@@ -6,6 +6,7 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
 import { Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-report-browser',
@@ -40,14 +41,20 @@ export class ReportBrowserComponent extends BaseBrowserComponent {
   //the class would need a reference or dependency on the router
   //which i dont think is needed
   public itemClick(item: Item) {
-    let dataID: string = "";
-
-    if(item.Type === ItemType.Resource){
-      let report: ReportEntity = item.Data as ReportEntity;
-      dataID = report.ID.toString();
+    if(!item || !item.Data) {
+      return;
     }
 
-    super.Navigate(item, this.router, dataID);
+    const md: Metadata = new Metadata();
+    const reportInfo = md.EntityByName("Reports");
+    if(!reportInfo) {
+      return;
+    }
+
+    let report: ReportEntity = item.Data as ReportEntity;
+    const reportID: string = report.ID;
+
+    super.Navigate(item, this.router, reportID);
   }
 
   public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {
