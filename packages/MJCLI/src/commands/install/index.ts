@@ -1,4 +1,5 @@
 import { confirm, input, select } from '@inquirer/prompts';
+import * as dotenv from 'dotenv';
 import * as recast from 'recast';
 import { Command, Flags } from '@oclif/core';
 import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
@@ -122,7 +123,7 @@ AI_VENDOR_API_KEY__OpenAILLM='${this.userConfig.openAIAPIKey}'
 AI_VENDOR_API_KEY__MistralLLM='${this.userConfig.mistralAPIKey}'
 AI_VENDOR_API_KEY__AnthropicLLM='${this.userConfig.anthropicAPIKey}'
 `;
-    fs.writeFileSync(path.join(CODEGEN_DIR, '.env'), codeGenENV);
+    fs.writeFileSync('.env', codeGenENV);
 
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
@@ -181,7 +182,8 @@ CONFIG_FILE='config.json'
 
     // next, run CodeGen
     // We do not manually run the compilation for GeneratedEntities because CodeGen handles that, but notice above that we did npm install for GeneratedEntities otherwise when CodeGen attempts to compile it, it will fail.
-    execSync('npx ts-node src/index.ts', { stdio: 'inherit', cwd: CODEGEN_DIR });
+    dotenv.config();
+    this.config.runCommand('codegen');
 
     // Process MJExplorer
     this.log('\nProcessing MJExplorer...');

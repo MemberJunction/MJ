@@ -280,11 +280,13 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  if (!configInfo) {
+  const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
+
+  if (!configInfo && !maybeConfig.success) {
     throw new Error('No configuration found');
   }
 
-  return configInfo;
+  return maybeConfig.success ? maybeConfig.data : configInfo;
 }
 
 export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {

@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
-import { config } from '../../config';
+import { updatedConfig } from '../../config';
 import { runMemberJunctionCodeGeneration, initializeConfig } from '@memberjunction/codegen-lib';
 
 export default class CodeGen extends Command {
@@ -20,6 +20,8 @@ export default class CodeGen extends Command {
   async run(): Promise<void> {
     const parsed = await this.parse(CodeGen);
     this.flags = parsed.flags;
+
+    const config = updatedConfig();
 
     if (!config) {
       this.error('No configuration found');

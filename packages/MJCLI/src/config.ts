@@ -22,6 +22,11 @@ const mjConfigSchema = z.object({
 const parsedConfig = mjConfigSchema.safeParse(result?.config);
 export const config = parsedConfig.success ? parsedConfig.data : undefined;
 
+export const updatedConfig = () => {
+  const maybeConfig = mjConfigSchema.safeParse(explorer.search(process.cwd())?.config);
+  return maybeConfig.success ? maybeConfig.data : undefined;
+};
+
 export const createFlywayUrl = (mjConfig: MJConfig) => {
   return `jdbc:sqlserver://${mjConfig.dbHost}:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
     mjConfig.dbTrustServerCertificate === 'Y' ? '; trustServerCertificate=true' : ''
