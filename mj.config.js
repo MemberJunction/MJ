@@ -1,6 +1,8 @@
-/** @import { ConfigInfo } from "./packages/CodeGenLib/src/Config/config" */
+/** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
+/** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
 /** @import { MJConfig } from "./packages/MJCLI/src/config" */
 
+/** @type {CodeGenConfig} */
 const codegenConfig = {
   /**
    * CodeGenLib Configuration (previously config.json)
@@ -189,9 +191,50 @@ const codegenConfig = {
   },
 };
 
-/** @type {ConfigInfo & MJConfig} */
+/** @type {MJServerConfig} */
+const mjServerConfig = {
+  userHandling: {
+    autoCreateNewUsers: true,
+    newUserLimitedToAuthorizedDomains: false,
+    newUserAuthorizedDomains: [],
+    newUserRoles: ['UI'],
+    updateCacheWhenNotFound: true,
+    updateCacheWhenNotFoundDelay: 5000,
+    contextUserForNewUserCreation: 'not.set@nowhere.com',
+  },
+  databaseSettings: {
+    connectionTimeout: 45000,
+    requestTimeout: 30000,
+    metadataCacheRefreshInterval: 180000,
+  },
+  viewingSystem: {
+    enableSmartFilters: true,
+  },
+  askSkip: {
+    organizationInfo: '',
+    entitiesToSendSkip: {
+      excludeSchemas: ['__mj'],
+      includeEntitiesFromExcludedSchemas: [
+        'Content Items',
+        'Content Item Tags',
+        'Content Item Attributes',
+        'Content Types',
+        'Content Type Attributes',
+        'Content File Types',
+        'Content Sources',
+        'Content Source Types',
+        'Content Source Params',
+        'Content Source Type Params',
+        'Content Process Runs',
+      ],
+    },
+  },
+};
+
+/** @type {CodeGenConfig & MJConfig & MJServerConfig} */
 const config = {
   ...codegenConfig,
+  ...mjServerConfig,
 
   /**
    * Shared Configuration and Environment Variables
@@ -204,16 +247,32 @@ const config = {
   codeGenLogin: process.env.CODEGEN_DB_USERNAME,
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
+  dbUsername: process.env.DB_USERNAME,
+  dbPassword: process.env.DB_PASSWORD,
 
   // Used only for CodeGenLib
   outputCode: process.env.OUTPUT_CODE,
 
-  // Used for MJCLI and CodeGenLib
-  dbUsername: process.env.DB_USERNAME,
-  dbPassword: process.env.DB_PASSWORD,
-
   // Used for CodeGenLib and MJAPI
   dbInstanceName: process.env.DB_INSTANCE_NAME,
+  mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
+
+  // Used only for MJAPI
+  graphqlPort: process.env.GRAPHQL_PORT ?? 4000,
+  ___codeGenAPIURL: process.env.CODEGEN_API_URL,
+  ___codeGenAPIPort: process.env.CODEGEN_API_PORT,
+  ___codeGenAPISubmissionDelay: process.env.CODEGEN_API_SUBMISSION_DELAY,
+  graphqlRootPath: process.env.GRAPHQL_ROOT_PATH ?? '/',
+  webClientID: process.env.WEB_CLIENT_ID,
+  tenantID: process.env.TENANT_ID,
+  enableIntrospection: process.env.ENABLE_INTROSPECTION,
+  websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
+  userEmailMap: process.env.USER_EMAIL_MAP,
+  ___skipAPIurl: process.env.ASK_SKIP_API_URL,
+  ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
+  auth0Domain: process.env.AUTH0_DOMAIN,
+  auth0WebClientID: process.env.AUTH0_CLIENT_ID,
+  auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',

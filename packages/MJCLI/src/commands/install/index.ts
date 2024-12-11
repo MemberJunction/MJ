@@ -76,19 +76,6 @@ export default class Install extends Command {
       this.logJson({ userConfig: this.userConfig, flags: this.flags });
     }
 
-    // TODO: Remove this
-    // // if the user asked for a new user via our config file, need to push that info down to the CodeGen config.json file
-    // if (this.userConfig.createNewUser === 'Y') {
-    //   this.log('   Setting up config.json...');
-    //   await this.updateConfigNewUserSetup(
-    //     CODEGEN_DIR,
-    //     this.userConfig.userName,
-    //     this.userConfig.userFirstName,
-    //     this.userConfig.userLastName,
-    //     this.userConfig.userEmail
-    //   );
-    // }
-
     //*******************************************************************
     // Process GeneratedEntities
     //*******************************************************************
@@ -97,16 +84,18 @@ export default class Install extends Command {
     execSync('npm install', { stdio: 'inherit', cwd: GENERATED_ENTITIES_DIR });
 
     //*******************************************************************
-    // Process CodeGen
+    // Process Config
     //*******************************************************************
-    this.log('\nProcessing CodeGen...');
+    this.log('\nProcessing Config...');
     this.log('   Updating ');
     this.log('   Setting up .env and mj.config.js...');
-    const codeGenENV = `#Database Setup
+    const dotenvContent = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
 DB_PORT=${this.userConfig.dbPort}
-DB_USERNAME='${this.userConfig.codeGenLogin}'
-DB_PASSWORD='${this.userConfig.codeGenPwD}'
+CODEGEN_DB_USERNAME='${this.userConfig.codeGenLogin}'
+CODEGEN_DB_PASSWORD='${this.userConfig.codeGenPwD}'
+DB_USERNAME='${this.userConfig.mjAPILogin}'
+DB_PASSWORD='${this.userConfig.mjAPIPwD}'
 DB_DATABASE='${this.userConfig.dbDatabase}'
 ${this.userConfig.dbInstance ? "DB_INSTANCE_NAME='" + this.userConfig.dbInstance + "'" : ''}
 ${this.userConfig.dbTrustServerCertificate === 'Y' ? 'DB_TRUST_SERVER_CERTIFICATE=1' : ''}
@@ -117,32 +106,11 @@ OUTPUT_CODE='${this.userConfig.dbDatabase}'
 # Name of the schema that MJ has been setup in. This defaults to __mj
 MJ_CORE_SCHEMA='__mj'
 
-# If using Advanced Generation, populate this with the API key for the AI vendor you are using
-# Also, you need to configure the settings under advancedGeneration in the config.json file, including choosing the vendor.
+# If using Advanced Generation or the MJAI library, populate this with the API key for the AI vendor you are using
+# Also, you need to configure the settings under advancedGeneration in the mj.config.js file, including choosing the vendor.
 AI_VENDOR_API_KEY__OpenAILLM='${this.userConfig.openAIAPIKey}'
 AI_VENDOR_API_KEY__MistralLLM='${this.userConfig.mistralAPIKey}'
 AI_VENDOR_API_KEY__AnthropicLLM='${this.userConfig.anthropicAPIKey}'
-`;
-    fs.writeFileSync('.env', codeGenENV);
-
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
-
-    //*******************************************************************
-    // Process MJAPI
-    //*******************************************************************
-    this.log('\n\nBootstrapping MJAPI...');
-    this.log('   Running npm link for generated code...');
-    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
-    this.log('   Setting up MJAPI .env file...');
-    const mjAPIENV = `#Database Setup
-DB_HOST='${this.userConfig.dbUrl}'
-DB_PORT=${this.userConfig.dbPort}
-DB_USERNAME='${this.userConfig.mjAPILogin}'
-DB_PASSWORD='${this.userConfig.mjAPIPwD}'
-DB_DATABASE='${this.userConfig.dbDatabase}'
-${this.userConfig.dbInstance ? "DB_INSTANCE_NAME='" + this.userConfig.dbInstance + "'" : ''}
-${this.userConfig.dbTrustServerCertificate === 'Y' ? 'DB_TRUST_SERVER_CERTIFICATE=1' : ''}
 
 PORT=${this.userConfig.graphQLPort}
 
@@ -158,24 +126,27 @@ TENANT_ID=${this.userConfig.msalTenantId}
 AUTH0_CLIENT_ID=${this.userConfig.auth0ClientId}
 AUTH0_CLIENT_SECRET=${this.userConfig.auth0ClientSecret}
 AUTH0_DOMAIN=${this.userConfig.auth0Domain}
-
-# Name of the schema that MJ has been setup in. This defaults to __mj
-MJ_CORE_SCHEMA='__mj'
-
-# If you are using MJAI library, provide your API KEYS here for the various services
-# Format is AI_VENDOR_API_KEY__<DriverClass> Where DriverClass is the DriverClass field from the AI Models Entity in MemberJunction
-AI_VENDOR_API_KEY__OpenAILLM = '${this.userConfig.openAIAPIKey}'
-AI_VENDOR_API_KEY__AnthropicLLM = '${this.userConfig.anthropicAPIKey}'
-AI_VENDOR_API_KEY__MistralLLM = '${this.userConfig.mistralAPIKey}'
-
+ 
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW
 ASK_SKIP_API_URL = 'http://localhost:8000'
 ASK_SKIP_ORGANIZATION_ID = 1
-
-CONFIG_FILE='config.json'
 `;
-    fs.writeFileSync(path.join(MJAPI_DIR, '.env'), mjAPIENV);
+    fs.writeFileSync('.env', dotenvContent);
+
+    //*******************************************************************
+    // Process CodeGen
+    //*******************************************************************
+    this.log('\nProcessing CodeGen...');
+    this.log('   Running npm link for GeneratedEntities...');
+    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
+
+    //*******************************************************************
+    // Process MJAPI
+    //*******************************************************************
+    this.log('\n\nBootstrapping MJAPI...');
+    this.log('   Running npm link for generated code...');
+    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
 
     this.log('Running CodeGen...');
     this.renameFolderToMJ_BASE(this.userConfig.dbDatabase);
@@ -267,7 +238,7 @@ CONFIG_FILE='config.json'
       const authType = await select({
         message: 'Will you be using Microsoft Entra (formerly Azure AD), Auth0, or both for authentication services for MJAPI:',
         choices: [
-          { name: 'Microsoft Entra', value: 'MSAL' },
+          { name: 'Microsoft Entra (MSAL)', value: 'MSAL' },
           { name: 'Auth0', value: 'AUTH0' },
           { name: 'Both', value: 'BOTH' },
         ],
