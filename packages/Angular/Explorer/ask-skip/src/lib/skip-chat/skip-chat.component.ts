@@ -756,8 +756,12 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     }
   }
   async sendSkipMessage() {
-    const val = this.askSkipInput.nativeElement.value;
-    await this.sendPrompt(val);
+    const input: string = this.askSkipInput.nativeElement.value;
+    if(!input || input.length === 0){
+      return;
+    }
+
+    await this.sendPrompt(input);
   }
 
   public ClearMessages() {
@@ -992,6 +996,11 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     if (this._processingStatus[Conversation.ID]) {
       return this._processingStatus[Conversation.ID];
     } else return false;
+  }
+
+  public IsTextAreaEmpty(): boolean {
+    const input: string = this.askSkipInput.nativeElement.value;
+    return !input || input.length === 0;
   }
 
   public isDataContextDialogVisible: boolean = false;
