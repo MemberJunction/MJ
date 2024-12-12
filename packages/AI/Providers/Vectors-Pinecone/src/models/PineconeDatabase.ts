@@ -3,7 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus, PotentialDuplicate, PotentialDuplicateResult } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 
 export type BaseMetadata = {
@@ -80,6 +80,7 @@ export class PineconeDatabase extends VectorDBBase {
             success: true,
             data: this.pinecone.Index(name)
         };
+
         return result;
     }
 
@@ -91,26 +92,31 @@ export class PineconeDatabase extends VectorDBBase {
      * ```
      */
     public async createIndex(options: CreateIndexParams): Promise<BaseResponse> {
-        const result = await this.pinecone.createIndex({
-            name: options.id,
-            dimension: options.dimension,
-            metric: options.metric,
-            spec: options.additionalParams
-        });
-
-        return this.wrapResponse(result);
+        try{
+            const result = await this.pinecone.createIndex({
+                name: options.id,
+                dimension: options.dimension,
+                metric: options.metric,
+                spec: options.additionalParams
+            });
+    
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error creating index", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async deleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
-        let result = await this.pinecone.deleteIndex(params.id);
-
-        const res: BaseResponse = {
-            message: "",
-            success: true,
-            data: result
-        };
-
-        return res;
+        try{
+            await this.pinecone.deleteIndex(params.id);
+            return this.wrapSuccessResponse(null);
+        }
+        catch(ex){
+            LogError("Error deleting index", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async editIndex(params: EditIndexParams): Promise<BaseResponse> {
@@ -118,42 +124,74 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
-        let index: Index = this.getIndex().data;
-        let result: QueryResponse = await index.query(params);
-        return this.wrapResponse(result);
+        try{
+            let index: Index = this.getIndex().data;
+            let result: QueryResponse = await index.query(params);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error querying index", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async createRecord(params: VectorRecord): Promise<BaseResponse> {
-        let records: VectorRecord[] = [params];
-        let result = await this.createRecords(records);
-
-        return this.wrapResponse(result);
+        try{
+            let records: VectorRecord[] = [params];
+            let result = await this.createRecords(records);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error creating record", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async createRecords(records: VectorRecord[]): Promise<BaseResponse> {
-        const index: Index = await this.getIndex().data;
-        let result = await index.upsert(records);
-
-        return this.wrapResponse(result);
+        try{
+            const index: Index = await this.getIndex().data;
+            let result = await index.upsert(records);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            console.log(ex);
+            return this.wrapSuccessResponse(null);
+        }
     }
 
     public async getRecord(params: BaseRequestParams): Promise<BaseResponse> {
-        let result = await this.getRecords(params);
-
-        return this.wrapResponse(result);
+        try{
+            let result = await this.getRecords(params);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error getting record", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async getRecords(params: BaseRequestParams): Promise<BaseResponse> {
-        const index: Index = this.getIndex().data;
-        const fetchResult: FetchResponse = await index.fetch(params.data);
-
-        return this.wrapResponse(fetchResult);
+        try{
+            const index: Index = this.getIndex().data;
+            const fetchResult: FetchResponse = await index.fetch(params.data);
+            return this.wrapSuccessResponse(fetchResult);
+        }
+        catch(ex){
+            LogError("Error getting records", undefined, ex);
+            return this.wrapSuccessResponse(null);
+        }
     }
 
     public async updateRecord(params: BaseRequestParams): Promise<BaseResponse> {
-        const index: Index = this.getIndex().data;
-        let result = index.update(params.data);
-        return this.wrapResponse(result);
+        try{
+            const index: Index = this.getIndex().data;
+            let result = index.update(params.data);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error updating record", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async updateRecords(params: BaseRequestParams): Promise<BaseResponse> {
@@ -161,36 +199,62 @@ export class PineconeDatabase extends VectorDBBase {
     }
 
     public async deleteRecord(record: VectorRecord): Promise<BaseResponse> {
-        const index: Index = this.getIndex().data;
-        let result = index.deleteOne(record.id);
-        return this.wrapResponse(result);
+        try{
+            const index: Index = this.getIndex().data;
+            let result = index.deleteOne(record.id);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            LogError("Error deleting record", undefined, ex);
+            return this.wrapFailureResponse();
+        }
     }
 
     public async deleteRecords(records: VectorRecord[]): Promise<BaseResponse> {
-        const index: Index = this.getIndex().data;
-        const IDMap: string[] = records.map((record: VectorRecord) => record.id);
-        let result = index.deleteMany(IDMap);
-        return this.wrapResponse(result);
+        try{
+            const index: Index = this.getIndex().data;
+            const IDMap: string[] = records.map((record: VectorRecord) => record.id);
+            let result = index.deleteMany(IDMap);
+            return this.wrapSuccessResponse(result);
+        }
+        catch(ex){
+            return this.wrapFailureResponse();
+        }
     }
 
     public async deleteAllRecords(params: BaseRequestParams): Promise<BaseResponse> {
-        const index: Index = this.getIndex().data;
-        if(params?.data){
-            await index.namespace(params?.data).deleteAll();
+        try {
+            const index: Index = this.getIndex().data;
+            if(params?.data){
+                await index.namespace(params?.data).deleteAll();
+            }
+            else{
+                index.deleteAll();
+            }
+
+            return this.wrapSuccessResponse(null);
         }
-        else{
-            index.deleteAll();
+        catch(ex){
+            LogError("Error deleting all records", undefined, ex);
+            return this.wrapFailureResponse();
         }
-        return this.wrapResponse(null);
     }
 
-    private wrapResponse(data: any): BaseResponse {
+    private wrapSuccessResponse(data: any): BaseResponse {
         return {
             success: true,
             message: null,
             data: data
         }
     };
+
+    private wrapFailureResponse(message?: string): BaseResponse {
+        return {
+            success: false,
+            message: message || "An error occurred",
+            data: null
+        }
+    }
 }
 
 export function LoadPineconeVectorDB() {
