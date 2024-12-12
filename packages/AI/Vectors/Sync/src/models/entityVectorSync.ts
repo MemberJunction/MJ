@@ -33,7 +33,7 @@ export class EntityVectorSyncer extends VectorBase {
    * @param contextUser The context user to use to refresh the cache and configure the engines
    */
   public async Config(forceRefresh: boolean, contextUser?: UserInfo): Promise<void> {
-    super.CurrentUser = contextUser;
+    super.CurrentUser;
     await EntityDocumentCache.Instance.Refresh(forceRefresh, contextUser);
     await AIEngine.Instance.Config(forceRefresh, contextUser);
     await TemplateEngineServer.Instance.Config(forceRefresh, contextUser);
@@ -77,7 +77,7 @@ export class EntityVectorSyncer extends VectorBase {
     //If this function doesnt throw an error, then the template is valid
     const validTemplate: boolean = this.ValidateTemplateContextParamAlignment(template);
 
-    const pageSize: number = params.batchCount || 20;
+    const pageSize: number = params.listBatchCount || 50;
     const dataStream = new PagedRecords();
     
     let templateObj: {} = {
@@ -98,35 +98,39 @@ export class EntityVectorSyncer extends VectorBase {
       delayTimeMS
     };
 
-    //annotator worker handles vectorizing the records 
-    const annotator = new BatchWorker({
+    //Handles vectorizing the records 
+    const VectorCreator = new BatchWorker({
       workerFile: resolve(__dirname, 'workers/VectorizeTemplates.js'),
-      batchSize: 3,
+      batchSize: params.VectorizeBatchCount || 50,
       concurrencyLimit: 2,
       contextUser: super.CurrentUser,
       workerContext,
     });
-    annotator.on('error', (err) => {      
-      LogError('Error in annotator worker', null, err);    
+
+    VectorCreator.on('error', (err) => {      
+      LogError('Error in VectorCreator worker', null, err);    
     });
 
-    //archiver worker handles upserting the vectors into the vector database
-    const archiver = new BatchWorker({ 
+    //Handles upserting the vectors into the vector database
+    const VectorUpserter = new BatchWorker({ 
       workerFile: resolve(__dirname, 'workers/UpsertVectors.js'), 
-      batchSize: 4,
+      batchSize: params.UpsertBatchCount || 50,
       contextUser: super.CurrentUser, 
       workerContext
     });
-    archiver.on('error', (err) => {      
-      LogError('Error in archiver worker', null, err);    
+
+    VectorUpserter.on('error', (err) => {      
+      LogError('Error in VectorUpserter worker', null, err);    
     });
 
-    const upserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
+    //short for entity record document upserter
+    // handles upserting entity record document records
+    const ERCUpserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
       this.UpsertEntityRecordDocumentRecords(chunk as EmbeddingData, super.CurrentUser).then(() => callback(null)).catch(callback);
     }});
 
     const getData = async (): Promise<void> => {
-      let pageNumber = 0;
+      let pageNumber =  params.StartingOffset || 0;
       let hasMore = true;
 
       while (hasMore) {
@@ -139,7 +143,7 @@ export class EntityVectorSyncer extends VectorBase {
 
         if(params.listID){
           const coreSchema: string = md.ConfigData.MJCoreSchemaName;
-          pageRecordRequest.Filter = `ID IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
+          pageRecordRequest.Filter = `${entity.FirstPrimaryKey.Name} IN (SELECT RecordID FROM ${coreSchema}.vwListDetails WHERE ListID = '${params.listID}')`;
         }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
@@ -174,11 +178,16 @@ export class EntityVectorSyncer extends VectorBase {
     // page data asynchrounously and add to the data stream
     getData();
 
-    console.log('Starting pipeline');
-    await pipeline(dataStream, annotator, archiver, upserter, new PassThrough({ objectMode: true }));
+    LogStatus('Starting pipeline');
+    await pipeline(dataStream, VectorCreator, VectorUpserter, ERCUpserter, new PassThrough({ objectMode: true }));
 
     const endTime: number = new Date().getTime();
-    LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${endTime - startTime} ms`);
+
+    //convert ms to seconds
+    const elapsedSeconds: number = (endTime - startTime) / 1000;
+    const elapsedMinutes: number = elapsedSeconds / 60;
+
+    LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${elapsedMinutes} minutes)`);
     return null;
   }
 
@@ -553,7 +562,6 @@ export class EntityVectorSyncer extends VectorBase {
   protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
     let md: Metadata = super.Metadata;
     let rv: RunView = super.RunView;
-    let success: boolean = true;
 
     let vectorIndex: VectorIndexEntity = await md.GetEntityObject<VectorIndexEntity>('Vector Indexes', contextUser);
     let vectorIndexID: string = embeddingData.VectorIndexID.toString();
@@ -599,14 +607,9 @@ export class EntityVectorSyncer extends VectorBase {
     let erdEntitySaveResult: boolean = await erdEntity.Save();
     if(!erdEntitySaveResult){
       LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
-      success = false;
-    }
-
-    if(success){
-      LogStatus("Upserting Entity Record Documents: Complete");
     }
     else{
-      LogError("Upserting Entity Record Documents: Fail");
+      LogStatus("Upserting Entity Record Documents: Complete");
     }
   }
 
