@@ -130,9 +130,14 @@ export class EntityVectorSyncer extends VectorBase {
     }});
 
     const getData = async (): Promise<void> => {
-      let pageNumber =  params.StartingOffset || 0;
-      let hasMore = true;
+      let pageNumber =  0;
 
+      if(params.StartingOffset){
+        pageNumber = params.StartingOffset * pageSize;
+        LogStatus(`Starting at offset ${params.StartingOffset} (skipping first ${pageNumber} records)`);
+      }
+
+      let hasMore = true;
       while (hasMore) {
         let pageRecordRequest: PageRecordsParams = {
           EntityID: params.entityID,
