@@ -28,7 +28,7 @@ export type VectorizeEntityParams = {
     /**
      * The UserInfo object to use
      */
-    CurrentUser: UserInfo;
+    CurrentUser?: UserInfo;
     /**
      * The number of records to skip before starting to fetch records from the list.
      */
