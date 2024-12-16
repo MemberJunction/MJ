@@ -4,7 +4,7 @@ import { RecommendationEntity, RecommendationItemEntity, RecommendationProviderE
 /**
  * Used to make requests to Recommendation providers
  */
-export class RecommendationRequest {
+export class RecommendationRequest<T = Record<string, any>> {
     /**
      * The ID of the RecommendationRun record that will be created by the caller of a given provider. This must be created before a provider is called.
      * This is done automatically by the Recommendation Engine and can be populated manually if for some reason you want to call a provider directly outside
@@ -50,7 +50,7 @@ export class RecommendationRequest {
     /**
      * Additional options to pass to the provider
      */
-    Options?: Record<string, any>;
+    Options?: T;
 
     /**
      * If true, creates a list that will contain additional informaton regarding errors
