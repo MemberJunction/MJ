@@ -51,8 +51,9 @@ export class DuplicateRecordDetector extends VectorBase {
         const request: VectorizeEntityParams = {
             entityID: entityDocument.EntityID,
             entityDocumentID: entityDocument.ID,
-            batchCount: 20,
-            options: {}
+            listBatchCount: 20,
+            options: {},
+            CurrentUser: contextUser
         }
 
         console.log("vectorizing entity...");
