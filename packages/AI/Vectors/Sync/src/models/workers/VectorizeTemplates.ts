@@ -64,7 +64,7 @@ export async function VectorizeEntity(): Promise<void> {
 
   const runTime = Date.now() - startTime;
   const elapsed = Date.now() - context.executionId;
-  console.log('\t##### Generating Vectors: Complate #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
+  console.log('\t##### Generating Vectors: Complete #####', { threadId, now: Date.now() % 100_000, runTime, elapsed });
   await delay(context.delayTimeMS); //short deplay to avoid getting rate limited by the embedding model's api 
   parentPort.postMessage({ ...workerData, batch: embeddingBatch });
 }

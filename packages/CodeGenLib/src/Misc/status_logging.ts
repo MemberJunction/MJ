@@ -11,8 +11,8 @@ import path from 'path';
 export class LoggerBase {
    /**
     * Logs an error message to the console and to the log file if configured
-    * @param message 
-    * @param args 
+    * @param message
+    * @param args
     */
    public logError(message: string, severity: SeverityType, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
@@ -20,11 +20,11 @@ export class LoggerBase {
       this.logToConsole(consoleMessage, true, ...args);
       this.logToFile(fileMessage, true, ...args);
    }
-   
+
    /**
     * Logs a status message to the console and to the log file if configured
-    * @param message 
-    * @param args 
+    * @param message
+    * @param args
     */
    public logStatus(message: string, severity: SeverityType, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
@@ -38,7 +38,7 @@ export class LoggerBase {
     * @param message The message to log
     * @param severity The severity of the message
     * @param isError Whether to treat this message as an error
-    * @param args Any additional arguments to log 
+    * @param args Any additional arguments to log
     */
    public logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
@@ -46,7 +46,7 @@ export class LoggerBase {
       this.logToConsole(consoleMessage, isError, ...args);
       this.logToFile(fileMessage, isError, ...args);
    }
-   
+
    protected logToConsole(message: string, isError: boolean, ...args: any[]) {
       if (configInfo.logging.console) {
          if (isError){
@@ -60,7 +60,7 @@ export class LoggerBase {
    protected logToFile(message: string, isError: boolean, ...args: any[]) {
       if (configInfo.logging.log) {
          if (configInfo.logging.logFile === null || configInfo.logging.logFile === undefined || configInfo.logging.logFile === '') {
-            LogError('ERROR: No log file specified in config.json', null!, ...args);
+            LogError('ERROR: No log file specified in config', null!, ...args);
          }
          else  {
             const file: string = path.join(currentWorkingDirectory, configInfo.logging.logFile);

@@ -23,7 +23,7 @@
     ],
     "logging": {
         "log": true,
-        "logFile": "codegen.output.txt",
+        "logFile": "codegen.output.log",
         "console": true
     },
     "newEntityDefaults": {

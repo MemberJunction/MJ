@@ -1,43 +1,7 @@
-import env from 'env-var';
-import fs from 'fs';
-import path from 'path';
 import { z } from 'zod';
+import { cosmiconfigSync } from 'cosmiconfig';
 
-export const nodeEnv = env.get('NODE_ENV').asString();
-
-export const dbHost = env.get('DB_HOST').required().asString();
-export const dbPort = env.get('DB_PORT').default('1433').asPortNumber();
-export const dbUsername = env.get('DB_USERNAME').required().asString();
-export const dbPassword = env.get('DB_PASSWORD').required().asString();
-export const dbDatabase = env.get('DB_DATABASE').required().asString();
-export const dbInstanceName = env.get('DB_INSTANCE_NAME').asString();
-export const dbTrustServerCertificate = env.get('DB_TRUST_SERVER_CERTIFICATE').asBool();
-
-export const graphqlPort = env.get('PORT').default('4000').asPortNumber();
-
-export const ___codeGenAPIURL = env.get('CODEGEN_API_URL').asString();
-export const ___codeGenAPIPort = env.get('CODEGEN_API_PORT').default('3999').asPortNumber();
-export const ___codeGenAPISubmissionDelay = env.get('CODEGEN_API_SUBMISSION_DELAY').default(5000).asIntPositive();
-
-export const graphqlRootPath = env.get('ROOT_PATH').default('/').asString();
-
-export const webClientID = env.get('WEB_CLIENT_ID').asString();
-export const tenantID = env.get('TENANT_ID').asString();
-
-export const enableIntrospection = env.get('ENABLE_INTROSPECTION').default('false').asBool();
-export const websiteRunFromPackage = env.get('WEBSITE_RUN_FROM_PACKAGE').asIntPositive();
-export const userEmailMap = env.get('USER_EMAIL_MAP').default('{}').asJsonObject() as Record<string, string>;
-
-export const ___skipAPIurl = env.get('ASK_SKIP_API_URL').asString();
-export const ___skipAPIOrgId = env.get('ASK_SKIP_ORGANIZATION_ID').asString();
-
-export const auth0Domain = env.get('AUTH0_DOMAIN').asString();
-export const auth0WebClientID = env.get('AUTH0_CLIENT_ID').asString();
-export const auth0ClientSecret = env.get('AUTH0_CLIENT_SECRET').asString();
-
-export const mj_core_schema = env.get('MJ_CORE_SCHEMA').asString();
-
-export const configFile = env.get('CONFIG_FILE').asString();
+const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
@@ -61,10 +25,12 @@ const viewingSystemInfoSchema = z.object({
 
 const askSkipInfoSchema = z.object({
   organizationInfo: z.string().optional(),
-  entitiesToSendSkip: z.object({
-    excludeSchemas: z.array(z.string()).optional(),
-    includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
-  }).optional()
+  entitiesToSendSkip: z
+    .object({
+      excludeSchemas: z.array(z.string()).optional(),
+      includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 const configInfoSchema = z.object({
@@ -72,6 +38,37 @@ const configInfoSchema = z.object({
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   askSkip: askSkipInfoSchema.optional(),
+
+  dbHost: z.string().default('localhost'),
+  dbDatabase: z.string(),
+  dbPort: z.number({ coerce: true }).default(1433),
+  dbUsername: z.string(),
+  dbPassword: z.string(),
+  dbTrustServerCertificate: z
+    .enum(['Y', 'N'])
+    .or(z.coerce.boolean().transform((v) => (v ? 'Y' : 'N')))
+    .default('Y'),
+  dbInstanceName: z.string().optional(),
+  graphqlPort: z.coerce.number().default(4000),
+
+  ___codeGenAPIURL: z.string().optional(),
+  ___codeGenAPIPort: z.coerce.number().optional().default(3999),
+  ___codeGenAPISubmissionDelay: z.coerce.number().optional().default(5000),
+  graphqlRootPath: z.string().optional().default('/'),
+  webClientID: z.string().optional(),
+  tenantID: z.string().optional(),
+  enableIntrospection: z.coerce.boolean().optional().default(false),
+  websiteRunFromPackage: z.coerce.number().optional(),
+  userEmailMap: z
+    .string()
+    .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
+    .optional(),
+  ___skipAPIurl: z.string().optional(),
+  ___skipAPIOrgId: z.string().optional(),
+  auth0Domain: z.string().optional(),
+  auth0WebClientID: z.string().optional(),
+  auth0ClientSecret: z.string().optional(),
+  mjCoreSchema: z.string(),
 });
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
@@ -81,13 +78,38 @@ export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
 
-export function loadConfig() {
-  const configPath = configFile ?? path.resolve('config.json');
+export const {
+  dbUsername,
+  dbPassword,
+  dbHost,
+  dbDatabase,
+  dbPort,
+  dbTrustServerCertificate,
+  dbInstanceName,
+  graphqlPort,
+  ___codeGenAPIURL,
+  ___codeGenAPIPort,
+  ___codeGenAPISubmissionDelay,
+  graphqlRootPath,
+  webClientID,
+  tenantID,
+  enableIntrospection,
+  websiteRunFromPackage,
+  userEmailMap,
+  ___skipAPIurl,
+  ___skipAPIOrgId,
+  auth0Domain,
+  auth0WebClientID,
+  auth0ClientSecret,
+  mjCoreSchema: mj_core_schema,
+} = configInfo;
 
-  if (!fs.existsSync(configPath)) {
-    throw new Error(`Config file ${configPath} does not exist.`);
+export function loadConfig() {
+  const configSearchResult = explorer.search(process.cwd());
+
+  if (configSearchResult.isEmpty) {
+    throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
   }
 
-  const configData = fs.readFileSync(configPath, 'utf-8');
-  return configInfoSchema.parse(JSON.parse(configData));
+  return configInfoSchema.parse(configSearchResult.config);
 }
