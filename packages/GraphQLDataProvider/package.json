@@ -41,6 +41,7 @@
     "graphql-request": "^5.2.0",
     "graphql-ws": "^5.14.0",
     "@tempfix/idb": "^8.0.3",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "uuid": "^10.0.0"
   }
 }
