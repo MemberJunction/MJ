@@ -22,10 +22,14 @@ import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
+import { v4 as uuidv4 } from 'uuid';
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
 
+/**
+ * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
+ */
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     /**
      * Token is the JWT token that is used to authenticate the user with the server
@@ -83,12 +87,23 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
+/**
+ * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
+ * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
+ */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
-    private static _client: GraphQLClient;
-    private static _configData: GraphQLProviderConfigData;
-    private static _sessionId: string;
-    public get ConfigData(): GraphQLProviderConfigData { return GraphQLDataProvider._configData; }
+    private static _instance: GraphQLDataProvider;
+    public static get Instance(): GraphQLDataProvider {
+        return GraphQLDataProvider._instance;
+    }
 
+    private _client: GraphQLClient;
+    private _configData: GraphQLProviderConfigData;
+    private _sessionId: string;
+
+    public get ConfigData(): GraphQLProviderConfigData { 
+        return this._configData; 
+    }
 
     /**
      * This getter is not implemented for the GraphQLDataProvider class.
@@ -98,26 +113,38 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public GenerateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-          var r = (Math.random() * 16) | 0,
-            v = c === 'x' ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        });
+        return uuidv4();
     }
 
-    public async Config(configData: GraphQLProviderConfigData): Promise<boolean> {
+    /**
+     * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
+     * will affect all callers to the GraphQLDataProvider including via wrappers like the Metadata class. If separateConnection is true, then the instance variables are set
+     * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
+     * @important If separateConnection is true, Metadata will NOT be loaded up. This is because the Metadata class is a singleton and it will be affected by the Config() call. To get Metadata for separate connections you must call the methods on this
+     * class directly and not use the Metadata singleton wrapper.
+     * @param configData 
+     * @param separateConnection 
+     * @returns 
+     */
+    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
         try {
-            // FIRST, set up the GraphQL client
-            if (GraphQLDataProvider._sessionId === undefined)
-                GraphQLDataProvider._sessionId = this.GenerateUUID();
-
-            GraphQLDataProvider._configData = configData;
-
-            // now create the new client, if it isn't alreayd created
-            if (!GraphQLDataProvider._client)
-                GraphQLDataProvider._client = GraphQLDataProvider.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider._sessionId);
-
-            return super.Config(configData); // now parent class can do it's config
+            const newUUID = this.GenerateUUID();
+            if (separateConnection) {
+                this._sessionId = newUUID;
+                this._configData = configData;
+                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId);
+            }
+            else {
+                if (GraphQLDataProvider.Instance._sessionId === undefined)
+                    GraphQLDataProvider.Instance._sessionId = newUUID;
+    
+                GraphQLDataProvider.Instance._configData = configData;
+    
+                // now create the new client, if it isn't alreayd created
+                if (!GraphQLDataProvider.Instance._client)
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId);    
+                return super.Config(configData); // now parent class can do it's config
+            }
         }
         catch (e) {
             LogError(e);
@@ -126,7 +153,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public get sessionId(): string {
-        return GraphQLDataProvider._sessionId;
+        return this._sessionId;
     }
 
     protected get AllowRefresh(): boolean {
@@ -1241,8 +1268,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
+    }
+
+    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         try {
-            const data = await GraphQLDataProvider._client.request(query, variables);
+            const data = await this._client.request(query, variables);
             return data;
         }
         catch (e) {
@@ -1252,8 +1283,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
-                        await GraphQLDataProvider.RefreshToken();
-                        return await GraphQLDataProvider.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                        await this.RefreshToken();
+                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
@@ -1271,14 +1302,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public static async RefreshToken(): Promise<void> {
-        if (GraphQLDataProvider._configData.Data.RefreshTokenFunction) {
-            const newToken = await GraphQLDataProvider._configData.Data.RefreshTokenFunction();
+    public async RefreshToken(): Promise<void> {
+        if (this._configData.Data.RefreshTokenFunction) {
+            const newToken = await this._configData.Data.RefreshTokenFunction();
             if (newToken) {
-                GraphQLDataProvider._configData.Token = newToken; // update the token
-                GraphQLDataProvider._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL,
-                                                                          GraphQLDataProvider._configData.Token,
-                                                                          GraphQLDataProvider._sessionId);
+                this._configData.Token = newToken; // update the token
+                this._client = this.CreateNewGraphQLClient(this._configData.URL,
+                                                           this._configData.Token,
+                                                           this._sessionId);
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');
@@ -1289,7 +1320,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    protected static CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
+    public static async RefreshToken(): Promise<void> {
+        return GraphQLDataProvider.Instance.RefreshToken();
+    }
+
+    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
         return new GraphQLClient(url, {
             headers: {
                 authorization: 'Bearer ' + token,
