@@ -103,15 +103,17 @@ export class BatchWorker<TRecord = Record<string, unknown>, TContext = Record<st
 
   async _flush(callback: TransformCallback) {
     if (this._buffer.length > 0) {
-      this._enqueue(() => this._processBatchInWorker(this._buffer));
+      this._enqueue(() =>
+        this._processBatchInWorker(this._buffer)
+          .then(() => callback())
+          .catch((error) => {
+            console.log('Error flushing:', error);
+            callback(error);
+          })
+      );
+    } else {
+      callback();
     }
-
-    Promise.all(this._queue)
-      .then(() => callback())
-      .catch((error) => {
-        console.log('Error flushing:', error);
-        callback();
-      })
   }
 
   _processBatchInWorker(batch: Array<TRecord>): Promise<void> {

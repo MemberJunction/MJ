@@ -3,8 +3,8 @@ import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, User
 import { EntityRecordDocumentEntityType, ListDetailEntity, ListEntity, RecommendationEntity, RecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
+import { GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse, RecommendContextData } from "./generic/models";
 import * as Config from "./config";
-import { GetEmbeddingParams, GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse } from "./generic/models";
 
 /**
  * This class implements the API calls to the rasa.io Rex Recommendation engine and will save results into the MJ Recommendations/Recommendation Items tables.
@@ -15,19 +15,20 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
     MinProbability: number = 0;
     MaxProbability: number = 1;
 
-    public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
+    public async Recommend(request: RecommendationRequest<RecommendContextData>): Promise<RecommendationResult> {
 
         // Rex handles each request one record at a time:
         const result = new RecommendationResult(request);
         result.Success = true; // start off true and set to false if any errors occur
 
-        if(!request.Options || !request.Options.EntityDocumentID){
+        const options: RecommendContextData = request.Options;
+        if(!options || !options.EntityDocumentID){
             LogError("EntityDocumentID is a required options paramter {request.Options.EntityDocumentID}");
             result.AppendError("EntityDocumentID is a required options paramter {request.Options.EntityDocumentID}");
             return result;
         }
 
-        const entityDocumentID: string = request.Options.EntityDocumentID;
+        const entityDocumentID: string = options.EntityDocumentID;
         const token: string = await this.GetAccessToken();
 
         if(!token){
@@ -41,6 +42,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             result.AppendError("Options are required for Rex recommendations")
             return result;
         }
+
+        const typeMap: Record<string, string> = options.TypeMap || {};
 
         const recommendationList = request.Recommendations;
         let batchCount: number = 0;
@@ -73,7 +76,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 const GetRecommendationParams: GetRecommendationParams = {
                     AccessToken: token,
                     VectorID: vectorID,
-                    Options: request.Options,
+                    Options: options,
                     ErrorListID: request.ErrorListID,
                     CurrentUser: request.CurrentUser
                 };
@@ -86,7 +89,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 }
     
                 LogStatus(`Creating ${recommendations.length} recommendation items for recommendation ${index + 1}/${batch.length} of batch ${batchCount + 1}`);
-                const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser);
+                const recommendationItemEntities: RecommendationItemEntity[] = await this.ConvertRecommendationsToItemEntities(recommendation, recommendations, request.CurrentUser, typeMap);
     
                 // Save the results
                 const saveResult = await this.SaveRecommendation(recommendation, request.RunID, recommendationItemEntities);
@@ -208,12 +211,12 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         }
     }
 
-    protected async ConvertRecommendationsToItemEntities(recommendationEntity: RecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo): Promise<RecommendationItemEntity[]> {
+    protected async ConvertRecommendationsToItemEntities(recommendationEntity: RecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo, typeMap: Record<string, string>): Promise<RecommendationItemEntity[]> {
         const md = new Metadata();        
 
         const entities: RecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
             const entity: RecommendationItemEntity = await md.GetEntityObject<RecommendationItemEntity>("Recommendation Items", currentUser);
-            let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation);
+            let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation, typeMap);
 
             entity.NewRecord();
             entity.RecommendationID = recommendationEntity.ID;
@@ -227,25 +230,30 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return entities;
     }
 
-    private GetEntityIDAndRecordID(data: RecommendationResponse): Record<'entityID' | 'recordID', string> {
+    private GetEntityIDAndRecordID(data: RecommendationResponse, typeMap: Record<string, string>): Record<'entityID' | 'recordID', string> {
         let entityName: string = "";
         let entityID: string = "";
         let recordID: string = "";
 
-        switch(data.type){
-            case "course":
-                entityName = "Contents";
-                break;
-            case "course_part":
-                entityName = "Course Parts";
-                break;
-            case "person":
-                entityName = "Contributors";
-                break;
-            default:
-                LogError(`Unknown entity type: ${data.type}`);
-                break;
-        };
+        entityName = typeMap[data.type] || entityName;
+        if(!entityName){
+            LogStatus(`Type ${data.type} not found in type map, using base values`);
+
+            switch(data.type){
+                case "course":
+                    entityName = "Contents";
+                    break;
+                case "course_part":
+                    entityName = "Course Parts";
+                    break;
+                case "person":
+                    entityName = "Contributors";
+                    break;
+                default:
+                    LogError(`Unknown entity type: ${data.type}`);
+                    break;
+            };
+        }
 
         const md: Metadata = new Metadata();
         const entity: EntityInfo | undefined = md.EntityByName(entityName);

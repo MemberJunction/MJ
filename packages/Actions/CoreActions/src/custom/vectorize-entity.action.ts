@@ -46,7 +46,7 @@ export class VectorizeEntityAction extends BaseAction {
                 await vectorizer.VectorizeEntity({
                     entityID: entityDocument.EntityID,
                     entityDocumentID: entityDocument.ID,
-                    batchCount: 20,
+                    listBatchCount: 20,
                     options: {},
                 }, params.ContextUser);
     
