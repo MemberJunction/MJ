@@ -201,10 +201,12 @@ const mjServerConfig = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI'],
+    newUserRoles: ['UI', 'Developer'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
     contextUserForNewUserCreation: 'not.set@nowhere.com',
+    CreateUserApplicationRecords: true,
+    UserApplications: ['Admin']
   },
   databaseSettings: {
     connectionTimeout: 45000,

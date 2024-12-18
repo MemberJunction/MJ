@@ -11,6 +11,8 @@ const userHandlingInfoSchema = z.object({
   updateCacheWhenNotFound: z.boolean().optional().default(false),
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
   contextUserForNewUserCreation: z.string().optional().default(''),
+  CreateUserApplicationRecords: z.boolean().optional().default(false),
+  UserApplications: z.array(z.string()).optional().default([])
 });
 
 const databaseSettingsInfoSchema = z.object({

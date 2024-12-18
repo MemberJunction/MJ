@@ -76,6 +76,8 @@ const newUserSetupSchema = z.object({
   LastName: z.string(),
   Email: z.string(),
   Roles: z.string().array().default(['Developer', 'Integration', 'UI']),
+  CreateUserApplicationRecords: z.boolean().optional().default(false),
+  UserApplications: z.array(z.string()).optional().default([])
 });
 
 export type AdvancedGenerationFeatureOption = z.infer<typeof advancedGenerationFeatureOptionSchema>;
