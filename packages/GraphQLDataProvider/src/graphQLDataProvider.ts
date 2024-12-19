@@ -1267,10 +1267,26 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetEntityRecordNames;
     }
 
+
+    /**
+     * Static version of the ExecuteGQL method that will use the global instance of the GraphQLDataProvider and execute the specified query with the provided variables. 
+     * If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
+     * @param query 
+     * @param variables 
+     * @param refreshTokenIfNeeded 
+     * @returns 
+     */
     public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
     }
 
+    /**
+     * Executes the GQL query with the provided variables. If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
+     * @param query 
+     * @param variables 
+     * @param refreshTokenIfNeeded 
+     * @returns 
+     */
     public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         try {
             const data = await this._client.request(query, variables);

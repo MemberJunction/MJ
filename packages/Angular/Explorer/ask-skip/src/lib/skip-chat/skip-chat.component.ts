@@ -7,16 +7,13 @@ import {
   ViewContainerRef,
   Renderer2,
   ElementRef,
-  Injector,
-  ComponentRef,
   OnDestroy,
   Input,
   ChangeDetectorRef,
-  ComponentFactoryResolver,
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, Metadata, RunQuery, RunView, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
+import { LogError, Metadata, UserInfo, CompositeKey, LogStatus, ProviderBase, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -28,12 +25,11 @@ import { ListViewComponent } from '@progress/kendo-angular-listview';
 import {
   MJAPISkipResult,
   SkipAPIAnalysisCompleteResponse,
-  SkipAPIClarifyingQuestionResponse,
   SkipAPIResponse,
   SkipResponsePhase,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { CopyScalarsAndArrays, MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 
 @Component({
@@ -62,6 +58,14 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
    */
   @Input() public UpdateAppRoute: boolean = true;
 
+  /**
+   * If specified, this provider will be used for communication and for all metadata purposes. By default, if not provided, the Metadata and RunView classes
+   * are used for this and the default GraphQLDataProvider is used which is connected to the same back-end MJAPI instance as the Metadata and RunView classes.
+   * If you want to have this component connect to a different MJAPI back-end, create an instance of a ProviderBase sub-class like GraphQLDataProvider/etc, and
+   * configure it as appropriate to connect to the MJAPI back-end you want to use, and then pass it in here.
+   */
+  @Input() public Provider: IMetadataProvider | undefined;
+
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
   @ViewChild('mjContainer', { read: ViewContainerRef }) mjContainerRef!: ViewContainerRef;
@@ -85,7 +89,10 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   private static __skipChatWindowsCurrentlyVisible: number = 0;
   private sub?: Subscription;
 
-  public WelcomeQuestions = [
+  /**
+   * The questions that will be displayed in the welcome screen.
+   */
+  @Input() public WelcomeQuestions = [
     {
       topLine: 'Create a report',
       bottomLine: 'with any of your data in it, just ask',
@@ -206,24 +213,33 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
 
   protected async SetSelectedConversationUser() {
     if (this.SelectedConversation?.UserID) {
-      const md = new Metadata();
-      if (md.CurrentUser.ID !== this.SelectedConversation.UserID) {
-        const rv = new RunView(); // inefficient, cache this later
-        const result = await rv.RunView({
+      const p = this.ProviderToUse;
+      if (p.CurrentUser.ID !== this.SelectedConversation.UserID) {
+        const result = await this.RunViewToUse.RunView({
           EntityName: 'Users',
           ExtraFilter: `ID='${this.SelectedConversation.UserID}'`,
         });
         this.SelectedConversationUser = result && result.Success ? <UserInfo>result.Results[0] : undefined;
-      } else this.SelectedConversationUser = md.CurrentUser; // current user is the one for this convo, just use that to avoid the extra query
+      } 
+      else 
+        this.SelectedConversationUser = p.CurrentUser; // current user is the one for this convo, just use that to avoid the extra query
     }
+  }
+
+  protected get ProviderToUse(): IMetadataProvider {
+    return this.Provider ? this.Provider : Metadata.Provider;
+  }
+
+  protected get RunViewToUse(): IRunViewProvider {
+    return <IRunViewProvider><any>this.ProviderToUse;
   }
 
   public get LinkedEntityID(): string | null {
     if (this.LinkedEntity && this.LinkedEntity.length > 0) {
       // lookup the entity id from the linkedentity provided to us as a property
-      const md = new Metadata();
-      const e = md.Entities.find((e) => e.Name === this.LinkedEntity);
-      if (e) return e.ID;
+      const e = this.ProviderToUse.Entities.find((e) => e.Name === this.LinkedEntity);
+      if (e) 
+        return e.ID;
     }
     return null;
   }
@@ -336,12 +352,9 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
     if (!cachedConversations) {
       // load up from the database as we don't have any cached conversations
-      const md = new Metadata();
-      const rv = new RunView();
-
-      const result = await rv.RunView({
+      const result = await this.RunViewToUse.RunView({
         EntityName: 'Conversations',
-        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
+        ExtraFilter: `UserID='${this.ProviderToUse.CurrentUser.ID}'`,
         OrderBy: '__mj_CreatedAt DESC', // get in reverse order so we have latest on top
       });
       if (result && result.Success) {
@@ -405,8 +418,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     if (conversation.Save !== undefined) {
       newConvoObject = conversation;
     } else {
-      const md = new Metadata();
-      newConvoObject = await md.GetEntityObject('Conversations');
+      const p = this.ProviderToUse;
+      newConvoObject = await p.GetEntityObject('Conversations', p.CurrentUser);
       await newConvoObject.Load(conversation.ID);
       // now replace conversation in the list with the new object
       this.Conversations = this.Conversations.map((c) => (c.ID == conversation.ID ? newConvoObject : c));
@@ -459,11 +472,11 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   }
 
   public async CreateNewConversation() {
-    const md = new Metadata();
-    const convo = await md.GetEntityObject<ConversationEntity>('Conversations');
+    const p = this.ProviderToUse;
+    const convo = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
     convo.NewRecord();
     convo.Name = 'New Chat'; // default value
-    convo.UserID = md.CurrentUser.ID;
+    convo.UserID = p.CurrentUser.ID;
     convo.Type = 'skip';
     convo.IsArchived = false;
     const linkedEntityID = this.LinkedEntityID;
@@ -472,14 +485,14 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       convo.LinkedRecordID = this.LinkedEntityCompositeKey.Values();
     }
     // next, create a new data context for this conversation
-    const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
+    const dc = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
     dc.NewRecord();
     dc.Name = 'Data Context for Skip Conversation';
-    dc.UserID = md.CurrentUser.ID;
+    dc.UserID = p.CurrentUser.ID;
     if (await dc.Save()) {
       // now create a data context item for the linked record if we have one
       if (this.LinkedEntityID && this.LinkedEntityID.length > 0 && this.CompositeKeyIsPopulated()) {
-        const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
+        const dci = await p.GetEntityObject<DataContextItemEntity>('Data Context Items', p.CurrentUser);
         dci.NewRecord();
         dci.DataContextID = dc.ID;
         if (this.LinkedEntity === 'User Views') {
@@ -510,7 +523,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       }
 
       this.DataContext = new DataContext();
-      await this.DataContext.LoadMetadata(this.DataContextID);
+      await this.DataContext.LoadMetadata(this.DataContextID, p.CurrentUser, p);
 
       this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
       // also update the cache
@@ -548,7 +561,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
         this.DataContext = convoAny._DataContext;
       } else {
         this.DataContext = new DataContext();
-        await this.DataContext.LoadMetadata(this.DataContextID);
+        await this.DataContext.LoadMetadata(this.DataContextID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
 
         // cache it for later
         convoAny._DataContext = this.DataContext;
@@ -561,8 +574,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       } else {
         this._conversationsToReload[conversation.ID] = true;
 
-        const rv = new RunView();
-        const result = await rv.RunView({
+        const result = await this.RunViewToUse.RunView({
           EntityName: 'Conversation Details',
           ExtraFilter: `ConversationID='${conversation.ID}'`,
           OrderBy: '__mj_CreatedAt ASC', // show messages in order of creation
@@ -677,8 +689,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       this._conversationsInProgress[convoID] = true;
       this._messageInProgress = true;
       this.AllowSend = false;
-      const md = new Metadata();
-      const convoDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
+      const p = this.ProviderToUse;
+      const convoDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
       convoDetail.NewRecord();
       convoDetail.Message = val;
       convoDetail.Role = 'User';
@@ -708,7 +720,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
           const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result);
 
           if (!this.SelectedConversation) {
-            const convo = <ConversationEntity>await md.GetEntityObject('Conversations');
+            const convo = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
             await convo.Load(skipResult.ConversationId);
             this._processingStatus[skipResult.ConversationId] = true;
             this.Conversations.push(convo);
@@ -730,7 +742,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
           }
 
           await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
-          const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
+          const aiDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
@@ -888,18 +900,18 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     if (!this.DataContextID && this.SelectedConversation) {
       // need to create a data context
       // add to the new data context a single item for the passed in linked record, which could be a query, view, or something else
-      const md = new Metadata();
-      const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
+      const p = this.ProviderToUse;
+      const dc = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
       dc.NewRecord();
-      const e = md.Entities.find((e) => e.Name === this.LinkedEntity);
+      const e = p.Entities.find((e) => e.Name === this.LinkedEntity);
       dc.Name =
         'Data Context for Skip Conversation ' + (e ? ' for ' + e.Name + ' - Record ID: ' + this.LinkedEntityCompositeKey.Values() : '');
-      dc.UserID = md.CurrentUser.ID;
+      dc.UserID = p.CurrentUser.ID;
       if (await dc.Save()) {
         this.DataContextID = dc.ID;
 
         // update the conversation with the data context id
-        const convo = await md.GetEntityObject<ConversationEntity>('Conversations');
+        const convo = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
         await convo.Load(this.SelectedConversation.ID);
         await convo.Save(); // save to the database
         this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
@@ -920,7 +932,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
               } else type = 'full_entity';
               break;
           }
-          const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
+          const dci = await p.GetEntityObject<DataContextItemEntity>('Data Context Items', p.CurrentUser);
           dci.NewRecord();
           dci.DataContextID = dc.ID;
           dci.Type = type;
@@ -944,7 +956,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     if (!this.DataContext) {
       // load the actual data context object
       this.DataContext = new DataContext();
-      await this.DataContext.LoadMetadata(this.DataContextID);
+      await this.DataContext.LoadMetadata(this.DataContextID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
     }
     return this.DataContextID;
   }
@@ -961,7 +973,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
           AIMessageConversationDetailId
         }
       }`;
-      const result = await GraphQLDataProvider.ExecuteGQL(gql, {
+      const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
+      const result = await gqlProvider.ExecuteGQL(gql, {
         userQuestion: question,
         conversationId: SelectedConversation ? SelectedConversation.ID : '',
         dataContextId: dataContextId,
@@ -970,8 +983,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       return result;
     } catch (err) {
       LogError('Error executing AskSkip query', undefined, err);
-      const md = new Metadata();
-      const errorMessage = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
+      const p = this.ProviderToUse;
+      const errorMessage = await p.GetEntityObject<ConversationDetailEntity>('Conversation Details', p.CurrentUser);
       errorMessage.NewRecord();
       errorMessage.Role = 'Error';
       errorMessage.Message = 'Error took place' + err;
@@ -981,8 +994,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   }
 
   protected async DeleteConversation(ConversationID: string) {
-    const md = new Metadata();
-    const convEntity = <ConversationEntity>await md.GetEntityObject('Conversations');
+    const p = this.ProviderToUse;
+    const convEntity = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
     await convEntity.Load(ConversationID);
     return await convEntity.Delete();
   }
