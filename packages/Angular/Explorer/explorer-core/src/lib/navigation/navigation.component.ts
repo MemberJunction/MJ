@@ -1027,8 +1027,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     await TemplateEngineBase.Instance.Config(false);
-    await EntityCommunicationsEngineClient.Instance.Config(false);
     await CommunicationEngineBase.Instance.Config(false);
+    await EntityCommunicationsEngineClient.Instance.Config(false);
 
     await this.LoadDrawer();
 
