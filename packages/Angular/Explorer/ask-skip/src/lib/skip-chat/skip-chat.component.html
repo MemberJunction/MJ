@@ -95,7 +95,7 @@
                         </button>    
                     }
                     <button kendoButton 
-                            [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" 
+                            [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
                             (click)="sendSkipMessage()">
                             <span class="fas fa-solid fa-arrow-up"></span>
                     </button>

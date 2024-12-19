@@ -42,7 +42,16 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             Action: () => {
                 this.createNewView();
             }
-        }];
+        },
+        {
+            Text: 'New Record',
+            Description: `Create a new record for the currently selected entity`,
+            Icon: 'plus',
+            Action: () => {
+                this.createNewRecord();
+            }
+        }
+    ];
 
     public ViewResourceTypeID!: string;
 
@@ -71,11 +80,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 const md = new Metadata();
                 const rv = new RunView();
 
-                this.app = md.Applications.find(a => a.Name === appName);
+                const appNameToLower: string = appName.toLowerCase();
+                this.app = md.Applications.find(a => a.Name.toLowerCase() === appNameToLower);
 
                 // if we get here and we have a blank app, problem
-                if (!this.app)
+                if (!this.app){
                     throw new Error(`Application ${appName} not found`);
+                }
 
                 // next up we need to find the UserApplication record based on the app and the current user
                 const userAppResult = await rv.RunView<UserApplicationEntity>({
@@ -328,11 +339,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.router.navigate(url, {queryParams: {viewMode: this.viewMode}});
     }
 
-    private isOverflown(element: any) {
-        let e: any = element.nativeElement;
-        return e.scrollHeight > e.clientHeight || e.scrollWidth > e.clientWidth;
-    }
-
     public onViewModeChange(viewMode: string): void {
         this.viewMode = viewMode;
     }
@@ -428,6 +434,38 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         event.preventDefault();
         // tell the router to go to /home
         this.router.navigate(['home']);
+    }
+
+    public createNewRecord(): void {
+        if(!this.currentlySelectedAppEntity){
+            LogError("Unable to create new record: No Entity selected");
+            return;
+        }
+
+        const md: Metadata = new Metadata();
+        const entityInfo = md.EntityByName(this.currentlySelectedAppEntity.Name);
+        if (!entityInfo.AllowCreateAPI) {
+            LogError(`Unable to create new record: ${entityInfo.Name} does not allow creation`);
+            return;
+        }
+
+        const permissions = entityInfo.GetUserPermisions(md.CurrentUser);
+        if(!permissions.CanCreate){
+            LogError(`Unable to create new record: Current User ${md.CurrentUser.Name} does not have permission to create records for ${entityInfo.Name}`);
+            return;
+        }
+
+        // route to a resource/record with a blank string for the 3rd segment which is normally the pkey value
+        // here we don't provide the pkey value so the record component will know to create a new record
+        this.router.navigate(
+            ['resource', 'record',''/*add this 3rd param that's blank so the route validates*/], 
+            { queryParams: 
+              { 
+                Entity: entityInfo.Name,
+                NewRecordValues: null
+              } 
+            }
+          );
     }
 } 
  

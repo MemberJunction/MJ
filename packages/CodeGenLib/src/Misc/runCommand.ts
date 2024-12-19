@@ -20,7 +20,7 @@ export class RunCommandsBase {
   public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
     try {
       const results: CommandExecutionResult[] = [];
-  
+
       for (const command of commands) {
         try {
           // do this in a safe way so that if one command fails, the others can still run
@@ -31,38 +31,38 @@ export class RunCommandsBase {
           logError(e as string);
         }
       }
-  
-      return results  
+
+      return results
     }
     catch (e) {
       logError(e as string)
       throw e;
     }
   }
-  
-  
+
+
   public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
     let cp: ChildProcess = null!;
     try {
       let output = '';
       let startTime = new Date();
       let bErrors: boolean = false;
-      const commandName = command.command; 
+      const commandName = command.command;
       const absPath = path.resolve(command.workingDirectory);
-  
+
       logStatus(`STARTING COMMAND: "${command.command}" in location "${absPath}" with args "${command.args.join(' ')}"`);
-  
+
       const commandExecution = new Promise<CommandExecutionResult>((resolve, reject) => {
         cp = spawn(commandName, command.args, {
           cwd: absPath,
           stdio: 'pipe',
           shell: true,
         });
-    
+
         cp.stdout?.on('data', (data) => {
           output += data.toString();
         });
-    
+
         cp.stderr?.on('data', (data) => {
           const elapsedTime = new Date().getTime() - startTime.getTime();
           const message: string = data.toString();
@@ -72,7 +72,7 @@ export class RunCommandsBase {
             bErrors = true;
           }
         });
-    
+
         cp.on('error', (error) => {
           const elapsedTime = new Date().getTime() - startTime.getTime();
           logError(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
@@ -80,13 +80,13 @@ export class RunCommandsBase {
             treeKill(cp.pid!);
           reject(error);
         });
-    
+
         cp.on('close', (code) => {
           if (code === 0) {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
-            resolve({ output: output, 
-                      error: null!, 
+            resolve({ output: output,
+                      error: null!,
                       success: !bErrors,
                       elapsedTime: elapsedTime
                     });
@@ -95,26 +95,27 @@ export class RunCommandsBase {
           }
         });
       });
-    
+
       if (command.timeout && command.timeout > 0) {
+        const { timeout } = command;
         const timeoutPromise = new Promise<CommandExecutionResult>((resolve, reject) => {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
               treeKill(cp.pid!);
-              logStatus(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime/1000} seconds`);
-              output += `Process killed after ${command.timeout} ms`
+              logStatus(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime / 1000} seconds`);
+              output += `Process killed after ${timeout} ms`;
             }
-  
+
             resolve({
-              output: output, 
-              error: null!, 
+              output: output,
+              error: null!,
               success: !bErrors,
-              elapsedTime: elapsedTime
-             });
-          }, command.timeout);
+              elapsedTime: elapsedTime,
+            });
+          }, timeout);
         });
-      
+
         return Promise.race([
           commandExecution,
           timeoutPromise,

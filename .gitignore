@@ -115,5 +115,5 @@ packages/MJAPI/.env-remote
 .config/mjrc.cjs
 mj.config.js
 mj.config.ts
-mj.config.cjs
+!mj.config.cjs
 packages/CodeGen/config.json.local

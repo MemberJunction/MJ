@@ -1,8 +1,25 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
-This log was last generated on Wed, 27 Nov 2024 20:42:53 GMT and should not be manually modified.
+This log was last generated on Tue, 03 Dec 2024 23:30:43 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.2
+
+Tue, 03 Dec 2024 23:30:43 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.13.2
+- Bump @memberjunction/core-entities to v2.13.2
+- Bump @memberjunction/ng-explorer-core to v2.13.2
+- Bump @memberjunction/ng-base-forms to v2.13.2
+- Bump @memberjunction/ng-form-toolbar to v2.13.2
+- Bump @memberjunction/ng-tabstrip to v2.13.2
+- Bump @memberjunction/ng-container-directives to v2.13.2
+- Bump @memberjunction/ng-code-editor to v2.13.2
+- Bump @memberjunction/ng-timeline to v2.13.2
+- Bump @memberjunction/ng-join-grid to v2.13.2
 
 ## 2.13.1
 

@@ -68,7 +68,7 @@ export type RecommendationResponse = {
 };
 
 export type GetRecommendationParams = {
-    Options: Record<string, any>, 
+    Options: RecommendContextData, 
     AccessToken: string, 
     VectorID: string,
     ErrorListID: string,
@@ -78,4 +78,11 @@ export type GetRecommendationParams = {
 export type GetRecommendationResults = {
     Recommendations: RecommendationResponse[] | null,
     ErrorMessage?: string
+};
+
+export type RecommendContextData = {
+    EntityDocumentID: string,
+    TypeMap: Record<string, string>
+    type: string,
+    filters: { type: string, max_results: number } []
 };
