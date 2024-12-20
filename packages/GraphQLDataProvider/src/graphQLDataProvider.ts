@@ -97,6 +97,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider._instance;
     }
 
+    constructor() {
+        super();
+        if (!GraphQLDataProvider._instance)
+            GraphQLDataProvider._instance = this;
+    }
+
     private _client: GraphQLClient;
     private _configData: GraphQLProviderConfigData;
     private _sessionId: string;
