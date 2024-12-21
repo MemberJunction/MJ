@@ -2,6 +2,39 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Sat, 21 Dec 2024 21:46:44 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/cli_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/cli",
+            "commit": "fc275f994d3aa72920bb9a112e35d441cbb9a4f6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/cli",
+            "commit": "cdf2672f138eaf3f8842443b423a97db61f196d8",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/cli",
+            "commit": "69ce31ba3abdfb2c9339692f5f2666405bfe194f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/cli",
+            "comment": "Bump @memberjunction/codegen-lib to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 03 Oct 2024 23:03:31 GMT",
       "version": "2.7.0",
       "tag": "@memberjunction/cli_v2.7.0",

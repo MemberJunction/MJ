@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/ng-skip-chat",
+  "entries": [
+    {
+      "date": "Sat, 21 Dec 2024 21:46:45 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/ng-skip-chat_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-skip-chat",
+            "commit": "b96b877d729369fa4c229f9e0cc640480e97668c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ng-skip-chat",
+            "commit": "435dda67d86ba3008833b6e25dc8a622c7cca965",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-skip-chat",
+            "comment": "Bump @memberjunction/ng-shared to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-skip-chat",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/entity-communications-base
 
-This log was last generated on Tue, 03 Dec 2024 23:30:43 GMT and should not be manually modified.
+This log was last generated on Sat, 21 Dec 2024 21:46:44 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.3
+
+Sat, 21 Dec 2024 21:46:44 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.13.3
+- Bump @memberjunction/core to v2.13.3
+- Bump @memberjunction/core-entities to v2.13.3
+- Bump @memberjunction/communication-types to v2.13.3
 
 ## 2.13.2
 

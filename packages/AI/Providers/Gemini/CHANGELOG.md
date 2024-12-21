@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/ai-gemini
 
-This log was last generated on Tue, 03 Dec 2024 23:30:43 GMT and should not be manually modified.
+This log was last generated on Sat, 21 Dec 2024 21:46:45 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.3
+
+Sat, 21 Dec 2024 21:46:45 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v2.13.3
+- Bump @memberjunction/global to v2.13.3
 
 ## 2.13.2
 

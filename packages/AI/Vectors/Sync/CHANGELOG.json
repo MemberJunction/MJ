@@ -2,6 +2,111 @@
   "name": "@memberjunction/ai-vector-sync",
   "entries": [
     {
+      "date": "Sat, 21 Dec 2024 21:46:44 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/ai-vector-sync_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-sync",
+            "commit": "5660ebf512c051f941ac1c886bf809f7a022d625",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-sync",
+            "commit": "5e7e4a0f8082b71f877a6b0895dcf4ac125a76f7",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-sync",
+            "commit": "0512e385e67d3ae09907d956cc4c3d1aee7e826d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-sync",
+            "commit": "06a350fe2dbb28e267d39794c056fb36816b8a7c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-sync",
+            "commit": "50777c5882a598e194d3e495c6500cd5f878c7d2",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-vectordb to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-vectors to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-mistral to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/aiengine to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/templates to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/templates-base-types to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-sync",
+            "comment": "Bump @memberjunction/ai-openai to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/ai-vector-sync_v2.13.2",

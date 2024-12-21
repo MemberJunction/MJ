@@ -2,6 +2,69 @@
   "name": "@memberjunction/core-actions",
   "entries": [
     {
+      "date": "Sat, 21 Dec 2024 21:46:44 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/core-actions_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-actions",
+            "commit": "50777c5882a598e194d3e495c6500cd5f878c7d2",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/core-entities to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/actions to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/communication-engine to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/external-change-detection to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/ai-vector-sync to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-actions",
+            "comment": "Bump @memberjunction/content-autotagging to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/core-actions_v2.13.2",
