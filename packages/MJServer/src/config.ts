@@ -12,7 +12,7 @@ const userHandlingInfoSchema = z.object({
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
-  UserApplications: z.array(z.string()).optional().default([])
+  UserApplications: z.array(z.string()).optional().default([]),
 });
 
 const databaseSettingsInfoSchema = z.object({
@@ -46,10 +46,10 @@ const configInfoSchema = z.object({
   dbPort: z.number({ coerce: true }).default(1433),
   dbUsername: z.string(),
   dbPassword: z.string(),
-  dbTrustServerCertificate: z
-    .enum(['Y', 'N'])
-    .or(z.coerce.boolean().transform((v) => (v ? 'Y' : 'N')))
-    .default('Y'),
+  dbTrustServerCertificate: z.coerce
+    .boolean()
+    .default(false)
+    .transform((v) => (v ? 'Y' : 'N')),
   dbInstanceName: z.string().optional(),
   graphqlPort: z.coerce.number().default(4000),
 
