@@ -1,6 +1,6 @@
-import { Metadata, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { NewUserSetup } from "../Config/config";
-import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
+import { UserEntity, UserRoleEntity, UserApplicationEntity, UserApplicationEntityEntity, ApplicationEntityEntityType } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
@@ -56,6 +56,63 @@ export class CreateNewUserBase {
                                 }
                                 else {
                                     logError("   Failed to create User Role: " + roleName);
+                                }
+                            }
+
+                            // Create UserApplication records if specified in the config
+                            if (newUserSetup.CreateUserApplicationRecords) {
+                                logStatus("Creating User Applications for new user: " + user.Name);
+                                for(const appName of newUserSetup.UserApplications){
+                                    const toLowerCase: string = appName.trim().toLocaleLowerCase();
+                                    const application: ApplicationInfo | undefined = md.Applications.find(a => a.Name.trim().toLocaleLowerCase() === toLowerCase);
+                                    if (!application) {
+                                        logError(`Application ${appName} not found in the Metadata, cannot assign to new user ${user.Name}`);
+                                        continue;
+                                    }
+
+                                    const userApplication: UserApplicationEntity = await md.GetEntityObject<UserApplicationEntity>('User Applications', currentUser);
+                                    userApplication.NewRecord();
+                                    userApplication.UserID = user.ID;
+                                    userApplication.ApplicationID = application.ID;
+                                    userApplication.IsActive = true;
+
+                                    const userApplicationSaveResult: boolean = await userApplication.Save();
+                                    if(userApplicationSaveResult){
+                                        logStatus(`Created User Application ${appName} for new user ${user.Name}`);
+                                        
+                                        //now create a UserApplicationEntity records for each entity in the application
+                                        const rv: RunView = new RunView();
+                                        const rvResult: RunViewResult<ApplicationEntityEntityType> = await rv.RunView({
+                                            EntityName: 'Application Entities',
+                                            ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
+                                        }, currentUser);
+
+                                        if(!rvResult.Success){
+                                            LogError(`Failed to load Application Entities for Application ${appName} for new user ${user.Name}:`, undefined, rvResult.ErrorMessage);
+                                            continue;
+                                        }
+
+                                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
+
+                                        for(const [index, appEntity] of rvResult.Results.entries()){
+                                            const userAppEntity: UserApplicationEntityEntity = await md.GetEntityObject<UserApplicationEntityEntity>('User Application Entities', currentUser);
+                                            userAppEntity.NewRecord();
+                                            userAppEntity.UserApplicationID = userApplication.ID;
+                                            userAppEntity.EntityID = appEntity.EntityID!;
+                                            userAppEntity.Sequence = index;
+
+                                            const userAppEntitySaveResult: boolean = await userAppEntity.Save();
+                                            if(userAppEntitySaveResult){
+                                                LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
+                                            }
+                                            else{
+                                                LogError(`Failed to create User Application Entity for new user ${user.Name}:`, undefined, userAppEntity.LatestResult);
+                                            }
+                                        }
+                                    }
+                                    else{
+                                        logError(`Failed to create User Application ${appName} for new user ${user.Name}:`, undefined, userApplication.LatestResult);
+                                    }
                                 }
                             }
     

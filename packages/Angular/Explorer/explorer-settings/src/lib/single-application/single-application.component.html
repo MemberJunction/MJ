@@ -17,7 +17,7 @@
                 </tr>
             </tbody>
         </table>         
-        <mj-tabstrip mjFillContainer>
+        <mj-tabstrip mjFillContainer (ResizeContainer)="InvokeManualResize()">
             <mj-tab [TabSelected]="true">
                 Entities
             </mj-tab>

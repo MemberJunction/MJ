@@ -8,7 +8,7 @@
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()">
                     <mj-tab Name="Fields">
                         Fields
                     </mj-tab>

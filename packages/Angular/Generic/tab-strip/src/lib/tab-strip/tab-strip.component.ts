@@ -1,7 +1,6 @@
 import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { MJTabComponent } from '../tab/tab.component';
 import { MJTabBodyComponent } from '../tab-body/tab-body.component';
-import { SharedService } from '@memberjunction/ng-shared';
 
  
 export class TabEvent {
@@ -44,6 +43,12 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   constructor(private cdr: ChangeDetectorRef) { }
   @Input() FillWidth: boolean = true;
   @Input() FillHeight: boolean = true;
+
+  /**
+   * This event is raised whenever the TabStrip component determines it would be advisable to conduct any necessary
+   * resizing action in the parent container. Implement an event handler to handle this, if desired, for your application.
+   */
+  @Output() ResizeContainer = new EventEmitter();
 
   /**
    * The index of the selected tab. You can get/set this value and it will change the displayed tab.
@@ -118,7 +123,9 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
       this.cdr.detectChanges();
       
       // also ask for a resize now
-      SharedService.Instance.InvokeManualResize();
+      this.ResizeContainer.emit();
+      // TO-DO: @AN-BC Go through code base and find all uses of Tab Strip and call SharedService whenever
+      // ResizeContainer is emitted.... SharedService.Instance.InvokeManualResize();
     });
   }
 

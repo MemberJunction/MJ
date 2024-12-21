@@ -21,6 +21,12 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
         ProviderMessageTypes: CommunicationProviderMessageTypeEntity[],
         EntityCommunicationMessageTypes: EntityCommunicationMessageTypeEntity[],
         EntityCommunicationFields: EntityCommunicationFieldEntity[]
+    } = {
+         BaseMessageTypes: [],
+         Providers: [],
+         ProviderMessageTypes: [],
+         EntityCommunicationMessageTypes: [],
+         EntityCommunicationFields: []
     };
 
     /**

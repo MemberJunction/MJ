@@ -13,7 +13,7 @@
         </kendo-button>
       </div>  
     }
-    <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25">
+    <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25" (ResizeContainer)="sharedService.InvokeManualResize()">
       <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsChart">
         <span class="fa-solid fa-chart-line"></span>
         <span class="report-tab-title">Chart</span>

@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
 import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
@@ -518,19 +518,20 @@ export class DataContext {
      * This method will load ONLY the metadata for the data context and data context items associated with the data context. This method will not load any data for the data context items. This method will return a promise that will resolve to true if the metadata was loaded successfully, and false if it was not.
      * @param DataContextID - the ID of the data context to load
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     * @param provider - optional, the metadata provider to use to load the metadata. If not provided, the default metadata provider will be used.
      */
-    public async LoadMetadata(DataContextID: string, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadMetadata(DataContextID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
         try {
             if (!DataContextID || DataContextID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
-            const md = new Metadata();
-            const rv = new RunView();
-            const dciEntityInfo = md.Entities.find((e) => e.Name === 'Data Context Items');
+            const p = provider ? provider : Metadata.Provider; 
+            const rv = <IRunViewProvider><any>p;
+            const dciEntityInfo = p.Entities.find((e) => e.Name === 'Data Context Items');
             if (!dciEntityInfo)
               throw new Error(`Data Context Items entity not found`);
         
-            this.DataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            this.DataContextEntity = await p.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
             await this.DataContextEntity.Load(DataContextID);
             this.ID = this.DataContextEntity.ID; // do it this way to make sure it loaded properly
             if (!this.ID)
@@ -556,7 +557,7 @@ export class DataContext {
                             break;
                         case 'query':
                             item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
-                            const q = md.Queries.find((q) => q.ID === item.QueryID);
+                            const q = p.Queries.find((q) => q.ID === item.QueryID);
                             item.RecordName = q?.Name;
                             item.SQL = q.SQL;
                             break;
@@ -567,7 +568,7 @@ export class DataContext {
                             item.ViewID = r.ViewID;
                             item.EntityID = r.EntityID; // attempt to get this from the database, often will be null though
                             if (item.ViewID) {
-                                const v = await md.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+                                const v = await p.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
                                 await v.Load(item.ViewID);
                                 item.RecordName = v.Name;
                                 item.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
@@ -577,7 +578,7 @@ export class DataContext {
                             break;
                     }
                     if (item.EntityID) {
-                        item.Entity = md.Entities.find((e) => e.ID === item.EntityID);
+                        item.Entity = p.Entities.find((e) => e.ID === item.EntityID);
                         item.EntityName = item.Entity.Name;
                         item.Fields = this.MapEntityFieldsToDataContextFields(item.Entity);
                         if (item.Type === 'full_entity')
@@ -628,7 +629,7 @@ export class DataContext {
             }});
             for (const itemEntry of itemsArray) {
                 const item = itemEntry.item;
-                const dciEntity = <DataContextItemEntity>await md.GetEntityObject('Data Context Items', contextUser);
+                const dciEntity = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser);
                 if (item.DataContextItemID && item.DataContextItemID.length > 0) 
                   await dciEntity.Load(item.DataContextItemID);
                 else

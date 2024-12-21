@@ -588,7 +588,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @returns 
      */
     public GetDatasetCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
-        return ProviderBase.localStorageRootKey + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
+        return this.LocalStoragePrefix + ProviderBase.localStorageRootKey + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
     }
 
     protected ConvertItemFiltersToUniqueKey(itemFilters: DatasetItemFilterType[]): string {
@@ -650,7 +650,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     public async RefreshRemoteMetadataTimestamps(): Promise<boolean> {
-        const mdTimeStamps = await this.GetLatestMetadataUpdates(); // sub-class implements this 
+        const mdTimeStamps = await this.GetLatestMetadataUpdates();  
         if (mdTimeStamps) {
             this._latestRemoteMetadataTimestamps = mdTimeStamps;
             return true;
@@ -719,8 +719,8 @@ export abstract class ProviderBase implements IMetadataProvider {
             const ls = this.LocalStorageProvider;
             if (ls) {
                 // execution environment supports local storage, use it
-                this._latestLocalMetadataTimestamps = JSON.parse(await ls.getItem(ProviderBase.localStorageTimestampsKey))
-                const temp = JSON.parse(await ls.getItem(ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
+                this._latestLocalMetadataTimestamps = JSON.parse(await ls.getItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey))
+                const temp = JSON.parse(await ls.getItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
                 if (temp) {
                     // we have local metadata
                     const metadata = AllMetadata.FromSimpleObject(temp, this); // create a new object to start this up
@@ -741,15 +741,25 @@ export abstract class ProviderBase implements IMetadataProvider {
         ProviderBase.localStorageTimestampsKey,
         ProviderBase.localStorageAllMetadataKey,
     ];
+
+    /**
+     * This property will return the prefix to use for local storage keys. This is useful if you have multiple instances of a provider running in the same environment
+     * and you want to keep their local storage keys separate. The default implementation returns an empty string, but subclasses can override this to return a unique string
+     * based on the connection or other distinct identifier.
+     */
+    protected get LocalStoragePrefix(): string {
+        return "";
+    }
+
     public async SaveLocalMetadataToStorage() {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
                 // execution environment supports local storage, use it
-                await ls.setItem(ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
+                await ls.setItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
 
                 // now persist the AllMetadata object
-                await ls.setItem(ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
+                await ls.setItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
             }
         }
         catch (e) {
@@ -762,7 +772,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         try {
             const ls = this.LocalStorageProvider;
             for (let i = 0; i < ProviderBase.localStorageKeys.length; i++) {
-                await ls.remove(ProviderBase.localStorageKeys[i])
+                await ls.remove(this.LocalStoragePrefix + ProviderBase.localStorageKeys[i])
             }
         }
         catch (e) {

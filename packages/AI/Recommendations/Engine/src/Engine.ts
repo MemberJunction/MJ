@@ -29,7 +29,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return await this.Load(params, forceRefresh, contextUser);
   }
 
-  public async Recommend(request: RecommendationRequest): Promise<RecommendationResult> {
+  public async Recommend<T>(request: RecommendationRequest<T>): Promise<RecommendationResult> {
     super.TryThrowIfNotLoaded();
 
     let provider: RecommendationProviderEntity = request.Provider;

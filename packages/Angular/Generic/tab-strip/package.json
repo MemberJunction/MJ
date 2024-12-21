@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@memberjunction/ng-container-directives": "2.13.2",
-    "@memberjunction/ng-shared": "2.13.2",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
