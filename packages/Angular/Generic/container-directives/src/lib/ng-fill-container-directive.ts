@@ -1,7 +1,7 @@
 import { Directive, ElementRef, Input, OnDestroy, OnInit } from '@angular/core';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
-import { debounceTime, throttleTime, tap, finalize } from 'rxjs/operators';
+import { debounceTime } from 'rxjs/operators';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 @Directive({

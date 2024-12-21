@@ -3,6 +3,7 @@ import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular
 import { Metadata } from '@memberjunction/core';
 import { ApplicationEntity } from '@memberjunction/core-entities';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
+import { SharedService } from '@memberjunction/ng-shared';
 
  
 @Component({
@@ -26,6 +27,10 @@ export class SingleApplicationComponent implements OnInit {
       
   ngOnInit(): void {
     this.Refresh();
+  }
+
+  public InvokeManualResize() {
+    SharedService.Instance.InvokeManualResize();
   }
 
   protected async Refresh() {

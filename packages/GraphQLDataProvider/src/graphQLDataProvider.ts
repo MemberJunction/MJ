@@ -136,8 +136,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
      * will affect all callers to the GraphQLDataProvider including via wrappers like the Metadata class. If separateConnection is true, then the instance variables are set
      * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
-     * @important If separateConnection is true, Metadata will NOT be loaded up. This is because the Metadata class is a singleton and it will be affected by the Config() call. To get Metadata for separate connections you must call the methods on this
-     * class directly and not use the Metadata singleton wrapper.
+     * @important If separateConnection is true, metadata for the provider will be loaded but will NOT affect the Metadata class/singleton. 
+     * This is because the Metadata class is a singleton that binds to the first Config() call in the process where separateConnection is falsy. 
      * @param configData 
      * @param separateConnection 
      * @returns 
@@ -149,7 +149,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._sessionId = newUUID;
                 this._configData = configData;
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId);
-                return super.Config(configData); // now parent class can do it's config
             }
             else {
                 if (GraphQLDataProvider.Instance._sessionId === undefined)
@@ -160,8 +159,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // now create the new client, if it isn't alreayd created
                 if (!GraphQLDataProvider.Instance._client)
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId);    
-                return super.Config(configData); // now parent class can do it's config
             }
+            return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);

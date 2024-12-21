@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ng-tabstrip",
+  "name": "@memberjunction/ng-skip-chat",
   "version": "2.13.2",
-  "description": "MemberJunction: Very simple tab strip component used in the MJ Explorer app and reusable anywhere else in an Angular project.",
+  "description": "MemberJunction: Simple Skip Chat components usable in any Angular project",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -23,7 +23,6 @@
     "@angular/core": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/ng-container-directives": "2.13.2",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

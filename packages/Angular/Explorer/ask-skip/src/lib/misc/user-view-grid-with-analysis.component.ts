@@ -7,7 +7,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 @Component({
     selector: 'mj-user-view-grid-with-analysis',
     template: `
-    <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler() ">
+    <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabSelected]="true"> Data </mj-tab>
         <mj-tab-body>
             <mj-user-view-grid [Params]="Params" [InEditMode]="InEditMode" [EditMode]="EditMode" [AutoNavigate]="AutoNavigate" 
@@ -41,6 +41,10 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
     private _compositeKey: CompositeKey = new CompositeKey();
 
+    public get sharedService(): SharedService {
+        return SharedService.Instance;
+    }
+    
     public get ViewID(): string {
         if (this.Params && this.Params.ViewID)
           return this.Params.ViewID;
