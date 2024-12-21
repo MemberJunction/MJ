@@ -51,6 +51,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this.tabComponent;
   }
 
+  /**
+   * Convenience method to resize application container when required
+   */
+  public InvokeManualResize(delay?: number) {
+    this.sharedService.InvokeManualResize(delay);
+  }
+
   async ngOnInit() {
     if (this.record) {
       const md: Metadata = new Metadata();
