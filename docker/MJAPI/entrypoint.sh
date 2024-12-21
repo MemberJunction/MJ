@@ -3,11 +3,13 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# Run migrations
+cd /app
+
+# Run migrations with the --tag parameter
 mj migrate
 
 # Run code generation
 mj codegen
 
 # Start the MJAPI application
-npm run start:api
+node packages/MJAPI/dist/index.js
