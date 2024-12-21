@@ -37,11 +37,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "CodeGen",
-      "envFile": "${workspaceFolder}/packages/CodeGen/.env",
-      "cwd": "${workspaceFolder}/packages/CodeGen",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start"],
+      "name": "CodeGen CLI",
+      "program": "${workspaceFolder}/packages/MJCLI/bin/dev",
+      "args": ["codegen"],
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {

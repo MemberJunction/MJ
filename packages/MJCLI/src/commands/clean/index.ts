@@ -26,7 +26,7 @@ export default class Clean extends Command {
       this.error('No configuration found');
     }
 
-    const flywayConfig = getFlywayConfig(config);
+    const flywayConfig = await getFlywayConfig(config);
     const flyway = new Flyway(flywayConfig);
 
     this.log('Resetting MJ database to pre-installation state');

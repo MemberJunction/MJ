@@ -22,10 +22,14 @@ import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
+import { v4 as uuidv4 } from 'uuid';
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
 
+/**
+ * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
+ */
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     /**
      * Token is the JWT token that is used to authenticate the user with the server
@@ -83,12 +87,29 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
+/**
+ * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
+ * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
+ */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
-    private static _client: GraphQLClient;
-    private static _configData: GraphQLProviderConfigData;
-    private static _sessionId: string;
-    public get ConfigData(): GraphQLProviderConfigData { return GraphQLDataProvider._configData; }
+    private static _instance: GraphQLDataProvider;
+    public static get Instance(): GraphQLDataProvider {
+        return GraphQLDataProvider._instance;
+    }
 
+    constructor() {
+        super();
+        if (!GraphQLDataProvider._instance)
+            GraphQLDataProvider._instance = this;
+    }
+
+    private _client: GraphQLClient;
+    private _configData: GraphQLProviderConfigData;
+    private _sessionId: string;
+
+    public get ConfigData(): GraphQLProviderConfigData { 
+        return this._configData; 
+    }
 
     /**
      * This getter is not implemented for the GraphQLDataProvider class.
@@ -98,25 +119,47 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public GenerateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-          var r = (Math.random() * 16) | 0,
-            v = c === 'x' ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        });
+        return uuidv4();
     }
 
-    public async Config(configData: GraphQLProviderConfigData): Promise<boolean> {
+    /**
+     * The GraphQLDataProvider uses a prefix for local storage that is equal to the URL of the GraphQL endpoint. This is because the GraphQLDataProvider can be configured multiple times with different URLs and each
+     * configuration will have its own local storage. This is useful when you want to have multiple connections to different servers and you don't want the local storage to be shared between them. The URL is 
+     * normalized to remove special characters and replace anything other than alphanumeric characters with an underscore.
+     */
+    protected override get LocalStoragePrefix(): string {
+        const replacementString = this._configData.URL.replace(/[^a-zA-Z0-9]/g, '_');
+        return replacementString + "."; // add a period at the end to separate the prefix from the key
+    }
+
+    /**
+     * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
+     * will affect all callers to the GraphQLDataProvider including via wrappers like the Metadata class. If separateConnection is true, then the instance variables are set
+     * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
+     * @important If separateConnection is true, metadata for the provider will be loaded but will NOT affect the Metadata class/singleton. 
+     * This is because the Metadata class is a singleton that binds to the first Config() call in the process where separateConnection is falsy. 
+     * @param configData 
+     * @param separateConnection 
+     * @returns 
+     */
+    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
         try {
-            // FIRST, set up the GraphQL client
-            if (GraphQLDataProvider._sessionId === undefined)
-                GraphQLDataProvider._sessionId = this.GenerateUUID();
-
-            GraphQLDataProvider._configData = configData;
-
-            // now create the new client, if it isn't alreayd created
-            if (!GraphQLDataProvider._client)
-                GraphQLDataProvider._client = GraphQLDataProvider.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider._sessionId);
-
+            const newUUID = this.GenerateUUID();
+            if (separateConnection) {
+                this._sessionId = newUUID;
+                this._configData = configData;
+                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId);
+            }
+            else {
+                if (GraphQLDataProvider.Instance._sessionId === undefined)
+                    GraphQLDataProvider.Instance._sessionId = newUUID;
+    
+                GraphQLDataProvider.Instance._configData = configData;
+    
+                // now create the new client, if it isn't alreayd created
+                if (!GraphQLDataProvider.Instance._client)
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId);    
+            }
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
@@ -126,7 +169,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public get sessionId(): string {
-        return GraphQLDataProvider._sessionId;
+        return this._sessionId;
     }
 
     protected get AllowRefresh(): boolean {
@@ -134,7 +177,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     protected async GetCurrentUser(): Promise<UserInfo> {
-        const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
+        const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
@@ -160,7 +203,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {ReportID: params.ReportID} );
+        const result = await this.ExecuteGQL(query, {ReportID: params.ReportID} );
         if (result && result.GetReportData)
             return {
                 ReportID: params.ReportID,
@@ -190,7 +233,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
+        const result = await this.ExecuteGQL(query, {QueryID: params.QueryID} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,
@@ -284,7 +327,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                 }`
 
-                const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+                const viewData = await this.ExecuteGQL(query, {input: innerParams} );
                 if (viewData && viewData[qName]) {
                     // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                     // so that the caller gets back what they expect
@@ -403,7 +446,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }`;
 
-            const viewData: unknown = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+            const viewData: unknown = await this.ExecuteGQL(query, {input: innerParams} );
             if (viewData && viewData["RunViews"]) {
                 // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                 // so that the caller gets back what they expect
@@ -576,7 +619,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entityName: entityName,
                 CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
             };
-            const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
+            const data = await this.ExecuteGQL(query, vars);
 
             return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
         }
@@ -632,7 +675,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return recordID.Copy();
             })
         }
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
+        const data = await this.ExecuteGQL(query, {params: request});
 
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;
@@ -681,7 +724,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             // now we have our query built, execute it
-            const data = await GraphQLDataProvider.ExecuteGQL(mutation, {request: newRequest});
+            const data = await this.ExecuteGQL(mutation, {request: newRequest});
 
             return data?.MergeRecords; // shape of the result should exactly match the RecordDependency type
         }
@@ -812,7 +855,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             else {
                 // not part of a transaction group, so just go for it and send across our GQL
-                const d = await GraphQLDataProvider.ExecuteGQL(outer, vars)
+                const d = await this.ExecuteGQL(outer, vars)
                 if (d && d[type + entity.EntityInfo.ClassName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
@@ -882,7 +925,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             `;
 
-            const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
+            const d = await this.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
                 return this.ConvertBackToMJFields(d[entity.EntityInfo.ClassName]);
@@ -1020,7 +1063,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             else {
                 // no transaction just go for it
-                const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
+                const d = await this.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
                     const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
@@ -1079,7 +1122,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Results
             }
         }`
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters });
+        const data = await this.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters });
         if (data && data.GetDatasetByName && data.GetDatasetByName.Success) {
             return {
                 DatasetID: data.GetDatasetByName.DatasetID,
@@ -1113,7 +1156,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 EntityUpdateDates
             }
         }`
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
+        const data = await this.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
         if (data && data.GetDatasetStatusByName && data.GetDatasetStatusByName.Success) {
             return {
                 DatasetID: data.GetDatasetStatusByName.DatasetID,
@@ -1137,7 +1180,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new GraphQLTransactionGroup();
+        return new GraphQLTransactionGroup(this);
     }
 
     public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
@@ -1156,7 +1199,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
+        const data = await this.ExecuteGQL(query,  {params: {
                                                                             UserID: userId,
                                                                             EntityID: e.ID,
                                                                             CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
@@ -1179,7 +1222,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
+        const data = await this.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId,
                                                                                 EntityID: e.ID,
                                                                                 CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)},
@@ -1203,7 +1246,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {
+        const data = await this.ExecuteGQL(query, {
                                                                     EntityName: entityName,
                                                                     CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
                                                                 });
@@ -1230,7 +1273,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => {
+        const data = await this.ExecuteGQL(query,  {info: info.map(i => {
             return {
                      EntityName: i.EntityName,
                      CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
@@ -1240,9 +1283,29 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetEntityRecordNames;
     }
 
+
+    /**
+     * Static version of the ExecuteGQL method that will use the global instance of the GraphQLDataProvider and execute the specified query with the provided variables. 
+     * If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
+     * @param query 
+     * @param variables 
+     * @param refreshTokenIfNeeded 
+     * @returns 
+     */
     public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
+        return GraphQLDataProvider.Instance.ExecuteGQL(query, variables, refreshTokenIfNeeded);
+    }
+
+    /**
+     * Executes the GQL query with the provided variables. If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
+     * @param query 
+     * @param variables 
+     * @param refreshTokenIfNeeded 
+     * @returns 
+     */
+    public async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         try {
-            const data = await GraphQLDataProvider._client.request(query, variables);
+            const data = await this._client.request(query, variables);
             return data;
         }
         catch (e) {
@@ -1252,8 +1315,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
-                        await GraphQLDataProvider.RefreshToken();
-                        return await GraphQLDataProvider.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                        await this.RefreshToken();
+                        return await this.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
                     }
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
@@ -1271,14 +1334,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public static async RefreshToken(): Promise<void> {
-        if (GraphQLDataProvider._configData.Data.RefreshTokenFunction) {
-            const newToken = await GraphQLDataProvider._configData.Data.RefreshTokenFunction();
+    public async RefreshToken(): Promise<void> {
+        if (this._configData.Data.RefreshTokenFunction) {
+            const newToken = await this._configData.Data.RefreshTokenFunction();
             if (newToken) {
-                GraphQLDataProvider._configData.Token = newToken; // update the token
-                GraphQLDataProvider._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL,
-                                                                          GraphQLDataProvider._configData.Token,
-                                                                          GraphQLDataProvider._sessionId);
+                this._configData.Token = newToken; // update the token
+                this._client = this.CreateNewGraphQLClient(this._configData.URL,
+                                                           this._configData.Token,
+                                                           this._sessionId);
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');
@@ -1289,7 +1352,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    protected static CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
+    public static async RefreshToken(): Promise<void> {
+        return GraphQLDataProvider.Instance.RefreshToken();
+    }
+
+    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
         return new GraphQLClient(url, {
             headers: {
                 authorization: 'Bearer ' + token,
@@ -1510,6 +1577,11 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
 }
 
 export class GraphQLTransactionGroup extends TransactionGroupBase {
+    private _provider: GraphQLDataProvider;
+    constructor(provider: GraphQLDataProvider) {
+        super();
+    }
+
     protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
         // iterate through each instruction and build up the combined query string
         // and the combined variables object
@@ -1542,7 +1614,7 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         }
 
         combinedQuery = `mutation TransactionGroup(${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
-        const execResults = await GraphQLDataProvider.ExecuteGQL(combinedQuery, combinedVars)
+        const execResults = await this._provider.ExecuteGQL(combinedQuery, combinedVars)
         const returnResults: TransactionResult[] = [];
         for (let i = 0; i < items.length; i++) {
             /// NEED TO TEST TO SEE WHAT ORDER WE GET RESULTS BACK AS

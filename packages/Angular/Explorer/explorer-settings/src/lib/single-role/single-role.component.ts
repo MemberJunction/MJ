@@ -4,6 +4,7 @@ import { BaseEntity, Metadata } from '@memberjunction/core';
 import { RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @RegisterClass(BaseEntity, 'User Roles', 10) // register this with a high priority so we are used here, we just need to extend it to add a property as a flag to know if it's in the database or not
 export class UserRoleEntity_Ext extends UserRoleEntity {
@@ -59,6 +60,10 @@ export class SingleRoleComponent implements OnInit {
 
   constructor(private cdRef: ChangeDetectorRef) { 
   } 
+
+  public InvokeManualResize() {
+    SharedService.Instance.InvokeManualResize();
+  }
       
   ngOnInit(): void {
     this.Refresh();

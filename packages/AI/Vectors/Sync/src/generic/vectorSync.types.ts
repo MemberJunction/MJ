@@ -1,6 +1,6 @@
 import { Embeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { TemplateContentEntity, EntityDocumentEntity } from "@memberjunction/core-entities";
 import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
 
@@ -14,10 +14,25 @@ export type VectorizeEntityParams = {
     */
     listID?: string;
     /**
-     * The number of records to be vectorized and inserted
-     * into the vector database at a time
+     * The number of records to fetch from the list at a time. Defaults to 50.
      */
-    batchCount?: number;
+    listBatchCount?: number;
+    /**
+     * The number of records to vectorize at a time. Defaults to 50.
+     */
+    VectorizeBatchCount?: number;
+    /**
+     * The number of records to upsert to the vector database at a time. Defaults to 50.
+     */
+    UpsertBatchCount?: number;
+    /**
+     * The UserInfo object to use
+     */
+    CurrentUser?: UserInfo;
+    /**
+     * The number of records to skip before starting to fetch records from the list.
+     */
+    StartingOffset?: number;
     options?: any;
 }
 

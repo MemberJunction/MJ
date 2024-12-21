@@ -1,4 +1,6 @@
 import { confirm, input, select } from '@inquirer/prompts';
+import * as dotenv from 'dotenv';
+import * as recast from 'recast';
 import { Command, Flags } from '@oclif/core';
 import { ParserOutput } from '@oclif/core/lib/interfaces/parser';
 import * as fs from 'fs-extra';
@@ -20,7 +22,10 @@ type Config = z.infer<typeof configSchema>;
 const configSchema = z.object({
   dbUrl: z.string().min(1),
   dbInstance: z.string(),
-  dbTrustServerCertificate: z.enum(['Y', 'N']),
+  dbTrustServerCertificate: z.coerce
+    .boolean()
+    .default(false)
+    .transform((v) => (v ? 'Y' : 'N')),
   dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).int().positive(),
   codeGenLogin: z.string(),
@@ -34,7 +39,7 @@ const configSchema = z.object({
   auth0ClientId: z.string().optional(),
   auth0ClientSecret: z.string().optional(),
   auth0Domain: z.string().optional(),
-  createNewUser: z.enum(['Y', 'N']).optional(),
+  createNewUser: z.coerce.boolean().optional(),
   userEmail: z.string().email().or(z.literal('')).optional().default(''),
   userFirstName: z.string().optional(),
   userLastName: z.string().optional(),
@@ -65,25 +70,13 @@ export default class Install extends Command {
 
     this.checkNodeVersion();
     this.checkAvailableDiskSpace(2);
-    this.verifyDirs(CODEGEN_DIR, GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);
+    this.verifyDirs(GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);
 
     this.userConfig = await this.getUserConfiguration();
 
     this.log('Setting up MemberJunction Distribution...');
     if (this.flags.verbose) {
       this.logJson({ userConfig: this.userConfig, flags: this.flags });
-    }
-
-    // if the user asked for a new user via our config file, need to push that info down to the CodeGen config.json file
-    if (this.userConfig.createNewUser === 'Y') {
-      this.log('   Setting up config.json...');
-      await this.updateConfigNewUserSetup(
-        CODEGEN_DIR,
-        this.userConfig.userName,
-        this.userConfig.userFirstName,
-        this.userConfig.userLastName,
-        this.userConfig.userEmail
-      );
     }
 
     //*******************************************************************
@@ -94,16 +87,18 @@ export default class Install extends Command {
     execSync('npm install', { stdio: 'inherit', cwd: GENERATED_ENTITIES_DIR });
 
     //*******************************************************************
-    // Process CodeGen
+    // Process Config
     //*******************************************************************
-    this.log('\nProcessing CodeGen...');
+    this.log('\nProcessing Config...');
     this.log('   Updating ');
-    this.log('   Setting up .env and config.json...');
-    const codeGenENV = `#Database Setup
+    this.log('   Setting up .env and mj.config.cjs...');
+    const dotenvContent = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
 DB_PORT=${this.userConfig.dbPort}
-DB_USERNAME='${this.userConfig.codeGenLogin}'
-DB_PASSWORD='${this.userConfig.codeGenPwD}'
+CODEGEN_DB_USERNAME='${this.userConfig.codeGenLogin}'
+CODEGEN_DB_PASSWORD='${this.userConfig.codeGenPwD}'
+DB_USERNAME='${this.userConfig.mjAPILogin}'
+DB_PASSWORD='${this.userConfig.mjAPIPwD}'
 DB_DATABASE='${this.userConfig.dbDatabase}'
 ${this.userConfig.dbInstance ? "DB_INSTANCE_NAME='" + this.userConfig.dbInstance + "'" : ''}
 ${this.userConfig.dbTrustServerCertificate === 'Y' ? 'DB_TRUST_SERVER_CERTIFICATE=1' : ''}
@@ -114,35 +109,11 @@ OUTPUT_CODE='${this.userConfig.dbDatabase}'
 # Name of the schema that MJ has been setup in. This defaults to __mj
 MJ_CORE_SCHEMA='__mj'
 
-# If using Advanced Generation, populate this with the API key for the AI vendor you are using
-# Also, you need to configure the settings under advancedGeneration in the config.json file, including choosing the vendor.
+# If using Advanced Generation or the MJAI library, populate this with the API key for the AI vendor you are using
+# Also, you need to configure the settings under advancedGeneration in the mj.config.cjs file, including choosing the vendor.
 AI_VENDOR_API_KEY__OpenAILLM='${this.userConfig.openAIAPIKey}'
 AI_VENDOR_API_KEY__MistralLLM='${this.userConfig.mistralAPIKey}'
 AI_VENDOR_API_KEY__AnthropicLLM='${this.userConfig.anthropicAPIKey}'
-
-#CONFIG_FILE is the name of the file that has the configuration parameters for CodeGen
-CONFIG_FILE='config.json'
-`;
-    fs.writeFileSync(path.join(CODEGEN_DIR, '.env'), codeGenENV);
-
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
-
-    //*******************************************************************
-    // Process MJAPI
-    //*******************************************************************
-    this.log('\n\nBootstrapping MJAPI...');
-    this.log('   Running npm link for generated code...');
-    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
-    this.log('   Setting up MJAPI .env file...');
-    const mjAPIENV = `#Database Setup
-DB_HOST='${this.userConfig.dbUrl}'
-DB_PORT=${this.userConfig.dbPort}
-DB_USERNAME='${this.userConfig.mjAPILogin}'
-DB_PASSWORD='${this.userConfig.mjAPIPwD}'
-DB_DATABASE='${this.userConfig.dbDatabase}'
-${this.userConfig.dbInstance ? "DB_INSTANCE_NAME='" + this.userConfig.dbInstance + "'" : ''}
-${this.userConfig.dbTrustServerCertificate === 'Y' ? 'DB_TRUST_SERVER_CERTIFICATE=1' : ''}
 
 PORT=${this.userConfig.graphQLPort}
 
@@ -159,30 +130,34 @@ AUTH0_CLIENT_ID=${this.userConfig.auth0ClientId}
 AUTH0_CLIENT_SECRET=${this.userConfig.auth0ClientSecret}
 AUTH0_DOMAIN=${this.userConfig.auth0Domain}
 
-# Name of the schema that MJ has been setup in. This defaults to __mj
-MJ_CORE_SCHEMA='__mj'
-
-# If you are using MJAI library, provide your API KEYS here for the various services
-# Format is AI_VENDOR_API_KEY__<DriverClass> Where DriverClass is the DriverClass field from the AI Models Entity in MemberJunction
-AI_VENDOR_API_KEY__OpenAILLM = '${this.userConfig.openAIAPIKey}'
-AI_VENDOR_API_KEY__AnthropicLLM = '${this.userConfig.anthropicAPIKey}'
-AI_VENDOR_API_KEY__MistralLLM = '${this.userConfig.mistralAPIKey}'
-
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW
 ASK_SKIP_API_URL = 'http://localhost:8000'
 ASK_SKIP_ORGANIZATION_ID = 1
-
-CONFIG_FILE='config.json'
 `;
-    fs.writeFileSync(path.join(MJAPI_DIR, '.env'), mjAPIENV);
+    fs.writeFileSync('.env', dotenvContent);
+
+    //*******************************************************************
+    // Process CodeGen
+    //*******************************************************************
+    this.log('\nProcessing CodeGen...');
+    this.log('   Running npm link for GeneratedEntities...');
+    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
+
+    //*******************************************************************
+    // Process MJAPI
+    //*******************************************************************
+    this.log('\n\nBootstrapping MJAPI...');
+    this.log('   Running npm link for generated code...');
+    execSync('npm link ../GeneratedEntities ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
 
     this.log('Running CodeGen...');
     this.renameFolderToMJ_BASE(this.userConfig.dbDatabase);
 
     // next, run CodeGen
     // We do not manually run the compilation for GeneratedEntities because CodeGen handles that, but notice above that we did npm install for GeneratedEntities otherwise when CodeGen attempts to compile it, it will fail.
-    execSync('npx ts-node src/index.ts', { stdio: 'inherit', cwd: CODEGEN_DIR });
+    dotenv.config();
+    this.config.runCommand('codegen');
 
     // Process MJExplorer
     this.log('\nProcessing MJExplorer...');
@@ -227,7 +202,7 @@ CONFIG_FILE='config.json'
 
     if (!userConfig) {
       this.log(
-        '\n>>> Please answer the following questions to setup the .env files for CodeGen. After this process you can manually edit the .env file in CodeGen as desired.'
+        '\n>>> Please answer the following questions to setup the .env files for CodeGen. After this process you can manually edit the .env file as desired.'
       );
       const dbUrl = await input({
         message: 'Enter the database server hostname:',
@@ -266,7 +241,7 @@ CONFIG_FILE='config.json'
       const authType = await select({
         message: 'Will you be using Microsoft Entra (formerly Azure AD), Auth0, or both for authentication services for MJAPI:',
         choices: [
-          { name: 'Microsoft Entra', value: 'MSAL' },
+          { name: 'Microsoft Entra (MSAL)', value: 'MSAL' },
           { name: 'Auth0', value: 'AUTH0' },
           { name: 'Both', value: 'BOTH' },
         ],
@@ -445,32 +420,57 @@ CONFIG_FILE='config.json'
   }
 
   /**
-   * Updates newUserSetup in the config.json file.
-   * @param {string} dirPath - The path to the directory containing the config.json file.
+   * Updates newUserSetup in the mj.config.cjs file.
    * @param {string} userName - The new UserName to set.
    * @param {string} firstName - The new FirstName to set.
    * @param {string} lastName - The new LastName to set.
    * @param {string} email - The new Email to set.
    */
-  async updateConfigNewUserSetup(dirPath: string, userName?: string, firstName?: string, lastName?: string, email?: string) {
+  async updateConfigNewUserSetup(userName?: string, firstName?: string, lastName?: string, email?: string) {
     try {
-      const configFilePath = path.join(dirPath, 'config.json');
+      // Read the mj.config.cjs file
+      const configFileContent = await fs.readFile('mj.config.cjs', 'utf8');
 
-      // Read the config.json file
-      const data = await fs.readFile(configFilePath, 'utf8');
-      const config = JSON.parse(data);
+      // Parse the content into an AST
+      const ast = recast.parse(configFileContent);
 
-      // Update the newUserSetup object
-      if (!config.newUserSetup) config.newUserSetup = {};
+      // Modify the AST
+      const n = recast.types.namedTypes;
+      const b = recast.types.builders;
+      recast.types.visit(ast, {
+        visitObjectExpression(path) {
+          const properties = path.node.properties;
 
-      config.newUserSetup.UserName = userName;
-      config.newUserSetup.FirstName = firstName;
-      config.newUserSetup.LastName = lastName;
-      config.newUserSetup.Email = email;
+          // Check if newUserSetup key exists
+          const newUserSetupProperty = properties.find(
+            (prop) => n.Property.check(prop) && n.Identifier.check(prop.key) && prop.key.name === 'newUserSetup'
+          );
 
-      // Write the updated configuration back to config.json
-      await fs.writeFile(configFilePath, JSON.stringify(config, null, 2), 'utf8');
-      this.log(`      Updated config.json in ${dirPath}`);
+          const newUserSetupValue = b.objectExpression([
+            b.property('init', b.identifier('userName'), b.literal(userName || '')),
+            b.property('init', b.identifier('firstName'), b.literal(firstName || '')),
+            b.property('init', b.identifier('lastName'), b.literal(lastName || '')),
+            b.property('init', b.identifier('email'), b.literal(email || '')),
+          ]);
+
+          if (newUserSetupProperty && newUserSetupProperty.type === 'Property') {
+            // Overwrite the existing newUserSetup key with an object
+            newUserSetupProperty.value = newUserSetupValue;
+          } else {
+            // Add a new newUserSetup key
+            properties.push(b.property('init', b.identifier('newUserSetup'), newUserSetupValue));
+          }
+
+          return false; // Stop traversing this path
+        },
+      });
+
+      // Serialize the AST back to a string
+      const updatedConfigFileContent = recast.prettyPrint(ast).code;
+
+      // Write the updated content back to the file
+      await fs.writeFile('mj.config.cjs', updatedConfigFileContent);
+      this.log(`      Updated mj.config.cjs`);
     } catch (err) {
       this.logToStderr('Error:', err);
     }

@@ -25,7 +25,7 @@ const orm = (entities: Array<string>): DataSourceOptions => {
   if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
     ormConfig.options = {
       ...ormConfig.options,
-      trustServerCertificate: dbTrustServerCertificate,
+      trustServerCertificate: dbTrustServerCertificate === 'Y',
     };
   }
 

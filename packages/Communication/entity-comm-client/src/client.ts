@@ -93,8 +93,9 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
     }
 
     protected getTemplateValues(template: TemplateEntityExtended) {
-        if (!template)
+        if (!template){
             return undefined;
+        }
 
         return {
           ID: template.ID,

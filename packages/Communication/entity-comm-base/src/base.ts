@@ -55,9 +55,14 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+
+        if(!CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields){
+            await CommunicationEngineBase.Instance.Config(false, contextUser);
+        }
+
         // post-process the fields to be linked to the message types they're part of 
-        this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields;
-        this._Metadata.EntityCommunicationMessageTypes = <EntityCommunicationMessageTypeExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes;
+        this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
+        this._Metadata.EntityCommunicationMessageTypes = <EntityCommunicationMessageTypeExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
         this.EntityCommunicationMessageTypes.forEach(m => {
             m.CommunicationFields = this.EntityCommunicationFields.filter(f => f.EntityCommunicationMessageTypeID === m.ID);
         });

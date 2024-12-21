@@ -27,7 +27,7 @@
             </tbody>
         </table>         
 
-        <mj-tabstrip mjFillContainer [bottomMargin]="150">
+        <mj-tabstrip mjFillContainer [bottomMargin]="150" (ResizeContainer)="InvokeManualResize()">
             <mj-tab>
                 Users
             </mj-tab>

@@ -21,6 +21,8 @@
     "build": "npm run build:stream",
     "build:stream": "turbo --log-order=stream build --filter=\"@memberjunction*\"",
     "build:generated": "turbo --log-order=stream build --filter=\"mj_generatedentities\" --filter=\"mj_generatedactions\"",
+    "build:api": "turbo --log-order=stream build --filter=\"mj_api\"",
+    "build:explorer": "turbo --log-order=stream build --filter=\"mj_explorer\"",
     "build:table": "turbo build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"@memberjunction*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
@@ -54,7 +56,7 @@
     "eslint-plugin-prettier": "5.1.3",
     "prettier": "^3.3.1",
     "syncpack": "^12.3.2",
-    "turbo": "2.0.3",
+    "turbo": "^2.3.3",
     "typedoc": "~0.25.12",
     "typedoc-plugin-missing-exports": "~2.2.0"
   }
