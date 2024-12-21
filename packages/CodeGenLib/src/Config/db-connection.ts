@@ -17,8 +17,7 @@ const ormConfig: SqlServerConnectionOptions = {
   requestTimeout: 120000, // long timeout for code gen, some queries are long at times...
   options: {
     instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
-    trustServerCertificate:
-      dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined ? dbTrustServerCertificate : undefined,
+    trustServerCertificate: dbTrustServerCertificate === 'Y',
   },
 };
 
@@ -32,8 +31,7 @@ export const sqlConfig: mssql.config = {
     requestTimeout: 120000, // long timeout for code gen, some queries are long at times...
     encrypt: true,
     instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
-    trustServerCertificate:
-      dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined ? dbTrustServerCertificate : undefined,
+    trustServerCertificate: dbTrustServerCertificate === 'Y',
   },
 };
 

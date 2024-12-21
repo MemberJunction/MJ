@@ -19,7 +19,7 @@ const mjConfigSchema = z.object({
   codeGenLogin: z.string(),
   codeGenPassword: z.string(),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
-  dbTrustServerCertificate: z.enum(['Y', 'N']).default('Y'),
+  dbTrustServerCertificate: z.coerce.boolean().default(false),
   coreSchema: z.string().optional().default('__mj'),
   cleanDisabled: z.boolean().optional().default(true),
   mjRepoUrl: z.string().url().catch(MJ_REPO_URL),
@@ -35,7 +35,7 @@ export const updatedConfig = () => {
 
 export const createFlywayUrl = (mjConfig: MJConfig) => {
   return `jdbc:sqlserver://${mjConfig.dbHost}:${mjConfig.dbPort}; databaseName=${mjConfig.dbDatabase}${
-    mjConfig.dbTrustServerCertificate === 'Y' ? '; trustServerCertificate=true' : ''
+    mjConfig.dbTrustServerCertificate ? '; trustServerCertificate=true' : ''
   }`;
 };
 

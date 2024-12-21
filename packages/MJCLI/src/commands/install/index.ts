@@ -22,7 +22,10 @@ type Config = z.infer<typeof configSchema>;
 const configSchema = z.object({
   dbUrl: z.string().min(1),
   dbInstance: z.string(),
-  dbTrustServerCertificate: z.enum(['Y', 'N']),
+  dbTrustServerCertificate: z.coerce
+    .boolean()
+    .default(false)
+    .transform((v) => (v ? 'Y' : 'N')),
   dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).int().positive(),
   codeGenLogin: z.string(),
@@ -36,7 +39,7 @@ const configSchema = z.object({
   auth0ClientId: z.string().optional(),
   auth0ClientSecret: z.string().optional(),
   auth0Domain: z.string().optional(),
-  createNewUser: z.enum(['Y', 'N']).optional(),
+  createNewUser: z.coerce.boolean().optional(),
   userEmail: z.string().email().or(z.literal('')).optional().default(''),
   userFirstName: z.string().optional(),
   userLastName: z.string().optional(),
@@ -126,7 +129,7 @@ TENANT_ID=${this.userConfig.msalTenantId}
 AUTH0_CLIENT_ID=${this.userConfig.auth0ClientId}
 AUTH0_CLIENT_SECRET=${this.userConfig.auth0ClientSecret}
 AUTH0_DOMAIN=${this.userConfig.auth0Domain}
- 
+
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW
 ASK_SKIP_API_URL = 'http://localhost:8000'

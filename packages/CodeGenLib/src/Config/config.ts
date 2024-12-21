@@ -77,7 +77,7 @@ const newUserSetupSchema = z.object({
   Email: z.string(),
   Roles: z.string().array().default(['Developer', 'Integration', 'UI']),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
-  UserApplications: z.array(z.string()).optional().default([])
+  UserApplications: z.array(z.string()).optional().default([]),
 });
 
 export type AdvancedGenerationFeatureOption = z.infer<typeof advancedGenerationFeatureOptionSchema>;
@@ -270,13 +270,16 @@ const configInfoSchema = z.object({
   codeGenPassword: z.string(),
   dbDatabase: z.string(),
   dbInstanceName: z.string().nullish(),
-  dbTrustServerCertificate: z.coerce.boolean().default(false),
+  dbTrustServerCertificate: z.coerce
+    .boolean()
+    .default(false)
+    .transform((v) => (v ? 'Y' : 'N')),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
 });
 export let currentWorkingDirectory: string;
-export const configInfo = configInfoSchema.parse(configSearchResult?.config);
+export const configInfo = configInfoSchema.optional().catch(undefined).parse(configSearchResult?.config) ?? ({} as ConfigInfo);
 export const { mjCoreSchema, dbDatabase } = configInfo;
 
 export function initializeConfig(cwd: string): ConfigInfo {
@@ -284,11 +287,13 @@ export function initializeConfig(cwd: string): ConfigInfo {
 
   const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
 
-  if (!configInfo && !maybeConfig.success) {
+  const config = maybeConfig.success ? maybeConfig.data : configInfo;
+
+  if (config === undefined) {
     throw new Error('No configuration found');
   }
 
-  return maybeConfig.success ? maybeConfig.data : configInfo;
+  return config;
 }
 
 export function outputDir(type: string, useLocalDirectoryIfMissing: boolean): string | null {
@@ -315,7 +320,7 @@ export function outputOptions(type: string): OutputOptionInfo[] | null {
 }
 
 export function outputOptionValue(type: string, optionName: string, defaultValue?: any): any {
-  const outputInfo = configInfo.output.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
+  const outputInfo = configInfo.output?.find((o) => o.type.trim().toUpperCase() === type.trim().toUpperCase());
   if (outputInfo && outputInfo.options) {
     const theOption = outputInfo.options.find((o) => o.name.trim().toUpperCase() === optionName.trim().toUpperCase());
     if (theOption) return theOption.value;
