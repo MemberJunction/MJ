@@ -123,6 +123,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * The GraphQLDataProvider uses a prefix for local storage that is equal to the URL of the GraphQL endpoint. This is because the GraphQLDataProvider can be configured multiple times with different URLs and each
+     * configuration will have its own local storage. This is useful when you want to have multiple connections to different servers and you don't want the local storage to be shared between them. The URL is 
+     * normalized to remove special characters and replace anything other than alphanumeric characters with an underscore.
+     */
+    protected override get LocalStoragePrefix(): string {
+        const replacementString = this._configData.URL.replace(/[^a-zA-Z0-9]/g, '_');
+        return replacementString + "."; // add a period at the end to separate the prefix from the key
+    }
+
+    /**
      * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
      * will affect all callers to the GraphQLDataProvider including via wrappers like the Metadata class. If separateConnection is true, then the instance variables are set
      * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
@@ -139,6 +149,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._sessionId = newUUID;
                 this._configData = configData;
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId);
+                return super.Config(configData); // now parent class can do it's config
             }
             else {
                 if (GraphQLDataProvider.Instance._sessionId === undefined)
@@ -167,7 +178,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     protected async GetCurrentUser(): Promise<UserInfo> {
-        const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
+        const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
             const u = this.ConvertBackToMJFields(d.CurrentUser);
@@ -193,7 +204,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {ReportID: params.ReportID} );
+        const result = await this.ExecuteGQL(query, {ReportID: params.ReportID} );
         if (result && result.GetReportData)
             return {
                 ReportID: params.ReportID,
@@ -223,7 +234,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
+        const result = await this.ExecuteGQL(query, {QueryID: params.QueryID} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,
@@ -317,7 +328,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                 }`
 
-                const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+                const viewData = await this.ExecuteGQL(query, {input: innerParams} );
                 if (viewData && viewData[qName]) {
                     // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                     // so that the caller gets back what they expect
@@ -436,7 +447,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }`;
 
-            const viewData: unknown = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
+            const viewData: unknown = await this.ExecuteGQL(query, {input: innerParams} );
             if (viewData && viewData["RunViews"]) {
                 // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
                 // so that the caller gets back what they expect
@@ -609,7 +620,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entityName: entityName,
                 CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
             };
-            const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
+            const data = await this.ExecuteGQL(query, vars);
 
             return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
         }
@@ -665,7 +676,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return recordID.Copy();
             })
         }
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
+        const data = await this.ExecuteGQL(query, {params: request});
 
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;
@@ -714,7 +725,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             // now we have our query built, execute it
-            const data = await GraphQLDataProvider.ExecuteGQL(mutation, {request: newRequest});
+            const data = await this.ExecuteGQL(mutation, {request: newRequest});
 
             return data?.MergeRecords; // shape of the result should exactly match the RecordDependency type
         }
@@ -845,7 +856,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             else {
                 // not part of a transaction group, so just go for it and send across our GQL
-                const d = await GraphQLDataProvider.ExecuteGQL(outer, vars)
+                const d = await this.ExecuteGQL(outer, vars)
                 if (d && d[type + entity.EntityInfo.ClassName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
@@ -915,7 +926,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             `;
 
-            const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
+            const d = await this.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
                 return this.ConvertBackToMJFields(d[entity.EntityInfo.ClassName]);
@@ -1053,7 +1064,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
             else {
                 // no transaction just go for it
-                const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
+                const d = await this.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
                     const data = d[queryName];
                     for (let key of entity.PrimaryKey.KeyValuePairs) {
@@ -1112,7 +1123,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Results
             }
         }`
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters });
+        const data = await this.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters });
         if (data && data.GetDatasetByName && data.GetDatasetByName.Success) {
             return {
                 DatasetID: data.GetDatasetByName.DatasetID,
@@ -1146,7 +1157,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 EntityUpdateDates
             }
         }`
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
+        const data = await this.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
         if (data && data.GetDatasetStatusByName && data.GetDatasetStatusByName.Success) {
             return {
                 DatasetID: data.GetDatasetStatusByName.DatasetID,
@@ -1170,7 +1181,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new GraphQLTransactionGroup();
+        return new GraphQLTransactionGroup(this);
     }
 
     public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
@@ -1189,7 +1200,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
+        const data = await this.ExecuteGQL(query,  {params: {
                                                                             UserID: userId,
                                                                             EntityID: e.ID,
                                                                             CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
@@ -1212,7 +1223,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
+        const data = await this.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId,
                                                                                 EntityID: e.ID,
                                                                                 CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)},
@@ -1236,7 +1247,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {
+        const data = await this.ExecuteGQL(query, {
                                                                     EntityName: entityName,
                                                                     CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(primaryKey.KeyValuePairs)}
                                                                 });
@@ -1263,7 +1274,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => {
+        const data = await this.ExecuteGQL(query,  {info: info.map(i => {
             return {
                      EntityName: i.EntityName,
                      CompositeKey: {KeyValuePairs: this.ensureKeyValuePairValueIsString(i.CompositeKey.KeyValuePairs)}
@@ -1567,6 +1578,11 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
 }
 
 export class GraphQLTransactionGroup extends TransactionGroupBase {
+    private _provider: GraphQLDataProvider;
+    constructor(provider: GraphQLDataProvider) {
+        super();
+    }
+
     protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
         // iterate through each instruction and build up the combined query string
         // and the combined variables object
@@ -1599,7 +1615,7 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         }
 
         combinedQuery = `mutation TransactionGroup(${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
-        const execResults = await GraphQLDataProvider.ExecuteGQL(combinedQuery, combinedVars)
+        const execResults = await this._provider.ExecuteGQL(combinedQuery, combinedVars)
         const returnResults: TransactionResult[] = [];
         for (let i = 0; i < items.length; i++) {
             /// NEED TO TEST TO SEE WHAT ORDER WE GET RESULTS BACK AS
