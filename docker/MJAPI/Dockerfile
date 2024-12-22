@@ -1,4 +1,5 @@
-FROM --platform=linux/amd64 openjdk:17-slim
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=$TARGETPLATFORM openjdk:17-slim
 
 ARG FLYWAY_VERSION=9.0.0
 ARG TARGETARCH
