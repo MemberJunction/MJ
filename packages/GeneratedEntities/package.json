@@ -20,8 +20,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.13.3",
-    "@memberjunction/global": "2.13.3",
+    "@memberjunction/core": "2.13.4",
+    "@memberjunction/global": "2.13.4",
     "zod": "^3.23.8"
   }
 }

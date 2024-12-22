@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-client",
-  "version": "2.13.3",
+  "version": "2.13.4",
   "description": "MemberJunction: Client for interacting with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,10 +19,10 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.13.3",
-    "@memberjunction/core": "2.13.3",
-    "@memberjunction/core-entities": "2.13.3",
-    "@memberjunction/entity-communications-base": "2.13.3",
-    "@memberjunction/graphql-dataprovider": "2.13.3"
+    "@memberjunction/global": "2.13.4",
+    "@memberjunction/core": "2.13.4",
+    "@memberjunction/core-entities": "2.13.4",
+    "@memberjunction/entity-communications-base": "2.13.4",
+    "@memberjunction/graphql-dataprovider": "2.13.4"
   }
 }

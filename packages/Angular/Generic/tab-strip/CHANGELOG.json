@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-tabstrip",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/ng-tabstrip_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-tabstrip",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 21 Dec 2024 21:46:44 GMT",
       "version": "2.13.3",
       "tag": "@memberjunction/ng-tabstrip_v2.13.3",

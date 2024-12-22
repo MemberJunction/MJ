@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/ng-auth-services
 
-This log was last generated on Sat, 21 Dec 2024 21:46:45 GMT and should not be manually modified.
+This log was last generated on Sun, 22 Dec 2024 04:19:34 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.4
+
+Sun, 22 Dec 2024 04:19:34 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.13.4
 
 ## 2.13.3
 
