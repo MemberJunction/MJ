@@ -20,22 +20,22 @@
   },
   "peerDependencies": {
     "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2"
+    "@angular/core": "18.0.2",
+    "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "tslib": "^2.3.0",
-    "@angular/forms": "18.0.2",
     "@memberjunction/core-entities": "2.13.4",
     "@memberjunction/core": "2.13.4",
     "@memberjunction/global": "2.13.4",
     "@memberjunction/graphql-dataprovider": "2.13.4",
     "@memberjunction/skip-types": "2.13.4",
     "@memberjunction/ng-container-directives": "2.13.4",
-    "@memberjunction/ng-tabstrip": "2.13.4",
+    "tslib": "^2.3.0",
     "angular-plotly.js": "^5.2.2",
     "plotly.js-dist-min": "^2.3.4",
     "@types/plotly.js-dist-min": "^2.3.4",
-    "@angular/cdk": "18.0.2"
+    "@angular/cdk": "18.0.2",
+    "ngx-markdown": "18.0.0"
   },
   "sideEffects": false
 }
