@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { OverlayModule } from '@angular/cdk/overlay';
+import { FormsModule } from '@angular/forms';
 
 /*********************************************/
 // Kendo UI Angular imports
@@ -23,34 +24,35 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
 
 /*********************************************/
 // Markdown
-import { MarkdownModule } from 'ngx-markdown';
+//import { MarkdownModule } from 'ngx-markdown';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { ChatModule } from '@memberjunction/ng-chat';
+import { DataContextModule } from '@memberjunction/ng-data-context';
 
 // LOCAL
 import { SkipChatComponent } from './skip-chat/skip-chat.component';
 import { SkipSingleMessageComponent } from './skip-single-message/skip-single-message.component';
 import { SkipDynamicReportWrapperComponent } from './dynamic-report/skip-dynamic-report-wrapper';
-import { SkipDynamicReportComponent } from './dynamic-report/dynamic-report';
+import { SkipDynamicLinearReportComponent } from './dynamic-report/linear-report';
 import { SkipDynamicChartComponent } from './dynamic-report/dynamic-chart';
 import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
-import { SkipDynamicReportDrillDownComponent } from './dynamic-report/dynamic-drill-down';
 
 
 @NgModule({
   declarations: [
     SkipChatComponent,
     SkipSingleMessageComponent,
-    SkipDynamicReportComponent,
+    SkipDynamicLinearReportComponent,
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicReportDrillDownComponent
   ],
   imports: [
     CommonModule,
     LayoutModule,
+    FormsModule,
     IndicatorsModule,
     DialogsModule,
     InputsModule,
@@ -59,22 +61,22 @@ import { SkipDynamicReportDrillDownComponent } from './dynamic-report/dynamic-dr
     ListViewModule,
     DropDownsModule,
     GridModule,
+    ButtonsModule,
     PlotlyViaCDNModule,
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
     ChatModule,
-    MarkdownModule.forRoot(),
+    //MarkdownModule.forRoot(),
 
   ],
   exports: [
     SkipChatComponent,
     SkipSingleMessageComponent,
-    SkipDynamicReportComponent,
+    SkipDynamicLinearReportComponent,
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicReportDrillDownComponent
   ]
 })
 export class MJSkipChatModule { }

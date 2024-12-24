@@ -4,8 +4,8 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
-import { DrillDownInfo } from './dynamic-drill-down';
-import { SkipDynamicReportComponent } from './dynamic-report';
+import { SkipDynamicLinearReportComponent } from './linear-report';
+import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-dynamic-chart',
@@ -84,7 +84,7 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
         if (drillDown && drillDownValue && drillDownValue.length > 0 ) {
           // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
           // we can navigate to the drill down view
-          const entityName = SkipDynamicReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+          const entityName = SkipDynamicLinearReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
 
           if (entityName) {
             const filterSQL = drillDown.filters.map(f => {

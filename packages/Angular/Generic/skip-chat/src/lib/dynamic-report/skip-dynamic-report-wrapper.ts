@@ -3,7 +3,7 @@ import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 
 @Component({
-  selector: 'skip-skip-dynamic-report',
+  selector: 'skip-dynamic-report',
   styles: [
     `.report-tab-title { margin-left: 10px;}`,
     `.skip-dynamic-report-container {
@@ -13,17 +13,15 @@ import { DataContext } from '@memberjunction/data-context';
     ],
   template: `
 <div class='skip-dynamic-report-wrapper'> 
-    <skip-dynamic-report #theReport
+    <skip-dynamic-linear-report
         [SkipData]="SkipData"
         [ConversationID]="ConversationID"
         [ConversationName]="ConversationName"
         [ConversationDetailID]="ConversationDetailID"
         [DataContext]="DataContext"
         [ShowCreateReportButton]="true"
-        [LayoutMode]="'linear'"
-        [LinearExpandAll]="true"
-        [AllowDrillDown]="AllowDrillDown"
-    ></skip-dynamic-report>
+        [ExpandAll]="true"
+    ></skip-dynamic-linear-report>
 </div>
 ` 
 })
