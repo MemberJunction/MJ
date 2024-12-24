@@ -2,6 +2,72 @@
   "name": "@memberjunction/ai-recommendations-rex",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 21 Dec 2024 21:46:45 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "7ecdaacb8dc4566af6ad1427ebea22f19f10193d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "302ebaec8bbdcf43bf07020a656d5e57efa9b0bf",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/ai-recommendations-rex_v2.13.2",

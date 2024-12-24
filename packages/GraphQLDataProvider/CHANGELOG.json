@@ -2,6 +2,84 @@
   "name": "@memberjunction/graphql-dataprovider",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/graphql-dataprovider_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 21 Dec 2024 21:46:45 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/graphql-dataprovider_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "b96b877d729369fa4c229f9e0cc640480e97668c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "30e19b2d29a4aa6e73952d5f5e21bcf4b47543fd",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "aaf722b22541626391bd2d2731cba6e0b86595be",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "a9bc3a84fcdbd3f853bfefacdcc6476c0518a294",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/graphql-dataprovider_v2.13.2",

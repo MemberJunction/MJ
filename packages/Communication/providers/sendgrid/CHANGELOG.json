@@ -2,6 +2,72 @@
   "name": "@memberjunction/communication-sendgrid",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/communication-sendgrid_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/global to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core-entities to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/communication-types to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 21 Dec 2024 21:46:45 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/communication-sendgrid_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core-entities to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/communication-types to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/communication-sendgrid_v2.13.2",

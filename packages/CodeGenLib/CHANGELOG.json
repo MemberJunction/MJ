@@ -2,6 +2,126 @@
   "name": "@memberjunction/codegen-lib",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/codegen-lib_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "6b3221aa4d9e999408ad488bc38c44faff4abedc",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/ai to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/actions to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core-entities to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/global to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 21 Dec 2024 21:46:44 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/codegen-lib_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "69ce31ba3abdfb2c9339692f5f2666405bfe194f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "b96b877d729369fa4c229f9e0cc640480e97668c",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "0bf8b13273fec691faa9dc89446d63b6540da3e3",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "cdf2672f138eaf3f8842443b423a97db61f196d8",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/ai to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/actions to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core-entities to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/codegen-lib_v2.13.2",

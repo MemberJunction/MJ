@@ -2,6 +2,78 @@
   "name": "@memberjunction/ai-vectors-pinecone",
   "entries": [
     {
+      "date": "Sun, 22 Dec 2024 04:19:34 GMT",
+      "version": "2.13.4",
+      "tag": "@memberjunction/ai-vectors-pinecone_v2.13.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/aiengine to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/core to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/global to v2.13.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/ai-vectors to v2.13.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Sat, 21 Dec 2024 21:46:44 GMT",
+      "version": "2.13.3",
+      "tag": "@memberjunction/ai-vectors-pinecone_v2.13.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "commit": "5660ebf512c051f941ac1c886bf809f7a022d625",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/aiengine to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/core to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/global to v2.13.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors-pinecone",
+            "comment": "Bump @memberjunction/ai-vectors to v2.13.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 03 Dec 2024 23:30:43 GMT",
       "version": "2.13.2",
       "tag": "@memberjunction/ai-vectors-pinecone_v2.13.2",

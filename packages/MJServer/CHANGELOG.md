@@ -1,8 +1,67 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Tue, 03 Dec 2024 23:30:43 GMT and should not be manually modified.
+This log was last generated on Sun, 22 Dec 2024 04:19:34 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.13.4
+
+Sun, 22 Dec 2024 04:19:34 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.13.4
+- Bump @memberjunction/ai to v2.13.4
+- Bump @memberjunction/ai-mistral to v2.13.4
+- Bump @memberjunction/ai-openai to v2.13.4
+- Bump @memberjunction/ai-vectors-pinecone to v2.13.4
+- Bump @memberjunction/aiengine to v2.13.4
+- Bump @memberjunction/core to v2.13.4
+- Bump @memberjunction/core-actions to v2.13.4
+- Bump @memberjunction/core-entities to v2.13.4
+- Bump @memberjunction/data-context to v2.13.4
+- Bump @memberjunction/data-context-server to v2.13.4
+- Bump @memberjunction/doc-utils to v2.13.4
+- Bump @memberjunction/entity-communications-server to v2.13.4
+- Bump @memberjunction/external-change-detection to v2.13.4
+- Bump @memberjunction/global to v2.13.4
+- Bump @memberjunction/queue to v2.13.4
+- Bump @memberjunction/skip-types to v2.13.4
+- Bump @memberjunction/sqlserver-dataprovider to v2.13.4
+- Bump @memberjunction/graphql-dataprovider to v2.13.4
+- Bump @memberjunction/storage to v2.13.4
+- Bump @memberjunction/templates to v2.13.4
+
+## 2.13.3
+
+Sat, 21 Dec 2024 21:46:44 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig@memberjunction.com)
+- Applying package updates [skip ci] (craig@memberjunction.com)
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/actions to v2.13.3
+- Bump @memberjunction/ai to v2.13.3
+- Bump @memberjunction/ai-mistral to v2.13.3
+- Bump @memberjunction/ai-openai to v2.13.3
+- Bump @memberjunction/ai-vectors-pinecone to v2.13.3
+- Bump @memberjunction/aiengine to v2.13.3
+- Bump @memberjunction/core to v2.13.3
+- Bump @memberjunction/core-actions to v2.13.3
+- Bump @memberjunction/core-entities to v2.13.3
+- Bump @memberjunction/data-context to v2.13.3
+- Bump @memberjunction/data-context-server to v2.13.3
+- Bump @memberjunction/doc-utils to v2.13.3
+- Bump @memberjunction/entity-communications-server to v2.13.3
+- Bump @memberjunction/external-change-detection to v2.13.3
+- Bump @memberjunction/global to v2.13.3
+- Bump @memberjunction/queue to v2.13.3
+- Bump @memberjunction/skip-types to v2.13.3
+- Bump @memberjunction/sqlserver-dataprovider to v2.13.3
+- Bump @memberjunction/graphql-dataprovider to v2.13.3
+- Bump @memberjunction/storage to v2.13.3
+- Bump @memberjunction/templates to v2.13.3
 
 ## 2.13.2
 

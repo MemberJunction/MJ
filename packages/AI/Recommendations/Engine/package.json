@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-recommendations",
-  "version": "2.13.2",
+  "version": "2.13.4",
   "description": "MemberJunction Recommendations Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.13.2",
-    "@memberjunction/core": "2.13.2",
-    "@memberjunction/core-entities": "2.13.2",
-    "@memberjunction/ai": "2.13.2"
+    "@memberjunction/global": "2.13.4",
+    "@memberjunction/core": "2.13.4",
+    "@memberjunction/core-entities": "2.13.4",
+    "@memberjunction/ai": "2.13.4"
   }
 }
