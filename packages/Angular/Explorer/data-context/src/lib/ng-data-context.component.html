@@ -1,31 +1,35 @@
-<div #wrapper>
-    <kendo-loader *ngIf="showloader" type="converging-spinner" ></kendo-loader>
-    <div class="k-d-flex k-flex-col k-justify-content-between k-h-full" #dialogContainer *ngIf="!showloader">
-        <div *ngIf="dataContextRecord">
-            <div>
-                ID: {{dataContextRecord.ID}}
+<div>
+    @if (!showLoader) {
+        <div class="k-d-flex k-flex-col k-justify-content-between k-h-full">
+            <div *ngIf="dataContextRecord">
+                <div>
+                    ID: {{dataContextRecord.ID}}
+                </div>
+                <div>
+                    Name: {{dataContextRecord.Name}}
+                </div>
+                <div>
+                    Description: {{dataContextRecord.Description}}
+                </div>
             </div>
-            <div>
-                Name: {{dataContextRecord.Name}}
+            <div style="margin-top: 10px;">
+                <b>Items</b>
             </div>
-            <div>
-                Description: {{dataContextRecord.Description}}
+            <div class="kendo-grid-container">
+                <kendo-grid 
+                    [kendoGridBinding]="dataContextItems" 
+                    scrollable="virtual" 
+                    [pageSize]="100" 
+                    [sortable]="true"
+                    [loading]="showLoader" 
+                    [resizable]="true" 
+                    [navigable]="true"
+                >
+                </kendo-grid>
             </div>
-        </div>
-        <div style="margin-top: 10px;">
-            <b>Items</b>
-        </div>
-        <div class="kendo-grid-container">
-            <kendo-grid 
-                [kendoGridBinding]="dataContextItems" 
-                scrollable="virtual" 
-                [pageSize]="100" 
-                [sortable]="true"
-                [loading]="showloader" 
-                [resizable]="true" 
-                [navigable]="true"
-            >
-            </kendo-grid>
-        </div>
-    </div>
+        </div>    
+    }
+    @else {
+        <kendo-loader type="converging-spinner" ></kendo-loader>
+    }
 </div>

@@ -8,7 +8,7 @@ import { DataContextEntity } from '@memberjunction/core-entities';
   styleUrls: ['./ng-data-context.component.css']
 })
 export class DataContextComponent implements OnInit {
-  public showloader: boolean = false;
+  public showLoader: boolean = false;
   @Input() dataContextId!: string;
   public dataContextRecord?: DataContextEntity;
 
@@ -16,7 +16,7 @@ export class DataContextComponent implements OnInit {
  
   ngOnInit(): void {
     if(this.dataContextId){
-      this.showloader = true;
+      this.showLoader = true;
       this.LoadDataContext(this.dataContextId);
     }
   }
@@ -36,10 +36,10 @@ export class DataContextComponent implements OnInit {
         });
       if(response.Success){
         this.dataContextItems = response.Results;
-        this.showloader = false;
+        this.showLoader = false;
       } else {
         LogError(response.ErrorMessage);
-        this.showloader = false;
+        this.showLoader = false;
       }
     }
   }
