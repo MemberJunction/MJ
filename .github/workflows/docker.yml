@@ -36,7 +36,7 @@ jobs:
           push: true
           tags: |
             memberjunction/api:latest
-            memberjunction/api:v{{ steps.version.outputs.VERSION }}
+            memberjunction/api:v${{ steps.version.outputs.VERSION }}
           platforms: |
             linux/amd64
             linux/arm64
