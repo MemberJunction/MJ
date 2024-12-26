@@ -19,6 +19,8 @@ WORKDIR /app
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
+# Install pm2 globally
+RUN npm install -g pm2
 
 # Copy package.json and package-lock.json from the root directory
 COPY package.json turbo.json ./
@@ -38,7 +40,7 @@ COPY packages/MJAPI ./packages/MJAPI/
 # Build the MJAPI application
 RUN npm run build:api
 
-COPY docker/MJAPI/docker.config.cjs ./mj.config.js
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 COPY migrations ./migrations
 COPY ["[SQL Scripts]", "./[SQL Scripts]"]
 

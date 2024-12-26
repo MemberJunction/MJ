@@ -119,25 +119,25 @@ const codegenConfig = {
     ],
   },
   output: [
-    { type: 'GraphQLServer', directory: './MJAPI/src/generated' },
-    { type: 'ActionSubclasses', directory: './GeneratedActions/src/generated' },
-    { type: 'EntitySubclasses', directory: './GeneratedEntities/src/generated' },
+    { type: 'GraphQLServer', directory: './packages/MJAPI/src/generated' },
+    { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
+    { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
   ],
   commands: [
     {
-      workingDirectory: './GeneratedEntities',
+      workingDirectory: './packages/GeneratedEntities',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './GeneratedActions',
+      workingDirectory: './packages/GeneratedActions',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './MJAPI',
+      workingDirectory: './packages/MJAPI',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
