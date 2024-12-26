@@ -6,19 +6,20 @@ import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { DrillDownInfo, DynamicReportDrillDownComponent } from './dynamic-drill-down';
-import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
+import { DynamicReportDrillDownComponent } from './dynamic-drill-down';
+import { TabEvent } from '@memberjunction/ng-tabstrip';
+import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
 // info from the database. This can also be used directly to render a dynamic report that is NOT saved in the DB
 // which is what Skip does in its conversational UI
 
 @Component({
-  selector: 'mj-dynamic-report',
-  styleUrls: ['./dynamic-report.css'],
-  templateUrl: './dynamic-report.html',
+  selector: 'skip-dynamic-tabbed-report',
+  styleUrls: ['./dynamic-tabbed-report.css'],
+  templateUrl: './dynamic-tabbed-report.html',
 })
-export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
+export class SkipDynamicTabbedReportComponent implements AfterViewInit, AfterViewChecked {
   @Input() ShowDetailsTab: boolean = false;
   @Input() ShowCreateReportButton: boolean = false;
   @Input() ConversationID: string | null = null;
@@ -26,8 +27,6 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   @Input() ConversationDetailID: string | null = null;
   @Input() DataContext!: DataContext;
   @Input() ReportEntity?: ReportEntity;
-  @Input() LayoutMode: 'linear' | 'tabs' = 'tabs';
-  @Input() LinearExpandAll: boolean = true;
   @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() AllowDrillDown: boolean = true;
 
@@ -51,7 +50,7 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
       if (this.ShowCreateReportButton) {
         // check to see if a report has been created that is linked to this ConvoID/ConvoDetailID
         // if so don't allow the user to create another report, show a link to the existing one
-        const cachedItem = DynamicReportComponent._reportCache.find(
+        const cachedItem = SkipDynamicTabbedReportComponent._reportCache.find(
           (x) => x.conversationId === this.ConversationID && x.conversationDetailId === this.ConversationDetailID
         );
         if (cachedItem) {
@@ -68,7 +67,7 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
             this.matchingReportID = item.ID;
             this.matchingReportName = item.Name;
             // cache for future to avoid db call
-            DynamicReportComponent._reportCache.push({
+            SkipDynamicTabbedReportComponent._reportCache.push({
               reportId: item.ID,
               conversationId: this.ConversationID,
               reportName: item.Name,

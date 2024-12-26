@@ -1,7 +1,7 @@
 @if(SkipData) {
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 
                         (click)="askCreateReport()" 
-                        [disabled]="isCreatingReport"
+                        [disabled]="IsCreatingReport"
                         class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">

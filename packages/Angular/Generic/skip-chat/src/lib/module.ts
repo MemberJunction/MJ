@@ -79,4 +79,4 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     SkipDynamicGridComponent,
   ]
 })
-export class MJSkipChatModule { }
+export class SkipChatModule { }

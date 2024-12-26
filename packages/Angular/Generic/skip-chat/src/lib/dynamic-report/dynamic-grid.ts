@@ -2,7 +2,7 @@ import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
-import { LogError } from '@memberjunction/core';
+import { GetEntityNameFromSchemaAndViewString, LogError } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared'
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { SkipDynamicLinearReportComponent } from './linear-report';
@@ -195,7 +195,7 @@ export class SkipDynamicGridComponent implements AfterViewInit {
       if (drillDown && rowSelected ) {
         // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
         // we can navigate to the drill down view
-        const entityName = SkipDynamicLinearReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+        const entityName = GetEntityNameFromSchemaAndViewString(drillDown.viewName);
 
         if (entityName) {
           const filterSQL = drillDown.filters.map(f => {
