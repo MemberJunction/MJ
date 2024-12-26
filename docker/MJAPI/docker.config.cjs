@@ -222,7 +222,7 @@ const config = {
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
 
   // Used only for MJAPI
-  graphqlPort: process.env.GRAPHQL_PORT ?? 4000,
+  graphqlPort: process.env.PORT ?? process.env.GRAPHQL_PORT ?? 4000,
   ___codeGenAPIURL: process.env.CODEGEN_API_URL,
   ___codeGenAPIPort: process.env.CODEGEN_API_PORT,
   ___codeGenAPISubmissionDelay: process.env.CODEGEN_API_SUBMISSION_DELAY,
