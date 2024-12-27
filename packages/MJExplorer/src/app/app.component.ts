@@ -45,17 +45,17 @@ export class AppComponent implements OnInit {
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
 
-        const testUrl = 'http://localhost:4050/'
-        const testwSUrl = 'ws://localhost:4050/'
-        const c2 = new GraphQLProviderConfigData(token, testUrl, testwSUrl, async () => {
-          const refresh$ = await this.authBase.refresh();
-          const claims = await lastValueFrom(refresh$);
-          const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
-          return token;
-        }, environment.MJ_CORE_SCHEMA_NAME);
-        const g2 = new GraphQLDataProvider();
-        await g2.Config(c2, true);
-        console.log(g2.Entities);
+        // const testUrl = 'http://localhost:4050/'
+        // const testwSUrl = 'ws://localhost:4050/'
+        // const c2 = new GraphQLProviderConfigData(token, testUrl, testwSUrl, async () => {
+        //   const refresh$ = await this.authBase.refresh();
+        //   const claims = await lastValueFrom(refresh$);
+        //   const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
+        //   return token;
+        // }, environment.MJ_CORE_SCHEMA_NAME);
+        // const g2 = new GraphQLDataProvider();
+        // await g2.Config(c2, true);
+        // console.log(g2.Entities);
 
         const end = Date.now();
         LogStatus(`GraphQL Client Setup took ${end - start}ms`);
