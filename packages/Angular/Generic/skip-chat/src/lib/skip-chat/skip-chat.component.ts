@@ -33,7 +33,7 @@ import { MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/g
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 
 @Component({
-  selector: 'mj-skip-chat',
+  selector: 'skip-chat',
   templateUrl: './skip-chat.component.html',
   styleUrls: ['./skip-chat.component.css'],
 })

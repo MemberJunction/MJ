@@ -42,11 +42,9 @@ import { SkipChatModule } from '@memberjunction/ng-skip-chat';
 
 /*********************************************/
 // Local Components 
-import { SkipChatComponent } from './lib/skip-chat/skip-chat.component' 
 import { SkipDynamicTabbedReportComponent } from './lib/dynamic-report/dynamic-tabbed-report';
 import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
 import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
-import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
 import { UserViewGridWithAnalysisComponent } from './public-api';
 import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
 import { SkipChatWithRecordComponent } from './lib/skip-chat-with-record/skip-chat-with-record.component';
@@ -55,13 +53,11 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
 
 @NgModule({
   declarations: [ 
-    SkipChatComponent,
     SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
     SkipChatWithRecordWindowComponent,
     SkipDynamicTabbedReportComponent,
-    SkipSingleMessageComponent,
     UserViewGridWithAnalysisComponent,
     DynamicReportDrillDownComponent
   ],
@@ -97,11 +93,9 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
     MarkdownModule.forRoot(),
   ],
   exports: [
-    SkipChatComponent,
     SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
-    SkipSingleMessageComponent,
     SkipDynamicTabbedReportComponent,
     UserViewGridWithAnalysisComponent,
     DynamicReportDrillDownComponent,

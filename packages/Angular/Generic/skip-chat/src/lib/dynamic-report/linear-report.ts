@@ -16,16 +16,12 @@ import { SkipDynamicReportBase } from './base-report';
   styleUrls: ['./linear-report.css'],
   templateUrl: './linear-report.html',
 })
-export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase implements AfterViewInit {
-  @Input() ShowCreateReportButton: boolean = false;
-  @Input() ConversationID: string | null = null;
-  @Input() ConversationName: string | null = null;
-  @Input() ConversationDetailID: string | null = null;
-  @Input() DataContext!: DataContext;
-  @Input() ReportEntity?: ReportEntity;
+export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
   @Input() ExpandAll: boolean = true;
-  @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
-  @Output() ManualResizeRequest = new EventEmitter<number>();
+  /**
+   * This event fires whenever the component has a click on a matching report link. 
+   * The provided parameter is the ID of the matching report.
+   */
   @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
   constructor(
@@ -34,12 +30,6 @@ export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase impl
     super(cdRef);
   } 
  
-  async ngAfterViewInit() {
-    await this.RefreshMatchingReport();
-    setTimeout(() => {
-      this.ManualResizeRequest.emit(250); // resize the tab strip and its contents after short delay
-    }, 100);
-  } 
 
   public clickMatchingReport() {
     if (this.matchingReportID !== null && this.matchingReportID.length > 0) {
