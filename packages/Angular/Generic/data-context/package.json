@@ -21,15 +21,12 @@
   "peerDependencies": {
     "@angular/common": "18.0.2",
     "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/router": "18.0.2",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
     "@memberjunction/core": "2.13.4",
     "@memberjunction/global": "2.13.4",
-    "@memberjunction/ng-compare-records": "2.13.4",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

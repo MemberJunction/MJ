@@ -2,9 +2,8 @@ import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Outpu
 import { UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
-import { SkipDynamicReportComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
+import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
-import { SharedService } from '@memberjunction/ng-shared';
  
 
 @Component({
@@ -34,7 +33,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     public SuggestedQuestionsClicked: boolean = false;
     public SuggestedAnswersClicked: boolean = false;
 
-    constructor (private sharedService: SharedService, private cdRef: ChangeDetectorRef) { }
+    constructor (private cdRef: ChangeDetectorRef) { }
 
     @ViewChild('reportContainer', { read: ViewContainerRef }) reportContainerRef!: ViewContainerRef;
 
@@ -102,7 +101,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     }
   
     public get AnalysisResult(): SkipAPIAnalysisCompleteResponse | undefined {
-      if (this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
+      if (this.IsAIMessage) {
         const resultObject = <SkipAPIResponse>JSON.parse(this.ConversationDetailRecord.Message);
         if (resultObject.success && resultObject.responsePhase === SkipResponsePhase.analysis_complete) {
           return <SkipAPIAnalysisCompleteResponse>resultObject;
@@ -132,7 +131,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
         if (resultObject.success) {
           if (resultObject.responsePhase ===  SkipResponsePhase.analysis_complete ) {
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
-            const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportComponent);
+            const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);
     
             // Pass the data to the new chart
             const report = componentRef.instance;
@@ -155,8 +154,10 @@ export class SkipSingleMessageComponent implements AfterViewInit {
       }
     }
 
-    public GetUserImageSource(): string | Blob {
-      return this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai' || this.ConversationDetailRecord.Role.trim().toLowerCase() === 'error' ? 'assets/Skip - Mark Only - Small.png' : this.UserImage
+    public GetUserImageSource(): string | Blob | undefined {
+      return this.IsAIMessage || this.ConversationDetailRecord.Role.trim().toLowerCase() === 'error' ? 
+                'assets/Skip - Mark Only - Small.png' : 
+                this.UserImage
     }
     public GetMessageRowCssClass(): string {
         if (this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai') {
@@ -172,9 +173,10 @@ export class SkipSingleMessageComponent implements AfterViewInit {
           return 'user-message';
     }    
 
-    public get UserImage() {
-        return this.sharedService.CurrentUserImage;
-    }    
+    /**
+     * Set this property in order to set the user image. This can either be a URL or a Blob
+     */
+    @Input() public UserImage: string | Blob | undefined = undefined;
 
     public get IsFirstMessageInConversation(): boolean {
         return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;

@@ -3,7 +3,7 @@ import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 
 @Component({
-  selector: 'mj-skip-dynamic-report',
+  selector: 'skip-dynamic-report',
   styles: [
     `.report-tab-title { margin-left: 10px;}`,
     `.skip-dynamic-report-container {
@@ -12,22 +12,20 @@ import { DataContext } from '@memberjunction/data-context';
     }`
     ],
   template: `
-<div class='skip-dynamic-report-container'> 
-    <mj-dynamic-report #theReport
+<div class='skip-dynamic-report-wrapper'> 
+    <skip-dynamic-linear-report
         [SkipData]="SkipData"
         [ConversationID]="ConversationID"
         [ConversationName]="ConversationName"
         [ConversationDetailID]="ConversationDetailID"
         [DataContext]="DataContext"
         [ShowCreateReportButton]="true"
-        [LayoutMode]="'linear'"
-        [LinearExpandAll]="true"
-        [AllowDrillDown]="AllowDrillDown"
-    ></mj-dynamic-report>
+        [ExpandAll]="true"
+    ></skip-dynamic-linear-report>
 </div>
 ` 
 })
-export class SkipDynamicReportComponent {
+export class SkipDynamicReportWrapperComponent {
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ConversationID: string | null = null;
     @Input() ConversationName: string | null = null;    

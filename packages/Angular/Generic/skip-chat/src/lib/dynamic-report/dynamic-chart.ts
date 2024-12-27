@@ -1,14 +1,14 @@
 import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { GetEntityNameFromSchemaAndViewString, Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
-import { DrillDownInfo } from './dynamic-drill-down';
-import { DynamicReportComponent } from './dynamic-report';
+import { SkipDynamicLinearReportComponent } from './linear-report';
+import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
-  selector: 'mj-dynamic-chart',
+  selector: 'skip-dynamic-chart',
   template: `
     <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">
       <span class="fa-regular fa-image"></span>
@@ -26,7 +26,7 @@ import { DynamicReportComponent } from './dynamic-report';
   `,
   styles: [`button { margin-top: 5px; margin-bottom: 5px;}`] 
 })
-export class DynamicChartComponent implements OnInit, OnDestroy {
+export class SkipDynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotData: any;
     @Input() plotLayout: any;
     @Input() defaultPlotHeight: number = 550;
@@ -84,7 +84,7 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
         if (drillDown && drillDownValue && drillDownValue.length > 0 ) {
           // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
           // we can navigate to the drill down view
-          const entityName = DynamicReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+          const entityName = GetEntityNameFromSchemaAndViewString(drillDown.viewName);
 
           if (entityName) {
             const filterSQL = drillDown.filters.map(f => {
@@ -147,57 +147,4 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
             }
         }
     }
-
-   
-    // TO DO
-    // below was used with Kendo charts, but we are now using Plotly
-    // we should wire this type of behavior up to Plotly too if we have the drill down info from Skip
-    //public onChartSeriesClick(e: SeriesClickEvent): void {
-        // try {
-        //     const drillDownValue = e.category; // contains the category for the clicked series item
-        //     const ddBaseViewField = this.SkipData?.DrillDownBaseViewField ;
-        //     const ddV = this.SkipData?.DrillDownView;
-        //     if (ddBaseViewField && ddV && ddBaseViewField.length > 0 && ddV.length > 0 && drillDownValue && drillDownValue.length > 0 ) {
-        //         // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
-        //         const md = new Metadata();
-        //         const e = md.Entities.find(x => x.BaseView.trim().toLowerCase() === ddV.trim().toLowerCase());
-        //         if (e) {
-        //             // we have a valid entity for the drill down view
-        //             // now that we've validated all of this, we can navigate to the drill down view
-        //             // which is simply a dynamic view for a given entity with a filter applied
-        //             const rd = new ResourceData();
-        //             const ef = e.Fields.find(ef => ef.Name.trim().toLowerCase() === ddBaseViewField.trim().toLowerCase());
-        //             // next, fix up the drill down value to wrap with quotes if we need if we are a string or  date, and also if a string, escape any single quotes
-        //             let filterVal: string = drillDownValue;
-        //             if (ef?.TSType === EntityFieldTSType.String) {
-        //                 filterVal = `'${filterVal.replace(/'/g, "''")}'`;
-        //             }
-        //             else if (ef?.TSType === EntityFieldTSType.Date) {
-        //                 filterVal = `'${filterVal}'`;
-        //             }
-    
-        //             rd.ResourceTypeID = SharedService.Instance.ViewResourceType.ID;
-        //             rd.ResourceRecordID = 0;
-        //             rd.Configuration = {
-        //                 Entity: e.Name,
-        //                 ExtraFilter: `${ddBaseViewField} = ${filterVal}`,
-        //             }
-    
-        //             // now we've built up our ResourceData object, we can raise the event to navigate to the drill down view
-        //             LogStatus(`drilling down to ${ddV} with filter ${ddBaseViewField} = ${drillDownValue}`);
-        //             MJGlobal.Instance.RaiseEvent({
-        //                 component: this,
-        //                 event: MJEventType.ComponentEvent,
-        //                 eventCode: EventCodes.ViewClicked,
-        //                 args: rd
-        //             });
-        //         }
-        //         else
-        //             LogError(`Could not find entity for the specified DrillDownView: ${ddV}`);
-        //     }
-        // }
-        // catch (e) {
-        //     LogError(e);
-        // }
-    //}
 }

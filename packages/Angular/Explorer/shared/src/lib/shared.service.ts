@@ -1,7 +1,7 @@
 import { ElementRef, Injectable } from '@angular/core';
 import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
-import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
+import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData, ConvertMarkdownStringToHtmlList } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
@@ -172,12 +172,7 @@ export class SharedService {
   }
 
   public ConvertMarkdownStringToHtmlList(listType: HtmlListType, text: string): string {
-    const listTag = listType === HtmlListType.Unordered ? 'ul' : 'ol';
-    if (!text.includes('\n')) {
-        return text;
-    }
-    const listItems = text.split('\n').map(line => `<li>${line.trim().replace(/^-\s*/, '')}</li>`).join('');
-    return `<${listTag}>${listItems}</${listTag}>`;
+    return ConvertMarkdownStringToHtmlList(listType, text);
   }
 
   

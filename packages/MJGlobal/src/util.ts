@@ -153,3 +153,24 @@ export function SafeJSONParse<T>(jsonString: string, logErrors: boolean = false)
         return null;
     }
 }
+
+/**
+ * This function takes in a string of text(assuming markdown, or just newline formatted), and converts it to an HTML list. The list type can be either ordered or unordered.
+ * @param htmlListType 
+ * @param text 
+ * @returns 
+ */
+export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unordered', text: string): string {
+    try {
+        const listTag = htmlListType === 'Unordered' ? 'ul' : 'ol';
+        if (!text.includes('\n')) {
+            return text;
+        }
+        const listItems = text.split('\n').map(line => `<li>${line.trim().replace(/^-\s*/, '')}</li>`).join('');
+        return `<${listTag}>${listItems}</${listTag}>`;    
+    }
+    catch (e) {
+        console.error("Error converting markdown string to HTML list:", e);
+        return null;
+    }   
+}

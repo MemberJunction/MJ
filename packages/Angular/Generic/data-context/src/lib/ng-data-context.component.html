@@ -1,0 +1,35 @@
+<div>
+    @if (!showLoader) {
+        <div class="k-d-flex k-flex-col k-justify-content-between k-h-full">
+            <div *ngIf="dataContextRecord">
+                <div>
+                    ID: {{dataContextRecord.ID}}
+                </div>
+                <div>
+                    Name: {{dataContextRecord.Name}}
+                </div>
+                <div>
+                    Description: {{dataContextRecord.Description}}
+                </div>
+            </div>
+            <div style="margin-top: 10px;">
+                <b>Items</b>
+            </div>
+            <div class="kendo-grid-container">
+                <kendo-grid 
+                    [kendoGridBinding]="dataContextItems" 
+                    scrollable="virtual" 
+                    [pageSize]="100" 
+                    [sortable]="true"
+                    [loading]="showLoader" 
+                    [resizable]="true" 
+                    [navigable]="true"
+                >
+                </kendo-grid>
+            </div>
+        </div>    
+    }
+    @else {
+        <kendo-loader type="converging-spinner" ></kendo-loader>
+    }
+</div>
