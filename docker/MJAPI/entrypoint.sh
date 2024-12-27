@@ -12,4 +12,4 @@ mj migrate
 mj codegen
 
 # Start the MJAPI application
-node packages/MJAPI/dist/index.js
+pm2-runtime packages/MJAPI/dist/index.js

@@ -119,25 +119,25 @@ const codegenConfig = {
     ],
   },
   output: [
-    { type: 'GraphQLServer', directory: './MJAPI/src/generated' },
-    { type: 'ActionSubclasses', directory: './GeneratedActions/src/generated' },
-    { type: 'EntitySubclasses', directory: './GeneratedEntities/src/generated' },
+    { type: 'GraphQLServer', directory: './packages/MJAPI/src/generated' },
+    { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
+    { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
   ],
   commands: [
     {
-      workingDirectory: './GeneratedEntities',
+      workingDirectory: './packages/GeneratedEntities',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './GeneratedActions',
+      workingDirectory: './packages/GeneratedActions',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './MJAPI',
+      workingDirectory: './packages/MJAPI',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
@@ -222,7 +222,7 @@ const config = {
   mjCoreSchema: process.env.MJ_CORE_SCHEMA ?? '__mj',
 
   // Used only for MJAPI
-  graphqlPort: process.env.GRAPHQL_PORT ?? 4000,
+  graphqlPort: process.env.PORT ?? process.env.GRAPHQL_PORT ?? 4000,
   ___codeGenAPIURL: process.env.CODEGEN_API_URL,
   ___codeGenAPIPort: process.env.CODEGEN_API_PORT,
   ___codeGenAPISubmissionDelay: process.env.CODEGEN_API_SUBMISSION_DELAY,
