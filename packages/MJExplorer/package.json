@@ -5,6 +5,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:stage": "ng serve --configuration staging",
     "build": "ng build",
     "build:stage": "ng build --configuration staging",
     "watch": "ng build --watch --configuration development",
