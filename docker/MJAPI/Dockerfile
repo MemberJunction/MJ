@@ -6,7 +6,13 @@ ARG TARGETARCH
 
 WORKDIR /flyway
 
-RUN apt-get update && apt-get install -y curl gnupg tar
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server
+RUN echo "root:Docker!" | chpasswd
+
+COPY docker/MJAPI/sshd_config /etc/ssh/
+EXPOSE 2222
+
+
 
 # Download correct Flyway tar file
 RUN curl -fsSL https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz -o flyway.tgz; \
