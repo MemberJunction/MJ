@@ -42,3 +42,14 @@ jobs:
             linux/arm64
           file: docker/MJAPI/Dockerfile
           context: .
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.ASKSKIP_ACR_CREDENTIALS }}
+      - name: Push image to AskSkip Azure Container Registry
+        run: |
+          docker buildx imagetools create \
+            --tag askskip.azurecr.io/memberjunction/api:latest \
+            --tag askskip.azurecr.io/memberjunction/api:v${{ steps.version.outputs.VERSION }} \
+            memberjunction/api:latest
