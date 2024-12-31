@@ -43,10 +43,13 @@ jobs:
           file: docker/MJAPI/Dockerfile
           context: .
 
-      - name: Azure Login
-        uses: azure/login@v2
+      - name: Log in to the AskSkip Azure Container Registry
+        uses: docker/login-action@v3
         with:
-          creds: ${{ secrets.ASKSKIP_ACR_CREDENTIALS }}
+          registry: askskip.azurecr.io
+          username: ${{ secrets.ASKSKIP_AZ_SP_CLIENT_ID }}
+          password: ${{ secrets.ASKSKIP_AZ_SP_CLIENT_SECRET }}
+
       - name: Push image to AskSkip Azure Container Registry
         run: |
           docker buildx imagetools create \
