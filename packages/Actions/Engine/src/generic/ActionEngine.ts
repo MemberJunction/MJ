@@ -1,8 +1,7 @@
-import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
-import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, UserNotificationEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEntityServerEntity } from "./ActionEntity.server";
 import { ActionEngineBase, ActionResult, RunActionParams } from "@memberjunction/actions-base";
 
  
@@ -18,33 +17,47 @@ export class ActionEngineServer extends ActionEngineBase {
    }
 
     public async RunAction(params: RunActionParams): Promise<ActionResult> {
-      if (await this.ValidateInputs(params)) {
-         if (await this.RunFilters(params)) {
-            return await this.InternalRunAction(params);
+      const validInputs: boolean = await this.ValidateInputs(params);
+      if(!validInputs) {
+         const errorMessage: string = `Unable to run Action ${params.Action.Name}: Input validation failed.`;
+         if(params.NotifyUserWhenComplete){
+            await this.NotifyUserOfActionRun({Success: false, ErrorMessage: errorMessage}, params.Action, this.ContextUser);
          }
-         else {
-            // filters indicated we should NOT run this action
-            const result: ActionResult = {
-               Success: true,
-               Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
-               LogEntry: null, // initially null
-               Params: [],
-               RunParams: params
-            };
 
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
-         }
-      }
-      else {
-         // input validation failed
          return {
             Success: false,
-            Message: "Input validation failed. This is a failure condition.",
+            Message: errorMessage,
             LogEntry: null,
             Params: [],
             RunParams: params
          };
       }
+
+      const canRun: boolean = await this.RunFilters(params);
+      if(!canRun){
+         const errorMessage: string = `Unable to run Action ${params.Action.Name}: Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.`;
+
+         if(params.NotifyUserWhenComplete){
+            await this.NotifyUserOfActionRun({Success: false, ErrorMessage: errorMessage}, params.Action, this.ContextUser);
+         }
+
+         const filterFailResult =  {
+            Success: false,
+            Message: errorMessage,
+            LogEntry: null,
+            Params: [],
+            RunParams: params
+         };
+
+         filterFailResult.LogEntry = await this.StartAndEndActionLog(params, filterFailResult);
+      }
+
+      const runResult: ActionResult = await this.InternalRunAction(params);
+      if(params.NotifyUserWhenComplete){
+         await this.NotifyUserOfActionRun({Success: runResult.Success, ErrorMessage: runResult.Message}, params.Action, this.ContextUser);
+      }
+
+      return runResult;
     }      
 
    /**
@@ -83,8 +96,9 @@ export class ActionEngineServer extends ActionEngineBase {
       // using ClassFactory
       const logEntry = await this.StartActionLog(params);
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
-      if (!action) 
+      if (!action){
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
       
       // we now have the action class for this particular action, so run it
       const simpleResult = await action.Run(params);
@@ -113,8 +127,9 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.StartedAt = new Date();
       logEntity.UserID = this.ContextUser.ID;
       logEntity.Params = JSON.stringify(params.Params); // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
-      if (saveRecord)
+      if (saveRecord){
          await logEntity.Save(); // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
+      }
 
       return logEntity;
    }
@@ -130,6 +145,19 @@ export class ActionEngineServer extends ActionEngineBase {
       const logEntity = await this.StartActionLog(params, false); // don't do the initial save
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
+   }
+
+   protected async NotifyUserOfActionRun(result: {Success: boolean, ErrorMessage?: string}, action: ActionEntity, contextUser: UserInfo): Promise<void> {
+      const md: Metadata = new Metadata();
+      const notificationEntity = await md.GetEntityObject<UserNotificationEntity>("User Notifications", contextUser);
+      notificationEntity.UserID = contextUser.ID;
+      notificationEntity.Title = result.Success ? `Action ${action?.Name} Completed Successfully` : `Action ${action?.Name} Failed`;
+      notificationEntity.Message = result.ErrorMessage ? `An error occured while running the Action: ${result.ErrorMessage}` : `Good News! The Action completed successfully`;
+
+      const saveResult = await notificationEntity.Save();
+      if(!saveResult){
+          LogError(`Failed to save notification for Action ${action?.Name} for user ${contextUser.Email}:`, undefined, notificationEntity.LatestResult);
+      }
    }
 }
 

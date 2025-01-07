@@ -13,10 +13,13 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          CompositeKey,
          EntityDeleteOptions,
          BaseEntityResult,
-         Metadata,
-         DatasetItemResultType} from "@memberjunction/core";
+         DatasetItemResultType,
+         IRunActionProvider,
+         RunActionResult,
+         RunActionParams,
+         } from "@memberjunction/core";
 
-import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { ActionParamEntity, AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserNotificationEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
@@ -26,8 +29,8 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { EntityActionEngineServer } from "@memberjunction/actions";
-import { ActionResult } from "@memberjunction/actions-base";
+import { ActionEngineServer, EntityActionEngineServer } from "@memberjunction/actions";
+import { ActionEntityExtended, ActionResult, RunActionParams as RunParams } from "@memberjunction/actions-base";
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -53,7 +56,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
 }
 
 // Implements both the IEntityDataProvider and IMetadataProvider interfaces.
-export class SQLServerDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
+export class SQLServerDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider, IRunActionProvider {
     private _dataSource: DataSource;
     private _queryRunner: QueryRunner;
     private _currentUserEmail: string;
@@ -2411,6 +2414,48 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected get Metadata(): IMetadataProvider {
         return this;
     }
+
+
+    /**************************************************************************/
+    // START ---- IRunActionProvider
+    /**************************************************************************/
+
+    public async RunAction(params: RunActionParams, contextUser?: UserInfo): Promise<RunActionResult>{
+        if(!contextUser){
+            const result = {Success: false, ErrorMessage: `context user is required to run an Action ${params.ActionID}`}; 
+            return result;
+        }
+
+        if(!ActionEngineServer.Instance.Loaded){
+            await ActionEngineServer.Instance.Config(false, contextUser);
+        }
+
+        const action: ActionEntityExtended | undefined = ActionEngineServer.Instance.Actions.find((actionExtended: ActionEntityExtended) => actionExtended.ID === params.ActionID);
+        if(!action){
+            const result = {Success: false, ErrorMessage: `Action not found with ID ${params.ActionID}`}; 
+            return result;
+        }
+
+        const actionParameters = action.Params.map((param:  ActionParamEntity) => {
+            return {Name: param.Name, Value: param.DefaultValue };
+        }); 
+
+        const actionParams: RunParams = {
+            Action: action,
+            ContextUser: contextUser,
+            Filters: [],
+            Params: actionParameters
+        };
+
+        ActionEngineServer.Instance.RunAction(actionParams);
+
+        const result = {Success: true, ErrorMessage: ''};
+        return result;
+    }
+
+    /**************************************************************************/
+    // END ---- IRunActionProvider
+    /**************************************************************************/
 }
 
 // This implementation is purely in memory and doesn't bother to persist to a file. It is fine to load it once per server instance load

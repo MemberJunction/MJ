@@ -24,6 +24,7 @@ export default class CodeGen extends Command {
     const config = updatedConfig();
 
     if (!config) {
+      this.log(process.cwd());
       this.error('No configuration found');
     }
 

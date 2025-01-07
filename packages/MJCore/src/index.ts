@@ -9,6 +9,7 @@ export * from "./generic/baseEngine";
 export * from "./views/runView";
 export * from "./generic/runReport";
 export * from "./generic/runQuery";
+export * from "./generic/runAction";
 export * from "./generic/interfaces";
 export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";

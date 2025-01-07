@@ -10,6 +10,7 @@ import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { RunActionParams, RunActionResult } from "./runAction";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -510,4 +511,10 @@ export type DatasetStatusEntityUpdateDateType = {
     EntityID: string;
     UpdateDate: Date;
     RowCount: number;
-}   
+}
+
+export interface IRunActionProvider {
+    Config(configData: ProviderConfigDataBase): Promise<boolean>
+
+    RunAction(params: RunActionParams, contextUser?: UserInfo): Promise<RunActionResult>
+}

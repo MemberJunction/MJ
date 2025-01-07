@@ -123,8 +123,11 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
+   /**
+    * If the action was unable to start or complete, this will contain a message describing why
+   */
+   public NotifyUserWhenComplete?: boolean;
 }
-
 
 /**
  * Base class for Action metadata. 
