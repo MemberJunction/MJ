@@ -158,7 +158,7 @@ const mjServerConfig = {
    */
 
   userHandling: {
-    autoCreateNewUsers: true,
+    autoCreateNewUsers: false,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
     newUserRoles: ['UI'],
