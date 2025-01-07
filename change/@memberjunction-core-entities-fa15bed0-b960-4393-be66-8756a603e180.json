@@ -1,5 +1,5 @@
 {
-  "type": "minor",
+  "type": "patch",
   "comment": "Applying package updates [skip ci]",
   "packageName": "@memberjunction/core-entities",
   "email": "97354817+AN-BC@users.noreply.github.com",
