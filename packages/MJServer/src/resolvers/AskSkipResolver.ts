@@ -332,7 +332,8 @@ export class AskSkipResolver {
       convoEntity,
       convoDetailEntity,
       dataContext,
-      dataContextEntity
+      dataContextEntity,
+      1
     );
   }
 
@@ -677,9 +678,12 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity
+    dataContextEntity: DataContextEntity, 
+    conversationDetailCount: number
   ): Promise<AskSkipResultType> {
     LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
+
+    LogStatus(`Conversation Detail Count: ${conversationDetailCount}`);
 
     const response = await sendPostRequest(
       ___skipAPIurl,
@@ -736,7 +740,8 @@ export class AskSkipResolver {
           convoEntity,
           convoDetailEntity,
           dataContext,
-          dataContextEntity
+          dataContextEntity, 
+          conversationDetailCount+1
         );
       } else if (apiResponse.responsePhase === 'clarifying_question') {
         // need to send the request back to the user for a clarifying question
@@ -925,7 +930,8 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity
+    dataContextEntity: DataContextEntity, 
+    conversationDetailCount: number
   ): Promise<AskSkipResultType> {
     // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
     try {
@@ -1039,6 +1045,7 @@ export class AskSkipResolver {
         apiRequest.dataContext = <DataContext>CopyScalarsAndArrays(dataContext); // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
         apiRequest.requestPhase = 'data_gathering_response';
       }
+      conversationDetailCount++;
       // we have all of the data now, add it to the data context and then submit it back to the Skip API
       return this.HandleSkipRequest(
         apiRequest,
@@ -1052,7 +1059,8 @@ export class AskSkipResolver {
         convoEntity,
         convoDetailEntity,
         dataContext,
-        dataContextEntity
+        dataContextEntity, 
+        conversationDetailCount
       );
     } catch (e) {
       LogError(e);
