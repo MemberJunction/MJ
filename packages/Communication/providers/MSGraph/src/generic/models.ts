@@ -26,3 +26,17 @@ export type GetMessagesContextDataParams = {
      */
     Top?: number;
 };
+
+export type ForwardMessageParams = {
+    EmailID: string;
+    Message: string;
+    ToRecipients: {
+        Name: string,
+        Address: string;
+    }[];
+};
+
+export type ForwardMessageResult = {
+    Success: boolean;
+    Message?: string;
+}
