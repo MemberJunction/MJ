@@ -1,12 +1,12 @@
-import { BaseCommunicationProvider, GetMessageMessage, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { User, Message } from "@microsoft/microsoft-graph-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
+import { compile, compiledFunction } from 'html-to-text';
 import * as Auth from "./auth";
 import * as Config from "./config";
-import { compile, compiledFunction } from "html-to-text";
-import { MSGraphGetResponse } from "./generic/models";
+import { ForwardMessageParams, ForwardMessageResult } from "./generic/models";
 
 /**
  * Implementation of the MS Graph provider for sending and receiving messages
@@ -124,7 +124,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         }
     }
 
-    public async GetMessages(params: Record<string, any>): Promise<GetMessagesResult<Message>> {
+    public async GetMessages(params: GetMessagesParams<Record<string, any>>): Promise<GetMessagesResult<Message>> {
         const contextData = params.ContextData;
         const user: User | null = await this.GetServiceAccount(contextData?.Email);
         if(!user || !user.id){
@@ -137,33 +137,33 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         let top: number = 10;
 
         if(contextData && contextData.Filter){
-            filter = params.ContextData.Filter;
+            filter = contextData.Filter;
         }
 
         if(contextData && contextData.Top){
-            top = params.ContextData.Top;
+            top = contextData.Top;
         }
 
         const messagesPath: string = `${Auth.ApiConfig.uri}/${user.id}/messages`;
         const Client: Client = Auth.GraphClient;
-        const response: MSGraphGetResponse<Message[]> | null = await Client.api(messagesPath)
+        const response: Record<string, any> | null = await Client.api(messagesPath)
         .filter(filter).top(top).get();
 
         if(!response){
-            LogError('Error: could not get messages');
+            console.log('Error: could not get messages');
             return {
                 Messages: []
             };
         }
 
-        const sourceMessages: Message[] = response.value;
+        const sourceMessages: Record<string, any>[] = response.value;
 
-        let messageResults: GetMessagesResult<Message> = {
+        let messageResults: GetMessagesResult = {
             SourceData: sourceMessages,
             Messages: []
         };
 
-        const messages: GetMessageMessage[] = sourceMessages.map((message: Message) => {
+        const messages = sourceMessages.map((message: Message) => {
             return {
                 From: message.from?.emailAddress?.address || '',
                 ReplyTo: message.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [],
@@ -182,6 +182,51 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         }
 
         return messageResults;
+    }
+
+    public async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
+        try{
+            if(!params.EmailID){
+                return {
+                    Success: false,
+                    Message: 'Email ID not set'
+                }
+            }
+
+            const user: User | null = await this.GetServiceAccount();
+            if(!user){
+                return {
+                    Success: false,
+                    Message: 'Service account not found'
+                }
+            }
+
+            const forward = {
+                comment: params.Message,
+                toRecipients: params.ToRecipients.map((recipient) => {
+                    return {
+                        emailAddress: {
+                            name: recipient.Name,
+                            address: recipient.Address
+                        }
+                    };
+                })
+            };
+
+            const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${params.EmailID}/forward`;
+            await Auth.GraphClient.api(sendMessagePath).post(forward);
+
+            return {
+                Success: true
+            }
+        }
+        catch(ex){
+            LogError(ex);
+            return {
+                Message: 'An Error occurred while forwarding the message',
+                Success: false,
+            };
+        }
     }
 
     protected async GetServiceAccount(email?: string): Promise<User | null> {
@@ -217,10 +262,10 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             };
             
             await Client.api(updatePath).update(updatedMessage);
+            LogStatus(`Message ${messageID} marked as read`);
             return true;
         }
         catch(ex){
-            LogStatus(`Failed to mark message ${messageID} as read`);
             LogError(ex);
             return false;
         }
