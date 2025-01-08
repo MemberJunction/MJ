@@ -684,6 +684,28 @@ export class AskSkipResolver {
     LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
 
     LogStatus(`Conversation Detail Count: ${conversationDetailCount}`);
+    if (conversationDetailCount > 5) {
+      // At this point it is likely that we are stuck in a loop, so we stop here
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        message: JSON.stringify({
+          type: 'AskSkip',
+          status: 'Error',
+          conversationID: ConversationId,
+          message: 'Analysis failed to run, please try again later and if this continues, contact your support desk.',
+        }),
+        sessionId: userPayload.sessionId,
+      });
+
+      return {
+        Success: false,
+        Status: 'Error',
+        Result: `Exceeded maximum attempts to answer the question ${UserQuestion}`,
+        ResponsePhase: SkipResponsePhase.AnalysisComplete,
+        ConversationId: ConversationId,
+        UserMessageConversationDetailId: '',
+        AIMessageConversationDetailId: '',
+      };
+    }
 
     const response = await sendPostRequest(
       ___skipAPIurl,
@@ -741,7 +763,7 @@ export class AskSkipResolver {
           convoDetailEntity,
           dataContext,
           dataContextEntity, 
-          conversationDetailCount+1
+          conversationDetailCount
         );
       } else if (apiResponse.responsePhase === 'clarifying_question') {
         // need to send the request back to the user for a clarifying question
