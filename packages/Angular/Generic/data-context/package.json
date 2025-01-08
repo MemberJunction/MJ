@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "2.13.4",
+    "@memberjunction/core-entities": "2.13.4",
     "@memberjunction/global": "2.13.4",
     "tslib": "^2.3.0"
   },
