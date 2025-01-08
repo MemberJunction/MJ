@@ -69,7 +69,7 @@ export class BettyBotLLM extends BaseLLM {
                     choices: [
                         {
                             message: {
-                                role: 'user',
+                                role: 'assistant',
                                 content: bettyResponse.data.response
                             },
                             finish_reason: "",
@@ -84,6 +84,27 @@ export class BettyBotLLM extends BaseLLM {
                 },
                 errorMessage: "",
                 exception: null
+            }
+
+            /**
+             * If Betty gave us any references, add them to the response
+             * as an additional choice
+             */
+            if(bettyResponse.data.references && bettyResponse.data.references.length > 0){
+                let text: string = "Here are some additional resources that may help you: \n";
+                const references = bettyResponse.data.references;
+                for(const reference of references){
+                    text += `${reference.title}: ${reference.link} \n`;
+                }
+
+                response.data.choices.push({
+                    message: {
+                        role: 'assistant',
+                        content: text
+                    },
+                    finish_reason: "",
+                    index: 1
+                });
             }
 
             return response;
@@ -117,12 +138,6 @@ export class BettyBotLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 
-    /**
-     * Fetches and caches a JWT token from the Betty Bot API.
-     * The tokens are cached for 30 minutes before being refreshed.
-     * @param forceRefresh If true, the cached token will be ignored and a new one will be fetched
-     * @returns 
-     */
     public async GetJWTToken(forceRefresh?: boolean): Promise<SettingsResponse | null> {
         try {
 
