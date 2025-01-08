@@ -262,7 +262,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
  }
 
  private maskPassword(input: string, password: string, replaceWith: string = 'XXXXX'): string {
-  return input.replace(new RegExp(password, 'g'), replaceWith);
+  return input.replace(password, replaceWith);
 }
 
  public async executeBatchSQLScript(scriptText: string): Promise<boolean> {

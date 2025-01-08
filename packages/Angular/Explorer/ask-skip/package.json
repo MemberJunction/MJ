@@ -32,6 +32,7 @@
     "@memberjunction/skip-types": "2.13.4",
     "@memberjunction/ng-container-directives": "2.13.4",
     "@memberjunction/ng-chat": "2.13.4",
+    "@memberjunction/ng-skip-chat": "2.13.4",
     "@memberjunction/ng-shared": "2.13.4",
     "@memberjunction/ng-data-context": "2.13.4",
     "@memberjunction/ng-user-view-grid": "2.13.4",

@@ -1,6 +1,11 @@
+import { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
+import { Metadata } from "./metadata";
 
-export function TypeScriptTypeFromSQLType(sqlType: string): string {
+/**
+ * Returns the TypeScript type that corresponds to the SQL type passed in
+ */
+export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' | 'boolean' | 'Date' {
     switch (sqlType.trim().toLowerCase()) {
         case 'text':
         case 'char':
@@ -96,6 +101,14 @@ function FormatValueInternal(sqlType: string,
 }
 
 
+/**
+ * Returns a string that contains the full SQL type including length, precision and scale if applicable
+ * @param baseType 
+ * @param length 
+ * @param precision 
+ * @param scale 
+ * @returns 
+ */
 export function SQLFullType(baseType: string, length: number, precision: number, scale: number): string {
     const type = baseType.trim().toLowerCase();
     let sOutput: string = type;
@@ -115,6 +128,13 @@ export function SQLFullType(baseType: string, length: number, precision: number,
     return sOutput;
 }
 
+/**
+ * This function determines the actual maximum length for a given SQL field based on the base type and the length specified in the schema. 
+ * For example, for a varchar(50) field, the length is 50, for an nvarchar(50) field, the length is 50/2 = 25
+ * @param sqlBaseType 
+ * @param sqlLength 
+ * @returns 
+ */
 export function SQLMaxLength(sqlBaseType: string, sqlLength: number): number {
     switch (sqlBaseType.trim().toLowerCase()) {
         case 'varchar':
@@ -153,10 +173,19 @@ const _stopwords = [
     "y", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
 ];
 
+/**
+ * This function returns an array of common stop words that are used in text processing
+ * @returns An array of common stop words that are used in text processing
+ */
 export function CommonStopWords(): string[] {
     return _stopwords;
 }
 
+/**
+ * This function takes a string and removes common stop words from it, using the CommonStopWords() function to get the list of stop words
+ * @param inputString 
+ * @returns 
+ */
 export function StripStopWords(inputString: string): string {
     const stopwordPattern = new RegExp(`\\b(${_stopwords.join('|')})\\b`, 'gi');
     let outputString = inputString.replace(stopwordPattern, '');
@@ -267,4 +296,38 @@ export function StripContainingParens(value: string): string {
         return StripContainingParens(value.substring(1, value.length - 1));
     }
     return value;
+}
+
+
+/**
+ * This function is used to get the entity name from the schema.view string
+ * @param schemaAndView - this string contains the combined schema name and base view name, for example: "dbo.vwMyView"
+ * @param provider - optional, if you want to use a different provider than the default one
+ */
+export function GetEntityNameFromSchemaAndViewString(schemaAndView: string, provider?: IMetadataProvider): string | null {
+    const p = provider || new Metadata();
+    // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
+    let schema = '', view = '';
+    if (schemaAndView.indexOf('.') === -1) {
+        view = schemaAndView.trim().toLowerCase();
+    } 
+    else {
+        schema = schemaAndView.split('.')[0].trim().toLowerCase();
+        view = schemaAndView.split('.')[1].trim().toLowerCase();
+    }
+    const e = p.Entities.filter(
+        (x) => x.BaseView.trim().toLowerCase() === view && (schema === '' || x.SchemaName.trim().toLowerCase() === schema)
+    ); // try to find the entity even if we don't have the schema name. AI should include it in schema.view syntax but if it doesn't we'll try to find
+    if (e && e.length === 1) {
+        return e[0].Name;
+    } 
+    else if (!e || e.length === 0) {
+        console.warn(`Could not find entity for the specified DrillDownView: ${schemaAndView}`);
+        return null;
+    } 
+    else if (e && e.length > 1) {
+        console.warn(`Found more than one entity for the specified DrillDownView: ${schemaAndView}`);
+        return null;
+    }
+    return null;
 }

@@ -4,7 +4,7 @@ import { ComponentPortal } from '@angular/cdk/portal';
 import { Router } from '@angular/router';
 
 import { SkipWindowComponent } from '../skip-window/skip-window.component';
-import { SkipChatComponent } from '../skip-chat/skip-chat.component';
+import { SkipChatComponent } from '@memberjunction/ng-skip-chat';
 
 export class SkipClickedEvent {
   public cancel: boolean = false;

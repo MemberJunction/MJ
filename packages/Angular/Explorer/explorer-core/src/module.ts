@@ -37,6 +37,7 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
 
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
+import { SkipChatModule } from '@memberjunction/ng-skip-chat';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
@@ -160,6 +161,7 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     DropDownsModule,
     MemberJunctionSharedModule,
     AskSkipModule,
+    SkipChatModule,
     EntityPermissionsModule,
     ExplorerSettingsModule,
     FileStorageModule,

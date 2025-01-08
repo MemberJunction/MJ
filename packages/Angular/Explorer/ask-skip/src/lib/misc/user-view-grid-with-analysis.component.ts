@@ -17,9 +17,9 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
         <mj-tab> Analysis </mj-tab>
         <mj-tab-body>
-            <mj-skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
+            <skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
                                           [LinkedEntity]="'User Views'" [LinkedEntityCompositeKey]="ViewIDAsCompositeKey">
-            </mj-skip-chat>
+            </skip-chat>
         </mj-tab-body>
     </mj-tabstrip>
     `,

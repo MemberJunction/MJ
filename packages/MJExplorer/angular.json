@@ -116,6 +116,9 @@
             "production": {
               "buildTarget": "MJExplorer:build:production"
             },
+            "staging": {
+              "buildTarget": "MJExplorer:build:staging"
+            },
             "development": {
               "buildTarget": "MJExplorer:build:development"
             },

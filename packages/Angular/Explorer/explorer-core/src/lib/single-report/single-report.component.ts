@@ -1,8 +1,9 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { LogError, Metadata, RunReport } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { DynamicReportComponent } from '@memberjunction/ng-ask-skip';
+import { SkipDynamicTabbedReportComponent } from '@memberjunction/ng-ask-skip';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types'; 
+
 @Component({
   selector: 'mj-single-report',
   templateUrl: './single-report.component.html',
@@ -13,7 +14,7 @@ export class SingleReportComponent implements OnInit {
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
-  @ViewChild('theReport', { static: true }) theReport!: DynamicReportComponent;
+  @ViewChild('theReport', { static: true }) theReport!: SkipDynamicTabbedReportComponent;
 
   public ReportEntity: ReportEntity | undefined;
 
@@ -30,7 +31,7 @@ export class SingleReportComponent implements OnInit {
   public get Columns(): SkipColumnInfo[] {
     return this.theReport.Columns;
   }
-  public get Report(): DynamicReportComponent {
+  public get Report(): SkipDynamicTabbedReportComponent {
     return this.theReport;
   }
 

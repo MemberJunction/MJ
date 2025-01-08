@@ -6,7 +6,14 @@ ARG TARGETARCH
 
 WORKDIR /flyway
 
-RUN apt-get update && apt-get install -y curl gnupg tar
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server
+RUN echo "root:Docker!" | chpasswd
+
+RUN mkdir /var/run/sshd
+COPY docker/MJAPI/sshd_config /etc/ssh/
+EXPOSE 2222
+
+
 
 # Download correct Flyway tar file
 RUN curl -fsSL https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz -o flyway.tgz; \
@@ -19,6 +26,8 @@ WORKDIR /app
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
+# Install pm2 globally
+RUN npm install -g pm2
 
 # Copy package.json and package-lock.json from the root directory
 COPY package.json turbo.json ./
@@ -38,7 +47,7 @@ COPY packages/MJAPI ./packages/MJAPI/
 # Build the MJAPI application
 RUN npm run build:api
 
-COPY docker/MJAPI/docker.config.cjs ./mj.config.js
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 COPY migrations ./migrations
 COPY ["[SQL Scripts]", "./[SQL Scripts]"]
 

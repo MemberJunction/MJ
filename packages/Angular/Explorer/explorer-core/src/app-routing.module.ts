@@ -18,7 +18,7 @@ import {
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { SkipChatComponent } from '@memberjunction/ng-ask-skip';
+import { SkipChatComponent } from '@memberjunction/ng-skip-chat';
 import { EventCodes, SharedService, ResourceData, BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ExplorerNavigationItemEntity } from '@memberjunction/core-entities';

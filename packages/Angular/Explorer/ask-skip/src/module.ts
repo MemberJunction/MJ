@@ -37,17 +37,14 @@ import { DataContextModule } from '@memberjunction/ng-data-context';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { ChatModule } from '@memberjunction/ng-chat';
+import { SkipChatModule } from '@memberjunction/ng-skip-chat';
+
 
 /*********************************************/
 // Local Components 
-import { SkipChatComponent } from './lib/skip-chat/skip-chat.component' 
-import { SkipDynamicReportComponent } from './lib/dynamic-report/skip-dynamic-report-wrapper'; 
-import { DynamicReportComponent } from './lib/dynamic-report/dynamic-report';
-import { DynamicChartComponent } from './lib/dynamic-report/dynamic-chart';
-import { DynamicGridComponent } from './lib/dynamic-report/dynamic-grid';
+import { SkipDynamicTabbedReportComponent } from './lib/dynamic-report/dynamic-tabbed-report';
 import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
 import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
-import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
 import { UserViewGridWithAnalysisComponent } from './public-api';
 import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
 import { SkipChatWithRecordComponent } from './lib/skip-chat-with-record/skip-chat-with-record.component';
@@ -56,16 +53,11 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
 
 @NgModule({
   declarations: [ 
-    SkipDynamicReportComponent,
-    SkipChatComponent,
     SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
     SkipChatWithRecordWindowComponent,
-    DynamicReportComponent,
-    DynamicChartComponent,
-    DynamicGridComponent,
-    SkipSingleMessageComponent,
+    SkipDynamicTabbedReportComponent,
     UserViewGridWithAnalysisComponent,
     DynamicReportDrillDownComponent
   ],
@@ -97,18 +89,14 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
     ExcelExportModule,
     UserViewGridModule,
     ChatModule,
+    SkipChatModule,
     MarkdownModule.forRoot(),
   ],
   exports: [
-    SkipDynamicReportComponent,
-    SkipChatComponent,
     SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
-    DynamicChartComponent,
-    DynamicGridComponent,
-    DynamicReportComponent ,
-    SkipSingleMessageComponent,
+    SkipDynamicTabbedReportComponent,
     UserViewGridWithAnalysisComponent,
     DynamicReportDrillDownComponent,
     SkipChatWithRecordWindowComponent
