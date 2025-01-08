@@ -28,7 +28,6 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { ChatModule } from '@memberjunction/ng-chat';
 import { DataContextModule } from '@memberjunction/ng-data-context';
 
 // LOCAL
@@ -66,9 +65,7 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
-    ChatModule,
     //MarkdownModule.forRoot(),
-
   ],
   exports: [
     SkipChatComponent,
