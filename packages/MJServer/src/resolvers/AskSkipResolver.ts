@@ -318,6 +318,7 @@ export class AskSkipResolver {
       AskSkipResolver._maxHistoricalMessages
     );
 
+    const conversationDetailCount = 1
     const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true);
 
     return this.HandleSkipRequest(
@@ -333,7 +334,7 @@ export class AskSkipResolver {
       convoDetailEntity,
       dataContext,
       dataContextEntity,
-      1
+      conversationDetailCount,
     );
   }
 
@@ -683,8 +684,7 @@ export class AskSkipResolver {
   ): Promise<AskSkipResultType> {
     LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
 
-    LogStatus(`Conversation Detail Count: ${conversationDetailCount}`);
-    if (conversationDetailCount > 5) {
+    if (conversationDetailCount > 10) {
       // At this point it is likely that we are stuck in a loop, so we stop here
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
