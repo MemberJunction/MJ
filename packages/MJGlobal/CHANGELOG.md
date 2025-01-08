@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Wed, 20 Nov 2024 19:21:35 GMT and should not be manually modified.
+This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.14.0
+
+Wed, 08 Jan 2025 04:33:32 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.13.0
 

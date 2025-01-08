@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-link-directives",
   "entries": [
     {
+      "date": "Wed, 08 Jan 2025 04:33:32 GMT",
+      "version": "2.14.0",
+      "tag": "@memberjunction/ng-link-directives_v2.14.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-link-directives",
+            "comment": "Bump @memberjunction/core to v2.14.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 22 Dec 2024 04:19:34 GMT",
       "version": "2.13.4",
       "tag": "@memberjunction/ng-link-directives_v2.13.4",

@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/entity-communications-client
 
-This log was last generated on Sun, 22 Dec 2024 04:19:34 GMT and should not be manually modified.
+This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.14.0
+
+Wed, 08 Jan 2025 04:33:32 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v2.14.0
+- Bump @memberjunction/core to v2.14.0
+- Bump @memberjunction/core-entities to v2.14.0
+- Bump @memberjunction/entity-communications-base to v2.14.0
+- Bump @memberjunction/graphql-dataprovider to v2.14.0
 
 ## 2.13.4
 
