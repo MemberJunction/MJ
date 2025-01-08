@@ -2,6 +2,9 @@ import { LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { DataSource } from "typeorm";
 
+/**
+ * Server side cache of users and their roles
+ */
 export class UserCache {
     static _instance: UserCache;
     private _globalObjectKey: string = 'MJ.SQLServerDataProvider.UserCache.Instance';
@@ -29,6 +32,11 @@ export class UserCache {
       }
     }
     
+    /**
+     * This method will refresh the cache with the latest data from the database
+     * @param dataSource - the data source to use to refresh the cache
+     * @param autoRefreshIntervalMS - optional, if provided, the cache will be refreshed every interval as specified - denominated in milliseconds
+     */
     public async Refresh(dataSource: DataSource, autoRefreshIntervalMS?: number): Promise<void> {
       try {
         const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName;
@@ -68,8 +76,18 @@ export class UserCache {
       return UserCache.Instance.Users; 
     }
 
-    public UserByName(name: string): UserInfo | undefined {
-      return UserCache.Users.find(u => u.Name === name);
+    /**
+     * Convenience method to get a user by their name
+     * @param name - name of the user
+     * @param caseSensitive - optional, if true, the search will be case sensitive
+     * @returns 
+     */
+    public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
+      return UserCache.Users.find(u => {
+        const comparisonItem = u.Name.trim();
+        const item = name.trim();
+        return caseSensitive ? comparisonItem === item : comparisonItem.toLowerCase() === item.toLowerCase();
+      });
     }
   }
   

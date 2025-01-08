@@ -9,6 +9,7 @@ WORKDIR /flyway
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server
 RUN echo "root:Docker!" | chpasswd
 
+RUN mkdir /var/run/sshd
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222
 
