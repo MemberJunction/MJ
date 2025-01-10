@@ -147,6 +147,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         const mjcSchema = this.ConfigData.MJCoreSchemaName;
 
         // check to see if the MJ Core schema is already in the list, if not add it
+        // TODO: The logic here doesn't match the comment above
         if (includeSchemaList && includeSchemaList.length > 0 && includeSchemaList.indexOf(mjcSchema) === -1) 
             includeSchemaList.push(mjcSchema)
 
