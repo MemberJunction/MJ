@@ -318,6 +318,7 @@ export class AskSkipResolver {
       AskSkipResolver._maxHistoricalMessages
     );
 
+    const conversationDetailCount = 1
     const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true);
 
     return this.HandleSkipRequest(
@@ -332,7 +333,8 @@ export class AskSkipResolver {
       convoEntity,
       convoDetailEntity,
       dataContext,
-      dataContextEntity
+      dataContextEntity,
+      conversationDetailCount,
     );
   }
 
@@ -677,9 +679,33 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity
+    dataContextEntity: DataContextEntity, 
+    conversationDetailCount: number
   ): Promise<AskSkipResultType> {
     LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
+
+    if (conversationDetailCount > 10) {
+      // At this point it is likely that we are stuck in a loop, so we stop here
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        message: JSON.stringify({
+          type: 'AskSkip',
+          status: 'Error',
+          conversationID: ConversationId,
+          message: 'Analysis failed to run, please try again later and if this continues, contact your support desk.',
+        }),
+        sessionId: userPayload.sessionId,
+      });
+
+      return {
+        Success: false,
+        Status: 'Error',
+        Result: `Exceeded maximum attempts to answer the question ${UserQuestion}`,
+        ResponsePhase: SkipResponsePhase.AnalysisComplete,
+        ConversationId: ConversationId,
+        UserMessageConversationDetailId: '',
+        AIMessageConversationDetailId: '',
+      };
+    }
 
     const response = await sendPostRequest(
       ___skipAPIurl,
@@ -736,7 +762,8 @@ export class AskSkipResolver {
           convoEntity,
           convoDetailEntity,
           dataContext,
-          dataContextEntity
+          dataContextEntity, 
+          conversationDetailCount
         );
       } else if (apiResponse.responsePhase === 'clarifying_question') {
         // need to send the request back to the user for a clarifying question
@@ -925,7 +952,8 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity
+    dataContextEntity: DataContextEntity, 
+    conversationDetailCount: number
   ): Promise<AskSkipResultType> {
     // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
     try {
@@ -1039,6 +1067,7 @@ export class AskSkipResolver {
         apiRequest.dataContext = <DataContext>CopyScalarsAndArrays(dataContext); // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
         apiRequest.requestPhase = 'data_gathering_response';
       }
+      conversationDetailCount++;
       // we have all of the data now, add it to the data context and then submit it back to the Skip API
       return this.HandleSkipRequest(
         apiRequest,
@@ -1052,7 +1081,8 @@ export class AskSkipResolver {
         convoEntity,
         convoDetailEntity,
         dataContext,
-        dataContextEntity
+        dataContextEntity, 
+        conversationDetailCount
       );
     } catch (e) {
       LogError(e);

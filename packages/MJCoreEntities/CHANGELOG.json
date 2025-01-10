@@ -2,6 +2,33 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Wed, 08 Jan 2025 04:33:32 GMT",
+      "version": "2.14.0",
+      "tag": "@memberjunction/core-entities_v2.14.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "ce2effae212ebba2c5be9b8880ee8fd0ef0866d7",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v2.14.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v2.14.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 22 Dec 2024 04:19:34 GMT",
       "version": "2.13.4",
       "tag": "@memberjunction/core-entities_v2.13.4",

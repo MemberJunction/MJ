@@ -6,14 +6,31 @@ ARG TARGETARCH
 
 WORKDIR /flyway
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server
+ENV PATH=/opt/mssql-tools/bin:$PATH
+
+# Install required packages
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2
+
+# Install Node
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+RUN apt-get install -y nodejs
+
+# Install Microsoft SQL Server tools
+RUN locale-gen "en_US.UTF-8"
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+RUN curl https://packages.microsoft.com/config/debian/11/prod.list | tee /etc/apt/sources.list.d/msprod.list
+RUN apt-get update
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
+RUN apt-get remove -y curl apt-transport-https
+RUN rm -f /etc/apt/sources.list.d/msprod.list
+RUN rm -rf /var/lib/apt/lists/*
+
+# Set up SSH configuration
+RUN mkdir /var/run/sshd
 RUN echo "root:Docker!" | chpasswd
 
-RUN mkdir /var/run/sshd
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222
-
-
 
 # Download correct Flyway tar file
 RUN curl -fsSL https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz -o flyway.tgz; \
@@ -21,10 +38,6 @@ RUN curl -fsSL https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${
          ln -s /flyway /root/.node-flyway
 
 WORKDIR /app
-
-# Install Node
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
 
 # Install pm2 globally
 RUN npm install -g pm2

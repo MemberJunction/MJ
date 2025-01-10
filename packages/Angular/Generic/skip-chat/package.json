@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-skip-chat",
-  "version": "2.13.4",
+  "version": "2.14.0",
   "description": "MemberJunction: Simple Skip Chat components usable in any Angular project",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -31,6 +31,7 @@
     "@memberjunction/skip-types": "2.14.0",
     "@memberjunction/ng-container-directives": "2.14.0",
     "@memberjunction/ng-data-context": "2.14.0",
+    "@memberjunction/ng-shared": "2.14.0",
     "@memberjunction/data-context": "2.14.0",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",
