@@ -110,10 +110,16 @@ export type RunViewParams = {
 
 /**
  * Class for running views in a generic, tier-independent manner - uses a provider model for 
- * implementation transparently from the viewpoint of the consumer of the class.
+ * implementation transparently from the viewpoint of the consumer of the class. By default the RunView class you create will
+ * connect to the DEFAULT provider. If you want your RunView to connect to a different provider, you can pass in the provider
+ * to the constructor.
  */
 export class RunView  {
     private _provider: IRunViewProvider | null = null;
+    /**
+     * Optionally, you can pass in a provider to the constructor. If you do not, the static RunView.Provider property is used.
+     * @param Provider 
+     */
     constructor(Provider: IRunViewProvider | null = null) {
         if (Provider)
             this._provider = Provider;
