@@ -18,16 +18,22 @@ export abstract class SkipDynamicReportBase {
     /**
      * Optional, specify a provider if you want to use a different provider than the default one
      */
-    @Input() Provider: GraphQLDataProvider | null = null;
+    @Input() Provider: IMetadataProvider | null = null;
     @Output() UserNotification = new EventEmitter<{message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number}>();
+
+    /**
+     * This event fires whenever the component has a click on a matching report link. 
+     * The provided parameter is the ID of the matching report.
+     */
+    @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
     constructor(protected cdRef: ChangeDetectorRef) {}
     
     /**
      * This property returns the provider to use, which will either be the one specified in the input or the default one, if nothing was specified.
      */
-    public get ProviderToUse(): GraphQLDataProvider {
-        return this.Provider || GraphQLDataProvider.Instance;
+    public get ProviderToUse(): IMetadataProvider {
+        return this.Provider || Metadata.Provider;
     }
 
     public matchingReportID: string | null = null;
@@ -149,7 +155,8 @@ export abstract class SkipDynamicReportBase {
             ErrorMessage
             }
         }`;
-        const result = await this.ProviderToUse.ExecuteGQL(mutation, {
+        const p = <GraphQLDataProvider>this.ProviderToUse;
+        const result = await p.ExecuteGQL(mutation, {
             ConversationDetailID: this.ConversationDetailID,
         });
         if (result && result.CreateReportFromConversationDetailID) 
@@ -189,7 +196,8 @@ export abstract class SkipDynamicReportBase {
             }
           }`;
     
-          const result: {ExecuteAskSkipRunScript: MJAPISkipResult} = await this.ProviderToUse.ExecuteGQL(gql, {
+          const p = <GraphQLDataProvider>this.ProviderToUse;
+          const result: {ExecuteAskSkipRunScript: MJAPISkipResult} = await p.ExecuteGQL(gql, {
             dataContextId: this.ReportEntity.DataContextID,
             scriptText: this.SkipData?.scriptText,
           });
