@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
+import { LogError } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -113,5 +114,9 @@ export function loadConfig() {
     throw new Error(`Config file ${configSearchResult.filepath} is empty or does not exist.`);
   }
 
-  return configInfoSchema.parse(configSearchResult.config);
+  const configParsing = configInfoSchema.safeParse(configSearchResult.config);
+  if (!configParsing.success) {
+    LogError('Error parsing config file', JSON.stringify(configParsing.error.issues, null, 2));
+  }
+  return configParsing.data;
 }
