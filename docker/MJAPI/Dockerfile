@@ -9,20 +9,19 @@ WORKDIR /flyway
 
 ENV PATH=/opt/mssql-tools/bin:$PATH
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2 && \
-  locale-gen "en_US.UTF-8" \
-    && export `grep "VERSION_ID" /etc/os-release | sed -e 's/^VERSION_ID=\"/VERSION_ID=/' -e 's/\"$//'` \
-    && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/ubuntu/$VERSION_ID/prod.list | tee /etc/apt/sources.list.d/msprod.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y mssql-tools=$MSSQLTOOLS_VERSION unixodbc-dev \
-    && apt-get remove -y curl apt-transport-https \
-    && rm -f /etc/apt/sources.list.d/msprod.list \
-    && rm -rf /var/lib/apt/lists/* \
-    && echo "root:Docker!" | chpasswd
-
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2
+RUN locale-gen "en_US.UTF-8"
+RUN export `grep "VERSION_ID" /etc/os-release | sed -e 's/^VERSION_ID=\"/VERSION_ID=/' -e 's/\"$//'`
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+RUN curl https://packages.microsoft.com/config/ubuntu/$VERSION_ID/prod.list | tee /etc/apt/sources.list.d/msprod.list
+RUN apt-get update
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools=$MSSQLTOOLS_VERSION unixodbc-dev
+RUN apt-get remove -y curl apt-transport-https
+RUN rm -f /etc/apt/sources.list.d/msprod.list
+RUN rm -rf /var/lib/apt/lists/*
 RUN mkdir /var/run/sshd
+RUN echo "root:Docker!" | chpasswd
+
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222
 
