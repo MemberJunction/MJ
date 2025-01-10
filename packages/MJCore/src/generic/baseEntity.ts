@@ -9,6 +9,7 @@ import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 import { z } from 'zod';
+import { httpTransport, CloudEvent } from 'cloudevents'; // P9515
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -852,6 +853,12 @@ export abstract class BaseEntity<T = unknown> {
                                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
     
                             this.RaiseEvent('save', null)
+
+                            // Emit cloud event if CLOUDEVENTS_HTTP_TRANSPORT is set
+                            if (process.env.CLOUDEVENTS_HTTP_TRANSPORT) {
+                                await this.emitCloudEvent('save');
+                            }
+
                             return true;
                         }
                         else
@@ -1081,6 +1088,12 @@ export abstract class BaseEntity<T = unknown> {
                     // record deleted correctly
                     // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                     this.RaiseEvent('delete', null);
+
+                    // Emit cloud event if CLOUDEVENTS_HTTP_TRANSPORT is set
+                    if (process.env.CLOUDEVENTS_HTTP_TRANSPORT) {
+                        await this.emitCloudEvent('delete');
+                    }
+
                     this.NewRecord(); // will trigger a new record event here too
                     return true;
                 }
@@ -1104,7 +1117,6 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
-
     /**
      * Called before an Action is executed by the AI Engine
      * This is intended to be overriden by subclass as needed, these methods called at the right time by the execution context
@@ -1120,6 +1132,23 @@ export abstract class BaseEntity<T = unknown> {
         return true;// default implementation does nothing
     }
 
+    /**
+     * Emits a cloud event for the given event type.
+     * @param eventType 
+     */
+    private async emitCloudEvent(eventType: 'save' | 'delete') {
+        const transportUrl = process.env.CLOUDEVENTS_HTTP_TRANSPORT;
+        const headers = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+
+        const cloudEvent = new CloudEvent({
+            type: `MemberJunction.${eventType}`,
+            source: process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction',
+            data: this.GetAll()
+        });
+
+        const transport = httpTransport(transportUrl);
+        await transport.send(cloudEvent, { headers });
+    }
 
     private static _globalProviderKey: string = 'MJ_BaseEntityProvider';
     public static get Provider(): IEntityDataProvider {

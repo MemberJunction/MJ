@@ -9,6 +9,8 @@ import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, ProviderType, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo"; 
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { httpTransport, CloudEvent } from "cloudevents";
+
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -192,6 +194,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
 
                 if (matchingAutoRefreshConfig){
                     return this.DebounceIndividualBaseEntityEvent(event);
+                }
+
+                // Emit cloud event if CLOUDEVENTS_HTTP_TRANSPORT is set
+                if (process.env.CLOUDEVENTS_HTTP_TRANSPORT) {
+                    await this.emitCloudEvent(event.type, event.baseEntity);
                 }
             }
             
@@ -509,5 +516,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     protected TryThrowIfNotLoaded() {
         if (!this.Loaded)
             throw new Error("Data not loaded, call Config() first.");
+    }
+
+    /**
+     * Emits a cloud event for the given event type.
+     * @param eventType 
+     * @param baseEntity 
+     */
+    private async emitCloudEvent(eventType: 'save' | 'delete', baseEntity: BaseEntity) {
+        const transportUrl = process.env.CLOUDEVENTS_HTTP_TRANSPORT;
+        const headers = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+
+        const cloudEvent = new CloudEvent({
+            type: `MemberJunction.${eventType}`,
+            source: process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction',
+            data: baseEntity.GetAll()
+        });
+
+        const transport = httpTransport(transportUrl);
+        await transport.send(cloudEvent, { headers });
     }
 }
