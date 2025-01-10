@@ -26,10 +26,16 @@ const mjConfigSchema = z.object({
 });
 
 const parsedConfig = mjConfigSchema.safeParse(result?.config);
+if (!parsedConfig.success) {
+  console.error('Error parsing config file', JSON.stringify(parsedConfig.error.issues, null, 2));
+}
 export const config = parsedConfig.success ? parsedConfig.data : undefined;
 
 export const updatedConfig = () => {
   const maybeConfig = mjConfigSchema.safeParse(explorer.search(process.cwd())?.config);
+  if (!maybeConfig.success) {
+    console.error('Error parsing config file', JSON.stringify(maybeConfig.error.issues, null, 2));
+  }
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 

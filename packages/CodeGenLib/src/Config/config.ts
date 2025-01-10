@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
+import { LogError } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 const configSearchResult = explorer.search(process.cwd());
@@ -279,13 +280,22 @@ const configInfoSchema = z.object({
   graphqlPort: z.coerce.number().int().positive().default(4000),
 });
 export let currentWorkingDirectory: string;
-export const configInfo = configInfoSchema.optional().catch(undefined).parse(configSearchResult?.config) ?? ({} as ConfigInfo);
+
+const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
+if (!configParsing.success) {
+  LogError('Error parsing config file', JSON.stringify(configParsing.error.issues, null, 2));
+}
+
+export const configInfo = configParsing.data ?? ({} as ConfigInfo);
 export const { mjCoreSchema, dbDatabase } = configInfo;
 
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
   const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
+  if (!maybeConfig.success) {
+    LogError('Error parsing config file', JSON.stringify(maybeConfig.error.issues, null, 2));
+  }
 
   const config = maybeConfig.success ? maybeConfig.data : configInfo;
 
