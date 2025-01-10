@@ -110,9 +110,28 @@ export type RunViewParams = {
 
 /**
  * Class for running views in a generic, tier-independent manner - uses a provider model for 
- * implementation transparently from the viewpoint of the consumer of the class.
+ * implementation transparently from the viewpoint of the consumer of the class. By default the RunView class you create will
+ * connect to the DEFAULT provider. If you want your RunView to connect to a different provider, you can pass in the provider
+ * to the constructor.
  */
 export class RunView  {
+    private _provider: IRunViewProvider | null = null;
+    /**
+     * Optionally, you can pass in a provider to the constructor. If you do not, the static RunView.Provider property is used.
+     * @param Provider 
+     */
+    constructor(Provider: IRunViewProvider | null = null) {
+        if (Provider)
+            this._provider = Provider;
+    }
+
+    /**
+     * This property is used to get the IRunViewProvider implementation that is used by this instance of the RunView class. If a provider was specified to the constructor, that provider is used, otherwise the static RunView.Provider property is used.
+     */
+    public get ProviderToUse(): IRunViewProvider {
+        return this._provider || RunView.Provider;
+    }
+
     /**
      * Runs a view based on the provided parameters, see documentation for RunViewParams for more
      * @param params 
@@ -132,7 +151,7 @@ export class RunView  {
         }
 
         // Run the view
-        const result = await RunView.Provider.RunView<T>(params, contextUser);
+        const result = await this.ProviderToUse.RunView<T>(params, contextUser);
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
@@ -163,7 +182,7 @@ export class RunView  {
             }
     
             // NOW, run the view
-            const results: RunViewResult<T>[] = await RunView.Provider.RunViews<T>(params, contextUser);
+            const results: RunViewResult<T>[] = await this.ProviderToUse.RunViews<T>(params, contextUser);
     
             for(const [index, result] of results.entries()){
                 await this.TransformSimpleObjectToEntityObject(params[index], result, contextUser);
@@ -192,6 +211,10 @@ export class RunView  {
     }
 
     private static _globalProviderKey: string = 'MJ_RunViewProvider';
+    /**
+     * This is the static provider property that is used to get/set the IRunViewProvider implementation that is used by the RunView class.
+     * This property can be overridden on a per-instance basis by passing in the optional Provider parameter to the RunView constructor.
+     */
     public static get Provider(): IRunViewProvider {
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g)

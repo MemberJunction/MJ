@@ -4,7 +4,6 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
-import { SkipDynamicLinearReportComponent } from './linear-report';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({

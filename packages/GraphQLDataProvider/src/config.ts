@@ -1,4 +1,4 @@
-import { RunReport, BaseEntity, Metadata, RunView, RunQuery } from "@memberjunction/core";
+import { RunReport, BaseEntity, Metadata, RunView, RunQuery, SetProvider } from "@memberjunction/core";
 import { GraphQLDataProvider, GraphQLProviderConfigData } from "./graphQLDataProvider";
 import { MJGlobal, MJEventType } from "@memberjunction/global";
 
@@ -10,11 +10,7 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData): Pro
     const provider = new GraphQLDataProvider()
 
     // BaseEntity + Metadata share the same GraphQLDataProvider instance
-    BaseEntity.Provider = provider
-    Metadata.Provider = provider
-    RunView.Provider = provider
-    RunReport.Provider = provider
-    RunQuery.Provider = provider
+    SetProvider(provider);
 
     await provider.Config(config);
 
