@@ -3,7 +3,6 @@ FROM --platform=$TARGETPLATFORM openjdk:17-slim
 
 ARG FLYWAY_VERSION=9.0.0
 ARG TARGETARCH
-ARG MSSQLTOOLS_VERSION=17.4.1.1-1
 
 WORKDIR /flyway
 
@@ -14,7 +13,7 @@ RUN locale-gen "en_US.UTF-8"
 RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
 RUN curl https://packages.microsoft.com/config/debian/11/prod.list | tee /etc/apt/sources.list.d/msprod.list
 RUN apt-get update
-RUN ACCEPT_EULA=Y apt-get install -y mssql-tools=$MSSQLTOOLS_VERSION unixodbc-dev
+RUN ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
 RUN apt-get remove -y curl apt-transport-https
 RUN rm -f /etc/apt/sources.list.d/msprod.list
 RUN rm -rf /var/lib/apt/lists/*
