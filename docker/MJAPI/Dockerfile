@@ -3,17 +3,28 @@ FROM --platform=$TARGETPLATFORM openjdk:17-slim
 
 ARG FLYWAY_VERSION=9.0.0
 ARG TARGETARCH
+ARG MSSQLTOOLS_VERSION=17.4.1.1-1
 
 WORKDIR /flyway
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg tar dialog openssh-server
-RUN echo "root:Docker!" | chpasswd
+ENV PATH=/opt/mssql-tools/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  curl gnupg tar dialog openssh-server apt-transport-https locales gnupg2 && \
+  locale-gen "en_US.UTF-8" \
+    && export `grep "VERSION_ID" /etc/os-release | sed -e 's/^VERSION_ID=\"/VERSION_ID=/' -e 's/\"$//'` \
+    && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/ubuntu/$VERSION_ID/prod.list | tee /etc/apt/sources.list.d/msprod.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y mssql-tools=$MSSQLTOOLS_VERSION unixodbc-dev \
+    && apt-get remove -y curl apt-transport-https \
+    && rm -f /etc/apt/sources.list.d/msprod.list \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "root:Docker!" | chpasswd
 
 RUN mkdir /var/run/sshd
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222
-
-
 
 # Download correct Flyway tar file
 RUN curl -fsSL https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}-linux-x64.tar.gz -o flyway.tgz; \
