@@ -9,7 +9,7 @@
 }
 
 .header__logo {
-   flex: 0 0 350px;
+   max-width: 200px;
 }
 
 .header__navigation {
