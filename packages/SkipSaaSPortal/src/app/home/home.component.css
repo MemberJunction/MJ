@@ -1,0 +1,161 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+
+h1 {
+    font-size: 2.344rem;
+    margin-bottom: 2rem;
+}
+
+h2 {
+    font-size: 1.344rem;
+    margin-bottom: 1.5rem;
+}
+
+h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.card {
+    position: relative;
+    background-color: var(--seconday);
+    border-color: var(--border-secondary);
+    border-radius: 0;
+    flex-grow: 1;
+    margin-bottom: 1.5rem;
+    transition: .3s;
+}
+
+.card:hover {
+    transform: translateY(-.25rem);
+}
+
+.card img {
+    margin-bottom: 1.5rem;
+}
+
+.card p {
+    margin: 0;
+}
+
+.card__link {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.cta-box {
+    padding: 3rem;
+    background-color: var(--seconday);
+    border: 4px solid var(--border-primary);
+    margin-bottom: 1.5rem;
+}
+
+.more-info {
+    border-top: solid 5px rgb(153,179,172);
+    margin-top: 200px;
+}
+
+.container-large {
+    max-width: 1200px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    flex: 1;
+        display: flex;
+        align-items: center;
+}
+
+.card-wrapper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 50px;
+}
+
+.card-wrapper a {
+    text-decoration: none;
+}
+.kendo-card {
+    padding: 50px 40px 45px;
+    border-radius: 50px;
+    background: #FFF;
+    box-shadow: 0px 0px 10px 0px rgba(66, 66, 66, 0.10);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+    justify-content: center;
+}
+
+.kendo-card h3 {
+    width: 100%;
+    margin-top: 50px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #6FC067;
+    text-align: center;
+    color: #28533F;
+    font-size: 24px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.card-wrapper a:hover .kendo-card h3 {
+    color: #6FC067;
+    transition: all 0.5s ease;
+}
+.kendo-card img {
+    max-width: 100%;
+    height: auto;
+}
+
+.kendo-card p {
+    color: #666;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 129%;
+    margin: 0;
+}
+
+.section-home {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 81px);
+    flex: 1;
+}
+@media (max-width: 991px) {
+    .card-wrapper {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 25px;
+        }
+        
+        .kendo-card h3 {
+            font-size: 16px;
+            font-style: normal;
+            font-weight: 500;
+            line-height: normal;
+        }
+
+    .container-large {
+        max-width: 100%;
+        width: 100%;
+        padding: 50px 16px;
+
+    }
+
+
+
+    .kendo-card {
+        padding: 26px;
+    }
+
+    .kendo-card h3 {
+        margin-top: 24px;
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+    }
+
+    .kendo-card h3 a {
+        font-size: 20px;
+    }
+}
