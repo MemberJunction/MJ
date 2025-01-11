@@ -54,7 +54,9 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   @Input() public LinkedEntityCompositeKey: CompositeKey = new CompositeKey();
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
-
+  @Input() public SkipLogoURL: string = "assets/Skip Full Logo - Transparent.png";
+  @Input() public UserAvatarURL: string = "assets/Default User Avatar.png";
+  
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
    */

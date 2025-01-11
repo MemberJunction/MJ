@@ -1,6 +1,5 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
-import { HomeComponent } from './home/home.component';
 import { AuthGuard } from '@auth0/auth0-angular';
 import { NoAccessComponent } from './no-access/no-access.component';
 import { SkipComponent } from './skip/skip.component';
@@ -28,8 +27,8 @@ const routes: Routes = [
   },
   { 
     path: '',
-    component: HomeComponent,
-    data: { breadcrumb: 'Home' }
+    redirectTo: 'chat/1', // Default conversation ID or desired route
+    pathMatch: 'full' // Ensure exact match for the empty path
   },
   { 
     path: 'no-access',

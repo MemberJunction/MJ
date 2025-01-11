@@ -1,10 +1,16 @@
-<skip-chat 
-    #skipChat
-    class="skip-chat"
-    [AutoLoad]="false"
-    mjFillContainer
-    (NavigateToMatchingReport)="showReport($event)"
-    (ConversationSelected)="onConversationSelected($event)"
-    [UpdateAppRoute]="false"
->
-</skip-chat>
+@if (loading) {
+    <kendo-loader></kendo-loader>
+}
+@else {
+    <skip-chat 
+        #skipChat
+        class="skip-chat"
+        [AutoLoad]="false"
+        mjFillContainer
+        (NavigateToMatchingReport)="showReport($event)"
+        (ConversationSelected)="onConversationSelected($event)"
+        [UpdateAppRoute]="false"
+        SkipLogoURL="/assets/images/img-logo.png"
+    >
+    </skip-chat>
+}

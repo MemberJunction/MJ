@@ -1,5 +1,5 @@
 import { Location } from '@angular/common';
-import { AfterViewInit, Component, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ViewChild } from '@angular/core';
 import { AuthService } from '@auth0/auth0-angular';
 import { EntityInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
@@ -13,15 +13,21 @@ import { Router } from '@angular/router';
   styleUrl: './skip.component.css'
 })
 export class SkipComponent implements AfterViewInit {
-  constructor(public auth: AuthService, private router: Router, private location: Location, private sharedService: SharedService) {}
+  constructor(public auth: AuthService, private router: Router, private location: Location, private sharedService: SharedService, private cdr: ChangeDetectorRef) {}
 
   @ViewChild('skipChat') skipChat!: SkipChatComponent;
 
   public targetEntities: EntityInfo[] = [];
+  public loading: boolean = true;
   async ngAfterViewInit() {
-    const p = this.sharedService.InstanceProvider;
-    this.skipChat.Provider = p;
-    this.skipChat.Load();
+    this.sharedService.setupComplete$.subscribe(async () => {
+      this.loading = false;
+      this.cdr.detectChanges();
+      
+      const p = this.sharedService.InstanceProvider;
+      this.skipChat.Provider = p;
+      await this.skipChat.Load();  
+    });
   } 
 
   public showReport(reportId: string) {

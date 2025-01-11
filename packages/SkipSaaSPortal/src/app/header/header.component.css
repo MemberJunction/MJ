@@ -4,12 +4,20 @@
    gap: 1rem;
 }
 
+.menu-item {
+   cursor: pointer;
+   display: flex;
+}
+.menu-item a:hover {
+   color: #1442c4;
+}
+
 .header {
    padding: 3rem;
 }
 
 .header__logo {
-   max-width: 200px;
+   max-width: 100px;
 }
 
 .header__navigation {

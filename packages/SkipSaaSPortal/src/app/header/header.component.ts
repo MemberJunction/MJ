@@ -15,7 +15,10 @@ export class HeaderComponent {
     private router: Router,
   ) {}
 
-  goToHome() {
-    this.router.navigate([`/`]);
+  goToReports() {
+    this.router.navigate([`/report-list`]);
+  }
+  goToChat() {
+    this.router.navigate([`/chat/0`]);
   }
 }

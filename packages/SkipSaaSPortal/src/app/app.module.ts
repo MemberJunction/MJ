@@ -14,7 +14,6 @@ import { environment } from 'src/environments/environment';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { HeaderComponent } from './header/header.component';
-import { HomeComponent } from './home/home.component';
 import { AuthButtonComponent } from './auth-button/auth-button.component';
 import { NoAccessComponent } from './no-access/no-access.component';
 import { SkipComponent } from './skip/skip.component';
@@ -29,7 +28,6 @@ import { ReportListComponent } from './report-list/report-list.component';
     AppComponent,
     AuthButtonComponent,
     HeaderComponent,
-    HomeComponent,
     NoAccessComponent,
     SkipComponent,
     SingleReportComponent,
