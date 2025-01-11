@@ -1,5 +1,5 @@
-import { ChangeDetectorRef, Component, Directive, EventEmitter, Input, Output } from "@angular/core";
-import { IMetadataProvider, LogError, Metadata, RunView } from "@memberjunction/core";
+import { AfterViewInit, ChangeDetectorRef, Component, Directive, EventEmitter, Input, OnInit, Output } from "@angular/core";
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from "@memberjunction/core";
 import { ReportEntity } from "@memberjunction/core-entities";
 import { DataContext } from "@memberjunction/data-context";
 import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";
@@ -7,7 +7,7 @@ import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
-export abstract class SkipDynamicReportBase {
+export abstract class SkipDynamicReportBase implements AfterViewInit {
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ShowCreateReportButton: boolean = false;
     @Input() ConversationID: string | null = null;
@@ -29,6 +29,9 @@ export abstract class SkipDynamicReportBase {
 
     constructor(protected cdRef: ChangeDetectorRef) {}
     
+    ngAfterViewInit() {
+      this.RefreshMatchingReport();
+    }
     /**
      * This property returns the provider to use, which will either be the one specified in the input or the default one, if nothing was specified.
      */
@@ -53,7 +56,7 @@ export abstract class SkipDynamicReportBase {
             this.matchingReportID = cachedItem.reportId;
             this.matchingReportName = cachedItem.reportName;
           } else {
-            const rv = new RunView();
+            const rv = new RunView(<IRunViewProvider><any>this.ProviderToUse);
             const matchingReports = await rv.RunView({
               EntityName: 'Reports',
               ExtraFilter: `ConversationID = '${this.ConversationID}' AND ConversationDetailID = '${this.ConversationDetailID}'`,
@@ -228,8 +231,5 @@ export abstract class SkipDynamicReportBase {
           console.error(err);
         }
       }
-    
-
-
 }
  
