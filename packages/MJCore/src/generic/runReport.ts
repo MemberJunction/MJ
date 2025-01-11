@@ -15,7 +15,7 @@ export class RunReport  {
      * Optionally, you can pass in a provider to use for running the report. If you dont pass in a provider, the static provider will be used.
      * @param provider 
      */
-    constructor(provider: IRunReportProvider) {
+    constructor(provider: IRunReportProvider | null = null) {
         this._provider = provider;
     }
 

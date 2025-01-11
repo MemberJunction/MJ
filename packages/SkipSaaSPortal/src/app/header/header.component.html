@@ -1,0 +1,22 @@
+<header class="header">
+  <div class="header__container container">
+    <div class="header__logo menu-item">
+        <img class="header__logo" src="../../assets/images/img-logo.png" alt="logo" (click)="goToChat()">
+    </div>
+    <kendo-appbar-spacer width="32px"></kendo-appbar-spacer>
+    <kendo-appbar-section>
+      <div class="menu-item" (click)="goToChat()">
+        Chat
+      </div>
+    </kendo-appbar-section>
+    <kendo-appbar-section>
+      <div class="menu-item" (click)="goToReports()">   
+        Reports
+      </div>
+    </kendo-appbar-section>
+    <kendo-appbar-spacer width="32px"></kendo-appbar-spacer>
+    <div class="login-section">
+      <app-auth-button></app-auth-button>
+    </div>
+  </div>
+</header>

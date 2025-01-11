@@ -3,7 +3,7 @@
         <kendo-splitter-pane *ngIf="ShowConversationList" [collapsible]="true" [scrollable]="false" [resizable]="false" size="272px" (collapsedChange)="splitterCollapseStateChanged($event)">
             <div class="conversation-history" *ngIf="ShowConversationList">
                 <div class="new-chat-area">
-                    <img src="assets/Skip Full Logo - Transparent.png" class="avatar" />
+                    <img [src]="SkipLogoURL" class="avatar" />
                     <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()">+</button>
                 </div>
                 <kendo-listview
@@ -47,7 +47,7 @@
                     </div>
                     <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
                         <div class='welcome-message'>
-                            <img src="assets/Skip Full Logo - Transparent.png"/>
+                            <img [src]="SkipLogoURL" />
                             <div class="welcome-header-text">What can I help with today?</div>
                         </div>
                         <div class='welcome-suggested-questions'>
@@ -106,5 +106,5 @@
 </div>     
 
 <div *ngIf="isDataContextDialogVisible">
-    <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()"></mj-data-context-dialog>
+    <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()" [Provider]="ProviderToUse"></mj-data-context-dialog>
 </div>

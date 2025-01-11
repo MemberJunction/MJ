@@ -236,9 +236,10 @@
     margin-right: 11px;
 }
 .edit-conversation-panel {
-    width: 100%; /* Take up the full width */
     display: flex;
     justify-content: flex-end; /* Align icons to the right */
+    margin-top: 2px; /* litle buffer on top */
+    margin-right: 2px; /* litle buffer to the right */
 }
 .edit-conversation-panel > .k-icon {
     margin-left: 5px;

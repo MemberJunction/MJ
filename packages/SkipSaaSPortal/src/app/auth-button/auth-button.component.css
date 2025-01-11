@@ -1,0 +1,21 @@
+.logout-btn {
+    color: #28533F;
+    text-align: center;
+    font-feature-settings: 'clig' off, 'liga' off;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    background: transparent;
+    border: none;
+}
+
+::ng-deep.logout-btn .k-button-text {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+@media (max-width: 767px) {
+    ::ng-deep.logout-btn .k-button-text span {
+        display: none;
+    }
+}

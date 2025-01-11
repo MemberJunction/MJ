@@ -1,0 +1,5 @@
+<ul>
+    <li *ngFor="let report of reports">
+        <a [routerLink]="['/report', report.ID]">{{ report.Name }}</a>
+    </li>
+</ul>

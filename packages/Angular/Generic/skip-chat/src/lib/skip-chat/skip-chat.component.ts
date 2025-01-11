@@ -10,6 +10,8 @@ import {
   OnDestroy,
   Input,
   ChangeDetectorRef,
+  Output,
+  EventEmitter,
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
@@ -52,7 +54,9 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   @Input() public LinkedEntityCompositeKey: CompositeKey = new CompositeKey();
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
-
+  @Input() public SkipLogoURL: string = "assets/Skip Full Logo - Transparent.png";
+  @Input() public UserAvatarURL: string = "assets/Default User Avatar.png";
+  
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
    */
@@ -66,6 +70,16 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
    */
   @Input() public Provider: IMetadataProvider | undefined;
 
+  /**
+   * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
+   */
+  @Output() NavigateToMatchingReport = new EventEmitter<string>();
+
+  /**
+   * Event emitted whenever a conversation is selected
+   */
+  @Output() ConversationSelected = new EventEmitter<string>();
+  
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
   @ViewChild('mjContainer', { read: ViewContainerRef }) mjContainerRef!: ViewContainerRef;
@@ -80,7 +94,6 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   public _showScrollToBottomIcon = false;
 
   private _messageInProgress: boolean = false;
-  private refreshOnAttach: boolean = false;
   private _conversationsInProgress: { [key: string]: any } = {};
   private _conversationsToReload: { [key: string]: boolean } = {};
   public _conversationLoadComplete: boolean = false;
@@ -277,57 +290,68 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   }
 
   public _loaded: boolean = false;
-  ngAfterViewInit(): void {
-    this.updateParentTabPanelStyling();
+  public async ngAfterViewInit() {
+    if (this.AutoLoad)
+      await this.Load();
+  }
 
-    // create an intersection observer to see if we are visible
-    this._intersectionObserver = new IntersectionObserver((entries) => {
-      const [entry] = entries;
-      if (!entry.isIntersecting) {
-        // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
-        if (this._loaded) {
-          // don't go below 0
-          SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
-        }
-      } else {
-        // we are now visible, increment the count of visible instances
-        SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
-        if (!this._loaded) {
-          // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
-          this.sharedService.InvokeManualResize();
+  /**
+   * This property is used to determine if the component should automatically load the data when it is first shown. Default is true. Turn this off if you want to have more control over the loading sequence and manually call the Load() method when ready.
+   */
+  @Input() public AutoLoad: boolean = true;
+  public async Load(forceRefresh: boolean = false) {
+    if (!this._loaded || forceRefresh) {
+      this.updateParentTabPanelStyling();
 
-          // first do stuff if we're on "global" skip chat mode...
-          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
-            // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
-            this.paramsSubscription = this.route.params.subscribe((params) => {
+      // create an intersection observer to see if we are visible
+      this._intersectionObserver = new IntersectionObserver(async (entries) => {
+        const [entry] = entries;
+        if (!entry.isIntersecting) {
+          // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
+          if (this._loaded) {
+            // don't go below 0
+            SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
+          }
+        } else {
+          // we are now visible, increment the count of visible instances
+          SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
+          if (!this._loaded) {
+            // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
+            this.sharedService.InvokeManualResize();
+  
+            // first do stuff if we're on "global" skip chat mode...
+            if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
+              // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
+              this.paramsSubscription = this.route.params.subscribe(async (params) => {
+                if (!this._loaded) {
+                  this._loaded = true; // do this once
+                  const conversationId = params.conversationId;
+                  if (conversationId) {
+                    await this.loadConversations(conversationId); // Load the conversation based on the conversationId
+                  } else {
+                    await this.loadConversations();
+                  }
+                }
+              });
+            } else if (this.LinkedEntity && this.CompositeKeyIsPopulated()) {
+              // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
               if (!this._loaded) {
                 this._loaded = true; // do this once
-                const conversationId = params.conversationId;
-                if (conversationId) {
-                  this.loadConversations(conversationId); // Load the conversation based on the conversationId
-                } else {
-                  this.loadConversations();
-                }
+                await this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
               }
-            });
-          } else if (this.LinkedEntity && this.CompositeKeyIsPopulated()) {
-            // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
-            if (!this._loaded) {
-              this._loaded = true; // do this once
-              this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
             }
+  
+            this.checkScroll();
           }
-
-          this.checkScroll();
+  
+          // Only care about the first time we are visible, so unobserve here to save resources
+          //this._intersectionObserver!.unobserve(this.topLevelDiv.nativeElement);
         }
-
-        // Only care about the first time we are visible, so unobserve here to save resources
-        //this._intersectionObserver!.unobserve(this.topLevelDiv.nativeElement);
-      }
-    });
-
-    // now fire up the observer on the top level div
-    this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
+      });
+  
+      // now fire up the observer on the top level div
+      this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
+    }
   }
 
   private _scrollToBottom: boolean = false;
@@ -611,8 +635,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       if (this.UpdateAppRoute) {
         // finally update the browser URL since we've changed the conversation ID
         this.location.go('/askskip/' + conversation.ID);
-        //      this.router.navigate(['askskip', conversation.ID]);
       }
+      this.ConversationSelected.emit(conversation.ID);
     }
   }
 
@@ -845,6 +869,10 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     // Pass the message details to the component instance
     const obj = componentRef.instance;
 
+    obj.NavigateToMatchingReport.subscribe((reportId: string) => {
+      this.NavigateToMatchingReport.emit(reportId);
+    });
+    obj.Provider = this.ProviderToUse;
     obj.ConversationRecord = this.SelectedConversation!;
     obj.ConversationDetailRecord = messageDetail;
     obj.DataContext = this.DataContext;

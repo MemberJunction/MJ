@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { DataContextEntity } from '@memberjunction/core-entities';
 
 @Component({
@@ -8,12 +8,17 @@ import { DataContextEntity } from '@memberjunction/core-entities';
   styleUrls: ['./ng-data-context.component.css']
 })
 export class DataContextComponent implements OnInit {
-  public showLoader: boolean = false;
   @Input() dataContextId!: string;
-  public dataContextRecord?: DataContextEntity;
-
-  dataContextItems: any = [];
+  @Input() Provider: IMetadataProvider | null = null;
  
+  public dataContextRecord?: DataContextEntity;
+  public dataContextItems: any = [];
+  public showLoader: boolean = false;
+
+  public get ProviderToUse(): IMetadataProvider {
+    return this.Provider || Metadata.Provider;
+  }
+
   ngOnInit(): void {
     if(this.dataContextId){
       this.showLoader = true;
@@ -23,11 +28,11 @@ export class DataContextComponent implements OnInit {
 
   async LoadDataContext(dataContextId: string) {
     if (dataContextId) {
-      const md = new Metadata();
-      this.dataContextRecord = await md.GetEntityObject<DataContextEntity>("Data Contexts");
+      const p = this.ProviderToUse;
+      this.dataContextRecord = await p.GetEntityObject<DataContextEntity>("Data Contexts", p.CurrentUser);
       await this.dataContextRecord.Load(dataContextId);
 
-      const rv = new RunView();
+      const rv = new RunView(<IRunViewProvider><any>p);
       const response = await rv.RunView(
         { 
           EntityName: "Data Context Items", 

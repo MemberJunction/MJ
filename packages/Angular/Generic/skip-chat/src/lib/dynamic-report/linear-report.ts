@@ -18,11 +18,6 @@ import { SkipDynamicReportBase } from './base-report';
 })
 export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
   @Input() ExpandAll: boolean = true;
-  /**
-   * This event fires whenever the component has a click on a matching report link. 
-   * The provided parameter is the ID of the matching report.
-   */
-  @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
   constructor(
     protected cdRef: ChangeDetectorRef,
@@ -35,7 +30,6 @@ export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
     if (this.matchingReportID !== null && this.matchingReportID.length > 0) {
       // navigate to the report
       this.NavigateToMatchingReport.emit(this.matchingReportID);
-      //this.router.navigate(['resource', 'report', this.matchingReportID]);
     }
   }
    
