@@ -1,5 +1,95 @@
-<ul>
-    <li *ngFor="let report of reports">
-        <a [routerLink]="['/report', report.ID]">{{ report.Name }}</a>
-    </li>
-</ul>
+<div class="finder">
+    <div class="header">
+        <nav class="breadcrumb">
+            <ng-container *ngFor="let folder of breadcrumb; let last = last">
+                <span 
+                    (click)="NavigateToBreadcrumb(folder)" 
+                    [class.active]="last">
+                <span *ngIf="!folder && breadcrumb.length > 1" class="fas fa-home"></span>{{ folder ? folder.Name : 'Reports' }}
+                </span>
+                <span *ngIf="!last">
+                    <span class="fas fa-chevron-right breadcrumb-separator"></span>
+                </span>
+            </ng-container>
+        </nav>
+        <button kendoButton class="create-folder-btn" (click)="OpenCreateFolderDialog()">+ Create Folder</button>
+    </div>
+    <div class="content">
+      <ul class="items">
+        <!-- Loop for Folders -->
+        <li *ngFor="let folder of folders" (click)="NavigateToFolder(folder)">
+            <span class="fas fa-folder"></span>
+            <span>{{ folder.Name }}</span>
+        </li>
+        <!-- Loop for Reports -->
+        <li *ngFor="let report of reports">
+            <div class="report-item">
+            <span class="fas fa-file-alt"></span>
+            <span>{{ report.Name }}</span>
+            <!-- Ellipsis Overlay -->
+            <button class="ellipsis-btn" (click)="OpenReportActions(report, $event)">
+                <span class="fas fa-ellipsis-v"></span>
+            </button>
+            </div>
+        </li>
+      </ul>
+    </div>
+  
+    <!-- Kendo Dialog for create folder -->
+    <kendo-dialog *ngIf="isCreateFolderDialogOpen" 
+                  (close)="CloseCreateFolderDialog()"
+                  [width]="500"
+    >
+      <kendo-dialog-titlebar>
+        Create New Folder
+      </kendo-dialog-titlebar>
+      <div class="dialog-content">
+        <label for="folderName">Folder Name:</label>
+        <input
+          id="folderName"
+          type="text"
+          [(ngModel)]="newFolderName"
+          placeholder="Enter folder name"
+        />
+      </div>
+      <kendo-dialog-actions>
+        <button kendoButton (click)="CreateFolder()">OK</button>
+        <button kendoButton (click)="CloseCreateFolderDialog()">Cancel</button>
+      </kendo-dialog-actions>
+    </kendo-dialog>
+
+    <!-- Kendo Action Sheet for Report Options -->
+    <kendo-actionsheet
+        [expanded]="isActionSheetOpen"
+        (itemClick)="ActionSheetItemClick($event)"
+        (overlayClick)="ActionSheetOverlayClick()"
+        [title]="actionSheetTitle"
+        [items]="actionSheetItems"
+    >
+    </kendo-actionsheet>  
+
+  <!-- Kendo Confirm Dialog for Delete -->
+  <kendo-dialog *ngIf="isDeleteConfirmOpen" (close)="CloseDeleteConfirm()">
+    <kendo-dialog-titlebar>Confirm Delete</kendo-dialog-titlebar>
+    <p>Are you sure you want to delete the report <strong>{{ selectedReport?.Name }}</strong>?</p>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="DeleteReport()">Yes</button>
+      <button kendoButton (click)="CloseDeleteConfirm()">No</button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+
+  <!-- Kendo Dialog for Rename -->
+  <kendo-dialog *ngIf="isRenameDialogOpen" (close)="CloseRenameDialog()">
+    <kendo-dialog-titlebar>Rename Report</kendo-dialog-titlebar>
+    <div class="dialog-content">
+      <label for="renameInput">New Name:</label>
+      <input id="renameInput" [(ngModel)]="renameReportName" placeholder="Enter new name" />
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="RenameReportConfirm()">Save</button>
+      <button kendoButton (click)="CloseRenameDialog()">Cancel</button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+
+  </div>
+  

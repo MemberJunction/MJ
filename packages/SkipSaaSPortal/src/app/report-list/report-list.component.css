@@ -1,0 +1,175 @@
+.finder {
+    font-family: Arial, sans-serif;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 16px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    width: 100%; /* Adjust to parent container */
+    max-width: 800px; /* Optional max width */
+    margin: 0 auto;
+  }
+  
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  
+  .header button.create-folder-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  
+  .header button.create-folder-btn:hover {
+    background-color: #0056b3;
+  }
+  
+  .content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px; /* Space between items */
+    justify-content: flex-start;
+  }
+  
+  .items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .items li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 120px; /* Fixed width for uniformity */
+    height: 140px; /* Consistent height */
+    cursor: pointer;
+    transition: background-color 0.2s ease; /* Smooth hover effect */
+  }
+  
+  .items li span {
+    font-size: 24px; /* Icon size */
+  }
+  
+  .items li span + span {
+    margin-top: 8px;
+    font-size: 14px; /* Ensure consistent font size */
+    word-break: break-word; /* Handle long names */
+  }
+  
+  .items li:hover {
+    background-color: #f0f0f0; /* Highlight on hover */
+    border-radius: 8px;
+  }
+  
+  .items li:active {
+    background-color: #e0e0e0; /* Slightly darker on click */
+  }
+  
+
+  .breadcrumb {
+    font-size: 14px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .breadcrumb span {
+    cursor: pointer;
+    color: #007bff;
+    text-decoration: none;
+    white-space: nowrap;
+    margin: 0 3px; /* Add spacing between breadcrumb items */
+  }
+  
+  .breadcrumb span.active {
+    color: #000;
+    cursor: default;
+    font-weight: bold;
+    text-decoration: none; /* No underline for active item */
+  }
+  
+  .breadcrumb span:hover:not(.active) {
+    text-decoration: underline;
+  }
+  
+  .breadcrumb .breadcrumb-separator {
+    color: #6c757d; /* Subtle gray for separator */
+    cursor: default;
+  }
+  .breadcrumb .breadcrumb-separator :hover:not(.active) {
+    text-decoration: underline;
+  }
+  
+
+
+  .create-folder-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+  
+  .create-folder-btn:hover {
+    background-color: #0056b3;
+  }
+  
+  .dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .dialog-content label {
+    font-weight: bold;
+  }
+  
+  .dialog-content input {
+    padding: 8px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 90%;
+  }
+  
+  
+
+
+  .report-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 120px;
+    height: 140px;
+    text-align: center;
+  }
+  
+  .ellipsis-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 16px;
+    color: #6c757d;
+  }
+  
+  .ellipsis-btn:hover {
+    color: #000;
+  }
+   
+  

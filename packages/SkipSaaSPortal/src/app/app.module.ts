@@ -6,9 +6,11 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { AuthModule } from '@auth0/auth0-angular';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { LayoutModule } from '@progress/kendo-angular-layout';
+import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { IconsModule } from '@progress/kendo-angular-icons';
 import { NotificationModule } from '@progress/kendo-angular-notification';
+import { DialogModule } from '@progress/kendo-angular-dialog';
 import { environment } from 'src/environments/environment';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -51,8 +53,10 @@ import { ReportListComponent } from './report-list/report-list.component';
     ButtonsModule,
     IconsModule,
     NotificationModule,
+    DialogModule,
     SkipChatModule,
-    ContainerDirectivesModule
+    ContainerDirectivesModule,
+    NavigationModule
   ],
   providers: [
     CurrencyPipe, 
