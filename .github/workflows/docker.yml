@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Error out if the trigger did not succeed
         run: |
-          if [ "${{ github.event.workflow_run.conclusion || 'success' }}" != "success" ]; then
+          if [ "${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || 'success' }}" != "success" ]; then
             echo "::error::The triggering workflow did not succeed"
             exit 1
           fi
