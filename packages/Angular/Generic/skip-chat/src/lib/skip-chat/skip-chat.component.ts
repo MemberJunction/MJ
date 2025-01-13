@@ -55,7 +55,11 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
   @Input() public SkipLogoURL: string = "assets/Skip Full Logo - Transparent.png";
-  @Input() public UserAvatarURL: string = "assets/Default User Avatar.png";
+  @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+  /**
+   * Set this property in order to set the user image. This can either be a URL or a Blob
+   */
+  @Input() public UserImage: string | Blob | undefined = undefined;
   
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -198,7 +202,9 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       setTimeout(() => {
         this.InnerSetSkipStatusMessage(message);
       }, delay);
-    } else this.InnerSetSkipStatusMessage(message);
+    } 
+    else 
+      this.InnerSetSkipStatusMessage(message);
   }
 
   protected InnerSetSkipStatusMessage(message: string) {
@@ -212,10 +218,12 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
         const ref = (<any>this._temporaryMessage)._componentRef;
         if (ref) {
           const obj = ref.instance;
-          if (obj && obj.RefreshMessage) obj.RefreshMessage();
+          if (obj && obj.RefreshMessage) 
+            obj.RefreshMessage();
         }
       }
-    } else {
+    } 
+    else {
       if (this._temporaryMessage) {
         // get rid of the temporary message
         this.RemoveMessageFromCurrentConversation(this._temporaryMessage);
@@ -289,7 +297,9 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     }
   }
 
-  public _loaded: boolean = false;
+  public _initialLoadComplete: boolean = false;
+  public _isLoading: boolean = false;
+  public _numLoads: number = 0;
   public async ngAfterViewInit() {
     if (this.AutoLoad)
       await this.Load();
@@ -300,7 +310,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
    */
   @Input() public AutoLoad: boolean = true;
   public async Load(forceRefresh: boolean = false) {
-    if (!this._loaded || forceRefresh) {
+    if (!this._initialLoadComplete || forceRefresh) {
       this.updateParentTabPanelStyling();
 
       // create an intersection observer to see if we are visible
@@ -308,14 +318,14 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
         const [entry] = entries;
         if (!entry.isIntersecting) {
           // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
-          if (this._loaded) {
+          if (this._initialLoadComplete) {
             // don't go below 0
             SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
           }
         } else {
           // we are now visible, increment the count of visible instances
           SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
-          if (!this._loaded) {
+          if (!this._initialLoadComplete) {
             // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
             this.sharedService.InvokeManualResize();
   
@@ -323,20 +333,21 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
             if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
               // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
               this.paramsSubscription = this.route.params.subscribe(async (params) => {
-                if (!this._loaded) {
-                  this._loaded = true; // do this once
+                if (!this._initialLoadComplete) {
+                  this._initialLoadComplete = true; // do this once
                   const conversationId = params.conversationId;
                   if (conversationId) {
                     await this.loadConversations(conversationId); // Load the conversation based on the conversationId
-                  } else {
+                  } 
+                  else {
                     await this.loadConversations();
                   }
                 }
               });
             } else if (this.LinkedEntity && this.CompositeKeyIsPopulated()) {
               // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
-              if (!this._loaded) {
-                this._loaded = true; // do this once
+              if (!this._initialLoadComplete) {
+                this._initialLoadComplete = true; // do this once
                 await this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
               }
             }
@@ -373,6 +384,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   }
 
   protected async loadConversations(conversationIdToLoad: string | undefined = undefined) {
+    this._isLoading = true; 
     let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
     if (!cachedConversations) {
       // load up from the database as we don't have any cached conversations
@@ -397,11 +409,13 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     // now setup the array we use to bind to the UI
     if (this.IncludeLinkedConversationsInList) {
       this.Conversations = cachedConversations; // dont filter out linked conversations
-    } else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated()) {
+    } 
+    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated()) {
       this.Conversations = cachedConversations.filter(
         (c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityCompositeKey.Values()
       ); // ONLY include the linked conversations
-    } else {
+    } 
+    else {
       this.Conversations = cachedConversations.filter(
         (c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID.length > 0)
       ); // filter OUT linked conversations
@@ -409,21 +423,26 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
 
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
-      this.CreateNewConversation();
+      await this.CreateNewConversation();
       this.sharedService.InvokeManualResize(1);
-    } else if (conversationIdToLoad) {
+    } 
+    else if (conversationIdToLoad) {
       // we have > 0 convos and we were asked to load a specific one
       const convo = this.Conversations.find((c) => c.ID == conversationIdToLoad);
       if (convo) {
-        this.SelectConversation(convo);
-      } else {
+        await this.SelectConversation(convo);
+      } 
+      else {
         // we didn't find the conversation so just select the first one
-        this.SelectConversation(this.Conversations[0]);
+        await this.SelectConversation(this.Conversations[0]);
       }
-    } else {
+    } 
+    else {
       // select the first conversation since no param was provided and we have > 0 convos
-      this.SelectConversation(this.Conversations[0]);
+      await this.SelectConversation(this.Conversations[0]);
     }
+    this._isLoading = false;
+    this._numLoads++;
   }
 
   private _oldConvoName: string = '';
@@ -441,7 +460,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     let newConvoObject: ConversationEntity;
     if (conversation.Save !== undefined) {
       newConvoObject = conversation;
-    } else {
+    } 
+    else {
       const p = this.ProviderToUse;
       newConvoObject = await p.GetEntityObject('Conversations', p.CurrentUser);
       await newConvoObject.Load(conversation.ID);
@@ -462,36 +482,48 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
           cachedConversations[idx] = newConvoObject;
         }
       }
-    } else this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000);
+    } 
+    else 
+      this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000);
+  }
+
+  public confirmDeleteConversationDialogOpen: boolean = false;
+  private _conversationToDelete: ConversationEntity | undefined;
+  public async showDeleteConvoDialog(conversation: ConversationEntity) {
+    this.confirmDeleteConversationDialogOpen = true;
+    this._conversationToDelete = conversation;
+  }
+  public async closeDeleteConversation(yesno: 'yes' | 'no') {
+    this.confirmDeleteConversationDialogOpen = false;
+    if (this._conversationToDelete && yesno === 'yes') 
+      await this.deleteConvo(this._conversationToDelete);
   }
 
   public async deleteConvo(conversation: ConversationEntity) {
-    if (confirm('Are you sure you want to delete this conversation?')) {
-      // delete the conversation - we might need to load the entity if the current object isn't a "real object"
-      if (await this.DeleteConversation(conversation.ID)) {
-        // get the index of the conversation
-        const idx = this.Conversations.findIndex((c) => c.ID === conversation.ID);
-        // remove the conversation from the list that is bound to the UI
-        this.Conversations = this.Conversations.filter((c) => c.ID != conversation.ID);
+    // delete the conversation - we might need to load the entity if the current object isn't a "real object"
+    if (await this.DeleteConversation(conversation.ID)) {
+      // get the index of the conversation
+      const idx = this.Conversations.findIndex((c) => c.ID === conversation.ID);
+      // remove the conversation from the list that is bound to the UI
+      this.Conversations = this.Conversations.filter((c) => c.ID != conversation.ID);
 
-        // also, remove the conversation from the cache
-        const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
-        if (cachedConversations) {
-          MJGlobal.Instance.ObjectCache.Replace(
-            'Conversations',
-            cachedConversations.filter((c) => c.ID != conversation.ID)
-          );
-        } else {
-          MJGlobal.Instance.ObjectCache.Add('Conversations', this.Conversations);
-        }
-
-        if (this.Conversations.length > 0) {
-          const newIdx = idx > 0 ? idx - 1 : 0;
-          this.SelectConversation(this.Conversations[newIdx]);
-        } else this.Messages = [];
+      // also, remove the conversation from the cache
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      if (cachedConversations) {
+        MJGlobal.Instance.ObjectCache.Replace(
+          'Conversations',
+          cachedConversations.filter((c) => c.ID != conversation.ID)
+        );
       } else {
-        this.sharedService.CreateSimpleNotification('Error deleting conversation', 'error', 5000);
+        MJGlobal.Instance.ObjectCache.Add('Conversations', this.Conversations);
       }
+
+      if (this.Conversations.length > 0) {
+        const newIdx = idx > 0 ? idx - 1 : 0;
+        this.SelectConversation(this.Conversations[newIdx]);
+      } else this.Messages = [];
+    } else {
+      this.sharedService.CreateSimpleNotification('Error deleting conversation', 'error', 5000);
     }
   }
 
@@ -786,7 +818,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
       //this.sharedService.InvokeManualResize();
 
-      this.SetSkipStatusMessage('', 3500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
+      this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
       // now set focus on the input box
       this.askSkipInput.nativeElement.focus();
     }
@@ -873,6 +905,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       this.NavigateToMatchingReport.emit(reportId);
     });
     obj.Provider = this.ProviderToUse;
+    obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
+    obj.UserImage = this.UserImage;
     obj.ConversationRecord = this.SelectedConversation!;
     obj.ConversationDetailRecord = messageDetail;
     obj.DataContext = this.DataContext;
@@ -895,7 +929,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     this._scrollToBottom = true;
 
     // Resume change detection
-    if (stopChangeDetection) this.cdRef.reattach();
+    if (stopChangeDetection) 
+      this.cdRef.reattach();
   }
 
   checkScroll() {

@@ -1,12 +1,20 @@
 <div>
     <div class="message-row" [ngClass]="GetMessageRowCssClass()" > 
         <div class="message-image">
-            <img [src]="GetUserImageSource()" class="avatar" />
+            @if (GetUserImageSource()) {
+                <img [src]="GetUserImageSource()" class="avatar" />
+            }
+            @else {
+                <span class="fa-solid fa-user default-user-image"></span>
+            }
         </div>
         <div class="message"
             [id]="'skip_message_' + ConversationDetailRecord.ID">
             <div class="message-user-name">{{IsAIMessage ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
             <div>
+                @if(IsTemporaryMessage) {
+                    <kendo-loader></kendo-loader>
+                }
                 {{Message}}
             </div>
             <div #reportContainer>

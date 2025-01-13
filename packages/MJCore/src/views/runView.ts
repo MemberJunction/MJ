@@ -1,5 +1,5 @@
 import { MJGlobal } from '@memberjunction/global';
-import { IRunViewProvider, RunViewResult } from '../generic/interfaces';
+import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { Metadata } from '../generic/metadata';
@@ -143,8 +143,8 @@ export class RunView  {
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
             // we need to get the entity definition and then get all the fields for it
-            const md = new Metadata();
-            const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            const p = <IMetadataProvider><any>this.ProviderToUse;
+            const entity = p.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
@@ -166,14 +166,14 @@ export class RunView  {
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         if (params && params.length > 0) {
-            const md = new Metadata();
+            const p = <IMetadataProvider><any>this.ProviderToUse;
         
-            for(const param of params) {
+            for (const param of params) {
                 // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
                 // so that we can get the data to populate the entity object with.
                 if (param.ResultType === 'entity_object') {
                     // we need to get the entity definition and then get all the fields for it
-                    const entity: EntityInfo | undefined = md.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                    const entity: EntityInfo | undefined = p.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
                     if (!entity){
                         throw new Error(`Entity ${param.EntityName} not found in metadata`);
                     }
@@ -199,10 +199,10 @@ export class RunView  {
         // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
         if (param.ResultType === 'entity_object' && result && result.Success){
             // we need to transform each of the items in the result set into a BaseEntity-derived object
-            const md = new Metadata();
+            const p = <IMetadataProvider><any>this.ProviderToUse;
             const newItems = [];
             for (const item of result.Results) {
-                const entity = await md.GetEntityObject(param.EntityName, contextUser);
+                const entity = await p.GetEntityObject(param.EntityName, contextUser);
                 entity.LoadFromData(item);
                 newItems.push(entity);
             }
@@ -236,19 +236,20 @@ export class RunView  {
      * @param params 
      * @returns 
      */
-    public static async GetEntityNameFromRunViewParams(params: RunViewParams): Promise<string> {
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null): Promise<string> {
+        const p = provider ? provider : <IMetadataProvider><any>RunView.Provider;
+
         if (params.EntityName)
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const md = new Metadata();
-            const entity = md.Entities.find(e => e.ID === entityID);
+            const entity = p.Entities.find(e => e.ID === entityID);
             if (entity)
                 return entity.Name
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
-            const rv = new RunView();
+            const rv = new RunView(<IRunViewProvider><any>p);
             const result = await rv.RunView({
                 EntityName: "User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,

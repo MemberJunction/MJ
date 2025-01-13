@@ -20,6 +20,19 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     @Input() public ConversationMessages!: ConversationDetailEntity[];
     @Input() public Provider: IMetadataProvider | null = null;
 
+    /**
+     * Set this property in order to set the Skip logo. This can either be a URL or a Blob
+     */
+    @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+    /**
+     * Set this property in order to set the user image. This can either be a URL or a Blob
+     */
+    @Input() public UserImage: string | Blob | undefined = undefined;
+    /**
+     * Default user image to use if the user image is not set
+     */
+    @Input() public DefaultUserImage: string | Blob | undefined = undefined;
+  
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
     /**
@@ -170,7 +183,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
 
     public GetUserImageSource(): string | Blob | undefined {
       return this.IsAIMessage || this.ConversationDetailRecord.Role.trim().toLowerCase() === 'error' ? 
-                'assets/Skip - Mark Only - Small.png' : 
+                this.SkipMarkOnlyLogoURL : 
                 this.UserImage
     }
     public GetMessageRowCssClass(): string {
@@ -187,10 +200,16 @@ export class SkipSingleMessageComponent implements AfterViewInit {
           return 'user-message';
     }    
 
-    /**
-     * Set this property in order to set the user image. This can either be a URL or a Blob
-     */
-    @Input() public UserImage: string | Blob | undefined = undefined;
+    public get IsTemporaryMessage(): boolean {
+      if (this.ConversationDetailRecord?.Role?.trim().toLowerCase() === 'ai') {
+        if (this.ConversationDetailRecord.ID?.length > 0)
+          return false;
+        else
+          return true;
+      }
+      else
+        return false;
+    }
 
     public get IsFirstMessageInConversation(): boolean {
         return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;

@@ -18,9 +18,9 @@
                     >
                     <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
                         <div class="conversation-item" 
-                             [ngClass]="GetConversationItemClass(dataItem)"
-                             [title]="dataItem.Name" 
-                             (click)="SelectConversation(dataItem)"> 
+                                [ngClass]="GetConversationItemClass(dataItem)"
+                                [title]="dataItem.Name" 
+                                (click)="SelectConversation(dataItem)"> 
                             <span *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" class="fa-regular fa-clock"></span>
                             <div class="text-container">
                                 <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
@@ -28,7 +28,7 @@
                             </div>
                             <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
                                 <span *ngIf="!ConversationEditMode" class="fa-solid fa-pen-to-square" (click)="editConvo(dataItem)"></span>
-                                <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="deleteConvo(dataItem)"></span>
+                                <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="showDeleteConvoDialog(dataItem)"></span>
                                 <span *ngIf="ConversationEditMode" class="fa-solid fa-check" (click)="saveConvoName(dataItem)"></span>
                                 <span *ngIf="ConversationEditMode" class="fa-solid fa-xmark" (click)="cancelConvoEdit(dataItem)"></span>
                             </div>
@@ -36,14 +36,14 @@
                     </ng-template>
                 </kendo-listview>
                 <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
-                     <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
+                        <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
             </div>
         </kendo-splitter-pane>
         <kendo-splitter-pane>
             <div class="conversation-wrapper" mjFillContainer>
                 <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
                     <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
-                        <kendo-loader></kendo-loader>
+                        <!-- MOVED THIS TO INSIDE MESSAGE - REMOVE THIS ENTIRE DIV ---- <kendo-loader></kendo-loader> -->
                     </div>
                     <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
                         <div class='welcome-message'>
@@ -91,7 +91,7 @@
                     @if (ShowDataContextButton) {
                         <button kendoButton >
                             <span class="fa-solid fa-gear" 
-                                  (click)="showDataContext()"></span>
+                                    (click)="showDataContext()"></span>
                         </button>    
                     }
                     <button kendoButton 
@@ -108,3 +108,24 @@
 <div *ngIf="isDataContextDialogVisible">
     <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()" [Provider]="ProviderToUse"></mj-data-context-dialog>
 </div>
+
+
+<kendo-dialog
+    title="Please confirm"
+    *ngIf="confirmDeleteConversationDialogOpen"
+    (close)="closeDeleteConversation('no')"
+    [minWidth]="250"
+    [width]="450"
+>
+    <p style="margin: 30px; text-align: center;">
+        Would you like to delete {{SelectedConversation?.Name}}?
+    </p>
+    <kendo-dialog-actions>
+        <button kendoButton (click)="closeDeleteConversation('yes')" themeColor="primary">
+            Yes
+        </button>
+    <button kendoButton (click)="closeDeleteConversation('no')">
+        No
+    </button>
+    </kendo-dialog-actions>
+</kendo-dialog>    

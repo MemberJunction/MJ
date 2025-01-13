@@ -42,7 +42,7 @@
       "url": "http://localhost:4200",
       "cwd": "${workspaceFolder}/packages/SkipSaasPortal",
       "sourceMaps": true,
-      "webRoot": "${workspaceFolder}/packages",
+      "webRoot": "${workspaceFolder}/packages/SkipSaasPortal",
       "sourceMapPathOverrides": {
         "webpack:///./src/*": "${workspaceFolder}/packages/SkipSaasPortal/src/*"
       }
