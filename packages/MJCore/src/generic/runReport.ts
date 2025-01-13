@@ -10,10 +10,24 @@ export type RunReportParams = {
  * Class used to run a report and return the results.
  */
 export class RunReport  {
-    //private static _Provider: IRunViewProvider;
+    private _provider: IRunReportProvider;
+    /**
+     * Optionally, you can pass in a provider to use for running the report. If you dont pass in a provider, the static provider will be used.
+     * @param provider 
+     */
+    constructor(provider: IRunReportProvider | null = null) {
+        this._provider = provider;
+    }
+
+    /**
+     * Returns the provider to be used for this instance, if one was passed in. Otherwise, it returns the static provider.
+     */
+    public get ProviderToUse(): IRunReportProvider {
+        return this._provider || RunReport.Provider;
+    }
 
     public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-        return RunReport.Provider.RunReport(params, contextUser);
+        return this.ProviderToUse.RunReport(params, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunReportProvider';

@@ -80,3 +80,8 @@
 .suggested-item:hover {
     background-color: #96d0f1;
 }
+
+.default-user-image {
+    width: 24px;
+    font-size: 22px;
+}

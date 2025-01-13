@@ -20,7 +20,8 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 // Plotly
 import { PlotlyViaCDNModule } from 'angular-plotly.js';
 PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
+PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'    
+
 
 /*********************************************/
 // Markdown
@@ -76,4 +77,5 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     SkipDynamicGridComponent,
   ]
 })
-export class SkipChatModule { }
+export class SkipChatModule { 
+}

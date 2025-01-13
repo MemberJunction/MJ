@@ -10,8 +10,19 @@ export type RunQueryParams = {
  * Class used to run a query and return the results.
  */
 export class RunQuery  {
+    private _provider: IRunQueryProvider | null;
+    /**
+     * Optionally, you can pass in a provider to use for running the query. If not provided, the static provider will be used.
+     */
+    constructor(provider: IRunQueryProvider | null = null) {
+        this._provider = provider;
+    }
+
+    public get ProviderToUse(): IRunQueryProvider {
+        return this._provider || RunQuery.Provider;
+    }
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
-        return RunQuery.Provider.RunQuery(params, contextUser);
+        return this.ProviderToUse.RunQuery(params, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunQueryProvider';

@@ -1,9 +1,10 @@
 import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
  
 
 @Component({
@@ -17,9 +18,27 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
     @Input() public ConversationMessages!: ConversationDetailEntity[];
+    @Input() public Provider: IMetadataProvider | null = null;
 
+    /**
+     * Set this property in order to set the Skip logo. This can either be a URL or a Blob
+     */
+    @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+    /**
+     * Set this property in order to set the user image. This can either be a URL or a Blob
+     */
+    @Input() public UserImage: string | Blob | undefined = undefined;
+    /**
+     * Default user image to use if the user image is not set
+     */
+    @Input() public DefaultUserImage: string | Blob | undefined = undefined;
+  
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
+    /**
+     * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
+     */
+    @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
@@ -38,6 +57,10 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     @ViewChild('reportContainer', { read: ViewContainerRef }) reportContainerRef!: ViewContainerRef;
 
     private static _detailHtml: any = {};
+
+    public get ProviderToUse(): IMetadataProvider {
+      return this.Provider || Metadata.Provider;
+    }
 
     private GetHtmlFromCache(detail: ConversationDetailEntity): string | null {
         if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0 && SkipSingleMessageComponent._detailHtml[detail.ID] !== undefined && SkipSingleMessageComponent._detailHtml[detail.ID] !== null) {
@@ -132,9 +155,13 @@ export class SkipSingleMessageComponent implements AfterViewInit {
           if (resultObject.responsePhase ===  SkipResponsePhase.analysis_complete ) {
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
             const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);
-    
+            
             // Pass the data to the new chart
             const report = componentRef.instance;
+            report.NavigateToMatchingReport.subscribe((reportID: string) => {
+              this.NavigateToMatchingReport.emit(reportID); // bubble up
+            });
+            report.Provider = this.ProviderToUse;
             report.SkipData = analysisResult;
             this.SuggestedQuestions = analysisResult.suggestedQuestions ? analysisResult.suggestedQuestions : [];
             report.DataContext = this.DataContext;
@@ -156,7 +183,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
 
     public GetUserImageSource(): string | Blob | undefined {
       return this.IsAIMessage || this.ConversationDetailRecord.Role.trim().toLowerCase() === 'error' ? 
-                'assets/Skip - Mark Only - Small.png' : 
+                this.SkipMarkOnlyLogoURL : 
                 this.UserImage
     }
     public GetMessageRowCssClass(): string {
@@ -173,10 +200,16 @@ export class SkipSingleMessageComponent implements AfterViewInit {
           return 'user-message';
     }    
 
-    /**
-     * Set this property in order to set the user image. This can either be a URL or a Blob
-     */
-    @Input() public UserImage: string | Blob | undefined = undefined;
+    public get IsTemporaryMessage(): boolean {
+      if (this.ConversationDetailRecord?.Role?.trim().toLowerCase() === 'ai') {
+        if (this.ConversationDetailRecord.ID?.length > 0)
+          return false;
+        else
+          return true;
+      }
+      else
+        return false;
+    }
 
     public get IsFirstMessageInConversation(): boolean {
         return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;

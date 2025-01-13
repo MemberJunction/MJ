@@ -147,6 +147,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         const mjcSchema = this.ConfigData.MJCoreSchemaName;
 
         // check to see if the MJ Core schema is already in the list, if not add it
+        // TODO: The logic here doesn't match the comment above
         if (includeSchemaList && includeSchemaList.length > 0 && includeSchemaList.indexOf(mjcSchema) === -1) 
             includeSchemaList.push(mjcSchema)
 
@@ -336,7 +337,7 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
+                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this); 
                     await newObject.Config(contextUser);
 
                     return newObject;

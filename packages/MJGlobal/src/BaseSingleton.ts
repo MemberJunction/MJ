@@ -10,7 +10,7 @@ export abstract class BaseSingleton<T> {
     private _globalKey: string;
     public get GlobalKey(): string {
         return this._globalKey;
-    }
+    } 
     protected constructor() {
         this._globalKey = BaseSingleton._globalKeyPrefix + this.constructor.name;
         const g = GetGlobalObjectStore();

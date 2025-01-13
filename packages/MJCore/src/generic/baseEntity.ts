@@ -85,14 +85,14 @@ export class EntityField {
      */
     set Value(value: any) {
         if (
-              !this.ReadOnly || 
-              this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load, 
+              !this.ReadOnly ||
+              this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
                                  after that load for a given INSTANCE of an EntityField object we never set a ReadOnly Field*/
             ) {
             this._Value = value;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
-            if (this._NeverSet && 
+            if (this._NeverSet &&
                 (value !== null || this._OldValue !== null)) {
                 // initial value set
                 this._OldValue = value;
@@ -125,7 +125,7 @@ export class EntityField {
                     // and sometimes the new values are date objects, convert to UTC timestamp for comparison
                     newCompare = this.Value.getTime();
                 }
-                
+
                 return oldCompare !== newCompare;
             }
         }
@@ -133,18 +133,18 @@ export class EntityField {
 
     /**
      * Convenience method to format the value of the field. This method calls the static method on EntityFieldInfo to do the actual formatting.
-     * @param decimals 
-     * @param currency 
-     * @returns 
+     * @param decimals
+     * @param currency
+     * @returns
      */
     public FormatValue(decimals: number = 2, currency: string = 'USD') {
         return this.EntityFieldInfo.FormatValue(this.Value, decimals, currency);
     }
 
     /**
-     * Validates the current value of the field. If the field is read only, or if the field is marked to skip validation, nothing happens. 
+     * Validates the current value of the field. If the field is read only, or if the field is marked to skip validation, nothing happens.
      * If the field is not read only, and the field is not marked to skip validation, the value is checked against the validation rules defined in the metadata for the field.
-     * @returns 
+     * @returns
      */
     public Validate(): ValidationResult {
         const ef = this._entityFieldInfo;
@@ -214,7 +214,7 @@ export class EntityField {
                             // this is an invalid date, so throw an error
                             throw new Error(); // blank error because we just end up going to the catch block anyway and in there we have logic to handle this properly
                         }
-                        else 
+                        else
                             this.Value = temp;
                     }
                     catch (e) {
@@ -339,7 +339,7 @@ export class BaseEntityResult {
         this.StartedAt = new Date();
         this.EndedAt = new Date();
     }
-} 
+}
 
 /**
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
@@ -373,19 +373,28 @@ export abstract class BaseEntity<T = unknown> {
     private _transactionGroup: TransactionGroupBase = null;
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
+    private _provider: IEntityDataProvider | null = null;
 
-    constructor(Entity: EntityInfo) {
+    constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
+        this._provider = Provider;
         this.init();
+    }
+
+    /**
+     * Returns this provider to be used for a given instance of a BaseEntity derived subclass. If the provider is not set, the BaseEntity.Provider is returned.
+     */
+    public get ProviderToUse(): IEntityDataProvider {
+        return this._provider || BaseEntity.Provider;
     }
 
     /**
      * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a 
      * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their 
      * own event types and payloads as needed.
-     * @param callback 
-     * @returns 
+     * @param callback
+     * @returns
      */
     public RegisterEventHandler(callback: (event: BaseEntityEvent) => void): Subscription {
         return this._eventSubject.asObservable().subscribe(callback);
@@ -393,7 +402,7 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * If the entity object has a TransactionGroup associated with it, the TransactionGroup will be notified that we are doing some transaction pre-processing so that the TransactionGroup can
-     * properly wait for those pre-processing steps to complete before submitting the transaction. This method should generally NOT be called by anyone other than a provider that is handling 
+     * properly wait for those pre-processing steps to complete before submitting the transaction. This method should generally NOT be called by anyone other than a provider that is handling
      * the tier-specific processing for the entity object.
      */
     public RegisterTransactionPreprocessing() {
@@ -403,7 +412,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Raises the transaction_ready event. This is used to indicate that the entity object is ready to be submitted for transaction processing. This is used by the TransactionGroup class to know when all async preprocessing is 
+     * Raises the transaction_ready event. This is used to indicate that the entity object is ready to be submitted for transaction processing. This is used by the TransactionGroup class to know when all async preprocessing is
      * done and it can submit the transaction. This is an internal method and shouldn't be used by sub-classes or external callers in most cases. It is primarily used by Provider classes who are handling the tier-specific processing
      * for the entity object.
      */
@@ -428,31 +437,31 @@ export abstract class BaseEntity<T = unknown> {
         // this is the local event handler that is specific to THIS instance of the entity object
         this._eventSubject.next({type: type, payload: payload, baseEntity: this});
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
-        // at the moment we only broadcast save/delete not the others 
+        // at the moment we only broadcast save/delete not the others
         if (type === 'save' || type === 'delete') {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
             event.payload = null;
             event.type = type;
-            
+
             MJGlobal.Instance.RaiseEvent({
                 component: this,
                 event: MJEventType.ComponentEvent,
                 eventCode: BaseEntity.BaseEventCode,
                 args: event
-            });            
+            });
         }
     }
 
     /**
-     * This method MUST be called right after the class is instantiated to provide an async/await pair for any asynchronous operations a given entity needs to do when it is first 
+     * This method MUST be called right after the class is instantiated to provide an async/await pair for any asynchronous operations a given entity needs to do when it is first
      * created/configured. When you call Metadata/Provider GetEntityObject() this is done automatically for you. In nearly all cases you should go through GetEntityObject() anyway
      * and not ever directly instantiate a BaseEntity derived class.
      */
     public async Config(contextUser: UserInfo) {
         this.ContextCurrentUser = contextUser;
     }
-    
+
     /**
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
@@ -503,18 +512,18 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Convenience method to access a field by name. This method is case-insensitive and will return null if the field is not found. You can do the same thing with more fine tune controlled by accessing the Fields property directly.
-     * @param fieldName 
-     * @returns 
+     * @param fieldName
+     * @returns
      */
     public GetFieldByName(fieldName: string): EntityField | null {
         if(!fieldName) {
             return null;
         }
-        
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
         return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
     }
-    
+
     /**
      * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
      */
@@ -523,7 +532,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Returns an array of all primary key fields for the entity. If the entity has a composite primary key, this method will return an array of all primary key fields. 
+     * Returns an array of all primary key fields for the entity. If the entity has a composite primary key, this method will return an array of all primary key fields.
      * If the entity has a single primary key, this method will return an array with a single field in it.
      */
     get PrimaryKeys(): EntityField[] {
@@ -533,11 +542,11 @@ export abstract class BaseEntity<T = unknown> {
     private _compositeKey: CompositeKey = null;
     /**
      * Returns the primary key for the record. The CompositeKey class is a multi-valued key that can have any number of key/value pairs within it. Always traverse the full
-     * set of key/value pairs to get the full primary key for the record.  
+     * set of key/value pairs to get the full primary key for the record.
      */
     get PrimaryKey (): CompositeKey {
         if (this._compositeKey === null) {
-            this._compositeKey = new CompositeKey();            
+            this._compositeKey = new CompositeKey();
             this._compositeKey.LoadFromEntityFields(this.PrimaryKeys);
         }
         return this._compositeKey;
@@ -559,28 +568,28 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Sets the value of a given field. If the field doesn't exist, nothing happens.
-     * @param FieldName 
-     * @param Value 
+     * @param FieldName
+     * @param Value
      */
     public Set(FieldName: string, Value: any) {
-        const field = this.GetFieldByName(FieldName); 
+        const field = this.GetFieldByName(FieldName);
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
                 field.Value = new Date(Value);
             }
             else {
-                field.Value = Value;                
+                field.Value = Value;
             }
         }
     }
 
     /**
      * Returns the value of the field with the given name. If the field is a date, and the value is a string, it will be converted to a date object.
-     * @param FieldName 
-     * @returns 
+     * @param FieldName
+     * @returns
      */
     public Get(FieldName: string): any {
-        const field = this.GetFieldByName(FieldName); 
+        const field = this.GetFieldByName(FieldName);
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
@@ -593,9 +602,9 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * NOTE: Do not call this method directly. Use the {@link From} method instead
-     * 
+     *
      * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
-     * @param object  
+     * @param object
      * @param ignoreNonExistentFields - if set to true, fields that don't exist on the entity object will be ignored, if false, an error will be thrown if a field doesn't exist
      * @param replaceOldValues - if set to true, the old values of the fields will be reset to the values provided in the object parameter, if false, they will be left alone
      */
@@ -604,7 +613,7 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
         for (let key in object) {
-            const field = this.GetFieldByName(key); 
+            const field = this.GetFieldByName(key);
             if (field) {
                 // check to see if key matches a field name, if so, set it
                 this.Set(key, object[key]);
@@ -624,7 +633,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 else {
                     // if we get here, we have a field that doesn't match either the field name or the code name, so throw an error
-                    if (!ignoreNonExistentFields) 
+                    if (!ignoreNonExistentFields)
                         throw new Error(`Field ${key} does not exist on ${this.EntityInfo.Name}`);
                     else
                         console.warn(`Field ${key} does not exist on ${this.EntityInfo.Name}, ignoring because ignoreNonExistentFields was set to true`);
@@ -635,12 +644,12 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * NOTE: Do not call this method directly. Use the {@link To} method instead
-     * 
+     *
      * Utility method to create an object and return it with properties in the newly created and returned object for each field in the entity object. This is useful for scenarios where you need to be able to persist the data
-     * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.  
-     * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.  
+     * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.
+     * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.
      * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
-     * @returns 
+     * @returns
      */
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
@@ -649,7 +658,7 @@ export abstract class BaseEntity<T = unknown> {
                 obj[field.Name] = oldValues ? field.OldValue : field.Value;
                 if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
                     obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
-                }    
+                }
             }
         }
         return obj;
@@ -657,9 +666,9 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * This utility method calls GetDataObject() internally and formats the result as a JSON string. If you want to get the data as an object instead of a string, call GetDataObject() directly.
-     * @param params 
-     * @param minifyJSON 
-     * @returns 
+     * @param params
+     * @param minifyJSON
+     * @returns
      */
     public async GetDataObjectJSON(params: DataObjectParams, minifyJSON: boolean = true): Promise<string> {
         const obj = await this.GetDataObject(params);
@@ -672,8 +681,8 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * This utility method generates a completely new object that has properties that map to the fields and values in the entity at the time it is called. It is a copy, NOT a link, so any changes
      * made to the object after calling this method will NOT be reflected in the object that is returned. This is useful for things like sending data to a client, or for use in a view model.
-     * @param params 
-     * @returns 
+     * @param params
+     * @returns
      */
     public async GetDataObject(params: DataObjectParams): Promise<any> {
         // first, get the object from GetAll
@@ -697,18 +706,18 @@ export abstract class BaseEntity<T = unknown> {
                 const pre = params.relatedEntityList ? params.relatedEntityList.find(r => r.relatedEntityName === re.RelatedEntity) : null;
                 if (pre) {
                     // pre now has the param that matches the related entity (re) that we are looking at
-                    // we are now here because either the caller didn't provide a list of entities to include 
+                    // we are now here because either the caller didn't provide a list of entities to include
                     // (which means to include all of 'em), or they did and this entity is in the list
                     const reData = await this.GetRelatedEntityDataExt(re, pre.filter, pre.maxRecords);
                     if (reData) {
-                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object                        
+                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object
                         if (pre.maxRecords > 0) {
                             // add a note to the object to let the caller know that only the first X records are returned so
                             // that a caller can know that there could be more records available if they want them
                             let msg: string;
                             if (pre.maxRecords < reData.TotalRowCount)
                                 msg = `Only the first ${pre.maxRecords} records are included in this response. There are ${reData.TotalRowCount} total records available.`;
-                            else  
+                            else
                                 msg = `All ${reData.TotalRowCount} records are included in this response.`;
 
                             obj[re.RelatedEntity].Note = msg; // add the message to the object as "Note"
@@ -734,11 +743,11 @@ export abstract class BaseEntity<T = unknown> {
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success) {
             return {
-                Data: result.Results, 
+                Data: result.Results,
                 TotalRowCount: result.TotalRowCount
             };
         }
-        else    
+        else
             return null;
     }
 
@@ -758,7 +767,7 @@ export abstract class BaseEntity<T = unknown> {
      * This method will copy the values from the other entity object into the current one. This is useful for things like cloning a record.
      * This method will ONLY copy values for fields that exist in the current entity object. If the other object has fields that don't exist in the current object, they will be ignored.
      * @param other - the other entity object to copy values from
-     * @param includePrimaryKeys - if true, the primary keys will be copied as well, if false, they will be ignored, defaults to false and generally you want to leave it that way 
+     * @param includePrimaryKeys - if true, the primary keys will be copied as well, if false, they will be ignored, defaults to false and generally you want to leave it that way
      * @param replaceOldValues - if true, the old values of the fields will be reset to the values provided in the other parameter, if false, they will be left alone, defaults to false and generally you want to leave it that way
      */
     public CopyFrom(other: BaseEntity, includePrimaryKeys: boolean = false, replaceOldValues: boolean = false): boolean {
@@ -779,13 +788,13 @@ export abstract class BaseEntity<T = unknown> {
         }
         catch (e) {
             LogError(`Error in BaseEntity.CopyFrom: ${e}`);
-            return false;            
+            return false;
         }
     }
 
 
     /**
-     * The ContextCurrentUser is a property used to manually set the "current" user for scenarios, primarily on the server side, where the user changes per request. For situations where there is no global CurrentUser in the Metadata.Provider, 
+     * The ContextCurrentUser is a property used to manually set the "current" user for scenarios, primarily on the server side, where the user changes per request. For situations where there is no global CurrentUser in the Metadata.Provider,
      * you MUST set this property to the user you want to use for the current operation. If you used Metadata.GetEntityObject() to get the entity object, this property will be set automatically for you as that method has a parameter that can
      * be provided for the ContextCurrentUser.
      */
@@ -801,23 +810,23 @@ export abstract class BaseEntity<T = unknown> {
      * This method will create a new state for the object that is equivalent to a new record including default values.
      * @param newValues - optional parameter to set the values of the fields to something other than the default values. The expected parameter is an object that has properties that map to field names in this entity.
      * This is the same as creating a NewRecord and then using SetMany(), but it is a convenience/helper approach.
-     * @returns 
+     * @returns
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
-                this.Set(kv.FieldName, kv.Value);                
+                this.Set(kv.FieldName, kv.Value);
             });
         }
-        this.RaiseEvent('new_record', null);      
+        this.RaiseEvent('new_record', null);
         return true;
     }
 
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record. If the record is new, it will be created, if it already exists, it will be updated.
-     * @param options 
-     * @returns 
+     * @param options
+     * @returns
      */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
@@ -827,11 +836,11 @@ export abstract class BaseEntity<T = unknown> {
         try {
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
 
-            const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;            
+            const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
-    
+
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
-                if (BaseEntity.Provider == null) {    
+                if (!this.ProviderToUse) {    
                     throw new Error('No provider set');
                 }
                 else  {
@@ -843,15 +852,16 @@ export abstract class BaseEntity<T = unknown> {
                         valResult = this.Validate();
                     }
                     if (valResult.Success) {
-                        const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
+                        const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (data) {
                             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
                             this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
                             const result = this.LatestResult;
                             if (result)
                                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
-    
+
                             this.RaiseEvent('save', null)
+
                             return true;
                         }
                         else
@@ -862,19 +872,19 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
-            else    
+            else
                 return true; // nothing to save since we're not dirty
         }
         catch (e) {
             if (currentResultCount === this.ResultHistory.length) {
-                // this means that NO new results were added to the history anywhere 
+                // this means that NO new results were added to the history anywhere
                 // so we need to add a new result to the history here
                 newResult.Success = false;
                 newResult.Type = this.IsSaved ? 'update' : 'create';
                 newResult.Message = e.message || null;
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                newResult.EndedAt = new Date();               
+                newResult.EndedAt = new Date();
                 this.ResultHistory.push(newResult);
             }
 
@@ -890,10 +900,10 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Utility method that returns true if the given permission being checked is enabled for the current user, and false if not. 
-     * @param type 
-     * @param throwError 
-     * @returns 
+     * Utility method that returns true if the given permission being checked is enabled for the current user, and false if not.
+     * @param type
+     * @param throwError
+     * @returns
      */
     public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         const u: UserInfo = this.ActiveUser;
@@ -920,7 +930,7 @@ export abstract class BaseEntity<T = unknown> {
                 break;
             case EntityPermissionType.Delete:
                 if (!this.EntityInfo.AllowDeleteAPI) {
-                    if (throwError) 
+                    if (throwError)
                         throw new Error(`Delete API is disabled for ${this.EntityInfo.Name}`);
                     else
                         return false;
@@ -935,7 +945,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 break;
         }
-        
+
         const permissions = this.EntityInfo.GetUserPermisions(u);
         let bAllowed: boolean = false;
         switch (type) {
@@ -955,19 +965,19 @@ export abstract class BaseEntity<T = unknown> {
         if (!bAllowed && throwError) {
             this.ThrowPermissionError(u, type, null);
         }
-        else 
+        else
             return bAllowed
     }
 
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {
-        throw new Error(`User: ${u.Name} (ID: ${u.ID}, Email: ${u.Email}) 
+        throw new Error(`User: ${u.Name} (ID: ${u.ID}, Email: ${u.Email})
                          Does NOT have permission to ${EntityPermissionType[type]} ${this.EntityInfo.Name } records.
                          If you believe this is an error, please contact your system administrator.${additionalInfoMessage ? '\nAdditional Information: ' + additionalInfoMessage : ''}}`);
     }
 
     /**
      * This method will revert the internal state of the object back to what it was when it was last saved, or if never saved, from when it was intially loaded from the database. This is useful if you want to offer a user an "undo" type of feature in a UI.
-     * @returns 
+     * @returns
      */
     public Revert(): boolean {
         if (this.Dirty) {
@@ -975,24 +985,23 @@ export abstract class BaseEntity<T = unknown> {
                 field.Value = field.OldValue;
             }
         }
-        return true; 
+        return true;
     }
-    
+
     /**
      * * This method loads a single record from the database. Make sure you first get the correct BaseEntity sub-class for your entity by calling Metadata.GetEntityObject() first. From there, you can
      * call this method to load your records.
      * * NOTE: You should not be calling this method directly from outside of a sub-class in most cases. You will use the auto-generated sub-classes that have overriden versions of this method that blow out the primary keys into individual parameters. This is much easier to program against.
-     * @param CompositeKey Wrapper that holds an array of objects that contain the field name and value for the primary key of the record you want to load. For example, if you have a table called "Customers" with a primary key of "ID", you would pass in an array with a single object like this: {FieldName: "ID", Value: 1234}. 
+     * @param CompositeKey Wrapper that holds an array of objects that contain the field name and value for the primary key of the record you want to load. For example, if you have a table called "Customers" with a primary key of "ID", you would pass in an array with a single object like this: {FieldName: "ID", Value: 1234}.
      * *If you had a composite primary key, you would pass in an array with multiple objects, one for each field in the primary key. You may ONLY pass in the primary key fields, no other fields are allowed.
      * @param EntityRelationshipsToLoad Optional, you can specify the names of the relationships to load up. This is an expensive operation as it loads up an array of the related entity objects for the main record, so use it sparingly.
      * @returns true if success, false otherwise
      */
     public async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        if (BaseEntity.Provider == null) {    
+        if (!this.ProviderToUse) {    
             throw new Error('No provider set');
         }
         else{
-            const start = new Date().getTime();
             const valResult = CompositeKey.Validate();
             if (!valResult || !valResult.IsValid)
                 throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
@@ -1003,9 +1012,9 @@ export abstract class BaseEntity<T = unknown> {
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
 
-            const data = await BaseEntity.Provider.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await this.ProviderToUse.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
             if (!data) {
-                LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);                
+                LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);
                 return false; // no data loaded, return false
             }
 
@@ -1026,7 +1035,7 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * 
+     *
      * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
      * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
      *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
@@ -1034,17 +1043,17 @@ export abstract class BaseEntity<T = unknown> {
      *  *** Note: for the #2 use case, when you call the RunView Object RunView() method with the ResultType='entity_object', you'll get an array of BaseEntity-derived objects instead of simple objects, that functionality utilizes this method
      * @param data - a simple object that has properties that match the field names of the entity object
      * @param replaceOldValues - if true, the old values of the fields will be set to the values provided in the data parameter, if false, they will be left alone
-     * @returns 
+     * @returns
      */
     public LoadFromData(data: any, replaceOldValues: boolean = false) : boolean {
         this.SetMany(data, true);
-        return true; 
+        return true;
     }
 
     /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
-     * @returns 
+     * @returns
      */
     public Validate(): ValidationResult  {
         const result = new ValidationResult();
@@ -1062,25 +1071,26 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting. 
-     * @returns 
+     * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting.
+     * @returns
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
-        
+
         try {
-            if (BaseEntity.Provider == null) {    
+            if (!this.ProviderToUse) {    
                 throw new Error('No provider set');
             }
             else{
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
                 
-                if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
+                if (await this.ProviderToUse.Delete(this, options, this.ActiveUser)) {
                     // record deleted correctly
                     // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                     this.RaiseEvent('delete', null);
+
                     this.NewRecord(); // will trigger a new record event here too
                     return true;
                 }
@@ -1090,20 +1100,19 @@ export abstract class BaseEntity<T = unknown> {
         }
         catch (e) {
             if (currentResultCount === this.ResultHistory.length) {
-                // this means that NO new results were added to the history anywhere 
+                // this means that NO new results were added to the history anywhere
                 // so we need to add a new result to the history here
                 newResult.Success = false;
                 newResult.Type = 'delete'
                 newResult.Message = e.message || null;
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                newResult.EndedAt = new Date();               
+                newResult.EndedAt = new Date();
                 this.ResultHistory.push(newResult);
             }
             return false;
         }
     }
-
 
     /**
      * Called before an Action is executed by the AI Engine
@@ -1120,8 +1129,12 @@ export abstract class BaseEntity<T = unknown> {
         return true;// default implementation does nothing
     }
 
-
     private static _globalProviderKey: string = 'MJ_BaseEntityProvider';
+    /**
+     * Static property to get/set the IEntityDataProvider that is used by all BaseEntity objects. This is a global setting that is used by all BaseEntity objects. It can be overriden for a given BaseEntity object instance by passing in a provider to the 
+     * constructor of the BaseEntity object. Typically, a provider will pass itself into BaseEntity objects it creates to create a tight coupling between the provider and the BaseEntity objects it creates. This allows multiple concurrent
+     * connections to exist in the same process space without interfering with each other.
+     */
     public static get Provider(): IEntityDataProvider {
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g)
@@ -1142,30 +1155,31 @@ export abstract class BaseEntity<T = unknown> {
      */
     public get RecordChanges(): Promise<RecordChange[]> {
         if (this.IsSaved){
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey);
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey, this.ProviderToUse);
         }
         else{
             throw new Error('Cannot get record changes for a record that has not been saved yet');
         }
     }
 
+
     /**
      * Static Utility method to get RecordChanges for a given entityName/KeyValuePair combination
      * @param entityName 
-     * @param KeyValuePair 
      * @returns 
      */
-    public static async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
-        if (BaseEntity.Provider === null) {    
-            throw new Error('No provider set');
+    public static async GetRecordChanges(entityName: string, primaryKey: CompositeKey, provider: IEntityDataProvider | null = null): Promise<RecordChange[]> {
+        const providerToUse = provider || BaseEntity.Provider;
+        if (!providerToUse) {    
+            throw new Error('No provider set or passed in');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, CompositeKey);
+            const results = await providerToUse.GetRecordChanges(entityName, primaryKey);
             if (results) {
                 const changes: RecordChange[] = [];
-                for (let result of results) 
+                for (let result of results)
                     changes.push(new RecordChange(result));
-                
+
                 return changes;
             }
             else

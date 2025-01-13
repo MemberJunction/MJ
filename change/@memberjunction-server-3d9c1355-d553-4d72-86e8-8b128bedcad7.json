@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/server",
+  "email": "nico.ortiz@bluecypress.io",
+  "dependentChangeType": "patch"
+}
