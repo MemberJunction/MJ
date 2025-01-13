@@ -4,13 +4,13 @@ if (runningOnNode()) {
     try {
         fs = eval("require('fs')"); // wrap the require in eval to avoid bundling attempt and also avoid runtime scanning issues in the browser.
     } catch (err) {
-        // shouldn't get here since we're checking for the node variables above, but have this 
-        // try/catch block just in case. 
+        // shouldn't get here since we're checking for the node variables above, but have this
+        // try/catch block just in case.
         // fs module is not available, normal in browser situation, we can't log to "Files" as that doesn't make sense in browser
     }
-} 
+}
 
-export function LogError(message: any, logToFileName: string = null, ...args: any[]) {
+export function LogError(message: any, logToFileName: string | null = null, ...args: any[]) {
     if (logToFileName !== null && logToFileName !== undefined && logToFileName.length >= 0)
         logToFile(message, true, logToFileName, ...args)
     else
@@ -35,9 +35,9 @@ function logToFile(message, isError: boolean, logToFileName: string, ...args: an
         console.error('Attempting to log to file, but fs module is not available, logging to console instead');
         logToConsole(message, isError, ...args);
     }
-    else    
+    else
         fs.appendFileSync(logToFileName, `${isError ? 'ERROR' : 'STATUS'} (${new Date()}: ${message}${args && args.length > 0 && args.join('').length > 0 ? '\n   ARGS' + args.join('\n   ')  : ''}` + '\n');
-}   
+}
 
 let _productionStatus: boolean = null;
 export function GetProductionStatus(): boolean {
@@ -45,13 +45,13 @@ export function GetProductionStatus(): boolean {
         return _productionStatus;
     else {
         if (runningOnNode()) {
-            return (process.env.NODE_ENV === 'production') 
+            return (process.env.NODE_ENV === 'production')
         }
         else if (runningInBrowser()) {
             // no status set if we get here, so return false, default to false to be safe and log stuff
             // for debug scenarios on staging environments/etc.
             return false;
-        }    
+        }
     }
 }
 
@@ -64,7 +64,7 @@ function runningInBrowser(): boolean {
 }
 
 function runningOnNode(): boolean {
-    return (typeof process !== 'undefined' && process.versions !== null && process.versions.node !== null) 
+    return (typeof process !== 'undefined' && process.versions !== null && process.versions.node !== null)
 }
 
 export function FormatConsoleMessage(message: string, serverity: SeverityType): string {
@@ -110,7 +110,7 @@ export const SeverityType = {
     Warning: 'Warning',
     Critical: 'Critical'
 } as const;
- 
+
 export type SeverityType = typeof SeverityType[keyof typeof SeverityType];
 
 /**
@@ -130,10 +130,10 @@ export const ConsoleColor = {
 } as const;
 type ConsoleColor = typeof ConsoleColor[keyof typeof ConsoleColor];
 
- 
+
 /**
  * Helper function to get the ANSI color code for the given console color.
- * @param color 
+ * @param color
  */
 export function getAnsiColorCode(color: ConsoleColor): number {
     switch (color) {
@@ -154,7 +154,7 @@ export function getAnsiColorCode(color: ConsoleColor): number {
 /**
  * Utility function that udpates the current console line with the provided message and color.
  * @param message
- * @param color 
+ * @param color
  */
 export function UpdateCurrentConsoleLine(message: string, color: ConsoleColor = ConsoleColor.white) {
     if (runningOnNode()) {
@@ -163,11 +163,11 @@ export function UpdateCurrentConsoleLine(message: string, color: ConsoleColor = 
         //process.stdout.write(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
 //        console.log(`\x1b[2K\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
         console.log(`\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
-    } 
+    }
     else {
         // Running in browser environment
         console.log(`\r%c${message}`, `color: ${color}`);
-    }    
+    }
 }
 
 export function UpdateCurrentConsoleProgress(message: string, current: number, total: number, color: ConsoleColor = ConsoleColor.white) {
