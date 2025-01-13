@@ -13,6 +13,12 @@ jobs:
   api:
     runs-on: ubuntu-latest
     steps:
+      - name: Error out if the trigger did not succeed
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion || 'success' }}" != "success" ]; then
+            echo "The triggering workflow did not succeed
+            exit 1
+
       - name: Checkout repo
         uses: actions/checkout@v4
       - name: Get version
