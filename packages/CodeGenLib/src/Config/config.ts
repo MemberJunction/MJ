@@ -283,7 +283,7 @@ export let currentWorkingDirectory: string;
 
 const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
 if (!configParsing.success) {
-  LogError('Error parsing config file', '', JSON.stringify(configParsing.error.issues, null, 2));
+  LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
 }
 
 export const configInfo = configParsing.data ?? ({} as ConfigInfo);
@@ -294,7 +294,7 @@ export function initializeConfig(cwd: string): ConfigInfo {
 
   const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
   if (!maybeConfig.success) {
-    LogError('Error parsing config file', '', JSON.stringify(maybeConfig.error.issues, null, 2));
+    LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
   }
 
   const config = maybeConfig.success ? maybeConfig.data : configInfo;

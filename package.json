@@ -34,6 +34,7 @@
     "docs": "typedoc",
     "change": "beachball change",
     "checkchange": "beachball check --verbose",
+    "beachball": "beachball",
     "release": "beachball publish --access public",
     "mergemain": "node ci/merge_main.mjs",
     "commitpush": "node ci/commit_push.mjs"
