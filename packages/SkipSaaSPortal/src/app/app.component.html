@@ -1,0 +1,31 @@
+<div mjFillContainer [bottomMargin]="0">
+    <div *ngIf='(isLoggedIn()) || hasNoAccess' class="app-header">
+        <app-header></app-header>
+    </div>
+    <div mjFillContainer>
+        <div *ngIf="auth.isAuthenticated$ | async; else loggedOut" mjFillContainer>
+            <router-outlet></router-outlet>
+        </div>
+
+        <ng-template #loggedOut>
+            <div class="home">
+                <div class="section-home">
+                    <div class="header-banner">
+                        <div class="home-auth-button-container k-d-flex k-flex-row">
+                            <button kendoButton (click)="doLogin()">Log In</button>
+                            <button kendoButton (click)="doSignUp()">Sign Up</button>
+                        </div>
+                    </div>
+                    <div class="container-large">
+                        <div class="card-wrapper">
+                            <img class="home-img" src=""/>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    
+                </div>
+            </div>
+        </ng-template>
+    </div>    
+</div>

@@ -1,0 +1,6 @@
+<ng-container *ngIf="auth.isAuthenticated$ | async">
+  <button class="logout-btn" kendoButton (click)="doLogOut()">
+    <img src="../../assets/logout.svg" alt="">
+    <span>Log out</span>
+  </button>
+</ng-container>
