@@ -2,7 +2,7 @@ DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwConversations]
 GO
 CREATE VIEW [${flyway:defaultSchema}].[vwConversations]
 AS
-SELECT
+SELECT 
     c.*,
     User_UserID.[Name] AS [User],
     Entity_LinkedEntityID.[Name] AS [LinkedEntity],
