@@ -12,6 +12,9 @@
             [id]="'skip_message_' + ConversationDetailRecord.ID">
             <div class="message-user-name">{{IsAIMessage ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
             <div>
+                @if(IsTemporaryMessage) {
+                    <kendo-loader></kendo-loader>
+                }
                 {{Message}}
             </div>
             <div #reportContainer>

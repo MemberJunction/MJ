@@ -200,6 +200,17 @@ export class SkipSingleMessageComponent implements AfterViewInit {
           return 'user-message';
     }    
 
+    public get IsTemporaryMessage(): boolean {
+      if (this.ConversationDetailRecord?.Role?.trim().toLowerCase() === 'ai') {
+        if (this.ConversationDetailRecord.ID?.length > 0)
+          return false;
+        else
+          return true;
+      }
+      else
+        return false;
+    }
+
     public get IsFirstMessageInConversation(): boolean {
         return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;
     }
