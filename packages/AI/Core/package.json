@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "MemberJunction: AI Module - LLMs and other AI services wrapped and abstracted for use in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

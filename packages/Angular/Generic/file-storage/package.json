@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-file-storage",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "MemberJunction: Angular components for managing files, and related components.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

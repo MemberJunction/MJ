@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduled-actions-server",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "Simple application server that can be called via URL to invoke Scheduled Actions",
   "main": "src/index.ts",
   "scripts": {

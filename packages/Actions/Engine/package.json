@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "Main library for MemberJunction Actions. This library is only intended to be imported on the server side.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

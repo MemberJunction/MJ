@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-timeline",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "MemberJunction: Timeline Display UI component",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
