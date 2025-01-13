@@ -783,6 +783,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
             this.SelectedConversation = convo;
             this.SetSelectedConversationUser();
           } else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
+            if (this.SelectedConversation.Name === 'New Chat' || this.SelectedConversation.Name?.trim().length === 0 )  {
             // we are on the first message so skip renamed the convo, use that
             this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
 
