@@ -14,7 +14,7 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
 
 /*********************************************/
 // Markdown
-import { MarkdownModule } from 'ngx-markdown'; 
+import { MarkdownModule } from 'ngx-markdown';
 
 /*********************************************/
 // Kendo UI Angular imports
