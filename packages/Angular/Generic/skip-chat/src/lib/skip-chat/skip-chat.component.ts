@@ -55,7 +55,11 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
   @Input() public SkipLogoURL: string = "assets/Skip Full Logo - Transparent.png";
-  @Input() public UserAvatarURL: string = "assets/Default User Avatar.png";
+  @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+  /**
+   * Set this property in order to set the user image. This can either be a URL or a Blob
+   */
+  @Input() public UserImage: string | Blob | undefined = undefined;
   
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -873,6 +877,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       this.NavigateToMatchingReport.emit(reportId);
     });
     obj.Provider = this.ProviderToUse;
+    obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
+    obj.UserImage = this.UserImage;
     obj.ConversationRecord = this.SelectedConversation!;
     obj.ConversationDetailRecord = messageDetail;
     obj.DataContext = this.DataContext;

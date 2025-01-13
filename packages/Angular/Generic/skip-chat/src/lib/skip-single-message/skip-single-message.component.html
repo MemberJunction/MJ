@@ -1,7 +1,12 @@
 <div>
     <div class="message-row" [ngClass]="GetMessageRowCssClass()" > 
         <div class="message-image">
-            <img [src]="GetUserImageSource()" class="avatar" />
+            @if (GetUserImageSource()) {
+                <img [src]="GetUserImageSource()" class="avatar" />
+            }
+            @else {
+                <span class="fa-solid fa-user"></span>
+            }
         </div>
         <div class="message"
             [id]="'skip_message_' + ConversationDetailRecord.ID">
