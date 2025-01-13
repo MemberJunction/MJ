@@ -10,6 +10,9 @@
         title="Data Context"
         (close)="closePropertiesDialog()"
     >
-        <mj-data-context [dataContextId]="dataContextId" ></mj-data-context>
+        <mj-data-context 
+                [dataContextId]="dataContextId" 
+                [Provider]="Provider"
+        ></mj-data-context>
     </kendo-window>
 </div>

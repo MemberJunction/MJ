@@ -1,5 +1,6 @@
 import { BaseEntity } from "./generic/baseEntity";
 import { Metadata } from "./generic/metadata";
+import { RunQuery } from "./generic/runQuery";
 import { RunReport } from "./generic/runReport";
 import { RunView } from "./views/runView";
 
@@ -26,5 +27,6 @@ export function SetProvider(provider) {
     BaseEntity.Provider = provider;
     RunView.Provider = provider;
     RunReport.Provider = provider;
+    RunQuery.Provider = provider;
 }
 

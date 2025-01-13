@@ -16,18 +16,18 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 RUN apt-get install -y nodejs
 
 # Install Microsoft SQL Server tools
-RUN locale-gen "en_US.UTF-8"
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-RUN curl https://packages.microsoft.com/config/debian/11/prod.list | tee /etc/apt/sources.list.d/msprod.list
-RUN apt-get update
-RUN ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev
-RUN apt-get remove -y curl apt-transport-https
-RUN rm -f /etc/apt/sources.list.d/msprod.list
-RUN rm -rf /var/lib/apt/lists/*
+RUN locale-gen "en_US.UTF-8" \
+  && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+  && curl https://packages.microsoft.com/config/debian/11/prod.list | tee /etc/apt/sources.list.d/msprod.list \
+  && apt-get update \
+  && ACCEPT_EULA=Y apt-get install -y mssql-tools unixodbc-dev \
+  && apt-get remove -y curl apt-transport-https \
+  && rm -f /etc/apt/sources.list.d/msprod.list \
+  && rm -rf /var/lib/apt/lists/*
 
 # Set up SSH configuration
-RUN mkdir /var/run/sshd
-RUN echo "root:Docker!" | chpasswd
+RUN mkdir /var/run/sshd \
+  && echo "root:Docker!" | chpasswd
 
 COPY docker/MJAPI/sshd_config /etc/ssh/
 EXPOSE 2222

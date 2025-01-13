@@ -373,16 +373,25 @@ export abstract class BaseEntity<T = unknown> {
     private _transactionGroup: TransactionGroupBase = null;
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
+    private _provider: IEntityDataProvider | null = null;
 
-    constructor(Entity: EntityInfo) {
+    constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
+        this._provider = Provider;
         this.init();
     }
 
     /**
-     * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a
-     * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their
+     * Returns this provider to be used for a given instance of a BaseEntity derived subclass. If the provider is not set, the BaseEntity.Provider is returned.
+     */
+    public get ProviderToUse(): IEntityDataProvider {
+        return this._provider || BaseEntity.Provider;
+    }
+
+    /**
+     * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a 
+     * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their 
      * own event types and payloads as needed.
      * @param callback
      * @returns
@@ -831,7 +840,7 @@ export abstract class BaseEntity<T = unknown> {
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
-                if (BaseEntity.Provider == null) {
+                if (!this.ProviderToUse) {    
                     throw new Error('No provider set');
                 }
                 else  {
@@ -843,7 +852,7 @@ export abstract class BaseEntity<T = unknown> {
                         valResult = this.Validate();
                     }
                     if (valResult.Success) {
-                        const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
+                        const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (data) {
                             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
                             this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
@@ -989,11 +998,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns true if success, false otherwise
      */
     public async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        if (BaseEntity.Provider == null) {
+        if (!this.ProviderToUse) {    
             throw new Error('No provider set');
         }
         else{
-            const start = new Date().getTime();
             const valResult = CompositeKey.Validate();
             if (!valResult || !valResult.IsValid)
                 throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name}): ${valResult.ErrorMessage}`);
@@ -1004,7 +1012,7 @@ export abstract class BaseEntity<T = unknown> {
                 this.init(); // wipe out current data if we're loading on top of existing record
             }
 
-            const data = await BaseEntity.Provider.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await this.ProviderToUse.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
             if (!data) {
                 LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);
                 return false; // no data loaded, return false
@@ -1072,13 +1080,13 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
-            if (BaseEntity.Provider == null) {
+            if (!this.ProviderToUse) {    
                 throw new Error('No provider set');
             }
             else{
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
-
-                if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
+                
+                if (await this.ProviderToUse.Delete(this, options, this.ActiveUser)) {
                     // record deleted correctly
                     // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                     this.RaiseEvent('delete', null);
@@ -1122,6 +1130,11 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     private static _globalProviderKey: string = 'MJ_BaseEntityProvider';
+    /**
+     * Static property to get/set the IEntityDataProvider that is used by all BaseEntity objects. This is a global setting that is used by all BaseEntity objects. It can be overriden for a given BaseEntity object instance by passing in a provider to the 
+     * constructor of the BaseEntity object. Typically, a provider will pass itself into BaseEntity objects it creates to create a tight coupling between the provider and the BaseEntity objects it creates. This allows multiple concurrent
+     * connections to exist in the same process space without interfering with each other.
+     */
     public static get Provider(): IEntityDataProvider {
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g)
@@ -1142,25 +1155,26 @@ export abstract class BaseEntity<T = unknown> {
      */
     public get RecordChanges(): Promise<RecordChange[]> {
         if (this.IsSaved){
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey);
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey, this.ProviderToUse);
         }
         else{
             throw new Error('Cannot get record changes for a record that has not been saved yet');
         }
     }
 
+
     /**
      * Static Utility method to get RecordChanges for a given entityName/KeyValuePair combination
-     * @param entityName
-     * @param KeyValuePair
-     * @returns
+     * @param entityName 
+     * @returns 
      */
-    public static async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
-        if (BaseEntity.Provider === null) {
-            throw new Error('No provider set');
+    public static async GetRecordChanges(entityName: string, primaryKey: CompositeKey, provider: IEntityDataProvider | null = null): Promise<RecordChange[]> {
+        const providerToUse = provider || BaseEntity.Provider;
+        if (!providerToUse) {    
+            throw new Error('No provider set or passed in');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, CompositeKey);
+            const results = await providerToUse.GetRecordChanges(entityName, primaryKey);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results)

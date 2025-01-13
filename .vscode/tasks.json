@@ -31,6 +31,37 @@
           }
         }
       }
+    },
+    {
+      "label": "start SkipSaaSPortal",
+      "type": "npm",
+      "script": "start",
+      "path": "packages/SkipSaaSPortal",
+      "isBackground": true,
+      "presentation": {
+        "focus": true,
+        "panel": "dedicated"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": {
+        "owner": "typescript",
+        "source": "ts",
+        "applyTo": "closedDocuments",
+        "fileLocation": ["relative", "${cwd}"],
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "Compiled |Application bundle generation complete|Failed to compile."
+          }
+        }
+      }
     }
   ]
 }
