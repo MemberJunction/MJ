@@ -11,23 +11,25 @@ const routes: Routes = [
     path: 'chat/:conversationId',
     component: SkipComponent,
     canActivate: [AuthGuard], // Protect this route
-    data: { breadcrumb: 'skip' }
+  },
+  {
+    path: 'chat',
+    component: SkipComponent,
+    canActivate: [AuthGuard], // Protect this route
   },
   { 
     path: 'report-list',
     component: ReportListComponent,
     canActivate: [AuthGuard], // Protect this route
-    data: { breadcrumb: 'report-list' }
   },
   { 
     path: 'report/:id',
     component: SingleReportComponent,
     canActivate: [AuthGuard], // Protect this route
-    data: { breadcrumb: 'report' }
   },
   { 
     path: '',
-    redirectTo: 'chat/1', // Default conversation ID or desired route
+    redirectTo: 'chat', // Default conversation ID or desired route
     pathMatch: 'full' // Ensure exact match for the empty path
   },
   { 

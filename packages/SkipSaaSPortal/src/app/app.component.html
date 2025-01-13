@@ -1,9 +1,9 @@
-<div mjFillContainer>
-    <div *ngIf='(isLoggedIn() && isSetupComplete) || hasNoAccess' class="app-header">
+<div mjFillContainer [bottomMargin]="0">
+    <div *ngIf='(isLoggedIn()) || hasNoAccess' class="app-header">
         <app-header></app-header>
     </div>
-    <div>
-        <div *ngIf="auth.isAuthenticated$ | async; else loggedOut">
+    <div mjFillContainer>
+        <div *ngIf="auth.isAuthenticated$ | async; else loggedOut" mjFillContainer>
             <router-outlet></router-outlet>
         </div>
 

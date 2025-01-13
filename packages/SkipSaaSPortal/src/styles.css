@@ -9,14 +9,10 @@
     --border-secondary: #85e9eb;
 }
 
-html {
+html, body {
     height: 100%;
     padding: 0;
     margin: 0;
-}
-
-body {
-    min-height: 100%;
     font-family: "Montserrat", sans-serif;
     font-optical-sizing: auto;
     font-weight: 400;

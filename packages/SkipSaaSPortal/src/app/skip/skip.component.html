@@ -1,5 +1,5 @@
 @if (loading) {
-    <kendo-loader></kendo-loader>
+    <div>Loading...</div>
 }
 @else {
     <skip-chat 
@@ -12,6 +12,10 @@
         [UpdateAppRoute]="false"
         SkipLogoURL="/assets/images/Skip Full Logo - Transparent.png"
         SkipMarkOnlyLogoURL="/assets/images/Skip - Mark Only - Small.png"
+
+        mjFillContainer
+        [fillHeight]="true"
+        [fillWidth]="false"
     >
     </skip-chat>
 }

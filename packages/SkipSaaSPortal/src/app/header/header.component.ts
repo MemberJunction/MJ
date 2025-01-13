@@ -18,7 +18,10 @@ export class HeaderComponent {
   goToReports() {
     this.router.navigate([`/report-list`]);
   }
+  goToSettings() {
+    this.router.navigate([`/settings`]);
+  }
   goToChat() {
-    this.router.navigate([`/chat/0`]);
+    this.router.navigate([`/chat`]);
   }
 }
