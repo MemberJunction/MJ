@@ -47,6 +47,8 @@ export class SharedService {
     const token = GraphQLDataProvider.Instance.ConfigData.Token;
     const url = "http://localhost:4051/"
     const wsurl = "ws://localhost:4051/"
+    //const url = "https://api-d2c59c49-709f-4f4d-a72d-34529a65fb72.azurewebsites.net/";
+    //const wsurl = "ws://api-d2c59c49-709f-4f4d-a72d-34529a65fb72.azurewebsites.net/"
     const config = new GraphQLProviderConfigData(token, url, wsurl, null);
     await g.Config(config, true);    
     this._instanceProvider = g;
