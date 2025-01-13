@@ -282,6 +282,41 @@ export class SkipAPIRequest {
      * NOTE: This is not where you put in the bearer token for the Skip API server itself, that goes in the header of the request
      */
     apiKeys: SkipAPIRequestAPIKey[];
+
+    /**
+     * Optional notes that can be passed to Skip for additional context
+     */
+    notes?: SkipAPIAgentNote[];
+}
+
+/**
+ * Defines the shape of an individual Agent note that is stored in MJ that can be passed to Skip for additional context.
+ */
+export class SkipAPIAgentNote {
+    /**
+     * Unique identifier for the note
+     */
+    id: string;
+    /**
+     * Unique type id (UUID) for the note type
+     */
+    typeId: string;
+    /**
+     * Text name for the note type
+     */
+    type: string;
+    /**
+     * Date/Time the note was initially created
+     */
+    createdAt: Date;
+    /**
+     * Date/Time the note was last updated
+     */
+    updatedAt: Date;
+    /**
+     * The text of the note
+     */
+    note: string; 
 }
 
 export class SkipAPIRunScriptRequest extends SkipAPIRequest {

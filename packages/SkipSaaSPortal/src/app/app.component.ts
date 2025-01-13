@@ -83,13 +83,7 @@ export class AppComponent implements OnInit {
 
         this.sharedService.AccessDenied = false; // turn this flag to false when we have a successful login
         this.isSetupComplete = true;
-        // if (this.sharedService.InitalPath === '/') {
-        //   console.log('Navigating to home page.');
-        //   this.router.navigateByUrl(`/`, { replaceUrl: true });
-        // } else {
-        //   console.log('Navigating to:', this.sharedService.InitalPath);
-        //   this.router.navigateByUrl(this.sharedService.InitalPath, { replaceUrl: true });
-        // }
+        
         this.hasNoAccess = false;
       } 
       catch (err) {
