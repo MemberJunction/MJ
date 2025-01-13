@@ -112,10 +112,10 @@ export class SharedService {
     }
   }
 
-  public DisplayNotification(message: string, style: "error" | "none" | "success" | "warning" | "info" | undefined) {
+  public DisplayNotification(message: string, style: "error" | "none" | "success" | "warning" | "info" | undefined, hideAfter: number = 600) {
     this.notificationService.show({
       content: message,
-      hideAfter: 600,
+      hideAfter: hideAfter,
       position: { horizontal: "center", vertical: "top" },
       animation: { type: "fade", duration: 400 },
       type: { style: style, icon: true },

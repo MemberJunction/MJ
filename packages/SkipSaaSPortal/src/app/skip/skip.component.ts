@@ -20,7 +20,7 @@ export class SkipComponent implements AfterViewInit {
   public targetEntities: EntityInfo[] = [];
   public loading: boolean = true;
   async ngAfterViewInit() {
-    this.sharedService.setupComplete$.subscribe(async () => {
+    this.sharedService.appInitialized$.subscribe(async () => {
       this.loading = false;
       this.cdr.detectChanges();
       
