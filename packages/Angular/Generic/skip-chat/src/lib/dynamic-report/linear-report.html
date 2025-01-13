@@ -3,7 +3,7 @@
                         (click)="askCreateReport()" 
                         [disabled]="IsCreatingReport"
                         class="create-report-button">Create Report</button>
-    <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
+    <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
         <h3>Explanation</h3>
         <div>
@@ -56,10 +56,10 @@
     Would you like to create a new report from this conversation element? If you choose to continue you'll be notified when the report has been created.
   </p>
   <kendo-dialog-actions>
-    <button kendoButton (click)="closeCreateReport('no')">No</button>
     <button kendoButton (click)="closeCreateReport('yes')" themeColor="primary">
       Yes
     </button>
+    <button kendoButton (click)="closeCreateReport('no')">No</button>
   </kendo-dialog-actions>
   </kendo-dialog>
 } 
