@@ -108,3 +108,22 @@
 <div *ngIf="isDataContextDialogVisible">
     <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()" [Provider]="ProviderToUse"></mj-data-context-dialog>
 </div>
+
+
+<!-- <kendo-dialog
+title="Please confirm"
+*ngIf="confirmCreateReportDialogOpen"
+(close)="closeCreateReport('no')"
+[minWidth]="250"
+[width]="450"
+>
+<p style="margin: 30px; text-align: center;">
+  Would you like to create a new report from this conversation element? If you choose to continue you'll be notified when the report has been created.
+</p>
+<kendo-dialog-actions>
+  <button kendoButton (click)="closeCreateReport('yes')" themeColor="primary">
+    Yes
+  </button>
+  <button kendoButton (click)="closeCreateReport('no')">No</button>
+</kendo-dialog-actions>
+</kendo-dialog> -->

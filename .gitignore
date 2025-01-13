@@ -119,3 +119,4 @@ mj.config.ts
 packages/CodeGen/config.json.local
 packages/MJCLI/bin/run.js
 packages/SkipSaaSPortal/.angular/** 
+mj.config.cjs
