@@ -15,7 +15,7 @@ const localPath = (p: string) => {
   const dirname = fileURLToPath(new URL('.', import.meta.url));
   // Resolve the provided path relative to the derived directory path
   const resolvedPath = resolve(dirname, p);
-  return resolvedPath;
+  return resolvedPath; 
 };
 
 const resolverPaths = [
