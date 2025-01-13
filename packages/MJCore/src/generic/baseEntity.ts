@@ -9,7 +9,6 @@ import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 import { z } from 'zod';
-import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -374,8 +373,6 @@ export abstract class BaseEntity<T = unknown> {
     private _transactionGroup: TransactionGroupBase = null;
     private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
-    private _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
-    private _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
     constructor(Entity: EntityInfo) {
         this._eventSubject = new Subject<BaseEntityEvent>();
@@ -856,8 +853,6 @@ export abstract class BaseEntity<T = unknown> {
 
                             this.RaiseEvent('save', null)
 
-                            await this.emitCloudEvent('save');
-
                             return true;
                         }
                         else
@@ -1088,11 +1083,6 @@ export abstract class BaseEntity<T = unknown> {
                     // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                     this.RaiseEvent('delete', null);
 
-                    // Emit cloud event if CLOUDEVENTS_HTTP_TRANSPORT is set
-                    if (process.env.CLOUDEVENTS_HTTP_TRANSPORT) {
-                        await this.emitCloudEvent('delete');
-                    }
-
                     this.NewRecord(); // will trigger a new record event here too
                     return true;
                 }
@@ -1129,22 +1119,6 @@ export abstract class BaseEntity<T = unknown> {
      */
     public async AfterEntityAIAction(params: BaseEntityAIActionParams): Promise<boolean> {
         return true;// default implementation does nothing
-    }
-
-    /**
-     * Emits a cloud event for the given event type.
-     * @param eventType
-     */
-    private async emitCloudEvent(eventType: 'save' | 'delete') {
-      if (this._emit) {
-        const cloudEvent = new CloudEvent({
-          type: `MemberJunction.${eventType}`,
-          source: process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction',
-          data: this.GetAll()
-        });
-        
-        await this._emit(cloudEvent, { headers: this._cloudeventsHeaders });
-      }
     }
 
     private static _globalProviderKey: string = 'MJ_BaseEntityProvider';

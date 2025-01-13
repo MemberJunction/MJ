@@ -1,18 +1,34 @@
-import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, LogError, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import {
+  BaseEntity,
+  BaseEntityEvent,
+  CompositeKey,
+  EntityFieldTSType,
+  EntityPermissionType,
+  LogError,
+  Metadata,
+  RunView,
+  RunViewParams,
+  RunViewResult,
+  UserInfo,
+} from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
+import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJGlobal } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 
 export class ResolverBase {
+  private _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
+  private _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -28,7 +44,7 @@ export class ResolverBase {
       entityInfo.Fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
           // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
-          const mappedFieldName = mapper.MapFieldName(f.CodeName)
+          const mappedFieldName = mapper.MapFieldName(f.CodeName);
           if (mappedFieldName !== f.Name) {
             dataObject[mappedFieldName] = dataObject[f.Name];
             delete dataObject[f.Name];
@@ -134,7 +150,7 @@ export class ResolverBase {
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: UserViewEntity = {
-        ID: "",
+        ID: '',
         Entity: viewInput.EntityName,
         EntityID: entity.ID,
         EntityBaseView: entity.BaseView as string,
@@ -164,22 +180,23 @@ export class ResolverBase {
     }
   }
 
-  async RunViewsGeneric(viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[], dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  async RunViewsGeneric(
+    viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
+    dataSource: DataSource,
+    userPayload: UserPayload,
+    pubSub: PubSubEngine
+  ) {
     let md: Metadata | null = null;
     let params: RunViewGenericParams[] = [];
-    for(const viewInput of viewInputs) {
+    for (const viewInput of viewInputs) {
       try {
         let viewInfo: UserViewEntity | null = null;
 
-        if(viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(
-            await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName })
-          );
-        }
-        else if(viewInput.ViewID) {
+        if (viewInput.ViewName) {
+          viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));
+        } else if (viewInput.ViewID) {
           viewInfo = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
-        }
-        else if(viewInput.EntityName) {
+        } else if (viewInput.EntityName) {
           md = md || new Metadata();
           const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
           if (!entity) {
@@ -188,14 +205,13 @@ export class ResolverBase {
 
           // only providing a few bits of data here, but it's enough to get the view to run
           viewInfo = {
-            ID: "",
+            ID: '',
             Entity: viewInput.EntityName,
             EntityID: entity.ID,
             EntityBaseView: entity.BaseView,
           } as UserViewEntity;
-        }
-        else{
-          throw new Error("Unable to determine input type");
+        } else {
+          throw new Error('Unable to determine input type');
         }
 
         params.push({
@@ -214,9 +230,8 @@ export class ResolverBase {
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
           userPayload,
-          pubSub
+          pubSub,
         });
-
       } catch (err) {
         LogError(err);
         return null;
@@ -227,7 +242,26 @@ export class ResolverBase {
     return results;
   }
 
+  protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
+    if (this._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
+      const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
+      const type = `MemberJunction.${event}${extendedType}`;
+      const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
+      const [subject, rawData] = args instanceof BaseEntityEvent ? [args.baseEntity.EntityInfo.CodeName, args.payload] : [undefined, args];
+      const data = (typeof rawData === 'object' ? rawData : { payload: rawData }) ?? {};
+      const cloudEvent = new CloudEvent({ source, subject, type, data });
 
+      try {
+        const cloudeventTransportResponse = await this._emit(cloudEvent, { headers: this._cloudeventsHeaders });
+        const cloudeventResponse = JSON.stringify(cloudeventTransportResponse);
+        if (/error/i.test(cloudeventResponse)) {
+          console.error('CloudEvent ERROR', cloudeventResponse);
+        }
+      } catch (e) {
+        console.error('CloudEvent ERROR', JSON.stringify(e));
+      }
+    }
+  }
 
   protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null) {
     const md = new Metadata();
@@ -326,10 +360,12 @@ export class ResolverBase {
       const rv = new RunView();
       let RunViewParams: RunViewParams[] = [];
       let contextUser: UserInfo | null = null;
-      for(const param of params){
+      for (const param of params) {
         if (param.viewInfo && param.userPayload) {
           md = md || new Metadata();
-          const user: UserInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === param.userPayload?.email.toLowerCase().trim());
+          const user: UserInfo = UserCache.Users.find(
+            (u) => u.Email.toLowerCase().trim() === param.userPayload?.email.toLowerCase().trim()
+          );
           if (!user) {
             throw new Error(`User ${param.userPayload?.email} not found in metadata`);
           }
@@ -337,7 +373,7 @@ export class ResolverBase {
           contextUser = contextUser || user;
 
           const entityInfo = md.Entities.find((e) => e.Name === param.viewInfo.Entity);
-          if (!entityInfo){
+          if (!entityInfo) {
             throw new Error(`Entity ${param.viewInfo.Entity} not found in metadata`);
           }
         }
@@ -381,7 +417,7 @@ export class ResolverBase {
 
       // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
       const mapper = new FieldMapper();
-      for(const runViewResult of runViewResults){
+      for (const runViewResult of runViewResults) {
         if (runViewResult && runViewResult.Success) {
           for (const result of runViewResult.Results) {
             mapper.MapFields(result);
@@ -390,8 +426,7 @@ export class ResolverBase {
       }
 
       return runViewResults;
-    }
-    catch (err) {
+    } catch (err) {
       console.log(err);
       throw err;
     }
@@ -453,8 +488,9 @@ export class ResolverBase {
       auditLog.UserID = userInfo.ID;
       auditLog.AuditLogTypeID = auditLogType.ID;
 
-      if (authorization)
+      if (authorization) {
         auditLog.AuthorizationID = authorization.ID;
+      }
 
       if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
       else auditLog.Status = 'Failed';
@@ -501,8 +537,10 @@ export class ResolverBase {
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-    MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+    MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
       if (event) {
+        await this.EmitCloudEvent(event);
+
         if (event.component === entityObject && event.args && event.args.message) {
           // message from our entity object, relay it to the client
           pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -554,8 +592,9 @@ export class ResolverBase {
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
-        if (key !== 'OldValues___')
+        if (key !== 'OldValues___') {
           clientNewValues[key] = input[key];
+        }
       }); // grab all the props except for the OldValues property
 
       if (entityInfo.TrackRecordChanges || !input.OldValues___) {
@@ -574,8 +613,7 @@ export class ResolverBase {
           if (input.OldValues___) {
             // we DO have OldValues, so we need to do a more in depth analysis
             this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject);
-          } 
-          else {
+          } else {
             // no OldValues, so we can just set the new values from input
             entityObject.SetMany(input);
           }
@@ -585,8 +623,7 @@ export class ResolverBase {
             extensions: { code: 'LOAD_ENTITY_ERROR', entityName },
           });
         }
-      } 
-      else {
+      } else {
         // we get here if we are NOT tracking changes and we DO have OldValues, so we can load from them
         const oldValues = {};
         // for each item in the oldValues array, add it to the oldValues object

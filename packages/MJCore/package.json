@@ -20,7 +20,6 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.14.0",
-    "cloudevents": "^8.0.2",
     "rxjs": "^7.8.1",
     "zod": "^3.23.8"
   }
