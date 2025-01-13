@@ -50,7 +50,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
-    "@memberjunction/codegen-lib": "2.14.0",
+    "@memberjunction/codegen-lib": "2.15.0",
     "@oclif/core": "^3",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-version": "^2.0.17",

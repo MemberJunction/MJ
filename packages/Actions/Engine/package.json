@@ -19,12 +19,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.14.0",
-    "@memberjunction/core": "2.14.0",
-    "@memberjunction/actions-base": "2.14.0",
-    "@memberjunction/core-entities": "2.14.0",
-    "@memberjunction/ai": "2.14.0",
-    "@memberjunction/aiengine": "2.14.0",
-    "@memberjunction/doc-utils": "2.14.0"
+    "@memberjunction/global": "2.15.0",
+    "@memberjunction/core": "2.15.0",
+    "@memberjunction/actions-base": "2.15.0",
+    "@memberjunction/core-entities": "2.15.0",
+    "@memberjunction/ai": "2.15.0",
+    "@memberjunction/aiengine": "2.15.0",
+    "@memberjunction/doc-utils": "2.15.0"
   }
 }

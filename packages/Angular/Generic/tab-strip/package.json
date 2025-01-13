@@ -23,7 +23,7 @@
     "@angular/core": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/ng-container-directives": "2.14.0",
+    "@memberjunction/ng-container-directives": "2.15.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

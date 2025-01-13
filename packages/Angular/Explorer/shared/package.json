@@ -26,9 +26,9 @@
     "@angular/core": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.14.0",
-    "@memberjunction/core-entities": "2.14.0",
-    "@memberjunction/graphql-dataprovider": "2.14.0",
+    "@memberjunction/core": "2.15.0",
+    "@memberjunction/core-entities": "2.15.0",
+    "@memberjunction/graphql-dataprovider": "2.15.0",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"
   },
