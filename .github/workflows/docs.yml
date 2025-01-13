@@ -24,6 +24,13 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
+      - name: Error out if the trigger did not succeed
+        run: |
+          if [ "${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || 'success' }}" != "success" ]; then
+            echo "::error::The triggering workflow did not succeed"
+            exit 1
+          fi
+
       - name: Checkout repo
         uses: actions/checkout@v4
         with:

@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
-This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
+This log was last generated on Mon, 13 Jan 2025 18:14:28 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.15.2
+
+Mon, 13 Jan 2025 18:14:28 GMT
+
+### Patches
+
+- Bump patch version (craig@memberjunction.com)
+- Bump patch version (craig@memberjunction.com)
+- Bump @memberjunction/core-entities to v2.15.2
+- Bump @memberjunction/global to v2.15.2
+- Bump @memberjunction/core to v2.15.2
+- Bump @memberjunction/ng-container-directives to v2.15.2
+- Bump @memberjunction/ng-shared to v2.15.2
+- Bump @memberjunction/ng-entity-form-dialog to v2.15.2
 
 ## 2.14.0
 
