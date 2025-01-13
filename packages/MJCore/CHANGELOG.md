@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/core
 
-This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
+This log was last generated on Mon, 13 Jan 2025 18:14:28 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.15.2
+
+Mon, 13 Jan 2025 18:14:28 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig@memberjunction.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump patch version (craig@memberjunction.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump patch version (craig@memberjunction.com)
+- Bump @memberjunction/global to v2.15.2
 
 ## 2.14.0
 

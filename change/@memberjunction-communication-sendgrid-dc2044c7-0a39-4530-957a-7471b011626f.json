@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Bump patch version",
-  "packageName": "@memberjunction/communication-sendgrid",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

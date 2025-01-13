@@ -1,8 +1,18 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
+This log was last generated on Mon, 13 Jan 2025 18:14:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.15.2
+
+Mon, 13 Jan 2025 18:14:29 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump patch version (craig@memberjunction.com)
+- Bump patch version (craig@memberjunction.com)
 
 ## 2.14.0
 

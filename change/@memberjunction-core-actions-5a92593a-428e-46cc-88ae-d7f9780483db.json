@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Bump patch version",
-  "packageName": "@memberjunction/core-actions",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

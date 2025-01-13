@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Bump patch version",
-  "packageName": "@memberjunction/ng-simple-record-list",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/ai-recommendations
 
-This log was last generated on Wed, 08 Jan 2025 04:33:32 GMT and should not be manually modified.
+This log was last generated on Mon, 13 Jan 2025 18:14:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.15.2
+
+Mon, 13 Jan 2025 18:14:29 GMT
+
+### Patches
+
+- Bump patch version (craig@memberjunction.com)
+- Bump patch version (craig@memberjunction.com)
+- Bump @memberjunction/global to v2.15.2
+- Bump @memberjunction/core to v2.15.2
+- Bump @memberjunction/core-entities to v2.15.2
+- Bump @memberjunction/ai to v2.15.2
 
 ## 2.14.0
 
