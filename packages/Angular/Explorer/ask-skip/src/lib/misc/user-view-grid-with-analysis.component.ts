@@ -6,7 +6,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
 @Component({
     selector: 'mj-user-view-grid-with-analysis',
-    template: `
+    template: ` 
     <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler()" (ResizeContainer)="sharedService.InvokeManualResize()">
         <mj-tab [TabSelected]="true"> Data </mj-tab>
         <mj-tab-body>
