@@ -1,6 +1,7 @@
 import { BaseEntity } from "@memberjunction/core";
 import { SharedService } from "./shared.service";
 import { BaseNavigationComponent } from "./base-navigation-component";
+import { ResourceData } from "@memberjunction/core-entities";
 
 export abstract class BaseResourceComponent extends BaseNavigationComponent {
     public Data: ResourceData = new ResourceData();
@@ -66,33 +67,4 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent {
     abstract GetResourceDisplayName(data: ResourceData): Promise<string>
 
     abstract GetResourceIconClass(data: ResourceData): Promise<string>
-}
-
-export class ResourceData {
-    constructor(data: any = null) {
-        if (data) {
-            this.ID = data.ID;
-            this.Name = data.Name;
-            this.ResourceTypeID = data.ResourceTypeID;
-            this.ResourceRecordID = data.ResourceRecordID;
-            this.Configuration = data.Configuration;
-        }
-    }
-    public ID!: number;
-    public Name!: string;
-    public ResourceTypeID!: string;
-    public ResourceRecordID!: any;
-    public Configuration: any;
-
-    /**
-     * Returns the name of the resource type based on the ResourceTypeID
-     */
-    public get ResourceType(): string {
-        const rt = SharedService.Instance.ResourceTypes.find(rt => rt.ID === this.ResourceTypeID);
-        return rt ? rt.Name : '';
-    }
-    public get ResourceIcon(): string {
-        const rt = SharedService.Instance.ResourceTypes.find(rt => rt.ID === this.ResourceTypeID);
-        return rt && rt.Icon ? rt.Icon : '';
-    }
 }

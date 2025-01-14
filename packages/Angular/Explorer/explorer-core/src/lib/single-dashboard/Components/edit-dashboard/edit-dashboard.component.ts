@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ResourceData } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { TileLayoutReorderEvent, TileLayoutResizeEvent } from '@progress/kendo-angular-layout';
 import { SharedService } from '@memberjunction/ng-shared';
 import { DashboardConfigDetails, DashboardItem } from '../../single-dashboard.component';

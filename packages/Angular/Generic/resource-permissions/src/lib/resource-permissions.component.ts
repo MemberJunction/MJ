@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
-import { LogError, Metadata, RoleInfo, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'mj-resource-permissions',
@@ -152,7 +152,7 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     else {
       // we had an error, show the user via SharedService
       if (this.ShowUserErrorMessages)
-        SharedService.Instance.CreateSimpleNotification('Error saving permissions', 'error', );
+        MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', );
   
       LogError('Error saving permissions in the transaction group');
       return false;

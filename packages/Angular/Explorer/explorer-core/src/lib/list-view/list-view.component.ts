@@ -2,7 +2,8 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ListEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { BaseNavigationComponent, EventCodes, ResourceData, SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, EventCodes, SharedService } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { BeforeAddItemEvent, BeforeDeleteItemEvent, BeforeUpdateItemEvent, DropdownOptionClickEvent } from '../../generic/Events.types';
 import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';

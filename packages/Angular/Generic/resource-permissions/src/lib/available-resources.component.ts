@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { EntityFieldInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
-import { ResourceData, SharedService } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { SelectionEvent } from '@progress/kendo-angular-grid';
 import { GridComponent } from '@progress/kendo-angular-grid';
 
@@ -67,7 +67,7 @@ export class AvailableResourcesComponent implements AfterViewInit {
             this.resources = [];
         }
         else {
-            const rt = SharedService.Instance.ResourceTypeByID(this.ResourceTypeID);
+            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find(rt => rt.ID === this.ResourceTypeID); 
             if (!rt || !rt.EntityID)
                 throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
 

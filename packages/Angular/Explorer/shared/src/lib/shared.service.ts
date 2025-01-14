@@ -26,6 +26,18 @@ export class SharedService {
     }
     // first time this has been called, so return ourselves since we're in the constructor
     SharedService._instance = this;
+
+    MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
+      switch (event.event) {
+        case MJEventType.LoggedIn:
+          if (SharedService._loaded === false)  {
+            const p1 = SharedService.RefreshData(false);
+            const p2 = ResourcePermissionEngine.Instance.Config(); // make sure that we get resource permissions configured
+            await Promise.all([p1, p2]);
+          }
+          break;
+      }      
+    });    
   }
 
   public static get Instance(): SharedService {

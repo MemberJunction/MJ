@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 

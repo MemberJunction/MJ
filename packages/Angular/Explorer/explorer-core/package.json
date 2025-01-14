@@ -28,6 +28,7 @@
   "dependencies": {
     "@memberjunction/global": "2.16.1",
     "@memberjunction/core": "2.16.1",
+    "@memberjunction/core-entities": "2.16.1",
     "@memberjunction/entity-communications-client": "2.16.1",
     "@memberjunction/communication-types": "2.16.1",
     "@memberjunction/templates-base-types": "2.16.1",

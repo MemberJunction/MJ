@@ -1,6 +1,6 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { TileLayoutComponent, TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
-import { ResourceData } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';

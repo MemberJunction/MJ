@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-resource-permissions",
   "version": "2.16.1",
-  "description": "MemberJunction: Angular components for displaying/editing permissions for a resource",
+  "description": "MemberJunction: Generic Angular components for displaying/editing permissions for a resource",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -25,11 +25,11 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.16.1",
     "@memberjunction/global": "2.16.1",
     "@memberjunction/core": "2.16.1",
+    "@memberjunction/core-entities": "2.16.1",
     "@memberjunction/ng-container-directives": "2.16.1",
-    "@memberjunction/ng-shared": "2.16.1",
+    "@memberjunction/ng-notifications": "2.16.1",
     "@memberjunction/ng-generic-dialog": "2.16.1",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-grid": "16.2.0",
