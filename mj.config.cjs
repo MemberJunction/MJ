@@ -247,11 +247,11 @@ const config = {
    */
 
   // Used for MJCLI, CodeGenLib, and MJServer
-  dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT,
-  dbDatabase: process.env.DB_DATABASE,
-  codeGenLogin: process.env.CODEGEN_DB_USERNAME,
-  codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
+  dbHost: process.env.DB_HOST ?? 'localhost', //"askskip-customer.database.windows.net", // process.env.DB_HOST ?? 'localhost',
+  dbPort: process.env.DB_PORT, // 1433,//process.env.DB_PORT,
+  dbDatabase: process.env.DB_DATABASE, // "d2c59c49-709f-4f4d-a72d-34529a65fb72", //process.env.DB_DATABASE,
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME, // "tapper", //process.env.CODEGEN_DB_USERNAME,
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD, // "zx6g4sXYcJUkxYnM82fDw8bH", //process.env.CODEGEN_DB_PASSWORD,
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
