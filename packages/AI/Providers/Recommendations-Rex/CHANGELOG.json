@@ -2,6 +2,39 @@
   "name": "@memberjunction/ai-recommendations-rex",
   "entries": [
     {
+      "date": "Tue, 14 Jan 2025 14:12:28 GMT",
+      "version": "2.16.1",
+      "tag": "@memberjunction/ai-recommendations-rex_v2.16.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "commit": "c32bdac41c3acdf134b4a734e56151b88926eb41",
+            "comment": "Fix for SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai to v2.16.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/global to v2.16.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-recommendations-rex",
+            "comment": "Bump @memberjunction/ai-recommendations to v2.16.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 14 Jan 2025 03:59:31 GMT",
       "version": "2.16.0",
       "tag": "@memberjunction/ai-recommendations-rex_v2.16.0",

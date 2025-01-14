@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/communication-ms-graph
 
-This log was last generated on Tue, 14 Jan 2025 03:59:31 GMT and should not be manually modified.
+This log was last generated on Tue, 14 Jan 2025 14:12:28 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.16.1
+
+Tue, 14 Jan 2025 14:12:28 GMT
+
+### Patches
+
+- Fix for SQL scripts (craig@memberjunction.com)
+- Bump @memberjunction/communication-types to v2.16.1
+- Bump @memberjunction/ai to v2.16.1
+- Bump @memberjunction/ai-openai to v2.16.1
+- Bump @memberjunction/aiengine to v2.16.1
+- Bump @memberjunction/core to v2.16.1
+- Bump @memberjunction/core-entities to v2.16.1
+- Bump @memberjunction/global to v2.16.1
+- Bump @memberjunction/sqlserver-dataprovider to v2.16.1
 
 ## 2.16.0
 
