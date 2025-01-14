@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule, RouteReuseStrategy } from '@angular/router';
 
 // Kendo UI Angular imports
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { ChartsModule } from '@progress/kendo-angular-charts';
 import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
