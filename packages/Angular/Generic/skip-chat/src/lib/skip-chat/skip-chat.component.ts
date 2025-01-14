@@ -730,7 +730,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
     return SkipChatComponent._startMessages[idx];
   }
 
-  async sendPrompt(val: string) {
+  public async sendPrompt(val: string) {
     const convoID: string = this.SelectedConversation ? this.SelectedConversation.ID : '';
     if (this._conversationsInProgress[convoID]) {
       // don't allow sending another message if we're in the midst of sending one
@@ -771,7 +771,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
           //the next time the user selects this convo, we will fetch messages
           //from the server rather than using the ones in cache
           this._conversationsToReload[convoID] = true;
-        } else {
+        } 
+        else {
           this._processingStatus[convoID] = false;
           const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result);
 
@@ -782,19 +783,21 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
             this.Conversations.push(convo);
             this.SelectedConversation = convo;
             this.SetSelectedConversationUser();
-          } else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
+          } 
+          else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
             if (this.SelectedConversation.Name === 'New Chat' || this.SelectedConversation.Name?.trim().length === 0 )  {
-            // we are on the first message so skip renamed the convo, use that
-            this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
+              // we are on the first message so skip renamed the convo, use that
+              this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
 
-            // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
-            // otherwise Angular binding doesn't pick up the change without the below.
-            const idx = this.Conversations.findIndex((c) => c.ID === this.SelectedConversation?.ID);
-            if (idx >= 0) {
-              // update our this.Conversations array to reflect the new name. First find the index of the conversation and then get that item and update it
-              this.Conversations[idx].Name = this.SelectedConversation.Name;
-              //reredner the list box
-              this.Conversations = [...this.Conversations];
+              // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
+              // otherwise Angular binding doesn't pick up the change without the below.
+              const idx = this.Conversations.findIndex((c) => c.ID === this.SelectedConversation?.ID);
+              if (idx >= 0) {
+                // update our this.Conversations array to reflect the new name. First find the index of the conversation and then get that item and update it
+                this.Conversations[idx].Name = this.SelectedConversation.Name;
+                //reredner the list box
+                this.Conversations = [...this.Conversations];
+              }
             }
           }
 
@@ -824,7 +827,8 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
       this.askSkipInput.nativeElement.focus();
     }
   }
-  async sendSkipMessage() {
+
+  public async sendSkipMessage() {
     if(this.IsTextAreaEmpty()){
       return;
     }
