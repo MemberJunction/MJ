@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Fix for SQL scripts",
+  "packageName": "@memberjunction/ng-simple-record-list",
+  "email": "craig@memberjunction.com",
+  "dependentChangeType": "patch"
+}
