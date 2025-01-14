@@ -18,6 +18,7 @@ import {
   SkipAPIRunScriptRequest,
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
+  SkipAPIAgentNote,
 } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -75,7 +76,7 @@ export class AskSkipResultType {
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
-  private static _maxHistoricalMessages = 20;
+  private static _maxHistoricalMessages = 30;
 
   /**
    * Handles a simple chat request from a user to Skip, using a particular data record
@@ -146,7 +147,7 @@ export class AskSkipResolver {
       }
     }
 
-    const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false);
+    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user);
     messages.push({
       content: UserQuestion,
       role: 'user',
@@ -219,16 +220,19 @@ export class AskSkipResolver {
     }
   }
 
-  protected buildSkipAPIRequest(
+  protected async buildSkipAPIRequest(
     messages: SkipMessage[],
     conversationId: string,
     dataContext: DataContext,
     requestPhase: SkipRequestPhase,
     includeEntities: boolean,
-    includeQueries: boolean
-  ): SkipAPIRequest {
+    includeQueries: boolean,
+    includeNotes: boolean,
+    contextUser: UserInfo
+  ): Promise<SkipAPIRequest> {
     const entities = includeEntities ? this.BuildSkipEntities() : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
+    const notes = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : [];
     const input: SkipAPIRequest = {
       apiKeys: this.buildSkipAPIKeys(),
       organizationInfo: configInfo?.askSkip?.organizationInfo,
@@ -239,6 +243,7 @@ export class AskSkipResolver {
       requestPhase: requestPhase,
       entities: entities,
       queries: queries,
+      notes: notes
     };
     return input;
   }
@@ -260,7 +265,7 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false);
+    const input = await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user);
     return this.handleSimpleSkipPostRequest(input);
   }
 
@@ -319,7 +324,7 @@ export class AskSkipResolver {
     );
 
     const conversationDetailCount = 1
-    const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true);
+    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user);
 
     return this.HandleSkipRequest(
       input,
@@ -376,6 +381,44 @@ export class AskSkipResolver {
         }),
       };
     });
+  }
+
+  /**
+   * Builds up the array of notes that are applicable for Skip to receive from MJAPI
+   */
+  protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<SkipAPIAgentNote[]> {
+    try {
+      const md = new Metadata();
+      if (md.EntityByName('AI Agent Notes')) {
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: "AI Agent Notes",
+          ExtraFilter: "Agent='Skip'"
+        }, contextUser)
+        if (result && result.Success) {
+          return result.Results.map((r) => {
+            return {
+              id: r.ID,
+              typeId: r.TypeID,
+              type: r.Type,
+              note: r.Note,
+              createdAt: r.__mj_CreatedAt,
+              updatedAt: r.__mj_UpdatedAt,
+            }
+          });
+        }
+        else 
+          return [];    
+      }
+      else {
+        console.warn(`No AI Agent Notes entity found in the metadata, so no notes will be sent to Skip`);
+        return []; // no agent notes configured in this MJ system, so not an error, just return empty array
+      }
+    }
+    catch (e) {
+      LogError(e);
+      return []; // non- fatal error just return an empty array
+    }
   }
 
   protected BuildSkipEntities(): SkipEntityInfo[] {
