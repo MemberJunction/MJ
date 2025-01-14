@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/skip-types
 
-This log was last generated on Mon, 13 Jan 2025 18:14:27 GMT and should not be manually modified.
+This log was last generated on Tue, 14 Jan 2025 03:59:31 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.16.0
+
+Tue, 14 Jan 2025 03:59:31 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core-entities to v2.16.0
+- Bump @memberjunction/data-context to v2.16.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.15.2
 

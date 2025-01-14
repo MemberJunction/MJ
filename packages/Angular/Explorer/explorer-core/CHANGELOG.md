@@ -1,8 +1,38 @@
 # Change Log - @memberjunction/ng-explorer-core
 
-This log was last generated on Mon, 13 Jan 2025 18:14:28 GMT and should not be manually modified.
+This log was last generated on Tue, 14 Jan 2025 03:59:31 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.16.0
+
+Tue, 14 Jan 2025 03:59:31 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.16.0
+- Bump @memberjunction/core to v2.16.0
+- Bump @memberjunction/entity-communications-client to v2.16.0
+- Bump @memberjunction/communication-types to v2.16.0
+- Bump @memberjunction/templates-base-types to v2.16.0
+- Bump @memberjunction/ng-compare-records to v2.16.0
+- Bump @memberjunction/ng-file-storage to v2.16.0
+- Bump @memberjunction/ng-record-changes to v2.16.0
+- Bump @memberjunction/ng-container-directives to v2.16.0
+- Bump @memberjunction/ng-user-view-grid to v2.16.0
+- Bump @memberjunction/ng-query-grid to v2.16.0
+- Bump @memberjunction/ng-user-view-properties to v2.16.0
+- Bump @memberjunction/ng-shared to v2.16.0
+- Bump @memberjunction/ng-tabstrip to v2.16.0
+- Bump @memberjunction/ng-skip-chat to v2.16.0
+- Bump @memberjunction/ng-ask-skip to v2.16.0
+- Bump @memberjunction/ng-auth-services to v2.16.0
+- Bump @memberjunction/ng-explorer-settings to v2.16.0
+- Bump @memberjunction/ng-base-forms to v2.16.0
+- Bump @memberjunction/ng-entity-form-dialog to v2.16.0
+- Bump @memberjunction/ng-record-selector to v2.16.0
+- Bump @memberjunction/ng-resource-permissions to v2.16.0
 
 ## 2.15.2
 

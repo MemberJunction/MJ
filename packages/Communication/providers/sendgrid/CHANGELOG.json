@@ -2,6 +2,39 @@
   "name": "@memberjunction/communication-sendgrid",
   "entries": [
     {
+      "date": "Tue, 14 Jan 2025 03:59:31 GMT",
+      "version": "2.16.0",
+      "tag": "@memberjunction/communication-sendgrid_v2.16.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/global to v2.16.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core to v2.16.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/core-entities to v2.16.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-sendgrid",
+            "comment": "Bump @memberjunction/communication-types to v2.16.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 13 Jan 2025 18:14:29 GMT",
       "version": "2.15.2",
       "tag": "@memberjunction/communication-sendgrid_v2.15.2",
