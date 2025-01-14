@@ -671,7 +671,7 @@ export class SkipAPILearningCycleResponse {
      */
     success: boolean;
 
-    /**
+    /** 
      * If the learning cycle was not successful, this property will contain an error message that describes the reason for the failure
      */
     error?: string;
