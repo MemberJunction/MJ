@@ -6,6 +6,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Injectable({
   providedIn: 'root'
@@ -18,60 +19,13 @@ export class SharedService {
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
-  constructor(private notificationService: NotificationService) {
+  constructor(private notificationService: NotificationService, private mjNotificationsService: MJNotificationService) {
     if (SharedService._instance) {
       // return existing instance which will short circuit the creation of a new instance
       return SharedService._instance;
     }
     // first time this has been called, so return ourselves since we're in the constructor
     SharedService._instance = this;
-
-    MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
-      switch (event.event) {
-        case MJEventType.DisplaySimpleNotificationRequest: 
-          // received the message to display a notification to the user, so do that...
-          const messageData: DisplaySimpleNotificationRequestData = <DisplaySimpleNotificationRequestData>event.args;
-          this.CreateSimpleNotification(messageData.message,messageData.style, messageData.DisplayDuration);
-          break;
-        case MJEventType.ComponentEvent:
-          if (event.eventCode === EventCodes.UserNotificationsUpdated) {
-            // refresh the user notifications
-            SharedService.RefreshUserNotifications();
-          }
-          break;
-        case MJEventType.LoggedIn:
-          if (SharedService._loaded === false) 
-            SharedService.RefreshData(true);
-
-          // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
-          this.PushStatusUpdates().subscribe( (status: any) => {
-            const statusObj = JSON.parse(status.message);
-
-            // pass along as an event so anyone else who wants to know about the push status update can do stuff
-            MJGlobal.Instance.RaiseEvent({
-              event: MJEventType.ComponentEvent,
-              eventCode: EventCodes.PushStatusUpdates,
-              args: statusObj,
-              component: this
-            })
-
-            if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
-              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
-                // we have changes to user notifications, so refresh them
-                this.CreateSimpleNotification('New Notification Available', "success", 2000)
-                SharedService.RefreshUserNotifications();
-              }
-            }
-            else {
-              // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              if (statusObj.type?.trim().toLowerCase() !== 'askskip')  {
-                this.CreateSimpleNotification(statusObj.message, "success", 2500);
-              }
-            }
-          });
-          break;
-      }      
-    });
   }
 
   public static get Instance(): SharedService {
@@ -200,15 +154,23 @@ export class SharedService {
     this._currentUserImage = value;
   }
 
-  private static _userNotifications: UserNotificationEntity[] = [];
+  /**
+   * @deprecated Use MJNotificationService.UserNotifications instead
+   */
   public static get UserNotifications(): UserNotificationEntity[] {
-    return SharedService._userNotifications;
+    return MJNotificationService.UserNotifications;
   }
+  /**
+   * @deprecated Use MJNotificationService.UnreadUserNotifications instead
+   */
   public static get UnreadUserNotifications(): UserNotificationEntity[] {
-    return SharedService._userNotifications.filter(n => n.Unread);
+    return MJNotificationService.UnreadUserNotifications;
   }
+  /**
+   * @deprecated Use MJNotificationService.UnreadUserNotificationCount instead
+   */
   public static get UnreadUserNotificationCount(): number {
-    return SharedService.UnreadUserNotifications.length;
+    return MJNotificationService.UnreadUserNotificationCount;
   }
 
   /**
@@ -236,49 +198,17 @@ export class SharedService {
    * @param resourceRecordId 
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
    * @returns 
+   * @deprecated Use MJNotificationService.CreateNotification instead
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null): Promise<UserNotificationEntity> {
-    const md = new Metadata();
-    const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
-    notification.Title = title;
-    notification.Message = message;
-    if (resourceTypeId)
-      notification.ResourceTypeID = resourceTypeId;
-    if (resourceRecordId)
-      notification.ResourceRecordID = resourceRecordId;
-    if (resourceConfiguration)
-      notification.ResourceConfiguration = JSON.stringify(resourceConfiguration);
-  
-    notification.UserID = md.CurrentUser.ID;
-    notification.Unread = true;
-    const result = await notification.Save();
-    if (result) {
-      SharedService.RefreshUserNotifications();
-    }
-
-    // test
-    this.CreateSimpleNotification(notification.Message, "success", 2500);
-
-    return notification;
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<UserNotificationEntity> {
+    return this.mjNotificationsService.CreateNotification(title, message, resourceTypeId, resourceRecordId, resourceConfiguration, displayToUser);
   }
 
+  /**
+   * @deprecated Use MJNotificationService.RefreshUserNotifications instead
+   */
   public static async RefreshUserNotifications() {
-    try {
-      const rv = new RunView();
-      const md = new Metadata();
-      const result = await rv.RunView({
-          EntityName: 'User Notifications',
-          ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          ResultType: 'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */
-      })
-      if (result && result.Success) {
-          SharedService._userNotifications = result.Results;
-      }
-    }
-    catch (e) {
-      LogError(e);
-    }
+    MJNotificationService.RefreshUserNotifications();
   }
 
   /**
@@ -286,21 +216,10 @@ export class SharedService {
    * @param message - text to display
    * @param style - display styling
    * @param hideAfter - option to auto hide after the specified delay in milliseconds
+   * @deprecated Use MJNotificationService.CreateSimpleNotification instead
    */
   public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
-    const props: NotificationSettings = {
-      content: message,
-      cssClass: "button-notification",
-      animation: { type: "slide", duration: 400 },
-      position: { horizontal: "center", vertical: "top" },
-      type: { style: style, icon: true }
-    }
-    if (hideAfter)
-      props.hideAfter = hideAfter;
-    else
-      props.closable = true;
-
-    this.notificationService.show(props);
+    return this.mjNotificationsService.CreateSimpleNotification(message, style, hideAfter);
   }
 
 

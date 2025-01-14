@@ -2,8 +2,9 @@ import { ElementRef, Injectable } from '@angular/core';
 import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 /**
  * This injectable service is also available as a singleton MJNotificationService.Instance globally within an Angular application/library process space. It is responsible for displaying notifications to the user and also is able to manage the User Notifications entity
@@ -31,15 +32,54 @@ export class MJNotificationService {
     MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
       switch (event.event) {
         case MJEventType.DisplaySimpleNotificationRequest: 
-            // received the message to display a notification to the user, so do that...
-            const messageData: DisplaySimpleNotificationRequestData = <DisplaySimpleNotificationRequestData>event.args;
-            this.CreateSimpleNotification(messageData.message,messageData.style, messageData.DisplayDuration);
-            break;
-        case MJEventType.LoggedIn: 
+          // received the message to display a notification to the user, so do that...
+          const messageData: DisplaySimpleNotificationRequestData = <DisplaySimpleNotificationRequestData>event.args;
+          this.CreateSimpleNotification(messageData.message,messageData.style, messageData.DisplayDuration);
+          break;
+        case MJEventType.ComponentEvent:
+          if (event.eventCode === "UserNotificationsUpdated") {
+            // refresh the user notifications
             MJNotificationService.RefreshUserNotifications();
-            break;
+          }
+          break;
+        case MJEventType.LoggedIn:
+          if (MJNotificationService._loaded === false) 
+            MJNotificationService.RefreshUserNotifications();
+
+          // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
+          this.PushStatusUpdates().subscribe( (status: any) => {
+            const statusObj = JSON.parse(status.message);
+
+            // pass along as an event so anyone else who wants to know about the push status update can do stuff
+            MJGlobal.Instance.RaiseEvent({
+              event: MJEventType.ComponentEvent,
+              eventCode: "PushStatusUpdates",
+              args: statusObj,
+              component: this
+            })
+
+            if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
+              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
+                // we have changes to user notifications, so refresh them
+                this.CreateSimpleNotification('New Notification Available', "success", 2000)
+                MJNotificationService.RefreshUserNotifications();
+              }
+            }
+            else {
+              // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
+              if (statusObj.type?.trim().toLowerCase() !== 'askskip')  {
+                this.CreateSimpleNotification(statusObj.message, "success", 2500);
+              }
+            }
+          });
+          break;
       }      
     });
+  }
+
+  public PushStatusUpdates(): Observable<string> {
+    const gp: GraphQLDataProvider = <GraphQLDataProvider>Metadata.Provider;
+    return gp.PushStatusUpdates();
   }
 
   public static get Instance(): MJNotificationService {
