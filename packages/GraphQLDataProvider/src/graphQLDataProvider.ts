@@ -13,8 +13,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, BaseEntityResult,
-         KeyValuePair,
-         LogStatus} from "@memberjunction/core";
+         KeyValuePair } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -1580,6 +1579,7 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
     private _provider: GraphQLDataProvider;
     constructor(provider: GraphQLDataProvider) {
         super();
+        this._provider = provider;
     }
 
     protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {

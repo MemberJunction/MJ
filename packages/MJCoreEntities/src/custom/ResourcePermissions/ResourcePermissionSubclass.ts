@@ -66,6 +66,7 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
                             ResourcePermissionID: this.ID // saving the resource permission here to make it easy to find the request from the notification
                         });
                         notification.UserID = recordOwnerID;
+                        return await notification.Save();
                     }
                     else if (statusChangedfromRequested) {
                         // notify the user who requested access that their request was approved or denied
@@ -77,8 +78,11 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
                         notification.ResourceConfiguration = JSON.stringify({
                             ResourcePermissionID: this.ID // saving the resource permission here to make it easy to find the request from the notification
                         });
+                        return await notification.Save();
                     }
-                    return await notification.Save();
+                    else {
+                        return true; // in this case we do NOT need to save the notification because there is nothing to do here
+                    }
                 }
                 else {
                     return false; // don't do workflow as the save failed
