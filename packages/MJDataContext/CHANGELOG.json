@@ -2,6 +2,27 @@
   "name": "@memberjunction/data-context",
   "entries": [
     {
+      "date": "Tue, 14 Jan 2025 03:59:31 GMT",
+      "version": "2.16.0",
+      "tag": "@memberjunction/data-context_v2.16.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context",
+            "comment": "Bump @memberjunction/global to v2.16.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context",
+            "comment": "Bump @memberjunction/core-entities to v2.16.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 13 Jan 2025 18:14:28 GMT",
       "version": "2.15.2",
       "tag": "@memberjunction/data-context_v2.15.2",
