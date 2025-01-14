@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Fix for SQL scripts",
-  "packageName": "@memberjunction/ng-explorer-settings",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

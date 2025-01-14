@@ -1,8 +1,18 @@
 # Change Log - @memberjunction/data-context
 
-This log was last generated on Tue, 14 Jan 2025 03:59:31 GMT and should not be manually modified.
+This log was last generated on Tue, 14 Jan 2025 14:12:27 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.16.1
+
+Tue, 14 Jan 2025 14:12:27 GMT
+
+### Patches
+
+- Fix for SQL scripts (craig@memberjunction.com)
+- Bump @memberjunction/global to v2.16.1
+- Bump @memberjunction/core-entities to v2.16.1
 
 ## 2.16.0
 

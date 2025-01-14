@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Fix for SQL scripts",
-  "packageName": "@memberjunction/communication-engine",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

@@ -2,6 +2,33 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Tue, 14 Jan 2025 14:12:27 GMT",
+      "version": "2.16.1",
+      "tag": "@memberjunction/core-entities_v2.16.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "c32bdac41c3acdf134b4a734e56151b88926eb41",
+            "comment": "Fix for SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v2.16.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v2.16.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 14 Jan 2025 03:59:31 GMT",
       "version": "2.16.0",
       "tag": "@memberjunction/core-entities_v2.16.0",

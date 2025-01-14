@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Fix for SQL scripts",
-  "packageName": "@memberjunction/ng-query-grid",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

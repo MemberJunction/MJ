@@ -2,6 +2,33 @@
   "name": "@memberjunction/data-context-server",
   "entries": [
     {
+      "date": "Tue, 14 Jan 2025 14:12:27 GMT",
+      "version": "2.16.1",
+      "tag": "@memberjunction/data-context-server_v2.16.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/data-context-server",
+            "commit": "c32bdac41c3acdf134b4a734e56151b88926eb41",
+            "comment": "Fix for SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/data-context to v2.16.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/global to v2.16.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 14 Jan 2025 03:59:31 GMT",
       "version": "2.16.0",
       "tag": "@memberjunction/data-context-server_v2.16.0",
