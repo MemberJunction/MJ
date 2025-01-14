@@ -675,7 +675,7 @@ export class SkipAPILearningCycleResponse {
      * If the learning cycle was not successful, this property will contain an error message that describes the reason for the failure
      */
     error?: string;
-
+ 
     /**
      * The number of milliseconds that have elapsed since the learning cycle process started
      */
