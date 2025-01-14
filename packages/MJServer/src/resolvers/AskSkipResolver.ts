@@ -19,6 +19,7 @@ import {
   SkipAPIRequestAPIKey,
   SkipRequestPhase,
   SkipAPIAgentNote,
+  SkipAPIAgentNoteType,
 } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -232,7 +233,7 @@ export class AskSkipResolver {
   ): Promise<SkipAPIRequest> {
     const entities = includeEntities ? this.BuildSkipEntities() : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const notes = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : [];
+    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
     const input: SkipAPIRequest = {
       apiKeys: this.buildSkipAPIKeys(),
       organizationInfo: configInfo?.askSkip?.organizationInfo,
@@ -243,7 +244,8 @@ export class AskSkipResolver {
       requestPhase: requestPhase,
       entities: entities,
       queries: queries,
-      notes: notes
+      notes: notes,
+      noteTypes: noteTypes
     };
     return input;
   }
@@ -386,9 +388,12 @@ export class AskSkipResolver {
   /**
    * Builds up the array of notes that are applicable for Skip to receive from MJAPI
    */
-  protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<SkipAPIAgentNote[]> {
+  protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
     try {
       const md = new Metadata();
+      let notes: SkipAPIAgentNote[] = [];
+      let noteTypes: SkipAPIAgentNoteType[] = [];
+
       if (md.EntityByName('AI Agent Notes')) {
         const rv = new RunView();
         const result = await rv.RunView({
@@ -396,7 +401,7 @@ export class AskSkipResolver {
           ExtraFilter: "Agent='Skip'"
         }, contextUser)
         if (result && result.Success) {
-          return result.Results.map((r) => {
+          notes = result.Results.map((r) => {
             return {
               id: r.ID,
               typeId: r.TypeID,
@@ -407,17 +412,33 @@ export class AskSkipResolver {
             }
           });
         }
-        else 
-          return [];    
       }
       else {
         console.warn(`No AI Agent Notes entity found in the metadata, so no notes will be sent to Skip`);
-        return []; // no agent notes configured in this MJ system, so not an error, just return empty array
       }
+
+      if (md.EntityByName('AI Agent Note Types')) {
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: "AI Agent Note Types" 
+        }, contextUser);
+        if (result && result.Success) {
+          noteTypes = result.Results.map((r) => {
+            return {
+              id: r.ID,
+              name: r.Name,
+              description: r.Description
+            }
+          });
+        }
+      }
+
+      // now return the notes and note types
+      return {notes, noteTypes};
     }
     catch (e) {
       LogError(e);
-      return []; // non- fatal error just return an empty array
+      return {notes: [], noteTypes: []}; // non- fatal error just return empty arrays
     }
   }
 
@@ -629,7 +650,7 @@ export class AskSkipResolver {
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
       const sql = `SELECT
-                      ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} ID, Message, Role, __mj_CreatedAt
+                      ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} *
                    FROM
                       ${e.SchemaName}.${e.BaseView}
                    WHERE
@@ -689,6 +710,13 @@ export class AskSkipResolver {
             content: skipRole === 'system' ? outputMessage : r.Message,
             role: skipRole,
             conversationDetailID: r.ID,
+            hiddenToUser: r.HiddenToUser,
+            userRating: r.UserRating,
+            userFeedback: r.UserFeedback,
+            reflectionInsights: r.ReflectionInsights,
+            summaryOfEarlierConveration: r.SummaryOfEarlierConversation,
+            createdAt: r.__mj_CreatedAt,
+            updatedAt: r.__mj_UpdatedAt,
           };
           return m;
         });
