@@ -1,6 +1,6 @@
 import { Field, ObjectType, Query, Resolver } from 'type-graphql';
 import { Public } from '../directives/index.js';
-import { version } from 'pkginfo';
+import packageJson from '../../package.json' assert { type: 'json' };
 
 @ObjectType()
 export class Info {
@@ -14,6 +14,6 @@ export class InfoResolver {
   @Query(() => Info)
   @Public()
   async Info() {
-    return { Version: version };
+    return { Version: packageJson.version };
   }
 }
