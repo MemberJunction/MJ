@@ -233,7 +233,7 @@ export class AskSkipResolver {
   ): Promise<SkipAPIRequest> {
     const entities = includeEntities ? this.BuildSkipEntities() : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
+    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []}; 
     const input: SkipAPIRequest = {
       apiKeys: this.buildSkipAPIKeys(),
       organizationInfo: configInfo?.askSkip?.organizationInfo,
