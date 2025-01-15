@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import path from 'path';
 import { SQLLogging } from "../Misc/sql_logging";
 
+
 /**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
  * to properly register your subclass with a priority of 1+ to ensure it gets instantiated.
@@ -23,8 +24,18 @@ export class ManageMetadataBase {
        return this._sqlUtilityObject;
    }
    private static _newEntityList: string[] = [];
+   /**
+    * Globally scoped list of entities that have been created during the metadata management process.
+    */
    public static get newEntityList(): string[] {
       return this._newEntityList;
+   }
+   private static _modifiedEntityList: string[] = [];
+   /**
+    * Globally scoped list of entities that have been modified during the metadata management process.  
+    */
+   public static get modifiedEntityList(): string[] {
+      return this._modifiedEntityList;
    }
 
    /**
@@ -858,6 +869,7 @@ export class ManageMetadataBase {
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       e.RelationshipDefaultDisplayType,
+      e.Name EntityName,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,
       IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
@@ -1067,6 +1079,11 @@ export class ManageMetadataBase {
             }
          });
 
+         // if we get here now send a distinct list of the entities that had new fields to the modified entity list
+         // column in the resultset is called EntityName, we dont have to dedupe them here because the method below
+         // will do that for us
+         ManageMetadataBase.addNewEntitiesToModifiedList(newEntityFields.map((f: { EntityName: any; }) => f.EntityName));
+
          return true;
       }
       catch (e) {
@@ -1099,7 +1116,12 @@ export class ManageMetadataBase {
    protected async updateExistingEntitiesFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`);
+         // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
+         // add these to the modified entity list if they're not already in there
+         if (result && result.length > 0 ) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: any; }) => r.Name));
+         }
          return true;
       }
       catch (e) {
@@ -1107,11 +1129,27 @@ export class ManageMetadataBase {
          return false;
       }
    }
+
+   /**
+    * Adds a list of entity names to the modified entity list if they're not already in there
+    */
+   protected static addNewEntitiesToModifiedList(entityNames: string[]) {
+      const distinctEntityNames = [...new Set(entityNames)];
+      const newlyModifiedEntityNames = distinctEntityNames.filter((e: string) => !ManageMetadataBase._modifiedEntityList.includes(e));
+      // now make sure that each of these entity names is in the modified entity list
+      ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
+   }
+
    protected async updateExistingEntityFieldsFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existingg entity fields from schema`);
-
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existingg entity fields from schema`);
+         // result contains the updated entity fields
+         // there is a field in there called EntityName. Get a distinct list of entity names from this and add them
+         // to the modified entity list if they're not already in there
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
+         }
          return true;
       }
       catch (e) {
@@ -1122,7 +1160,13 @@ export class ManageMetadataBase {
    protected async deleteUnneededEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`);
+         // result contains the DELETED entity fields
+         // there is a field in there called Entity. Get a distinct list of entity names from this and add them
+         // to the modified entity list if they're not already in there
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+         }
          return true;
       }
       catch (e) {

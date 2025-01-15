@@ -299,7 +299,9 @@ export class SQLCodeGenBase {
     }
 
     protected logSQLForNewEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
-        if (logSql && ManageMetadataBase.newEntityList.find(e => e === entity.Name)) {
+        if (logSql && 
+            (ManageMetadataBase.newEntityList.find(e => e === entity.Name) || ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name))  ) {
+            // per above only do this if (a) logSql is true and (b) the entity is in the newEntityList OR modifiedEntityList
             SQLLogging.appendToSQLLogFile(sql, description);
         }
     }
