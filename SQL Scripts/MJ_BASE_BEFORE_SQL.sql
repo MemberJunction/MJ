@@ -869,7 +869,7 @@ SELECT
 	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
 	basetable_columns.object_id,
 	dc.name AS DefaultConstraintName,
-    dc.definition AS DefaultValue,
+  dc.definition AS DefaultValue,
 	cc.definition ComputedColumnDefinition,
 	COALESCE(EP_View.value, EP_Table.value) AS [Description], -- Dynamically choose description - first look at view level if a description was defined there (rare) and then go to table if it was defined there (often not there either)
 	EP_View.value AS ViewColumnDescription,
@@ -917,13 +917,15 @@ LEFT OUTER JOIN
 ON 
 	EP_Table.major_id = basetable_columns.object_id AND 
 	EP_Table.minor_id = basetable_columns.column_id AND 
-	EP_Table.name = 'MS_Description'
+	EP_Table.name = 'MS_Description' AND
+	EP_Table.class_desc = 'OBJECT_OR_COLUMN'
 LEFT OUTER JOIN 
     sys.extended_properties EP_View 
 ON 
 	EP_View.major_id = c.object_id AND 
 	EP_View.minor_id = c.column_id AND 
-	EP_View.name = 'MS_Description'
+	EP_View.name = 'MS_Description' AND
+	EP_View.class_desc = 'OBJECT_OR_COLUMN'
 GO
 
 
@@ -940,6 +942,8 @@ IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #ef_spDeleteUnneededEntityFields
 IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #actual_spDeleteUnneededEntityFields
+IF OBJECT_ID('tempdb..#DeletedFields') IS NOT NULL
+    DROP TABLE #DeletedFields
 
 -- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
 SELECT 
@@ -961,62 +965,58 @@ WHERE
     e.VirtualEntity = 0 AND -- exclude virtual entities from this always
     excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 
-
+-- get actual fields from the database so we can compare MJ metadata to the SQL catalog
 SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
+
+-- now figure out which fields are NO longer in the DB and should be removed from MJ metadata
+SELECT ef.* INTO #DeletedFields 	 
+	FROM 
+	  #ef_spDeleteUnneededEntityFields ef 
+	LEFT JOIN
+	  #actual_spDeleteUnneededEntityFields actual 
+	  ON
+	  ef.EntityID=actual.EntityID AND
+	  ef.Name = actual.EntityFieldName
+	WHERE 
+	  actual.column_id IS NULL  
+
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
 UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 (
-	SELECT 
-	  ef.EntityID 
-	FROM 
-	  #ef_spDeleteUnneededEntityFields ef 
-	LEFT JOIN
-	  #actual_spDeleteUnneededEntityFields actual 
-	  ON
-	  ef.EntityID=actual.EntityID AND
-	  ef.Name = actual.EntityFieldName
-	WHERE 
-	  actual.column_id IS NULL  
+  SELECT DISTINCT EntityID FROM #DeletedFields
 )
-
 
 -- next delete the entity field values
 DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (
-	SELECT 
-	  ef.ID 
-	FROM 
-	  #ef_spDeleteUnneededEntityFields ef 
-	LEFT JOIN
-	  #actual_spDeleteUnneededEntityFields actual 
-	  ON
-	  ef.EntityID=actual.EntityID AND
-	  ef.Name = actual.EntityFieldName
-	WHERE 
-	  actual.column_id IS NULL  
+  SELECT ID FROM #DeletedFields
 )
-
 
 -- now delete the entity fields themsevles
 DELETE FROM __mj.EntityField WHERE ID IN
 (
-	SELECT 
-	  ef.ID 
-	FROM 
-	  #ef_spDeleteUnneededEntityFields ef 
-	LEFT JOIN
-	  #actual_spDeleteUnneededEntityFields actual 
-	  ON
-	  ef.EntityID=actual.EntityID AND
-	  ef.Name = actual.EntityFieldName
-	WHERE 
-	  actual.column_id IS NULL  
+  SELECT ID FROM #DeletedFields
 )
+
+-- return the deleted fields to the caller
+SELECT * FROM #DeletedFields
 
 -- clean up and get rid of our temp tables now
 DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
+DROP TABLE #DeletedFields
 GO
+
+
+
+
+
+
+
+
+
+
+
 
 
 DROP PROCEDURE IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema];
@@ -1026,31 +1026,57 @@ CREATE PROCEDURE [__mj].spUpdateExistingEntitiesFromSchema
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
-    -- Update statement excluding rows with matching SchemaName
-    UPDATE 
-        [__mj].[Entity]
+    SET NOCOUNT ON;
+
+    -- Declare a table variable to store the filtered rows
+    DECLARE @FilteredRows TABLE (
+        ID UNIQUEIDENTIFIER,
+        Name NVARCHAR(500),
+        CurrentDescription NVARCHAR(MAX),
+        NewDescription NVARCHAR(MAX),
+        EntityDescription NVARCHAR(MAX),
+        SchemaName NVARCHAR(MAX)
+    );
+
+    INSERT INTO @FilteredRows
+        SELECT 
+            e.ID,
+            e.Name,
+            e.Description AS CurrentDescription,
+            IIF(e.AutoUpdateDescription = 1, CONVERT(NVARCHAR(MAX), fromSQL.EntityDescription), e.Description) AS NewDescription,
+            CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription),
+            CONVERT(NVARCHAR(MAX),fromSQL.SchemaName)
+        FROM
+            [__mj].[Entity] e
+        INNER JOIN
+            [__mj].[vwSQLTablesAndEntities] fromSQL
+        ON
+            e.ID = fromSQL.EntityID
+        LEFT JOIN
+            STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+        ON
+            fromSQL.SchemaName = excludedSchemas.value
+        WHERE
+            e.VirtualEntity = 0 
+            AND excludedSchemas.value IS NULL -- Exclude rows with matching SchemaName
+            AND IIF(e.AutoUpdateDescription = 1, CONVERT(NVARCHAR(MAX), fromSQL.EntityDescription), e.Description) <> e.Description -- Only rows with changes
+
+    -- Perform the update
+    UPDATE e
     SET
-        Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
+        Description = fr.NewDescription
     FROM
         [__mj].[Entity] e
     INNER JOIN
-        [__mj].[vwSQLTablesAndEntities] fromSQL
+        @FilteredRows fr
     ON
-        e.ID = fromSQL.EntityID
-    -- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
-    LEFT JOIN
-        STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
-    ON
-        fromSQL.SchemaName = excludedSchemas.value
-    WHERE
-        e.VirtualEntity = 0 AND
-        excludedSchemas.value IS NULL; -- This ensures rows with matching SchemaName are excluded
+        e.ID = fr.ID;
+
+    -- Return the modified rows
+    SELECT * FROM @FilteredRows;
 END;
 GO
-
-
-
-
+ 
 
 
 DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
@@ -1059,104 +1085,154 @@ CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
-    -- Step 1: Parse the excluded schema names into a table
+    SET NOCOUNT ON;
+
+    -- Step 1: Parse the excluded schema names into a table variable
     DECLARE @ExcludedSchemas TABLE (SchemaName NVARCHAR(255));
     INSERT INTO @ExcludedSchemas(SchemaName)
     SELECT TRIM(value) FROM STRING_SPLIT(@ExcludedSchemaNames, ',');
 
-    -- Step 2: Precompute the join results in a CTE
-    WITH PrecomputedData AS (
-        SELECT 
-            ef.ID AS EntityFieldID,
-            ef.AutoUpdateDescription,
-            ef.Description AS ExistingDescription,
-            fromSQL.Description AS SQLDescription,
-            fromSQL.Type,
-            fromSQL.Length,
-            fromSQL.Precision,
-            fromSQL.Scale,
-            fromSQL.AllowsNull,
-            fromSQL.DefaultValue,
-            fromSQL.AutoIncrement,
-            fromSQL.IsVirtual,
-            fromSQL.Sequence,
-            re.ID AS RelatedEntityID,
-            fk.referenced_column AS RelatedEntityFieldName,
-            CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
-            CASE 
-                WHEN pk.ColumnName IS NOT NULL THEN 1 
-                ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
-            END AS IsUnique,
-            e.VirtualEntity,
-            excludedSchemas.SchemaName AS ExcludedSchemaName
-        FROM
-            [__mj].EntityField ef
-        INNER JOIN
-            vwSQLColumnsAndEntityFields fromSQL
-        ON
-            ef.EntityID = fromSQL.EntityID AND
-            ef.Name = fromSQL.FieldName
-        INNER JOIN
-            [__mj].Entity e 
-        ON
-            ef.EntityID = e.ID
-        LEFT OUTER JOIN
-            vwForeignKeys fk
-        ON
-            ef.Name = fk.[column] AND
-            e.BaseTable = fk.[table] AND
-            e.SchemaName = fk.[schema_name]
-        LEFT OUTER JOIN 
-            [__mj].Entity re -- Related Entity
-        ON
-            re.BaseTable = fk.referenced_table AND
-            re.SchemaName = fk.[referenced_schema]
-        LEFT OUTER JOIN 
-            [__mj].vwTablePrimaryKeys pk
-        ON
-            e.BaseTable = pk.TableName AND
-            ef.Name = pk.ColumnName AND
-            e.SchemaName = pk.SchemaName
-        LEFT OUTER JOIN 
-            [__mj].vwTableUniqueKeys uk
-        ON
-            e.BaseTable = uk.TableName AND
-            ef.Name = uk.ColumnName AND
-            e.SchemaName = uk.SchemaName
-        LEFT OUTER JOIN
-            @ExcludedSchemas excludedSchemas
-        ON
-            e.SchemaName = excludedSchemas.SchemaName
-    )
-    -- Step 3: Perform the update using the precomputed data
+    -- Step 2: Declare a table variable to store filtered rows
+    DECLARE @FilteredRows TABLE (
+        EntityID UNIQUEIDENTIFIER,
+        EntityName NVARCHAR(500),
+        EntityFieldID UNIQUEIDENTIFIER,
+        EntityFieldName NVARCHAR(500),
+        AutoUpdateDescription BIT,
+        ExistingDescription NVARCHAR(MAX),
+        SQLDescription NVARCHAR(MAX),
+        Type NVARCHAR(255),
+        Length INT,
+        Precision INT,
+        Scale INT,
+        AllowsNull BIT,
+        DefaultValue NVARCHAR(MAX),
+        AutoIncrement BIT,
+        IsVirtual BIT,
+        Sequence INT,
+        RelatedEntityID UNIQUEIDENTIFIER,
+        RelatedEntityFieldName NVARCHAR(255),
+        IsPrimaryKey BIT,
+        IsUnique BIT
+    );
+
+    -- Step 3: Populate the table variable with filtered rows
+    INSERT INTO @FilteredRows
+    SELECT
+        e.ID as EntityID,
+        e.Name as EntityName,
+        ef.ID AS EntityFieldID,
+        ef.Name as EntityFieldName,
+        ef.AutoUpdateDescription,
+        ef.Description AS ExistingDescription,
+        CONVERT(nvarchar(max),fromSQL.Description) AS SQLDescription,
+        fromSQL.Type,
+        fromSQL.Length,
+        fromSQL.Precision,
+        fromSQL.Scale,
+        fromSQL.AllowsNull,
+        CONVERT(nvarchar(max),fromSQL.DefaultValue),
+        fromSQL.AutoIncrement,
+        fromSQL.IsVirtual,
+        fromSQL.Sequence,
+        re.ID AS RelatedEntityID,
+        fk.referenced_column AS RelatedEntityFieldName,
+        CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
+        CASE 
+            WHEN pk.ColumnName IS NOT NULL THEN 1 
+            ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
+        END AS IsUnique
+    FROM
+        [__mj].EntityField ef
+    INNER JOIN
+        vwSQLColumnsAndEntityFields fromSQL
+    ON
+        ef.EntityID = fromSQL.EntityID AND
+        ef.Name = fromSQL.FieldName
+    INNER JOIN
+        [__mj].Entity e 
+    ON
+        ef.EntityID = e.ID
+    LEFT OUTER JOIN
+        vwForeignKeys fk
+    ON
+        ef.Name = fk.[column] AND
+        e.BaseTable = fk.[table] AND
+        e.SchemaName = fk.[schema_name]
+    LEFT OUTER JOIN 
+        [__mj].Entity re -- Related Entity
+    ON
+        re.BaseTable = fk.referenced_table AND
+        re.SchemaName = fk.[referenced_schema]
+    LEFT OUTER JOIN 
+        [__mj].vwTablePrimaryKeys pk
+    ON
+        e.BaseTable = pk.TableName AND
+        ef.Name = pk.ColumnName AND
+        e.SchemaName = pk.SchemaName
+    LEFT OUTER JOIN 
+        [__mj].vwTableUniqueKeys uk
+    ON
+        e.BaseTable = uk.TableName AND
+        ef.Name = uk.ColumnName AND
+        e.SchemaName = uk.SchemaName
+    LEFT OUTER JOIN
+        @ExcludedSchemas excludedSchemas
+    ON
+        e.SchemaName = excludedSchemas.SchemaName
+    WHERE
+        e.VirtualEntity = 0
+        AND excludedSchemas.SchemaName IS NULL -- Only include non-excluded schemas
+        AND ef.ID IS NOT NULL -- Only where we have already created EntityField records
+        AND (
+          -- this large filtering block includes ONLY the rows that have changes
+          LTRIM(RTRIM(ef.Description)) <> LTRIM(RTRIM(IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), fromSQL.Description), ef.Description))) OR
+          ef.Type <> fromSQL.Type OR
+          ef.Length <> fromSQL.Length OR
+          ef.Precision <> fromSQL.Precision OR
+          ef.Scale <> fromSQL.Scale OR
+          ef.AllowsNull <> fromSQL.AllowsNull OR
+          ISNULL(LTRIM(RTRIM(ef.DefaultValue)), '') <> ISNULL(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), fromSQL.DefaultValue))), '') OR
+          ef.AutoIncrement <> fromSQL.AutoIncrement OR
+          ef.IsVirtual <> fromSQL.IsVirtual OR
+          ef.Sequence <> fromSQL.Sequence OR
+          ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR -- Use TRY_CONVERT here
+          ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
+          ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
+          ef.IsUnique <> CASE 
+              WHEN pk.ColumnName IS NOT NULL THEN 1 
+              ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
+          END
+        );
+
+    -- Step 4: Perform the update using the table variable
     UPDATE ef
     SET
-        ef.Description = IIF(pd.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX), pd.SQLDescription), pd.ExistingDescription),
-        ef.Type = pd.Type,
-        ef.Length = pd.Length,
-        ef.Precision = pd.Precision,
-        ef.Scale = pd.Scale,
-        ef.AllowsNull = pd.AllowsNull,
-        ef.DefaultValue = pd.DefaultValue,
-        ef.AutoIncrement = pd.AutoIncrement,
-        ef.IsVirtual = pd.IsVirtual,
-        ef.Sequence = pd.Sequence,
-        ef.RelatedEntityID = pd.RelatedEntityID,
-        ef.RelatedEntityFieldName = pd.RelatedEntityFieldName,
-        ef.IsPrimaryKey = pd.IsPrimaryKey,
-        ef.IsUnique = pd.IsUnique,
+        ef.Description = IIF(fr.AutoUpdateDescription=1, fr.SQLDescription, ef.Description),
+        ef.Type = fr.Type,
+        ef.Length = fr.Length,
+        ef.Precision = fr.Precision,
+        ef.Scale = fr.Scale,
+        ef.AllowsNull = fr.AllowsNull,
+        ef.DefaultValue = fr.DefaultValue,
+        ef.AutoIncrement = fr.AutoIncrement,
+        ef.IsVirtual = fr.IsVirtual,
+        ef.Sequence = fr.Sequence,
+        ef.RelatedEntityID = fr.RelatedEntityID,
+        ef.RelatedEntityFieldName = fr.RelatedEntityFieldName,
+        ef.IsPrimaryKey = fr.IsPrimaryKey,
+        ef.IsUnique = fr.IsUnique,
         ef.__mj_UpdatedAt = GETUTCDATE()
     FROM
         [__mj].EntityField ef
     INNER JOIN
-        PrecomputedData pd
+        @FilteredRows fr
     ON
-        ef.ID = pd.EntityFieldID
-    WHERE
-        pd.VirtualEntity = 0
-        AND pd.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
-        AND pd.ExcludedSchemaName IS NULL; -- Only include non-excluded schemas
-END
+        ef.ID = fr.EntityFieldID;
+
+    -- Step 5: Return the modified rows
+    SELECT * FROM @FilteredRows;
+END;
 GO
  
 
