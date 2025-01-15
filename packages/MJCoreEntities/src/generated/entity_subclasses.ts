@@ -1031,6 +1031,287 @@ export const AIResultCacheSchema = z.object({
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
 
 /**
+ * zod schema definition for the entity AIAgent Actions
+ */
+export const AIAgentActionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent-action mapping. Serves as the primary key.`),
+    AgentID: z.string().nullish().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: References the unique identifier of the associated AI agent from the AIAgent table.`),
+    ActionID: z.string().nullish().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    * * Description: References the unique identifier of the associated action from the Action table.`),
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(15)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Revoked`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullish().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullish().describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)`),
+});
+
+export type AIAgentActionEntityType = z.infer<typeof AIAgentActionSchema>;
+
+/**
+ * zod schema definition for the entity AIAgent Learning Cycles
+ */
+export const AIAgentLearningCycleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the learning cycle.`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: Identifier for the AI Agent associated with this learning cycle.`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+    * * Description: Timestamp indicating when the learning cycle started.`),
+    EndedAt: z.date().nullish().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp indicating when the learning cycle ended.`),
+    Status: z.union([z.literal('In-Progress'), z.literal('Complete'), z.literal('Failed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * In-Progress
+    *   * Complete
+    *   * Failed
+    * * Description: Status of the learning cycle (In-Progress, Complete, or Failed).`),
+    AgentSummary: z.string().nullish().describe(`
+        * * Field Name: AgentSummary
+        * * Display Name: Agent Summary
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Text summary provided by the agent about what it learned and any changes it requested for stored metadata.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullish().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentLearningCycleEntityType = z.infer<typeof AIAgentLearningCycleSchema>;
+
+/**
+ * zod schema definition for the entity AIAgent Models
+ */
+export const AIAgentModelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent-model mapping. Serves as the primary key.`),
+    AgentID: z.string().nullish().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: References the unique identifier of the associated AI agent from AIAgent table.`),
+    ModelID: z.string().nullish().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The unique identifier of the associated AI model.`),
+    Active: z.boolean().nullish().describe(`
+        * * Field Name: Active
+        * * Display Name: Active
+        * * SQL Data Type: bit`),
+    Priority: z.number().nullish().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+    * * Description: The priority level of the AI model for the agent, where higher values indicate higher priority.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullish().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Model: z.string().nullish().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIAgentModelEntityType = z.infer<typeof AIAgentModelSchema>;
+
+/**
+ * zod schema definition for the entity AIAgent Note Types
+ */
+export const AIAgentNoteTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentNoteTypeEntityType = z.infer<typeof AIAgentNoteTypeSchema>;
+
+/**
+ * zod schema definition for the entity AIAgent Notes
+ */
+export const AIAgentNoteSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().nullish().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)`),
+    AgentNoteTypeID: z.string().nullish().describe(`
+        * * Field Name: AgentNoteTypeID
+        * * Display Name: Agent Note Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AIAgent Note Types (vwAIAgentNoteTypes.ID)`),
+    Note: z.string().nullish().describe(`
+        * * Field Name: Note
+        * * Display Name: Note
+        * * SQL Data Type: nvarchar(MAX)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullish().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    AgentNoteType: z.string().nullish().describe(`
+        * * Field Name: AgentNoteType
+        * * Display Name: Agent Note Type
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentNoteEntityType = z.infer<typeof AIAgentNoteSchema>;
+
+/**
+ * zod schema definition for the entity AIAgents
+ */
+export const AIAgentSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent. Serves as the primary key.`),
+    Name: z.string().nullish().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the AI agent.`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: A detailed description of the AI agent.`),
+    LogoURL: z.string().nullish().describe(`
+        * * Field Name: LogoURL
+        * * Display Name: Logo URL
+        * * SQL Data Type: nvarchar(255)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentEntityType = z.infer<typeof AIAgentSchema>;
+
+/**
  * zod schema definition for the entity Application Entities
  */
 export const ApplicationEntitySchema = z.object({
@@ -6252,13 +6533,11 @@ export const QueryEntitySchema = z.object({
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type QueryEntityEntityType = z.infer<typeof QueryEntitySchema>;
@@ -11975,6 +12254,714 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+}
+
+
+/**
+ * AIAgent Actions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentAction
+ * * Base View: vwAIAgentActions
+ * * @description Table to store the relationship between AI agents and actions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgent Actions')
+export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
+    /**
+    * Loads the AIAgent Actions record from the database
+    * @param ID: string - primary key value to load the AIAgent Actions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentActionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent-action mapping. Serves as the primary key.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: References the unique identifier of the associated AI agent from the AIAgent table.
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Actions (vwActions.ID)
+    * * Description: References the unique identifier of the associated action from the Action table.
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(15)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Revoked
+    */
+    get Status(): 'Pending' | 'Active' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Active' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+}
+
+
+/**
+ * AIAgent Learning Cycles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentLearningCycle
+ * * Base View: vwAIAgentLearningCycles
+ * * @description Tracks the learning cycles for AI Agents where the Agent does offline reasoning, reflection, learning, and updates metadata.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgent Learning Cycles')
+export class AIAgentLearningCycleEntity extends BaseEntity<AIAgentLearningCycleEntityType> {
+    /**
+    * Loads the AIAgent Learning Cycles record from the database
+    * @param ID: string - primary key value to load the AIAgent Learning Cycles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentLearningCycleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the learning cycle.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: Identifier for the AI Agent associated with this learning cycle.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp indicating when the learning cycle started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp indicating when the learning cycle ended.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * In-Progress
+    *   * Complete
+    *   * Failed
+    * * Description: Status of the learning cycle (In-Progress, Complete, or Failed).
+    */
+    get Status(): 'In-Progress' | 'Complete' | 'Failed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'In-Progress' | 'Complete' | 'Failed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AgentSummary
+    * * Display Name: Agent Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Text summary provided by the agent about what it learned and any changes it requested for stored metadata.
+    */
+    get AgentSummary(): string | null {
+        return this.Get('AgentSummary');
+    }
+    set AgentSummary(value: string | null) {
+        this.Set('AgentSummary', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+}
+
+
+/**
+ * AIAgent Models - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentModel
+ * * Base View: vwAIAgentModels
+ * * @description Table to store the relationship between AI agents and AI models.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgent Models')
+export class AIAgentModelEntity extends BaseEntity<AIAgentModelEntityType> {
+    /**
+    * Loads the AIAgent Models record from the database
+    * @param ID: string - primary key value to load the AIAgent Models record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentModelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent-model mapping. Serves as the primary key.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    * * Description: References the unique identifier of the associated AI agent from AIAgent table.
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The unique identifier of the associated AI model.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: Active
+    * * Display Name: Active
+    * * SQL Data Type: bit
+    */
+    get Active(): boolean | null {
+        return this.Get('Active');
+    }
+    set Active(value: boolean | null) {
+        this.Set('Active', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Description: The priority level of the AI model for the agent, where higher values indicate higher priority.
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
+    }
+}
+
+
+/**
+ * AIAgent Note Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentNoteType
+ * * Base View: vwAIAgentNoteTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgent Note Types')
+export class AIAgentNoteTypeEntity extends BaseEntity<AIAgentNoteTypeEntityType> {
+    /**
+    * Loads the AIAgent Note Types record from the database
+    * @param ID: string - primary key value to load the AIAgent Note Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentNoteTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * AIAgent Notes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentNote
+ * * Base View: vwAIAgentNotes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgent Notes')
+export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
+    /**
+    * Loads the AIAgent Notes record from the database
+    * @param ID: string - primary key value to load the AIAgent Notes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentNoteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AIAgents (vwAIAgents.ID)
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: AgentNoteTypeID
+    * * Display Name: Agent Note Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AIAgent Note Types (vwAIAgentNoteTypes.ID)
+    */
+    get AgentNoteTypeID(): string | null {
+        return this.Get('AgentNoteTypeID');
+    }
+    set AgentNoteTypeID(value: string | null) {
+        this.Set('AgentNoteTypeID', value);
+    }
+
+    /**
+    * * Field Name: Note
+    * * Display Name: Note
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Note(): string | null {
+        return this.Get('Note');
+    }
+    set Note(value: string | null) {
+        this.Set('Note', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: AgentNoteType
+    * * Display Name: Agent Note Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentNoteType(): string | null {
+        return this.Get('AgentNoteType');
+    }
+}
+
+
+/**
+ * AIAgents - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgent
+ * * Base View: vwAIAgents
+ * * @description Table to store information about AI agents.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'AIAgents')
+export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
+    /**
+    * Loads the AIAgents record from the database
+    * @param ID: string - primary key value to load the AIAgents record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: The unique identifier for each AI agent. Serves as the primary key.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the AI agent.
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: A detailed description of the AI agent.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: LogoURL
+    * * Display Name: Logo URL
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LogoURL(): string | null {
+        return this.Get('LogoURL');
+    }
+    set LogoURL(value: string | null) {
+        this.Set('LogoURL', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -26022,7 +27009,6 @@ export class QueryEntityEntity extends BaseEntity<QueryEntityEntityType> {
     * * Field Name: Query
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Query(): string {
         return this.Get('Query');
@@ -26032,7 +27018,6 @@ export class QueryEntityEntity extends BaseEntity<QueryEntityEntityType> {
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Entity(): string {
         return this.Get('Entity');
