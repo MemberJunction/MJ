@@ -15,7 +15,7 @@ FROM
     [${flyway:defaultSchema}].[AIAgent] AS a
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 
 ------------------------------------------------------------
@@ -35,7 +35,7 @@ FROM
     [${flyway:defaultSchema}].[AIAgentNoteType] AS a
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentNoteTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      AIAgent Notes
@@ -55,7 +55,7 @@ SELECT
 FROM
     [${flyway:defaultSchema}].[AIAgentNote] AS a
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_AgentID
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgentAIAgentLearningCycleAgentID
   ON
     [a].[AgentID] = AIAgent_AgentID.[ID]
 LEFT OUTER JOIN
@@ -93,7 +93,7 @@ LEFT OUTER JOIN
     [a].[ModelID] = AIModel_ModelID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentModels] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      AIAgent Actions
@@ -196,9 +196,9 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentAction] TO [cdp_Developer], [cdp_Integration]
-    
 
-    
+
+
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR AIAgentModel
 ------------------------------------------------------------
@@ -235,7 +235,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentModel] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 
 
@@ -269,7 +269,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentNoteType] TO [cdp_Developer], [cdp_Integration]
-        
+
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR AIAgentNote
@@ -304,7 +304,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentNote] TO [cdp_Developer], [cdp_Integration]
-            
+
 
 
 
@@ -355,8 +355,8 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentAction] TO [cdp_Integration]
-    
-    
+
+
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR AIAgentModel
 ------------------------------------------------------------
@@ -379,9 +379,9 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentModel] TO [cdp_Integration]
-    
 
-    
+
+
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR AIAgentNote
 ------------------------------------------------------------
@@ -404,9 +404,9 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentNote] TO [cdp_Integration]
-    
 
-    
+
+
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR AIAgentNoteType
 ------------------------------------------------------------
@@ -429,7 +429,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentNoteType] TO [cdp_Integration]
-    
+
 
 
 ------------------------------------------------------------
@@ -462,7 +462,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgents]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -470,7 +470,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer],
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgent table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgent
 GO
@@ -483,7 +483,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgent]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgent] AS _organicTable
     INNER JOIN
@@ -491,7 +491,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR AIAgentAction
@@ -523,7 +523,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentActions]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -531,7 +531,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentAction] TO [cdp_Devel
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgentAction table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentAction table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentAction
 GO
@@ -544,7 +544,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgentAction]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgentAction] AS _organicTable
     INNER JOIN
@@ -552,7 +552,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 
 ------------------------------------------------------------
@@ -587,7 +587,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentModels]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -595,7 +595,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentModel] TO [cdp_Develo
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgentModel table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentModel table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentModel
 GO
@@ -608,7 +608,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgentModel]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgentModel] AS _organicTable
     INNER JOIN
@@ -648,7 +648,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentNotes]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -656,7 +656,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentNote] TO [cdp_Develop
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgentNote table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentNote table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentNote
 GO
@@ -669,7 +669,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgentNote]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgentNote] AS _organicTable
     INNER JOIN
@@ -677,8 +677,8 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-                        
-                        
+
+
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR AIAgentNoteType
 ------------------------------------------------------------
@@ -707,7 +707,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentNoteTypes]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -715,7 +715,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentNoteType] TO [cdp_Dev
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgentNoteType table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentNoteType table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentNoteType
 GO
@@ -728,7 +728,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgentNoteType]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgentNoteType] AS _organicTable
     INNER JOIN
@@ -736,7 +736,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 
 
@@ -783,8 +783,8 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateQueryEntity] TO [cdp_Developer], [cdp_Integration]
-    
-    
+
+
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR QueryEntity
 ------------------------------------------------------------
@@ -807,7 +807,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQueryEntity] TO [cdp_Integration]
-    
+
 
 
 ------------------------------------------------------------
@@ -838,7 +838,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwQueryEntities]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -846,7 +846,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateQueryEntity] TO [cdp_Develop
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the QueryEntity table
+----- TRIGGER FOR __mj_UpdatedAt field for the QueryEntity table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateQueryEntity
 GO
@@ -859,7 +859,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[QueryEntity]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[QueryEntity] AS _organicTable
     INNER JOIN
@@ -867,7 +867,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      Query Entities
@@ -882,7 +882,7 @@ CREATE VIEW [${flyway:defaultSchema}].[vwQueryEntities]
 AS
 SELECT
     q.*,
-    Query_QueryID.[Name] AS [Query],  
+    Query_QueryID.[Name] AS [Query],
     Entity_EntityID.[Name] AS [Entity]
 FROM
     [${flyway:defaultSchema}].[QueryEntity] AS q
@@ -896,17 +896,17 @@ INNER JOIN
     [q].[EntityID] = Entity_EntityID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwQueryEntities] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
 
- 
+
+
 /**************************************************************************
  **************************************************************************
  **************************************************************************
  **************************************************************************
  **************************************************************************
- 
+
  AI AGENT LEARNING CYCLE STUFF
- 
+
  **************************************************************************
  **************************************************************************
  **************************************************************************
@@ -957,7 +957,7 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwQueryEntities] TO [cdp_UI], [cdp_De
          , 1
          , 1000
       )
-   
+
 
 /* SQL generated to add new permission for entity AIAgent Learning Cycles for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
@@ -1359,7 +1359,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
          '92445a33-f4fc-4340-8fcf-77c9597919cf',
          '96A815C7-49E4-4794-8739-DC5A2D3B2D9C',
          7,
-         '${flyway:defaultSchema}_CreatedAt',
+         '__mj_CreatedAt',
          'Created At',
          NULL,
          'datetimeoffset',
@@ -1416,7 +1416,7 @@ EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedS
          '35b915c4-c17f-4491-90a5-fbe1c6b3026f',
          '96A815C7-49E4-4794-8739-DC5A2D3B2D9C',
          8,
-         '${flyway:defaultSchema}_UpdatedAt',
+         '__mj_UpdatedAt',
          'Updated At',
          NULL,
          'datetimeoffset',
@@ -1529,7 +1529,7 @@ UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=3 WHERE ID='C0513
 /* SQL text to create Entitiy Relationships */
 INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                                           VALUES ('4b2736bf-88e7-4511-a871-2eac712d27b5', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '96A815C7-49E4-4794-8739-DC5A2D3B2D9C', 'AgentID', 'One To Many', 1, 1, 'AIAgent Learning Cycles', 1);
-                              
+
 
 /* Index for Foreign Keys for AIAgentLearningCycle */
 -----------------------------------------------------------------
@@ -1544,7 +1544,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEnt
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentLearningCycle_AgentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentLearningCycle_AgentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentLearningCycle]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentLearningCycle_AgentID ON [${flyway:defaultSchema}].[AIAgentLearningCycle] ([AgentID]);
@@ -1586,7 +1586,7 @@ INNER JOIN
     [a].[AgentID] = AIAgent_AgentID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentLearningCycles] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for AIAgent Learning Cycles */
 -----------------------------------------------------------------
@@ -1649,7 +1649,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentLearningCycle] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for AIAgent Learning Cycles */
 
@@ -1701,7 +1701,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwAIAgentLearningCycles]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -1709,7 +1709,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentLearningCycle] TO [cd
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the AIAgentLearningCycle table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentLearningCycle table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentLearningCycle
 GO
@@ -1722,7 +1722,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[AIAgentLearningCycle]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[AIAgentLearningCycle] AS _organicTable
     INNER JOIN
@@ -1730,7 +1730,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for AIAgent Learning Cycles */
 
@@ -1770,7 +1770,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentLearningCycle] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for AIAgent Learning Cycles */
 
