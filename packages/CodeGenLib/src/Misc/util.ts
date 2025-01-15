@@ -6,13 +6,6 @@ const fse = require('fs-extra');
 const glob = require('glob');
 const path = require('path');
 
-export function replaceAllSpaces(s: string): string {
-    if (s.includes(' '))
-        return replaceAllSpaces(s.replace(' ', '')); // recursive case
-    else // base case
-        return s;
-}
-
 export function makeDirs(dirPaths: string[]) {
     for (let i = 0; i < dirPaths.length; i++) {
         makeDir(dirPaths[i]);
@@ -91,3 +84,6 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     // Write the combined content to the specified file
     fs.writeFileSync(combinedFilePath, combinedContent);
 }
+
+
+ 
