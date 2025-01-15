@@ -1,8 +1,27 @@
 # Change Log - @memberjunction/ng-ask-skip
 
-This log was last generated on Tue, 14 Jan 2025 14:12:27 GMT and should not be manually modified.
+This log was last generated on Wed, 15 Jan 2025 03:17:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.17.0
+
+Wed, 15 Jan 2025 03:17:08 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core-entities to v2.17.0
+- Bump @memberjunction/core to v2.17.0
+- Bump @memberjunction/global to v2.17.0
+- Bump @memberjunction/graphql-dataprovider to v2.17.0
+- Bump @memberjunction/skip-types to v2.17.0
+- Bump @memberjunction/ng-container-directives to v2.17.0
+- Bump @memberjunction/ng-chat to v2.17.0
+- Bump @memberjunction/ng-skip-chat to v2.17.0
+- Bump @memberjunction/ng-shared to v2.17.0
+- Bump @memberjunction/ng-data-context to v2.17.0
+- Bump @memberjunction/ng-user-view-grid to v2.17.0
+- Bump @memberjunction/ng-tabstrip to v2.17.0
 
 ## 2.16.1
 

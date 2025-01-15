@@ -2,6 +2,41 @@
   "name": "@memberjunction/skip-types",
   "entries": [
     {
+      "date": "Wed, 15 Jan 2025 03:17:08 GMT",
+      "version": "2.17.0",
+      "tag": "@memberjunction/skip-types_v2.17.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/skip-types",
+            "commit": "a296fa62d7fa5469097140e8912187bfc16dd195",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/skip-types",
+            "commit": "11819212d1c5100ac022e8d207952090c789b008",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/core-entities to v2.17.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/data-context to v2.17.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 14 Jan 2025 14:12:27 GMT",
       "version": "2.16.1",
       "tag": "@memberjunction/skip-types_v2.16.1",

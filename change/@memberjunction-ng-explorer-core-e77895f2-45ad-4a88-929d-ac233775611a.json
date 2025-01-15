@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ng-explorer-core",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "minor"
-}
