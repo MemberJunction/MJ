@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
-This log was last generated on Tue, 14 Jan 2025 14:12:27 GMT and should not be manually modified.
+This log was last generated on Wed, 15 Jan 2025 03:17:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.17.0
+
+Wed, 15 Jan 2025 03:17:07 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (craig@memberjunction.com)
+- Bump @memberjunction/global to v2.17.0
+- Bump @memberjunction/core to v2.17.0
+- Bump @memberjunction/core-entities to v2.17.0
+- Bump @memberjunction/ng-base-forms to v2.17.0
+- Bump @memberjunction/ng-find-record to v2.17.0
+- Bump @memberjunction/ng-resource-permissions to v2.17.0
+- Bump @memberjunction/ng-shared to v2.17.0
 
 ## 2.16.1
 

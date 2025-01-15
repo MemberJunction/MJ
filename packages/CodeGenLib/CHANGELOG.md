@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/codegen-lib
 
-This log was last generated on Tue, 14 Jan 2025 14:12:28 GMT and should not be manually modified.
+This log was last generated on Wed, 15 Jan 2025 03:17:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.17.0
+
+Wed, 15 Jan 2025 03:17:08 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v2.17.0
+- Bump @memberjunction/core to v2.17.0
+- Bump @memberjunction/actions to v2.17.0
+- Bump @memberjunction/core-entities to v2.17.0
+- Bump @memberjunction/global to v2.17.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.17.0
 
 ## 2.16.1
 
