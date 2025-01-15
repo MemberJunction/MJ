@@ -1280,29 +1280,32 @@ export class ManageMetadataBase {
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-         logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
+         // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of 
+         // check constraints that are not simple OR conditions
+         //logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
          return null;
       }
+      else {
+         // Regular expression to match the values within the single quotes specifically for the field
+         const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
+         let match;
+         const possibleValues: string[] = [];
 
-      // Regular expression to match the values within the single quotes specifically for the field
-      const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
-      let match;
-      const possibleValues: string[] = [];
+         // Use regex to find matches and extract the values
+         while ((match = valueRegex.exec(constraintDefinition)) !== null) {
+            // This is necessary to avoid infinite loops with zero-width matches
+            if (match.index === valueRegex.lastIndex) {
+               valueRegex.lastIndex++;
+            }
 
-      // Use regex to find matches and extract the values
-      while ((match = valueRegex.exec(constraintDefinition)) !== null) {
-          // This is necessary to avoid infinite loops with zero-width matches
-          if (match.index === valueRegex.lastIndex) {
-              valueRegex.lastIndex++;
-          }
+            // The first captured group contains the value
+            if (match[1]) {
+               possibleValues.push(match[1]);
+            }
+         }
 
-          // The first captured group contains the value
-          if (match[1]) {
-              possibleValues.push(match[1]);
-          }
+         return possibleValues;
       }
-
-      return possibleValues;
    }
 
 
