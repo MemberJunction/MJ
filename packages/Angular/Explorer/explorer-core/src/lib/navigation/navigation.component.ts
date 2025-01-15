@@ -7,7 +7,9 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
-import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
+
 import { Title } from '@angular/platform-browser';
 import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';

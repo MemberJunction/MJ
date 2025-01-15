@@ -6,9 +6,9 @@ import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationRes
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListEntity, ResourcePermissionEngine, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { ResourceData, EventCodes, SharedService } from '@memberjunction/ng-shared';
+import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 
-
+import { ResourceData } from '@memberjunction/core-entities';
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';

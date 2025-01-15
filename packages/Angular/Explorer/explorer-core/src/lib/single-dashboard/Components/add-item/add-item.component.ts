@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceTypeEntity, ViewInfo} from '@memberjunction/core-entities';
-import { ResourceData } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({

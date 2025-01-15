@@ -115,9 +115,4 @@ packages/MJAPI/.env-remote
 .config/mjrc.cjs
 mj.config.js
 mj.config.ts
-!mj.config.cjs
-packages/CodeGen/config.json.local
-packages/MJCLI/bin/run.js
-packages/SkipSaaSPortal/.angular/** 
-*.config.cjs*
-mj.config.cjs
+*.local

@@ -23,11 +23,13 @@
   },
   "peerDependencies": {
     "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2"
+    "@angular/core": "18.0.2",
+    "rxjs": "^7.8.1"
   },
   "dependencies": {
     "@memberjunction/core": "2.16.1",
     "@memberjunction/core-entities": "2.16.1",
+    "@memberjunction/ng-notifications": "2.16.1",
     "@memberjunction/graphql-dataprovider": "2.16.1",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"

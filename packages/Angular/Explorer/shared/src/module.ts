@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { URLPipe } from './lib/urlPipe';
 import { NotificationModule } from '@progress/kendo-angular-notification';
 import { SimpleTextFormatPipe } from './lib/simpleTextFormat';
-
+import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 @NgModule({
   declarations: [ 
     URLPipe,
@@ -10,6 +10,7 @@ import { SimpleTextFormatPipe } from './lib/simpleTextFormat';
   ],
   imports: [
     NotificationModule,
+    MJNotificationsModule
   ],
   exports: [
     URLPipe,

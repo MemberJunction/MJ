@@ -12,6 +12,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { SQLLogging } from '../Misc/sql_logging';
 
 
 export const SPType = {
@@ -56,14 +57,15 @@ export class SQLCodeGenBase {
 
             // STEP 2(b) - generate all the SQL files and execute them
             const step2StartTime: Date = new Date();
-            const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, includedEntities, directory, false, true);
+
+            const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, includedEntities, directory, false, true, true, 5, true); // enable sql logging for NEW entities....
             if (!genResult.Success) {
                 logError('Error generating all entities SQL to separate files');
                 return false;
             }
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
-            const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, excludedEntities, directory, true, true);
+            const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles(ds, excludedEntities, directory, true);
             if (!genResult2.Success) {
                 logError('Error generating permissions SQL for excluded entities to separate files');
                 return false;
@@ -198,7 +200,7 @@ export class SQLCodeGenBase {
      * @param directory The directory to save the generated SQL files to
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
-    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, batchSize: number = 5): Promise<{Success: boolean, Files: string[]}> {
+    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, batchSize: number = 5, enableSQLLoggingForNewEntities: boolean = false): Promise<{Success: boolean, Files: string[]}> {
         const files: string[] = [];
         try {
             let bFail: boolean = false;
@@ -212,7 +214,7 @@ export class SQLCodeGenBase {
                         logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
                         return {Success: false, Files: []};
                     }
-                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, skipExecution, writeFiles);
+                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, skipExecution, writeFiles, enableSQLLoggingForNewEntities);
                 });
 
                 const results = await Promise.all(promises);
@@ -278,9 +280,9 @@ export class SQLCodeGenBase {
 
 
 
-    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{Success: boolean, Files: string[]}> {
+    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, enableSQLLoggingForNewEntities: boolean = false): Promise<{Success: boolean, Files: string[]}> {
         try {
-            const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, skipExecution, writeFiles); // this creates the files and returns a single string with all the SQL we can then execute
+            const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, skipExecution, writeFiles, enableSQLLoggingForNewEntities); // this creates the files and returns a single string with all the SQL we can then execute
             if (!skipExecution) {
                 return {
                     Success: await this.SQLUtilityObject.executeSQLScript(ds, sql + "\n\nGO\n\n" + permissionsSQL, true), // combine the SQL and permissions and execute it,
@@ -296,7 +298,13 @@ export class SQLCodeGenBase {
         }
     }
 
-    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
+    protected logSQLForNewEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
+        if (logSql && ManageMetadataBase.newEntityList.find(e => e === entity.Name)) {
+            SQLLogging.appendToSQLLogFile(sql, description);
+        }
+    }
+
+    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, enableSQLLoggingForNewEntities: boolean = false): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
         const files: string[] = [];
         try {
             // create the directory if it doesn't exist
@@ -316,7 +324,8 @@ export class SQLCodeGenBase {
                 const s = this.generateSingleEntitySQLFileHeader(entity, 'Index for Foreign Keys') + indexSQL; 
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('index', entity.SchemaName, entity.BaseTable, false, true));
-                    fs.writeFileSync(filePath, s)
+                    this.logSQLForNewEntity(entity, s, 'Index for Foreign Keys for ' + entity.BaseTable, enableSQLLoggingForNewEntities);
+                    fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
                 sRet += s + '\nGO\n';
@@ -328,6 +337,7 @@ export class SQLCodeGenBase {
                 const s = this.generateSingleEntitySQLFileHeader(entity,entity.BaseView) + await this.generateBaseView(ds, entity)
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, true));
                 if (writeFiles) {
+                    this.logSQLForNewEntity(entity, s, `Base View SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
                     fs.writeFileSync(filePath, s)
                     files.push(filePath);
                 }
@@ -340,6 +350,8 @@ export class SQLCodeGenBase {
             if (writeFiles) {
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true));
                 fs.writeFileSync(filePath, s)
+                this.logSQLForNewEntity(entity, s, `Base View Permissions SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                 files.push(filePath);
             }
 
@@ -356,6 +368,9 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPCreate(entity)
                     if (writeFiles) {
                         const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
+
+                        this.logSQLForNewEntity(entity, s, `spCreate SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                         fs.writeFileSync(filePath, s);
                         files.push(filePath);
                     }
@@ -366,6 +381,9 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true))
+
+                    this.logSQLForNewEntity(entity, s, `spCreate Permissions for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
@@ -385,6 +403,9 @@ export class SQLCodeGenBase {
                     if (writeFiles) {
                         const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
                         fs.writeFileSync(filePath, s);
+
+                        this.logSQLForNewEntity(entity, s, `spUpdate SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                         files.push(filePath);
                     }
                     sRet += s + '\nGO\n';
@@ -394,6 +415,9 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
+
+                    this.logSQLForNewEntity(entity, s, `spUpdate Permissions for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
@@ -412,6 +436,9 @@ export class SQLCodeGenBase {
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPDelete(entity)
                     if (writeFiles) {
                         const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true))
+
+                        this.logSQLForNewEntity(entity, s, `spDelete SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                         fs.writeFileSync(filePath, s);
                         files.push(filePath);
                     }
@@ -422,6 +449,9 @@ export class SQLCodeGenBase {
                     permissionsSQL += s + '\nGO\n';
                 if (writeFiles) {
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true));
+
+                    this.logSQLForNewEntity(entity, s, `spDelete Permissions for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                     fs.writeFileSync(filePath, s);
                     files.push(filePath);
                 }
@@ -440,6 +470,8 @@ export class SQLCodeGenBase {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, false, true));
                     if (writeFiles) {
+                        this.logSQLForNewEntity(entity, ft.sql, `Full Text Search SQL for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                         fs.writeFileSync(filePath, ft.sql)
                         files.push(filePath);
                     }
@@ -452,6 +484,8 @@ export class SQLCodeGenBase {
 
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
                 if (writeFiles) {
+                    this.logSQLForNewEntity(entity, sP, `Full Text Search Permissions for ${entity.Name}`, enableSQLLoggingForNewEntities);
+
                     fs.writeFileSync(filePath, sP)
                     files.push(filePath);
                 }

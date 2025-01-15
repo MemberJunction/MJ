@@ -1,8 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { LogError, Metadata } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
-
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Use this component to display to the user the ability to request access to a resource they do not own and do not currently have permission to access
@@ -72,7 +71,7 @@ export class RequestResourceAccessComponent implements OnInit {
         else {
             //failed
             LogError(`Failed to request access to ${this.ResourceType} record ${this.ResourceRecordID}`, undefined, permission.LatestResult);
-            SharedService.Instance.CreateSimpleNotification(`Failed to request access to ${this.ResourceType} record ${this.ResourceName} (${this.ResourceRecordID})`, 'error', 5000);
+            MJNotificationService.Instance.CreateSimpleNotification(`Failed to request access to ${this.ResourceType} record ${this.ResourceName} (${this.ResourceRecordID})`, 'error', 5000);
         }
     }
 }

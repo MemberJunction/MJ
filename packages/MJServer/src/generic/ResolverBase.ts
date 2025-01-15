@@ -573,8 +573,11 @@ export class ResolverBase {
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       }
       // save failed, return null
-      else throw entityObject.LatestResult.Message;
-    } else return null;
+      else 
+        throw entityObject.LatestResult?.Message;
+    } 
+    else 
+      return null;
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
