@@ -905,12 +905,27 @@ export class ManageMetadataBase {
       e.SchemaName = uk.SchemaName
    WHERE
       EntityFieldID IS NULL -- only where we have NOT YET CREATED EntityField records\n${this.createExcludeTablesAndSchemasFilter('sf.')}
+   ),
+   FilteredRows AS ( -- filter rows to only include rn=1 OR where we have rows where the to/from fkey is the same so long as the field name <> the same
+      SELECT *
+      FROM NumberedRows
+      WHERE rn = 1
+      UNION ALL
+      SELECT nr.*
+      FROM NumberedRows nr
+      WHERE rn <> 1 
+      AND NOT EXISTS (
+            SELECT 1
+            FROM NumberedRows nr1
+            WHERE nr1.rn = 1 
+            AND nr1.EntityID = nr.EntityID
+            AND nr1.FieldName = nr.FieldName
+      )
    )
-   SELECT
-      *
-   FROM
-      NumberedRows -- REMOVED - Need all fkey fields WHERE rn = 1 -- if someone has two foreign keys with same to/from table and field name this makes sure we only get the field info ONCE
-   ORDER BY EntityID, Sequence`
+   SELECT *
+   FROM FilteredRows
+   ORDER BY EntityID, Sequence;
+   `
       return sSQL;
    }
 
@@ -1039,8 +1054,15 @@ export class ManageMetadataBase {
                   // that would have been created violate rules - such as not having an ID column, etc.
                   const newEntityFieldUUID = this.createNewUUID();
                   const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
-                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert new entity field`);
-                  // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
+                  try {
+                     await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert new entity field`);
+                     // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
+                  }
+                  catch (e) {
+                     // this is here so we can catch the error for debug. We want the transaction to die
+                     logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
+                     throw e;
+                  }
                }
             }
          });

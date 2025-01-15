@@ -106,6 +106,19 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="AIAgent Models" [Visible]="record.IsSaved"> 
+                        AIAgent Models
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AIAgent Models','ModelID')"  
+                            [NewRecordValues]="NewRecordValues('AIAgent Models')"
+                            [AllowLoad]="IsCurrentTab('AIAgent Models')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
