@@ -62,6 +62,37 @@ export class SkipSingleMessageComponent implements AfterViewInit {
       return this.Provider || Metadata.Provider;
     }
 
+    private _loadTime: number = 0;
+    public get ElapsedTimeSinceLoad(): number {
+      return Date.now() - this._loadTime;
+    }
+
+    /**
+     * Returns the elapsed time since load as a nicely formatted string taking the value of ElapsedTimeSinceLoad and instead of having it in milliseconds,
+     * showing as a string like "5 seconds" or "1:05" which will update every second
+     */
+    public get ElapsedTimeSinceLoadFormatted(): string {
+      // first time this gets called we invoke the timer to get things going, don't do until then as it's not needed
+      if (this._elapsedTimeInterval === null) {
+        this._elapsedTimeInterval = setInterval(() => {
+          this._elapsedTimeFormatted = this.FormatElapsedTime(this.ElapsedTimeSinceLoad);
+        }, 1000);
+      }
+      return this._elapsedTimeFormatted;
+    }
+
+    private _elapsedTimeFormatted: string = "";
+    private _elapsedTimeInterval: any = null;
+    protected FormatElapsedTime(elapsedTime: number): string {
+      let seconds = Math.floor(elapsedTime / 1000);
+      let minutes = Math.floor(seconds / 60);
+      seconds = seconds % 60;
+      let hours = Math.floor(minutes / 60);
+      minutes = minutes % 60;
+      let formattedTime = (hours > 0 ? hours + ":" : "") + (minutes < 10 && hours > 0 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+      return `(${formattedTime} elapsed)`;
+    }
+
     private GetHtmlFromCache(detail: ConversationDetailEntity): string | null {
         if (detail.ID !== null && detail.ID !== undefined && detail.ID.length > 0 && SkipSingleMessageComponent._detailHtml[detail.ID] !== undefined && SkipSingleMessageComponent._detailHtml[detail.ID] !== null) {
             // use cached HTML details for SAVED conversation details, don't do for NEW ONes where ID is null
@@ -85,6 +116,8 @@ export class SkipSingleMessageComponent implements AfterViewInit {
         // thing is, we have to use ngAfterViewInit to do this, because the view is not ready in the constructor
         // since we are dynamically adding stuff
         this.cdRef.detectChanges();  
+
+        this._loadTime = Date.now();
     }
  
 

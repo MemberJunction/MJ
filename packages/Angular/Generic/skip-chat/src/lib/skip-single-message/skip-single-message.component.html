@@ -14,8 +14,11 @@
             <div>
                 @if(IsTemporaryMessage) {
                     <kendo-loader></kendo-loader>
+                    <span class="elapsed-time">{{ElapsedTimeSinceLoadFormatted}}</span>
                 }
                 {{Message}}
+                @if(IsTemporaryMessage && ElapsedTimeSinceLoadFormatted!.length > 0) {
+                }
             </div>
             <div #reportContainer>
                 <!-- this is where the report will go - dynamically instantiated -->

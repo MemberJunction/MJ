@@ -28,13 +28,23 @@
     max-height: 100%;
 }
 
+
+
 .error-message {
     background-color:lightpink;
 }
 
 .ai-message-in-progress {
-    font-style: italic;
-    opacity: 0.7;
+    /* font-style: italic; */
+    opacity: 0.9;
+}
+
+.elapsed-time {
+    font-style: regular;
+    font-size: 0.8rem;
+    color: #124be7;
+    margin-left: 5px;
+    margin-right: 5px;
 }
 
 .message-user-name {
