@@ -55,7 +55,7 @@ SELECT
 FROM
     [${flyway:defaultSchema}].[AIAgentNote] AS a
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[AIAgent] AS AIAgentAIAgentLearningCycleAgentID
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_AgentID
   ON
     [a].[AgentID] = AIAgent_AgentID.[ID]
 LEFT OUTER JOIN
