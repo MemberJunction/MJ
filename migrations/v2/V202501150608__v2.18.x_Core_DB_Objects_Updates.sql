@@ -3,9 +3,9 @@
 
 
 
-DROP VIEW IF EXISTS [__mj].[vwSQLColumnsAndEntityFields]
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwSQLColumnsAndEntityFields]
 GO
-CREATE VIEW [__mj].[vwSQLColumnsAndEntityFields]
+CREATE VIEW [${flyway:defaultSchema}].[vwSQLColumnsAndEntityFields]
 AS
 WITH FilteredColumns AS (
     SELECT *
@@ -42,7 +42,7 @@ SELECT
 FROM
 	FilteredColumns c
 INNER JOIN
-	[__mj].vwSQLTablesAndEntities e
+	[${flyway:defaultSchema}].vwSQLTablesAndEntities e
 ON
   c.object_id = COALESCE(e.view_object_id, e.object_id)
 INNER JOIN
@@ -68,7 +68,7 @@ ON
 	basetable.object_id = basetable_columns.object_id AND
 	c.name = basetable_columns.name 
 LEFT OUTER JOIN
-	__mj.EntityField ef 
+	${flyway:defaultSchema}.EntityField ef 
 ON
 	e.EntityID = ef.EntityID AND
 	c.name = ef.Name
@@ -100,10 +100,10 @@ GO
 
 
 -- modify this proc to return the rows that it modified
-DROP PROCEDURE IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema];
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateExistingEntitiesFromSchema];
 GO
 
-CREATE PROCEDURE [__mj].spUpdateExistingEntitiesFromSchema
+CREATE PROCEDURE [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
@@ -128,9 +128,9 @@ BEGIN
             CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription),
             CONVERT(NVARCHAR(MAX),fromSQL.SchemaName)
         FROM
-            [__mj].[Entity] e
+            [${flyway:defaultSchema}].[Entity] e
         INNER JOIN
-            [__mj].[vwSQLTablesAndEntities] fromSQL
+            [${flyway:defaultSchema}].[vwSQLTablesAndEntities] fromSQL
         ON
             e.ID = fromSQL.EntityID
         LEFT JOIN
@@ -147,7 +147,7 @@ BEGIN
     SET
         Description = fr.NewDescription
     FROM
-        [__mj].[Entity] e
+        [${flyway:defaultSchema}].[Entity] e
     INNER JOIN
         @FilteredRows fr
     ON
@@ -173,9 +173,9 @@ GO
 
 
 
-DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
+DROP PROC IF EXISTS [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
 GO
-CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
+CREATE PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
@@ -237,14 +237,14 @@ BEGIN
             ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
-        [__mj].EntityField ef
+        [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
         vwSQLColumnsAndEntityFields fromSQL
     ON
         ef.EntityID = fromSQL.EntityID AND
         ef.Name = fromSQL.FieldName
     INNER JOIN
-        [__mj].Entity e 
+        [${flyway:defaultSchema}].Entity e 
     ON
         ef.EntityID = e.ID
     LEFT OUTER JOIN
@@ -254,18 +254,18 @@ BEGIN
         e.BaseTable = fk.[table] AND
         e.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN 
-        [__mj].Entity re -- Related Entity
+        [${flyway:defaultSchema}].Entity re -- Related Entity
     ON
         re.BaseTable = fk.referenced_table AND
         re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN 
-        [__mj].vwTablePrimaryKeys pk
+        [${flyway:defaultSchema}].vwTablePrimaryKeys pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN 
-        [__mj].vwTableUniqueKeys uk
+        [${flyway:defaultSchema}].vwTableUniqueKeys uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -316,9 +316,9 @@ BEGIN
         ef.RelatedEntityFieldName = fr.RelatedEntityFieldName,
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
-        ef.__mj_UpdatedAt = GETUTCDATE()
+        ef.${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].EntityField ef
+        [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
         @FilteredRows fr
     ON
@@ -332,9 +332,9 @@ GO
 
 
 
-DROP PROC IF EXISTS [__mj].[spDeleteUnneededEntityFields]
+DROP PROC IF EXISTS [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
 GO
-CREATE PROC [__mj].[spDeleteUnneededEntityFields]
+CREATE PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
     @ExcludedSchemaNames NVARCHAR(MAX)
 
 AS
@@ -384,18 +384,18 @@ SELECT ef.* INTO #DeletedFields
 
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
-UPDATE __mj.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
+UPDATE ${flyway:defaultSchema}.Entity SET ${flyway:defaultSchema}_UpdatedAt=GETUTCDATE() WHERE ID IN
 (
   SELECT DISTINCT EntityID FROM #DeletedFields
 )
 
 -- next delete the entity field values
-DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (
+DELETE FROM ${flyway:defaultSchema}.EntityFieldValue WHERE EntityFieldID IN (
   SELECT ID FROM #DeletedFields
 )
 
 -- now delete the entity fields themsevles
-DELETE FROM __mj.EntityField WHERE ID IN
+DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN
 (
   SELECT ID FROM #DeletedFields
 )
