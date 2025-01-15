@@ -6,7 +6,7 @@ import env from 'env-var';
  * Make sure any sub-class implementation is registered with the RegisterClass decorator and a priority higher than 1.
  */
 @RegisterClass(AIAPIKeys, null, 1)
-export class AIAPIKeys {
+export class AIAPIKeys { 
     private static readonly _apiKeyPrefix = 'AI_VENDOR_API_KEY__';
 
     // cache the result to not go back to the env package as much
