@@ -6,6 +6,7 @@ import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { BaseAngularComponent } from "@memberjunction/ng-base-types";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
+import { SkipConversationReportCache } from "../report-cache";
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
 export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
@@ -50,14 +51,13 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
           if (cachedItem) {
             this.matchingReportID = cachedItem.reportId;
             this.matchingReportName = cachedItem.reportName;
-          } else {
-            const rv = new RunView(this.RunViewToUse);
-            const matchingReports = await rv.RunView({
-              EntityName: 'Reports',
-              ExtraFilter: `ConversationID = '${this.ConversationID}' AND ConversationDetailID = '${this.ConversationDetailID}'`,
-            });
-            if (matchingReports && matchingReports.Success && matchingReports.RowCount > 0) {
-              const item = matchingReports.Results[0];
+          } 
+          else {
+            // no cached items locally so use the generalized ReportCache which can load for us if needed
+            const reports = await SkipConversationReportCache.Instance.GetConversationReports(this.ConversationID, this.RunViewToUse); 
+            const matchingReports = reports ? reports.filter((x) => x.ConversationDetailID === this.ConversationDetailID) : [];
+            if (matchingReports && matchingReports.length > 0) {
+              const item = matchingReports[0];
               this.matchingReportID = item.ID;
               this.matchingReportName = item.Name;
               // cache for future to avoid db call
@@ -128,7 +128,15 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
           if (result && result.Success) {
             this.matchingReportID = result.ReportID;
             this.matchingReportName = result.ReportName;
+            // let the user know we saved the report
             this.RaiseUserNotification(`Report "${result.ReportName}"Saved`, 'success', 2500);
+
+            // tell our shared report cache about the new report
+            const report = await this.ProviderToUse.GetEntityObject<ReportEntity>('Reports', this.ProviderToUse.CurrentUser);
+            report.Load(result.ReportID).then(() => {
+              // do async so the user doesn't wait for this to finish
+              SkipConversationReportCache.Instance.AddConversationReport(this.ConversationID!, report);
+            });
           } else {
             this.RaiseUserNotification('Error saving report', 'error', 2500);
             this._isCreatingReport = false;

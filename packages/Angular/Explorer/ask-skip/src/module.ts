@@ -49,6 +49,7 @@ import { UserViewGridWithAnalysisComponent } from './public-api';
 import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
 import { SkipChatWithRecordComponent } from './lib/skip-chat-with-record/skip-chat-with-record.component';
 import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-window/skip-chat-with-record-window.component';
+import { SkipChatWrapperComponent } from './lib/skip-chat-wrapper/skip-chat-wrapper.component';
 
 
 @NgModule({
@@ -59,7 +60,8 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
     SkipChatWithRecordWindowComponent,
     SkipDynamicTabbedReportComponent,
     UserViewGridWithAnalysisComponent,
-    DynamicReportDrillDownComponent
+    DynamicReportDrillDownComponent,
+    SkipChatWrapperComponent
   ],
   imports: [
     CommonModule,
@@ -99,7 +101,8 @@ import { SkipChatWithRecordWindowComponent } from './lib/skip-chat-with-record-w
     SkipDynamicTabbedReportComponent,
     UserViewGridWithAnalysisComponent,
     DynamicReportDrillDownComponent,
-    SkipChatWithRecordWindowComponent
+    SkipChatWithRecordWindowComponent,
+    SkipChatWrapperComponent
   ]
 })
 export class AskSkipModule { }

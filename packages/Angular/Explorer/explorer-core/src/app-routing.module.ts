@@ -23,6 +23,7 @@ import { EventCodes, SharedService, BaseNavigationComponent } from '@memberjunct
 import { ResourceData } from '@memberjunction/core-entities';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ExplorerNavigationItemEntity } from '@memberjunction/core-entities';
+import { SkipChatWrapperComponent } from '@memberjunction/ng-ask-skip';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
@@ -231,8 +232,8 @@ export class ResourceResolver implements Resolve<void> {
 const routes: Routes = [
   { path: '', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: 'askskip', component: SkipChatComponent, canActivate: [AuthGuard] },
-  { path: 'askskip/:conversationId', component: SkipChatComponent, canActivate: [AuthGuard] },
+  { path: 'askskip', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
+  { path: 'askskip/:conversationId', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },
