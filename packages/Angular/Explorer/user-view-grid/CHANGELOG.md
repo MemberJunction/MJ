@@ -1,8 +1,28 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
-This log was last generated on Thu, 16 Jan 2025 16:25:06 GMT and should not be manually modified.
+This log was last generated on Thu, 16 Jan 2025 22:06:37 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.2
+
+Thu, 16 Jan 2025 22:06:37 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.18.2
+- Bump @memberjunction/core to v2.18.2
+- Bump @memberjunction/core-entities to v2.18.2
+- Bump @memberjunction/entity-communications-client to v2.18.2
+- Bump @memberjunction/communication-types to v2.18.2
+- Bump @memberjunction/templates-base-types to v2.18.2
+- Bump @memberjunction/actions-base to v2.18.2
+- Bump @memberjunction/ng-shared to v2.18.2
+- Bump @memberjunction/ng-entity-form-dialog to v2.18.2
+- Bump @memberjunction/ng-compare-records to v2.18.2
+- Bump @memberjunction/ng-container-directives to v2.18.2
+- Bump @memberjunction/ng-entity-communications to v2.18.2
+- Bump @memberjunction/ng-base-types to v2.18.2
 
 ## 2.18.1
 

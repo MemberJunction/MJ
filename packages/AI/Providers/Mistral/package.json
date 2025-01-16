@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-mistral",
-  "version": "2.18.1",
+  "version": "2.18.2",
   "description": "MemberJunction Wrapper for Mistral AI's AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.18.1",
-    "@memberjunction/global": "2.18.1",
+    "@memberjunction/ai": "2.18.2",
+    "@memberjunction/global": "2.18.2",
     "axios-retry": "^4.3.0"
   }
 }
