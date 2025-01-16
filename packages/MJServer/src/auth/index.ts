@@ -13,6 +13,9 @@ export { TokenExpiredError } from './tokenExpiredError.js';
 const missingAzureConfig = !tenantID || !webClientID;
 const missingAuth0Config = !auth0Domain || !auth0WebClientID;
 
+// This is a hard-coded forever constant due to internal migrations
+const SYSTEM_USER_ID = 'ecafccec-6a37-ef11-86d4-000d3a4e707e';
+
 class MissingAuthError extends Error {
   constructor() {
     super('Could not find authentication configuration for either MSAL or Auth0 in the server environment variables.');
@@ -23,6 +26,29 @@ class MissingAuthError extends Error {
 const issuers = {
   azure: `https://login.microsoftonline.com/${tenantID}/v2.0`,
   auth0: `https://${auth0Domain}/`,
+};
+
+const refreshUserCache = async (dataSource?: DataSource) => {
+  const startTime: number = Date.now();
+  await UserCache.Instance.Refresh(dataSource);
+  const endTime: number = Date.now();
+  const elapsed: number = endTime - startTime;
+
+  // if elapsed time is less than the delay setting, wait for the additional time to achieve the full delay
+  // the below also makes sure we never go more than a 30 second total delay
+  const delay = configInfo.userHandling.updateCacheWhenNotFoundDelay
+    ? configInfo.userHandling.updateCacheWhenNotFoundDelay < 30000
+      ? configInfo.userHandling.updateCacheWhenNotFoundDelay
+      : 30000
+    : 0;
+  if (elapsed < delay) await new Promise((resolve) => setTimeout(resolve, delay - elapsed));
+
+  const finalTime: number = Date.now();
+  const finalElapsed: number = finalTime - startTime;
+
+  console.log(
+    `   UserCache updated in ${elapsed}ms, total elapsed time of ${finalElapsed}ms including delay of ${delay}ms (if needed). Attempting to find the user again via recursive call`
+  );
 };
 
 export const validationOptions = {
@@ -79,6 +105,20 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
     .catch((err) => console.error(err));
 };
 
+export const getSystemUser = async (dataSource?: DataSource, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
+  const systemUser = UserCache.Instance.Users.find((u) => u.ID.toLowerCase() === SYSTEM_USER_ID.toLowerCase());
+  if (!systemUser) {
+    if (dataSource && attemptCacheUpdateIfNeeded) {
+      console.warn(`System user not found in cache. Updating cache in attempt to find the user...`);
+
+      await refreshUserCache(dataSource);
+      return getSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
+    }
+    throw new Error(`System user ID '${SYSTEM_USER_ID}' not found in database`);
+  }
+  return systemUser;
+};
+
 export const verifyUserRecord = async (
   email?: string,
   firstName?: string,
@@ -128,12 +168,12 @@ export const verifyUserRecord = async (
           // to init it, including passing in the role list for the user.
           const md: Metadata = new Metadata();
 
-          const initData: UserEntityType & {UserRoles: {UserID: string, RoleName: string, RoleID: string}[] } = newUser.GetAll();
-          
+          const initData: UserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
+
           initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);
-            const roleID: string = roleInfo ? roleInfo.ID : "";
-            
+            const roleID: string = roleInfo ? roleInfo.ID : '';
+
             return { UserID: initData.ID, RoleName: role, RoleID: roleID };
           });
 
@@ -152,26 +192,8 @@ export const verifyUserRecord = async (
       // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
       console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
 
-      const startTime: number = Date.now();
-      await UserCache.Instance.Refresh(dataSource);
-      const endTime: number = Date.now();
-      const elapsed: number = endTime - startTime;
+      await refreshUserCache(dataSource);
 
-      // if elapsed time is less than the delay setting, wait for the additional time to achieve the full delay
-      // the below also makes sure we never go more than a 30 second total delay
-      const delay = configInfo.userHandling.updateCacheWhenNotFoundDelay
-        ? configInfo.userHandling.updateCacheWhenNotFoundDelay < 30000
-          ? configInfo.userHandling.updateCacheWhenNotFoundDelay
-          : 30000
-        : 0;
-      if (elapsed < delay) await new Promise((resolve) => setTimeout(resolve, delay - elapsed));
-
-      const finalTime: number = Date.now();
-      const finalElapsed: number = finalTime - startTime;
-
-      console.log(
-        `   UserCache updated in ${elapsed}ms, total elapsed time of ${finalElapsed}ms including delay of ${delay}ms (if needed). Attempting to find the user again via recursive call to verifyUserRecord()`
-      );
       return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
     }
   }
