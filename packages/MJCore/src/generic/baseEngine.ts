@@ -6,7 +6,7 @@ import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus } from "./logging";
 import { Metadata } from "./metadata";
-import { DatasetItemFilterType, DatasetResultType, ProviderType, RunViewResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo"; 
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 /**
@@ -86,6 +86,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: any[] }> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
+    private _provider: IMetadataProvider;
+
+    /**
+     * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
+     */
+    public get ProviderToUse(): IMetadataProvider {
+        return this._provider || Metadata.Provider;
+    }
+
+    /**
+     * Returns the RunView provider to use for the engine. This is the same underlying object as the @property ProviderTouse, but cast to IRunViewProvider. 
+     * If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
+     */
+    public get RunViewProviderToUse(): IRunViewProvider {
+        return <IRunViewProvider><any>this.ProviderToUse;
+    }
 
     /**
      * Returns a COPY of the metadata configs array for the engine. This is a copy so you can't modify the original configs by modifying this array.
@@ -94,11 +110,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         // do a full deep copy of the array to ensure no tampering
         return JSON.parse(JSON.stringify(this._metadataConfigs));
     }
-
+, 
     /**
      * Configures the engine by loading metadata from the database.  
      */
-    public abstract Config(forceRefresh?: boolean, contextUser?: UserInfo);
+    public abstract Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider);
 
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
@@ -107,7 +123,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      * @returns 
      */
-    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        this._provider = provider; // stash this for later use
+
         if (Metadata.Provider.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
@@ -383,8 +401,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
-        const result: DatasetResultType = await md.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        const p = this.ProviderToUse;
+        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
         if (result.Success) {
             if (config.AddToObject !== false) {
                 if (config.DatasetResultHandling === 'single_property') {
