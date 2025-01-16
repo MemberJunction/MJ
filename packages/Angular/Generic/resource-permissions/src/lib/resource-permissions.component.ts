@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
-import { LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
@@ -8,7 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   templateUrl: './resource-permissions.component.html',
   styleUrls: ['./resource-permissions.component.css']
 })
-export class ResourcePermissionsComponent implements AfterViewInit {
+export class ResourcePermissionsComponent extends BaseAngularComponent implements AfterViewInit {
   @Input() ResourceTypeID!: string;
   @Input() ResourceRecordID!: string;
   @Input() ShowSaveButton: boolean = false;
@@ -16,7 +17,6 @@ export class ResourcePermissionsComponent implements AfterViewInit {
   @Input() AllowAddPermissions: boolean = true;
   @Input() AllowEditPermissions: boolean = true;
   @Input() AllowDeletePermissions: boolean = true;
-
 
   // Define permission levels
   public permissionLevels = ['View', 'Edit', 'Owner']; // these are the possible permission levels
@@ -47,8 +47,8 @@ export class ResourcePermissionsComponent implements AfterViewInit {
     const allResourcePermissions = ResourcePermissionEngine.Instance.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
     this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
     
-    const md = new Metadata();
-    const rv = new RunView();
+    const p = this.ProviderToUse;
+    const rv = new RunView(<IRunViewProvider><any>p)
     const result = await rv.RunView<UserEntity>({
       EntityName: "Users",
       ResultType: "entity_object",
@@ -56,7 +56,7 @@ export class ResourcePermissionsComponent implements AfterViewInit {
       ExtraFilter: "IsActive=1"
     });
     this.AllUsers = result.Results;
-    this.AllRoles = md.Roles;
+    this.AllRoles = p.Roles;
 
     if (this.AllUsers.length > 0)
       this.SelectedUser = this.AllUsers[0];
@@ -72,8 +72,8 @@ export class ResourcePermissionsComponent implements AfterViewInit {
 
   private _pendingAdds: ResourcePermissionEntity[] = [];
   public async addPermission() {
-    const md = new Metadata();
-    const permission = await md.GetEntityObject<ResourcePermissionEntity>("Resource Permissions");
+    const p = this.ProviderToUse;
+    const permission = await p.GetEntityObject<ResourcePermissionEntity>("Resource Permissions", p.CurrentUser);
     permission.ResourceTypeID = this.ResourceTypeID;
     permission.ResourceRecordID = this.ResourceRecordID;
     permission.Type = this.SelectedType;
@@ -114,8 +114,8 @@ export class ResourcePermissionsComponent implements AfterViewInit {
 
   public async SavePermissions(): Promise<boolean> {
     // first delete any permissions that were marked for deletion
-    const md = new Metadata();
-    const tg = await md.CreateTransactionGroup();
+    const p = this.ProviderToUse;
+    const tg = await p.CreateTransactionGroup();
     for (const permission of this._pendingDeletes) {
       if (permission.IsSaved) {
         // only delete records previously saved, sometimes a user adds a new permission and deletes it before saving it

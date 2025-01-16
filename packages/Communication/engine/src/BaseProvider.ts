@@ -31,7 +31,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                 };
             }
 
-            if (!this.HTMLBodyTemplate) { // if we have an HTMLBodyTemplate, we will process it separately below
+            if (!this.HTMLBodyTemplate && !this.HTMLBody) { // if we have an HTMLBodyTemplate, we will process it separately below
                 const htmlContent = this.BodyTemplate.GetHighestPriorityContent('HTML');
                 if (htmlContent) {
                     const result = await TemplateEngineServer.Instance.RenderTemplate(this.BodyTemplate, htmlContent, this.ContextData);
@@ -78,6 +78,9 @@ export class ProcessedMessageServer extends ProcessedMessage {
                     Message: 'HTMLBodyTemplate does not have an HTML option and this is required for processing the HTML body of the message.'
                 }
             }
+        }
+        else {
+            this.ProcessedHTMLBody = this.HTMLBody || '';
         }
 
         if (this.SubjectTemplate) {
