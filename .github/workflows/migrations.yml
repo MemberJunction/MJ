@@ -13,8 +13,11 @@ jobs:
       - name: Create SQL Server container
         run: docker run --rm -d -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 
-      - name: Push image to AskSkip Azure Container Registry
-        run: ./packages/MJCLI/bin/run.js migrate
+      - name: Install MJ CLI globally
+        run: npm install --global @memberjunction/cli
+
+      - name: Run mj migrate locally
+        run: mj migrate
         env:
           DB_HOST: localhost
           DB_DATABASE: master
@@ -23,4 +26,3 @@ jobs:
           CODEGEN_DB_USERNAME: sa
           CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
           DB_TRUST_SERVER_CERTIFICATE: Y
-
