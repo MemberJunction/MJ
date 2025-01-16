@@ -32,7 +32,7 @@ export class ManageMetadataBase {
    }
    private static _modifiedEntityList: string[] = [];
    /**
-    * Globally scoped list of entities that have been modified during the metadata management process.  
+    * Globally scoped list of entities that have been modified during the metadata management process.
     */
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
@@ -925,11 +925,11 @@ export class ManageMetadataBase {
       UNION ALL
       SELECT nr.*
       FROM NumberedRows nr
-      WHERE rn <> 1 
+      WHERE rn <> 1
       AND NOT EXISTS (
             SELECT 1
             FROM NumberedRows nr1
-            WHERE nr1.rn = 1 
+            WHERE nr1.rn = 1
             AND nr1.EntityID = nr.EntityID
             AND nr1.FieldName = nr.FieldName
       )
@@ -1280,7 +1280,7 @@ export class ManageMetadataBase {
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-         // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of 
+         // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
          // check constraints that are not simple OR conditions
          //logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
          return null;
@@ -1449,7 +1449,7 @@ export class ManageMetadataBase {
             // process a single new entity
             let newEntityName: string = await this.createNewEntityName(newEntity);
             let suffix = '';
-            const existingEntity = md.Entities.find(e => e.Name === newEntityName);
+            const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
