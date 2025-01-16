@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  api:
+  test-migrations:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo

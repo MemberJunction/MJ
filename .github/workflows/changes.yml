@@ -61,6 +61,10 @@ jobs:
               echo "::error file=$file::Migration script contains a reference to a hard-coded `__mj` schema"
               exit 1
             fi
+            if grep -qP "\$\{flyway:defaultSchema\}_([A-Z][a-z]+At)" "$file"; then
+              echo "::error file=$file::Migration script is using the Flyway schema placeholder in a timestamp column"
+              exit 1
+            fi
           done
 
       - name: Check for minor version change

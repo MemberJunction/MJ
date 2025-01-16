@@ -15,6 +15,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  test-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Create SQL Server container
+        run: docker run --rm -d -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Install MJ CLI globally
+        run: npm install --global @memberjunction/cli
+
+      - name: Run mj migrate locally
+        run: mj migrate
+        env:
+          DB_HOST: localhost
+          DB_DATABASE: master
+          DB_USERNAME: sa
+          DB_PASSWORD: VeryStr0ngP@ssw0rd
+          CODEGEN_DB_USERNAME: sa
+          CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+          DB_TRUST_SERVER_CERTIFICATE: Y
+
   build-and-publish:
     name: Build and publish new versions of NPM packages
     timeout-minutes: 30
