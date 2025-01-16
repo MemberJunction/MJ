@@ -2,6 +2,21 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 16:25:06 GMT",
+      "version": "2.18.1",
+      "tag": "@memberjunction/cli_v2.18.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/cli",
+            "comment": "Bump @memberjunction/codegen-lib to v2.18.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 16 Jan 2025 06:06:20 GMT",
       "version": "2.18.0",
       "tag": "@memberjunction/cli_v2.18.0",

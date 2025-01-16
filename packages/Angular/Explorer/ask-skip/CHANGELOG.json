@@ -2,6 +2,87 @@
   "name": "@memberjunction/ng-ask-skip",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 16:25:06 GMT",
+      "version": "2.18.1",
+      "tag": "@memberjunction/ng-ask-skip_v2.18.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/core-entities to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/core to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/global to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/skip-types to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-chat to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-skip-chat to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-shared to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-data-context to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.18.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.18.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 16 Jan 2025 06:06:20 GMT",
       "version": "2.18.0",
       "tag": "@memberjunction/ng-ask-skip_v2.18.0",
