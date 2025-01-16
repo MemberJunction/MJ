@@ -5,9 +5,9 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import { DataSource } from 'typeorm';
-import { getSigningKeys, validationOptions, verifyUserRecord } from './auth/index.js';
+import { getSigningKeys, getSystemUser, validationOptions, verifyUserRecord } from './auth/index.js';
 import { authCache } from './cache.js';
-import { userEmailMap } from './config.js';
+import { userEmailMap, apiKey } from './config.js';
 import { UserPayload } from './types.js';
 import { TokenExpiredError } from './auth/index.js';
 
@@ -30,9 +30,25 @@ export const getUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSource: DataSource,
-  requestDomain?: string
+  requestDomain?: string,
+  requestApiKey?: string
 ): Promise<UserPayload> => {
   try {
+    if (requestApiKey && requestApiKey != String(undefined)) {
+      // use requestApiKey for auth
+      if (requestApiKey === apiKey) {
+        const systemUser = await getSystemUser(dataSource);
+        return {
+          userRecord: systemUser,
+          email: systemUser.Email,
+          sessionId,
+          isSystemUser: true,
+          apiKey,
+        };
+      }
+      throw new AuthenticationError('Invalid API key provided');
+    }
+
     const token = bearerToken.replace('Bearer ', '');
 
     if (!token) {
@@ -94,11 +110,14 @@ export const contextFunction =
     const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
     const bearerToken = req.headers.authorization ?? '';
 
+    const apiKey = String(req.headers['x-mj-api-key']);
+
     const userPayload = await getUserPayload(
       bearerToken,
       sessionId,
       dataSource,
-      requestDomain?.hostname ? requestDomain.hostname : undefined
+      requestDomain?.hostname ? requestDomain.hostname : undefined,
+      apiKey
     );
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
