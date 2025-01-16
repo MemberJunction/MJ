@@ -407,9 +407,12 @@ export class AskSkipResolver {
         notes = agent.Notes.map((r) => {
           return {
             id: r.ID,
-            typeId: r.AgentNoteTypeID,
-            type: r.AgentNoteType,
+            agentNoteTypeId: r.AgentNoteTypeID,
+            agentNoteType: r.AgentNoteType,
             note: r.Note,
+            type: r.Type,
+            userId: r.UserID,
+            user: r.User,
             createdAt: r.__mj_CreatedAt,
             updatedAt: r.__mj_UpdatedAt,
           }
