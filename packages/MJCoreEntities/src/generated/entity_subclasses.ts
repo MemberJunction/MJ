@@ -868,6 +868,21 @@ export const AIAgentNoteSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Type: z.union([z.literal('User'), z.literal('Global')]).describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User
+    *   * Global
+    * * Description: Indicates the type of note, either User-specific or Global.`),
+    UserID: z.string().nullish().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User`),
     Agent: z.string().nullish().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -876,6 +891,11 @@ export const AIAgentNoteSchema = z.object({
         * * Field Name: AgentNoteType
         * * Display Name: Agent Note Type
         * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullish().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type AIAgentNoteEntityType = z.infer<typeof AIAgentNoteSchema>;
@@ -906,7 +926,6 @@ export const AIAgentRequestSchema = z.object({
         * * Display Name: Request For User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Default Value: null
     * * Description: Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.`),
     Status: z.union([z.literal('Requested'), z.literal('Approved'), z.literal('Rejected'), z.literal('Canceled')]).describe(`
         * * Field Name: Status
@@ -934,7 +953,6 @@ export const AIAgentRequestSchema = z.object({
         * * Display Name: Response By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Default Value: null
     * * Description: Populated when a user responds indicating which user responded to the request.`),
     RespondedAt: z.date().nullish().describe(`
         * * Field Name: RespondedAt
@@ -960,6 +978,16 @@ export const AIAgentRequestSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
+    RequestForUser: z.string().nullish().describe(`
+        * * Field Name: RequestForUser
+        * * Display Name: Request For User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
+    ResponseByUser: z.string().nullish().describe(`
+        * * Field Name: ResponseByUser
+        * * Display Name: Response By User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type AIAgentRequestEntityType = z.infer<typeof AIAgentRequestSchema>;
@@ -11915,6 +11943,37 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * User
+    *   * Global
+    * * Description: Indicates the type of note, either User-specific or Global.
+    */
+    get Type(): 'User' | 'Global' {
+        return this.Get('Type');
+    }
+    set Type(value: 'User' | 'Global') {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -11930,6 +11989,16 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get AgentNoteType(): string | null {
         return this.Get('AgentNoteType');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -12006,7 +12075,6 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     * * Display Name: Request For User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    * * Default Value: null
     * * Description: Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.
     */
     get RequestForUserID(): string | null {
@@ -12066,7 +12134,6 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     * * Display Name: Response By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    * * Default Value: null
     * * Description: Populated when a user responds indicating which user responded to the request.
     */
     get ResponseByUserID(): string | null {
@@ -12129,6 +12196,26 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     */
     get Agent(): string | null {
         return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: RequestForUser
+    * * Display Name: Request For User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get RequestForUser(): string | null {
+        return this.Get('RequestForUser');
+    }
+
+    /**
+    * * Field Name: ResponseByUser
+    * * Display Name: Response By User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get ResponseByUser(): string | null {
+        return this.Get('ResponseByUser');
     }
 }
 

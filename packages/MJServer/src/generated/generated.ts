@@ -1191,6 +1191,14 @@ export class AIAgentNote_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: 'Indicates the type of note, either User-specific or Global.'}) 
+    @MaxLength(40)
+    Type: string;
+        
+    @Field({nullable: true, description: 'Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User'}) 
+    @MaxLength(16)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1198,6 +1206,10 @@ export class AIAgentNote_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     AgentNoteType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
         
 }
 
@@ -1214,6 +1226,12 @@ export class CreateAIAgentNoteInput {
 
     @Field({ nullable: true })
     Note?: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -1233,6 +1251,12 @@ export class UpdateAIAgentNoteInput {
 
     @Field({ nullable: true })
     Note?: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5690,8 +5714,17 @@ export class User_ {
     @Field(() => [ResourceLink_])
     ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
+    @Field(() => [AIAgentRequest_])
+    AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
+    
+    @Field(() => [AIAgentNote_])
+    AIAgentNotes_UserIDArray: AIAgentNote_[]; // Link to AIAgentNotes
+    
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
+    
+    @Field(() => [AIAgentRequest_])
+    AIAgentRequests_RequestForUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
 }
 
@@ -6104,11 +6137,35 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIAgentRequest_])
+    async AIAgentRequests_ResponseByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ResponseByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentNote_])
+    async AIAgentNotes_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ResourcePermission_])
     async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRequest_])
+    async AIAgentRequests_RequestForUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [RequestForUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
         return result;
     }
         
@@ -27771,6 +27828,14 @@ export class AIAgentRequest_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    RequestForUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ResponseByUser?: string;
         
 }
 
