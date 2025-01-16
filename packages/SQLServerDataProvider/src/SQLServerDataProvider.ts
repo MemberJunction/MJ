@@ -1478,6 +1478,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         let val: any = value;
 
         switch  ( f.TSType ) {
+            case EntityFieldTSType.Boolean:
+                // check to see if the value is a string and if it is equal to true, if so, set the value to 1
+                if (typeof value === 'string' && value.trim().toLowerCase() === 'true')
+                    val = 1;
+                else if (typeof value === 'string' && value.trim().toLowerCase() === 'false')
+                    val = 0;
+                else
+                    val = value ? 1 : 0;
+                break;
             case EntityFieldTSType.String:
                 quotes = "'";
                 break;
@@ -1510,9 +1519,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected packageSPParam(paramValue: any, quoteString: string) {
         let pVal: any;
         if (typeof paramValue === 'string') {
-            if (quoteString == "'")
+            if (quoteString === "'")
                 pVal = paramValue.toString().replace(/'/g, "''");
-            else if (quoteString == '"')
+            else if (quoteString === '"')
                 pVal = paramValue.toString().replace(/"/g, '""');
             else
                 pVal = paramValue;
