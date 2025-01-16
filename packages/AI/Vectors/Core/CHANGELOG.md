@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/ai-vectors
 
-This log was last generated on Thu, 16 Jan 2025 06:06:20 GMT and should not be manually modified.
+This log was last generated on Thu, 16 Jan 2025 16:25:06 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.1
+
+Thu, 16 Jan 2025 16:25:06 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.18.1
+- Bump @memberjunction/global to v2.18.1
+- Bump @memberjunction/core-entities to v2.18.1
+- Bump @memberjunction/aiengine to v2.18.1
+- Bump @memberjunction/ai to v2.18.1
+- Bump @memberjunction/ai-vectordb to v2.18.1
 
 ## 2.18.0
 

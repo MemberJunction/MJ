@@ -2,6 +2,21 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 16:25:06 GMT",
+      "version": "2.18.1",
+      "tag": "@memberjunction/core_v2.18.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v2.18.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 16 Jan 2025 06:06:20 GMT",
       "version": "2.18.0",
       "tag": "@memberjunction/core_v2.18.0",
