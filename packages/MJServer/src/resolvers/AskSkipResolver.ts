@@ -38,6 +38,7 @@ import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
+import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -345,9 +346,14 @@ export class AskSkipResolver {
     );
   }
 
-  protected BuildSkipQueries(): SkipQueryInfo[] {
+  /**
+   * Packages up the Approved queries from the metadata
+   * @returns 
+   */
+  protected BuildSkipQueries(status: "Pending" | "In-Review" | "Approved" | "Rejected" | "Obsolete" = 'Approved'): SkipQueryInfo[] {
     const md = new Metadata();
-    return md.Queries.map((q) => {
+    const approvedQueries = md.Queries.filter((q) => q.Status === status);
+    return approvedQueries.map((q) => {
       return {
         id: q.ID,
         name: q.Name,
@@ -390,51 +396,40 @@ export class AskSkipResolver {
    */
   protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
     try {
-      const md = new Metadata();
-      let notes: SkipAPIAgentNote[] = [];
-      let noteTypes: SkipAPIAgentNoteType[] = [];
+      // if already configured this does nothing, just makes sure we're configured
+      await AIEngine.Instance.Config(false, contextUser); 
 
-      if (md.EntityByName('AI Agent Notes')) {
-        const rv = new RunView();
-        const result = await rv.RunView({
-          EntityName: "AI Agent Notes",
-          ExtraFilter: "Agent='Skip'"
-        }, contextUser)
-        if (result && result.Success) {
-          notes = result.Results.map((r) => {
-            return {
-              id: r.ID,
-              typeId: r.TypeID,
-              type: r.Type,
-              note: r.Note,
-              createdAt: r.__mj_CreatedAt,
-              updatedAt: r.__mj_UpdatedAt,
-            }
-          });
-        }
+      const agent: AIAgentEntityExtended = AIEngine.Instance.GetAgentByName('Skip');
+      if (agent) {
+        let notes: SkipAPIAgentNote[] = [];
+        let noteTypes: SkipAPIAgentNoteType[] = [];
+        
+        notes = agent.Notes.map((r) => {
+          return {
+            id: r.ID,
+            typeId: r.AgentNoteTypeID,
+            type: r.AgentNoteType,
+            note: r.Note,
+            createdAt: r.__mj_CreatedAt,
+            updatedAt: r.__mj_UpdatedAt,
+          }
+        });
+
+        noteTypes = AIEngine.Instance.AgentNoteTypes.map((r) => {
+          return {
+            id: r.ID,
+            name: r.Name,
+            description: r.Description
+          }
+        });
+
+        // now return the notes and note types
+        return {notes, noteTypes};
       }
       else {
-        console.warn(`No AI Agent Notes entity found in the metadata, so no notes will be sent to Skip`);
+        console.warn(`No AI Agent found with the name 'Skip' in the AI Engine, so no notes will be sent to Skip`);
+        return {notes: [], noteTypes: []}; // no agent found, so nothing to do
       }
-
-      if (md.EntityByName('AI Agent Note Types')) {
-        const rv = new RunView();
-        const result = await rv.RunView({
-          EntityName: "AI Agent Note Types" 
-        }, contextUser);
-        if (result && result.Success) {
-          noteTypes = result.Results.map((r) => {
-            return {
-              id: r.ID,
-              name: r.Name,
-              description: r.Description
-            }
-          });
-        }
-      }
-
-      // now return the notes and note types
-      return {notes, noteTypes};
     }
     catch (e) {
       LogError(e);
