@@ -2,6 +2,27 @@
   "name": "@memberjunction/ai",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 06:06:20 GMT",
+      "version": "2.18.0",
+      "tag": "@memberjunction/ai_v2.18.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai",
+            "commit": "2f8e2e186280b46cb5476e1794e7c7cf2fe788f3",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai",
+            "comment": "Bump @memberjunction/global to v2.18.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 15 Jan 2025 03:17:08 GMT",
       "version": "2.17.0",
       "tag": "@memberjunction/ai_v2.17.0",

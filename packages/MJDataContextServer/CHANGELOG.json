@@ -2,6 +2,27 @@
   "name": "@memberjunction/data-context-server",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 06:06:20 GMT",
+      "version": "2.18.0",
+      "tag": "@memberjunction/data-context-server_v2.18.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/data-context to v2.18.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/global to v2.18.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 15 Jan 2025 03:17:08 GMT",
       "version": "2.17.0",
       "tag": "@memberjunction/data-context-server_v2.17.0",

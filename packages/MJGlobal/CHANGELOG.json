@@ -2,6 +2,21 @@
   "name": "@memberjunction/global",
   "entries": [
     {
+      "date": "Thu, 16 Jan 2025 06:06:20 GMT",
+      "version": "2.18.0",
+      "tag": "@memberjunction/global_v2.18.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/global",
+            "commit": "2607b08a54cda6826d3ea0bd696178b366d02536",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 14 Jan 2025 14:12:27 GMT",
       "version": "2.16.1",
       "tag": "@memberjunction/global_v2.16.1",

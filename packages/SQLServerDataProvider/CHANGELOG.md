@@ -1,8 +1,27 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
-This log was last generated on Wed, 15 Jan 2025 03:17:08 GMT and should not be manually modified.
+This log was last generated on Thu, 16 Jan 2025 06:06:20 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.0
+
+Thu, 16 Jan 2025 06:06:20 GMT
+
+### Minor changes
+
+- Bump @memberjunction/actions to v2.18.0
+- Bump @memberjunction/ai to v2.18.0
+- Bump @memberjunction/ai-vector-dupe to v2.18.0
+- Bump @memberjunction/aiengine to v2.18.0
+- Bump @memberjunction/core to v2.18.0
+- Bump @memberjunction/core-entities to v2.18.0
+- Bump @memberjunction/global to v2.18.0
+- Bump @memberjunction/queue to v2.18.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.17.0
 

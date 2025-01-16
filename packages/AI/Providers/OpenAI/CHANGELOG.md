@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/ai-openai
 
-This log was last generated on Wed, 15 Jan 2025 03:17:08 GMT and should not be manually modified.
+This log was last generated on Thu, 16 Jan 2025 06:06:20 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.0
+
+Thu, 16 Jan 2025 06:06:20 GMT
+
+### Minor changes
+
+- Bump @memberjunction/ai to v2.18.0
+- Bump @memberjunction/global to v2.18.0
 
 ## 2.17.0
 
