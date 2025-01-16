@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
-import { EntityFieldInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EntityFieldInfo, RunView, UserInfo } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -72,11 +72,11 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             if (!rt || !rt.EntityID)
                 throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
 
-            const md = new Metadata();
-            const entity = md.EntityByID(rt.EntityID);
+            const p = this.ProviderToUse;
+            const entity = p.Entities.find(e => e.ID === rt.EntityID);
             if (!entity || !entity.NameField)
                 throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
-            const rv = new RunView();
+            const rv = new RunView(this.RunViewToUse);
             const nameField = entity.NameField;
             if (this.ExtraColumns && this.ExtraColumns.length > 0) {
                 /// split the comma delim string and for each item find it in the EntityFields collection

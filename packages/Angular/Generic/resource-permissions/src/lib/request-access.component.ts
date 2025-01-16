@@ -55,13 +55,13 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
     }
 
     public async requestAccess() {
-        const md = new Metadata();
-        const permission = await md.GetEntityObject<ResourcePermissionEntity>("Resource Permissions");
+        const p = this.ProviderToUse;
+        const permission = await p.GetEntityObject<ResourcePermissionEntity>("Resource Permissions", p.CurrentUser);
         permission.ResourceTypeID = this.ResourceTypeObject.ID;
         permission.ResourceRecordID = this.ResourceRecordID;
         permission.Status = 'Requested';
         permission.Type = 'User';
-        permission.UserID = md.CurrentUser.ID; 
+        permission.UserID = p.CurrentUser.ID; 
         permission.PermissionLevel = this.PermissionLevel;
         if (await permission.Save()) {
             // worked, fire the event. 
