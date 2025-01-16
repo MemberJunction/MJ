@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { LogError, Metadata } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -11,7 +12,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   templateUrl: './request-access.component.html',
   styleUrls: ['./request-access.component.css']
 })
-export class RequestResourceAccessComponent implements OnInit {
+export class RequestResourceAccessComponent  extends BaseAngularComponent implements OnInit {
     /**
      * The name of the resource type that the user is requesting access to
      */

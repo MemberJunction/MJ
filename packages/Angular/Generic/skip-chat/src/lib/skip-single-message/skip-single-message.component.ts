@@ -5,6 +5,7 @@ import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, Ski
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  
 
 @Component({
@@ -12,13 +13,12 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
   templateUrl: './skip-single-message.component.html',
   styleUrls: ['./skip-single-message.component.css']
 })
-export class SkipSingleMessageComponent implements AfterViewInit {  
+export class SkipSingleMessageComponent  extends BaseAngularComponent implements AfterViewInit {  
     @Input() public ConversationRecord!: ConversationEntity;
     @Input() public ConversationDetailRecord!: ConversationDetailEntity;
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
     @Input() public ConversationMessages!: ConversationDetailEntity[];
-    @Input() public Provider: IMetadataProvider | null = null;
 
     /**
      * Set this property in order to set the Skip logo. This can either be a URL or a Blob
@@ -52,15 +52,14 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     public SuggestedQuestionsClicked: boolean = false;
     public SuggestedAnswersClicked: boolean = false;
 
-    constructor (private cdRef: ChangeDetectorRef) { }
+    constructor (private cdRef: ChangeDetectorRef) { 
+      super();
+    }
 
     @ViewChild('reportContainer', { read: ViewContainerRef }) reportContainerRef!: ViewContainerRef;
 
     private static _detailHtml: any = {};
 
-    public get ProviderToUse(): IMetadataProvider {
-      return this.Provider || Metadata.Provider;
-    }
 
     private _loadTime: number = 0;
     public get ElapsedTimeSinceLoad(): number {

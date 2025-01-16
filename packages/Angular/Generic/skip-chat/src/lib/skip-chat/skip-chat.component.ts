@@ -33,6 +33,7 @@ import {
 import { DataContext } from '@memberjunction/data-context';
 import { MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
   selector: 'skip-chat',
@@ -40,7 +41,7 @@ import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-m
   styleUrls: ['./skip-chat.component.css'],
 })
 @RegisterClass(BaseNavigationComponent, 'Ask Skip')
-export class SkipChatComponent extends BaseNavigationComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
+export class SkipChatComponent extends BaseAngularComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
   @Input() public Messages: ConversationDetailEntity[] = [];
   @Input() public Conversations: ConversationEntity[] = [];
@@ -65,14 +66,6 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
    */
   @Input() public UpdateAppRoute: boolean = true;
-
-  /**
-   * If specified, this provider will be used for communication and for all metadata purposes. By default, if not provided, the Metadata and RunView classes
-   * are used for this and the default GraphQLDataProvider is used which is connected to the same back-end MJAPI instance as the Metadata and RunView classes.
-   * If you want to have this component connect to a different MJAPI back-end, create an instance of a ProviderBase sub-class like GraphQLDataProvider/etc, and
-   * configure it as appropriate to connect to the MJAPI back-end you want to use, and then pass it in here.
-   */
-  @Input() public Provider: IMetadataProvider | undefined;
 
   /**
    * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
@@ -246,15 +239,7 @@ export class SkipChatComponent extends BaseNavigationComponent implements OnInit
         this.SelectedConversationUser = p.CurrentUser; // current user is the one for this convo, just use that to avoid the extra query
     }
   }
-
-  protected get ProviderToUse(): IMetadataProvider {
-    return this.Provider ? this.Provider : Metadata.Provider;
-  }
-
-  protected get RunViewToUse(): IRunViewProvider {
-    return <IRunViewProvider><any>this.ProviderToUse;
-  }
-
+ 
   public get LinkedEntityID(): string | null {
     if (this.LinkedEntity && this.LinkedEntity.length > 0) {
       // lookup the entity id from the linkedentity provided to us as a property

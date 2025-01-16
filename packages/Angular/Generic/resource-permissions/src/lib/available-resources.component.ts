@@ -2,6 +2,7 @@ import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from
 import { EntityFieldInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
 import { ResourceData } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SelectionEvent } from '@progress/kendo-angular-grid';
 import { GridComponent } from '@progress/kendo-angular-grid';
 
@@ -13,7 +14,7 @@ import { GridComponent } from '@progress/kendo-angular-grid';
   templateUrl: './available-resources.component.html',
   styleUrls: ['./available-resources.component.css']
 })
-export class AvailableResourcesComponent implements AfterViewInit {
+export class AvailableResourcesComponent  extends BaseAngularComponent implements AfterViewInit {
     @Input() User!: UserInfo;
     @Input() ResourceTypeID!: string;
     @Input() ResourceExtraFilter?: string;

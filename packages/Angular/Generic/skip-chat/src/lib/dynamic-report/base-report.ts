@@ -4,10 +4,11 @@ import { ReportEntity } from "@memberjunction/core-entities";
 import { DataContext } from "@memberjunction/data-context";
 import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
+import { BaseAngularComponent } from "@memberjunction/ng-base-types";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
-export abstract class SkipDynamicReportBase implements AfterViewInit {
+export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ShowCreateReportButton: boolean = false;
     @Input() ConversationID: string | null = null;
@@ -15,10 +16,7 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
     @Input() ConversationDetailID: string | null = null;
     @Input() DataContext!: DataContext;
     @Input() ReportEntity?: ReportEntity;
-    /**
-     * Optional, specify a provider if you want to use a different provider than the default one
-     */
-    @Input() Provider: IMetadataProvider | null = null;
+
     @Output() UserNotification = new EventEmitter<{message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number}>();
 
     /**
@@ -27,18 +25,15 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
      */
     @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
-    constructor(protected cdRef: ChangeDetectorRef) {}
+    constructor(protected cdRef: ChangeDetectorRef) {
+      super();
+    }
     
     ngAfterViewInit() {
       this.RefreshMatchingReport();
     }
-    /**
-     * This property returns the provider to use, which will either be the one specified in the input or the default one, if nothing was specified.
-     */
-    public get ProviderToUse(): IMetadataProvider {
-        return this.Provider || Metadata.Provider;
-    }
 
+    
     public matchingReportID: string | null = null;
     public matchingReportName: string | null = null;
     private static _reportCache: { reportId: string; conversationId: string; reportName: string; conversationDetailId: string }[] = [];
@@ -56,7 +51,7 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
             this.matchingReportID = cachedItem.reportId;
             this.matchingReportName = cachedItem.reportName;
           } else {
-            const rv = new RunView(<IRunViewProvider><any>this.ProviderToUse);
+            const rv = new RunView(this.RunViewToUse);
             const matchingReports = await rv.RunView({
               EntityName: 'Reports',
               ExtraFilter: `ConversationID = '${this.ConversationID}' AND ConversationDetailID = '${this.ConversationDetailID}'`,
