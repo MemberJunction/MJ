@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/communication-engine
 
-This log was last generated on Thu, 16 Jan 2025 16:25:06 GMT and should not be manually modified.
+This log was last generated on Thu, 16 Jan 2025 22:06:37 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.2
+
+Thu, 16 Jan 2025 22:06:37 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.18.2
+- Bump @memberjunction/core to v2.18.2
+- Bump @memberjunction/templates to v2.18.2
+- Bump @memberjunction/core-entities to v2.18.2
+- Bump @memberjunction/communication-types to v2.18.2
 
 ## 2.18.1
 
