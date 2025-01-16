@@ -12,7 +12,7 @@ import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';

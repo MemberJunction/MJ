@@ -5,7 +5,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAIAgentNoteTypeDetailsComponent } from "./sections/details.component"
 import { UserViewGridComponent } from "@memberjunction/ng-user-view-grid"
 
-@RegisterClass(BaseFormComponent, 'AIAgent Note Types') // Tell MemberJunction about this class
+@RegisterClass(BaseFormComponent, 'AI Agent Note Types') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentnotetype-form',
     templateUrl: './aiagentnotetype.form.component.html',

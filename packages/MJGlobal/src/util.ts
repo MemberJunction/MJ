@@ -174,3 +174,207 @@ export function ConvertMarkdownStringToHtmlList(htmlListType: 'Ordered' | 'Unord
         return null;
     }   
 }
+
+
+
+
+
+
+/**
+* Converts a string that uses camel casing or contains consecutive uppercase letters to have spaces between words.
+* For example:
+* "DatabaseVersion" -> "Database Version"
+* "AIAgentLearningCycle" -> "AI Agent Learning Cycle"
+*/
+export function convertCamelCaseToHaveSpaces(s: string): string {
+    let result = '';
+    for (let i = 0; i < s.length; ++i) {
+       if (
+          i > 0 && // Not the first character
+          ((s[i] === s[i].toUpperCase() && s[i - 1] !== s[i - 1].toUpperCase()) || // Transition from lowercase to uppercase
+             (s[i] === s[i].toUpperCase() && s[i - 1] === s[i - 1].toUpperCase() && // Transition within consecutive uppercase letters
+             i + 1 < s.length && s[i + 1] !== s[i + 1].toUpperCase())) // Followed by a lowercase
+       ) {
+          result += ' ';
+       }
+       result += s[i];
+    }
+    return result;
+}
+
+
+/**
+ * Removes all whitespace characters (spaces, tabs, newlines) from a given string.
+ *
+ * @param s - The input string from which to remove whitespace.
+ * @returns A new string with all whitespace characters removed.
+ *
+ * @example
+ * ```typescript
+ * stripWhitespace("  Hello   World  "); // "HelloWorld"
+ * stripWhitespace("\tExample\nString "); // "ExampleString"
+ * stripWhitespace(""); // ""
+ * ```
+ */
+export function stripWhitespace(s: string): string {
+    if (!s) {
+        // Return the original string if it is null, undefined, or empty
+        return s;
+    }
+    return s.replace(/\s+/g, ''); // Use \s+ for efficiency in case of consecutive whitespace
+}
+
+
+
+/**
+ * Retrieves the plural form of a word if it is an irregular plural.
+ * 
+ * @param singularName - The singular form of the word to check.
+ * @returns The irregular plural form if found, or `null` if not found.
+ * 
+ * @example
+ * ```typescript
+ * getIrregularPlural('child'); // returns 'children'
+ * getIrregularPlural('dog'); // returns null
+ * ```
+ */
+export function getIrregularPlural(singularName: string): string | null {
+    const irregularPlurals: Record<string, string> = {
+        child: 'children',
+        person: 'people',
+        mouse: 'mice',
+        foot: 'feet',
+        tooth: 'teeth',
+        goose: 'geese',
+        man: 'men',
+        woman: 'women',
+        ox: 'oxen',
+        cactus: 'cacti',
+        focus: 'foci',
+        fungus: 'fungi',
+        nucleus: 'nuclei',
+        syllabus: 'syllabi',
+        analysis: 'analyses',
+        diagnosis: 'diagnoses',
+        thesis: 'theses',
+        crisis: 'crises',
+        phenomenon: 'phenomena',
+        criterion: 'criteria',
+        datum: 'data',
+    };
+
+    const lowerSingular = singularName.toLowerCase();
+    return irregularPlurals[lowerSingular] || null;
+}
+
+
+/**
+ * Converts a singular word to its plural form, handling common pluralization rules 
+ * and irregular plurals.
+ * 
+ * @param singularName - The singular form of the word to pluralize.
+ * @returns The plural form of the word.
+ * 
+ * @example
+ * ```typescript
+ * generatePluralName('child'); // returns 'children'
+ * generatePluralName('box'); // returns 'boxes'
+ * generatePluralName('party'); // returns 'parties'
+ * generatePluralName('dog'); // returns 'dogs'
+ * ```
+ */
+export function generatePluralName(singularName: string): string {
+    // Check for irregular plurals
+    const irregularPlural = getIrregularPlural(singularName);
+    if (irregularPlural) {
+        return irregularPlural;
+    }
+
+    // Handle common pluralization rules
+    if (singularName.endsWith('y') && singularName.length > 1) {
+        const secondLastChar = singularName[singularName.length - 2].toLowerCase();
+        if ('aeiou'.includes(secondLastChar)) {
+            // Ends with a vowel + y, just add 's'
+            return singularName + 's';
+        } else {
+            // Ends with a consonant + y, replace 'y' with 'ies'
+            return singularName.slice(0, -1) + 'ies';
+        }
+    }
+
+    if (/(s|ch|sh|x|z)$/.test(singularName)) {
+        // Ends with 's', 'ch', 'sh', 'x', or 'z', add 'es'
+        return singularName + 'es';
+    }
+
+    // Default case: Add 's' to the singular name
+    return singularName + 's';
+}
+
+
+
+
+/**
+ * Removes trailing characters from a string if they match the specified substring.
+ *
+ * @param s - The input string from which trailing characters should be stripped.
+ * @param charsToStrip - The substring to remove if it appears at the end of the input string.
+ * @param skipIfExactMatch - If `true`, does not strip the trailing characters when the string is exactly equal to `charsToStrip`.
+ * @returns The modified string with trailing characters stripped, or the original string if no match is found.
+ *
+ * @example
+ * ```typescript
+ * stripTrailingChars("example.txt", ".txt", false); // "example"
+ * stripTrailingChars("example.txt", ".txt", true);  // "example"
+ * stripTrailingChars("file.txt", "txt", false);     // "file.txt" (no match)
+ * stripTrailingChars(".txt", ".txt", true);         // ".txt" (exact match, not stripped)
+ * ```
+ */
+export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactMatch: boolean): string {
+    if (!s || !charsToStrip) {
+        // Return the original string if either input is empty
+        return s;
+    }
+
+    const shouldStrip =
+        s.endsWith(charsToStrip) &&
+        (!skipIfExactMatch || s !== charsToStrip);
+
+    if (shouldStrip) {
+        return s.substring(0, s.length - charsToStrip.length);
+    }
+
+    return s;
+}
+
+
+/**
+ * Recursively removes all spaces from a given string.
+ *
+ * @param s - The input string from which to remove all spaces.
+ * @returns A new string with all spaces removed.
+ *
+ * @example
+ * ```typescript
+ * replaceAllSpaces("Hello World");       // "HelloWorld"
+ * replaceAllSpaces("  Leading spaces"); // "Leadingspaces"
+ * replaceAllSpaces("Trailing spaces  "); // "Trailingspaces"
+ * replaceAllSpaces("NoSpacesHere");     // "NoSpacesHere"
+ * replaceAllSpaces("");                 // ""
+ * ```
+ */
+export function replaceAllSpaces(s: string): string {
+    if (!s) {
+        // Handle null, undefined, or empty string cases
+        return s;
+    }
+
+    if (s.includes(' ')) {
+        // Recursive case: Replace a single space and call the function again
+        return replaceAllSpaces(s.replace(' ', ''));
+    }
+
+    // Base case: No spaces left to replace
+    return s;
+}
+  

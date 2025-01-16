@@ -445,6 +445,32 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="AI Agent Requests" [Visible]="record.IsSaved"> 
+                        AI Agent Requests
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Requests','ResponseByUserID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agent Requests')"
+                            [AllowLoad]="IsCurrentTab('AI Agent Requests')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Agent Notes" [Visible]="record.IsSaved"> 
+                        AI Agent Notes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','UserID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agent Notes')"
+                            [AllowLoad]="IsCurrentTab('AI Agent Notes')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
                         Resource Permissions
                     </mj-tab>
@@ -453,6 +479,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','UserID')"  
                             [NewRecordValues]="NewRecordValues('Resource Permissions')"
                             [AllowLoad]="IsCurrentTab('Resource Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Agent Requests" [Visible]="record.IsSaved"> 
+                        AI Agent Requests
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Requests','RequestForUserID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agent Requests')"
+                            [AllowLoad]="IsCurrentTab('AI Agent Requests')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
