@@ -245,7 +245,8 @@ export class SQLCodeGenBase {
                 try {
                   stats = fs.statSync(fullPath)
                 } catch (e) {
-                    logMessage(`Directory '${fullPath}' does not exist so no need to delete previously generated SQL`, 'Info');
+                    // this is NOT an error, so not doing this logging anymore as it makes it seem like we're having a problem, not needed
+                    //logMessage(`      Directory '${fullPath}' does not exist so no need to delete previously generated SQL`, 'Info');
                 }
                 if (stats?.isDirectory()) {
                     const files = fs.readdirSync(fullPath).filter(f => f.endsWith('.generated.sql') || f.endsWith('.permissions.generated.sql'));
@@ -299,7 +300,9 @@ export class SQLCodeGenBase {
     }
 
     protected logSQLForNewEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
-        if (logSql && ManageMetadataBase.newEntityList.find(e => e === entity.Name)) {
+        if (logSql && 
+            (ManageMetadataBase.newEntityList.find(e => e === entity.Name) || ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name))  ) {
+            // per above only do this if (a) logSql is true and (b) the entity is in the newEntityList OR modifiedEntityList
             SQLLogging.appendToSQLLogFile(sql, description);
         }
     }

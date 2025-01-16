@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { AIAgentEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'AIAgents.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'AI Agents.details') // Tell MemberJunction about this class 
 @Component({
     selector: 'gen-aiagent-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],

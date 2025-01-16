@@ -22,7 +22,7 @@ const codegenConfig = {
     { name: 'auto_index_foreign_keys', value: true },
   ],
   logging: {
-    log: false,
+    log: true,
     logFile: 'codegen.output.log',
     console: true,
   },
@@ -144,10 +144,10 @@ const codegenConfig = {
     },
   ],
   SQLOutput: {
-    enabled: false,
-    folderPath: './migrations/v2/',
+    enabled: true,
+    folderPath: './output/',
     appendToFile: true,
-    convertCoreSchemaToFlywayMigrationFile: true,
+    convertCoreSchemaToFlywayMigrationFile: false,
   },
 };
 

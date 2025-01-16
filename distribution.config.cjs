@@ -61,12 +61,7 @@ const codegenConfig = {
       table: 'sys%',
     },
   ],
-  customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
-  ],
+  customSQLScripts: [],
   dbSchemaJSONOutput: {
     excludeEntities: [],
     excludeSchemas: ['sys', 'staging', 'dbo'],

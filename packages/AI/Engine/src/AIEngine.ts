@@ -3,9 +3,10 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEngine, BaseEntity, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { MJGlobal } from "@memberjunction/global";
+import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
+import { AIAgentEntityExtended } from "./AIAgentExtended";
 
 
 export class AIActionParams {
@@ -32,6 +33,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _prompts: AIPromptEntity[] = [];
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
+    private _agentActions: AIAgentActionEntity[] = [];
+    private _agentModels: AIAgentModelEntity[] = [];
+    private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
+    private _agentNotes: AIAgentNoteEntity[] = [];
+    private _agents: AIAgentEntityExtended[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
         const params = [
@@ -66,6 +72,26 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_modelActions',
                 EntityName: 'AI Model Actions'
+            },
+            {
+                PropertyName: '_agentActions',
+                EntityName: 'AI Agent Actions'
+            },
+            {
+                PropertyName: '_agentModels',
+                EntityName: 'AI Agent Models'
+            },
+            {
+                PropertyName: '_agentNoteTypes',
+                EntityName: 'AI Agent Note Types'
+            },
+            {
+                PropertyName: '_agentNotes',
+                EntityName: 'AI Agent Notes'
+            },
+            {
+                PropertyName: '_agents',
+                EntityName: 'AI Agents'
             }
         ];
         return await this.Load(params, forceRefresh, contextUser);
@@ -80,6 +106,27 @@ export class AIEngine extends BaseEngine<AIEngine> {
                 return prompt.CategoryID === PromptCategory.ID;
             }).forEach((prompt: AIPromptEntity) => {
                 PromptCategory.Prompts.push(prompt);
+            });
+        }
+
+        // handle association agent actions, models, and notes with agents
+        for(const agent of this._agents){
+            this._agentActions.filter((action: AIAgentActionEntity) => {
+                return action.AgentID === agent.ID;
+            }).forEach((action: AIAgentActionEntity) => {
+                agent.Actions.push(action);
+            });
+
+            this._agentModels.filter((model: AIAgentModelEntity) => {
+                return model.AgentID === agent.ID;
+            }).forEach((model: AIAgentModelEntity) => {
+                agent.Models.push(model);
+            });
+
+            this._agentNotes.filter((note: AIAgentNoteEntity) => {
+                return note.AgentID === agent.ID;
+            }).forEach((note: AIAgentNoteEntity) => {
+                agent.Notes.push(note);
             });
         }
     }
@@ -156,6 +203,36 @@ export class AIEngine extends BaseEngine<AIEngine> {
             LogError(e);
             throw e;
         }
+    }
+
+    public get Agents(): AIAgentEntityExtended[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agents;
+    }
+
+    public GetAgentByName(agentName: string): AIAgentEntityExtended {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
+    }
+
+    public get AgentActions(): AIAgentActionEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agentActions;
+    }
+
+    public get AgentModels(): AIAgentModelEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agentModels;
+    }
+
+    public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agentNoteTypes;
+    }
+
+    public get AgentNotes(): AIAgentNoteEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._agentNotes;
     }
 
     public get Prompts(): AIPromptEntity[] {

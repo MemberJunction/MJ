@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAIAgentActionDetailsComponent } from "./sections/details.component"
 
-@RegisterClass(BaseFormComponent, 'AIAgent Actions') // Tell MemberJunction about this class
+@RegisterClass(BaseFormComponent, 'AI Agent Actions') // Tell MemberJunction about this class
 @Component({
     selector: 'gen-aiagentaction-form',
     templateUrl: './aiagentaction.form.component.html',

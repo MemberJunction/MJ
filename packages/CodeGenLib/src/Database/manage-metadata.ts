@@ -4,12 +4,13 @@ import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, Lo
 import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
 import { SQLLogging } from "../Misc/sql_logging";
+
 
 /**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
@@ -23,8 +24,18 @@ export class ManageMetadataBase {
        return this._sqlUtilityObject;
    }
    private static _newEntityList: string[] = [];
+   /**
+    * Globally scoped list of entities that have been created during the metadata management process.
+    */
    public static get newEntityList(): string[] {
       return this._newEntityList;
+   }
+   private static _modifiedEntityList: string[] = [];
+   /**
+    * Globally scoped list of entities that have been modified during the metadata management process.
+    */
+   public static get modifiedEntityList(): string[] {
+      return this._modifiedEntityList;
    }
 
    /**
@@ -799,7 +810,7 @@ export class ManageMetadataBase {
          const fields = await ds.query(sql)
          if (fields && fields.length > 0)
             for (const field of fields) {
-               const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
+               const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(ds, sSQL, `SQL text to update display name for field ${field.Name}`);
@@ -858,6 +869,7 @@ export class ManageMetadataBase {
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
       e.RelationshipDefaultDisplayType,
+      e.Name EntityName,
       re.ID RelatedEntityID,
       fk.referenced_column RelatedEntityFieldName,
       IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
@@ -913,11 +925,11 @@ export class ManageMetadataBase {
       UNION ALL
       SELECT nr.*
       FROM NumberedRows nr
-      WHERE rn <> 1 
+      WHERE rn <> 1
       AND NOT EXISTS (
             SELECT 1
             FROM NumberedRows nr1
-            WHERE nr1.rn = 1 
+            WHERE nr1.rn = 1
             AND nr1.EntityID = nr.EntityID
             AND nr1.FieldName = nr.FieldName
       )
@@ -943,8 +955,8 @@ export class ManageMetadataBase {
       let fieldDisplayName: string = '';
       switch (n.FieldName.trim().toLowerCase()) {
          case EntityInfo.CreatedAtFieldName.trim().toLowerCase():
-            fieldDisplayName = "Created At";
-            break;
+               fieldDisplayName = "Created At";
+               break;
             case EntityInfo.UpdatedAtFieldName.trim().toLowerCase():
                fieldDisplayName = "Updated At";
                break;
@@ -952,8 +964,8 @@ export class ManageMetadataBase {
                fieldDisplayName = "Deleted At";
                break;
             default:
-            fieldDisplayName = this.convertCamelCaseToHaveSpaces(n.FieldName).trim();
-            break;
+               fieldDisplayName = convertCamelCaseToHaveSpaces(n.FieldName).trim();
+               break;
       }
 
       return `
@@ -1067,6 +1079,11 @@ export class ManageMetadataBase {
             }
          });
 
+         // if we get here now send a distinct list of the entities that had new fields to the modified entity list
+         // column in the resultset is called EntityName, we dont have to dedupe them here because the method below
+         // will do that for us
+         ManageMetadataBase.addNewEntitiesToModifiedList(newEntityFields.map((f: { EntityName: any; }) => f.EntityName));
+
          return true;
       }
       catch (e) {
@@ -1099,7 +1116,12 @@ export class ManageMetadataBase {
    protected async updateExistingEntitiesFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`);
+         // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
+         // add these to the modified entity list if they're not already in there
+         if (result && result.length > 0 ) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: any; }) => r.Name));
+         }
          return true;
       }
       catch (e) {
@@ -1107,11 +1129,27 @@ export class ManageMetadataBase {
          return false;
       }
    }
+
+   /**
+    * Adds a list of entity names to the modified entity list if they're not already in there
+    */
+   protected static addNewEntitiesToModifiedList(entityNames: string[]) {
+      const distinctEntityNames = [...new Set(entityNames)];
+      const newlyModifiedEntityNames = distinctEntityNames.filter((e: string) => !ManageMetadataBase._modifiedEntityList.includes(e));
+      // now make sure that each of these entity names is in the modified entity list
+      ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
+   }
+
    protected async updateExistingEntityFieldsFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existingg entity fields from schema`);
-
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existingg entity fields from schema`);
+         // result contains the updated entity fields
+         // there is a field in there called EntityName. Get a distinct list of entity names from this and add them
+         // to the modified entity list if they're not already in there
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
+         }
          return true;
       }
       catch (e) {
@@ -1122,7 +1160,13 @@ export class ManageMetadataBase {
    protected async deleteUnneededEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`);
+         // result contains the DELETED entity fields
+         // there is a field in there called Entity. Get a distinct list of entity names from this and add them
+         // to the modified entity list if they're not already in there
+         if (result && result.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+         }
          return true;
       }
       catch (e) {
@@ -1236,29 +1280,32 @@ export class ManageMetadataBase {
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
       if (!structureRegex.test(constraintDefinition)) {
-         logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
+         // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
+         // check constraints that are not simple OR conditions
+         //logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
          return null;
       }
+      else {
+         // Regular expression to match the values within the single quotes specifically for the field
+         const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
+         let match;
+         const possibleValues: string[] = [];
 
-      // Regular expression to match the values within the single quotes specifically for the field
-      const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
-      let match;
-      const possibleValues: string[] = [];
+         // Use regex to find matches and extract the values
+         while ((match = valueRegex.exec(constraintDefinition)) !== null) {
+            // This is necessary to avoid infinite loops with zero-width matches
+            if (match.index === valueRegex.lastIndex) {
+               valueRegex.lastIndex++;
+            }
 
-      // Use regex to find matches and extract the values
-      while ((match = valueRegex.exec(constraintDefinition)) !== null) {
-          // This is necessary to avoid infinite loops with zero-width matches
-          if (match.index === valueRegex.lastIndex) {
-              valueRegex.lastIndex++;
-          }
+            // The first captured group contains the value
+            if (match[1]) {
+               possibleValues.push(match[1]);
+            }
+         }
 
-          // The first captured group contains the value
-          if (match[1]) {
-              possibleValues.push(match[1]);
-          }
+         return possibleValues;
       }
-
-      return possibleValues;
    }
 
 
@@ -1388,7 +1435,7 @@ export class ManageMetadataBase {
       }
    }
    protected simpleNewEntityName(tableName: string): string {
-      return this.convertCamelCaseToHaveSpaces(this.generatePluralName(tableName));
+      return convertCamelCaseToHaveSpaces(generatePluralName(tableName));
    }
 
    protected createNewUUID(): string {
@@ -1402,7 +1449,7 @@ export class ManageMetadataBase {
             // process a single new entity
             let newEntityName: string = await this.createNewEntityName(newEntity);
             let suffix = '';
-            const existingEntity = md.Entities.find(e => e.Name === newEntityName);
+            const existingEntity = md.Entities.find(e => e.Name.toLowerCase() === newEntityName.toLowerCase());
             const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
@@ -1543,7 +1590,7 @@ export class ManageMetadataBase {
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
          '${newEntity.TableName}',
-         'vw${this.generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
+         'vw${generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
          1,
          ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0}
@@ -1561,64 +1608,7 @@ export class ManageMetadataBase {
       return sSQLInsert;
    }
 
-   protected stripTrailingChars(s:string, charsToStrip: string, skipIfExactMatch: boolean): string {
-      if (s && charsToStrip) {
-         if (s.endsWith(charsToStrip) && (skipIfExactMatch ? s !== charsToStrip : true))
-            return s.substring(0, s.length - charsToStrip.length);
-         else
-            return s
-      }
-      else
-         return s;
-   }
 
-   protected convertCamelCaseToHaveSpaces(s: string): string {
-      let result = '';
-      for (let i = 0; i < s.length; ++i) {
-         if ( s[i] === s[i].toUpperCase() && // current character is upper case
-              i > 0 && // not first character
-              s[i - 1] !== ' ' && // previous character is not a space - needed for strings like "Database Version" that already have spaces
-              (s[i - 1] !== s[i - 1].toUpperCase()) // previous character is not upper case handles not putting space between I and D in ID as an example of consecutive upper case
-            ) {
-            result += ' ';
-         }
-         result += s[i];
-      }
-      return result;
-   }
-
-   protected stripWhitespace(s: string): string {
-      return s.replace(/\s/g, '');
-   }
-
-   protected generatePluralName(singularName: string) {
-      if (singularName.endsWith('y') && singularName.length > 1) {
-          // Check if the letter before 'y' is a vowel
-          const secondLastChar = singularName[singularName.length - 2].toLowerCase();
-          if ('aeiou'.includes(secondLastChar)) {
-              // If it's a vowel, just add 's', example "key/keys"
-              return singularName + 's';
-          } else {
-              // If it's a consonant, replace 'y' with 'ies' - example "party/parties"
-              return singularName.substring(0, singularName.length - 1) + 'ies';
-          }
-      } else if (singularName.endsWith('y')) {
-          // If the string is just 'y', treat it like a vowel and just add 's'
-          return singularName + 's';
-      }
-      else if (singularName.endsWith('s')) {
-          // Singular name already ends with 's', so just return it
-          return singularName;
-      }
-      else if (singularName.endsWith('ch') || singularName.endsWith('sh') || singularName.endsWith('x') || singularName.endsWith('z')) {
-            // If the singular name ends with 'ch', 'sh', 'x', or 'z', add 'es' - example "box/boxes", "index/indexes", "church/churches", "dish/dishes", "buzz/buzzes"
-            return singularName + 'es';
-      }
-      else {
-          // For other cases, just add 's'
-          return singularName + 's';
-      }
-   }
 
    /**
     * Executes the given SQL query using the given DataSource object.
