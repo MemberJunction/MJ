@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.18.0",
-    "@memberjunction/core-entities": "2.18.0"
+    "@memberjunction/core-entities": "2.18.0",
+    "@memberjunction/core": "2.18.0"
   }
 }
