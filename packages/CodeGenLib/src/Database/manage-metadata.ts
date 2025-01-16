@@ -4,7 +4,7 @@ import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, Lo
 import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -810,7 +810,7 @@ export class ManageMetadataBase {
          const fields = await ds.query(sql)
          if (fields && fields.length > 0)
             for (const field of fields) {
-               const sDisplayName = this.stripTrailingChars(this.convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
+               const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE [${mj_core_schema()}].EntityField SET ${EntityInfo.UpdatedAtFieldName}=GETUTCDATE(), DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(ds, sSQL, `SQL text to update display name for field ${field.Name}`);
@@ -955,8 +955,8 @@ export class ManageMetadataBase {
       let fieldDisplayName: string = '';
       switch (n.FieldName.trim().toLowerCase()) {
          case EntityInfo.CreatedAtFieldName.trim().toLowerCase():
-            fieldDisplayName = "Created At";
-            break;
+               fieldDisplayName = "Created At";
+               break;
             case EntityInfo.UpdatedAtFieldName.trim().toLowerCase():
                fieldDisplayName = "Updated At";
                break;
@@ -964,8 +964,8 @@ export class ManageMetadataBase {
                fieldDisplayName = "Deleted At";
                break;
             default:
-            fieldDisplayName = this.convertCamelCaseToHaveSpaces(n.FieldName).trim();
-            break;
+               fieldDisplayName = convertCamelCaseToHaveSpaces(n.FieldName).trim();
+               break;
       }
 
       return `
@@ -1435,7 +1435,7 @@ export class ManageMetadataBase {
       }
    }
    protected simpleNewEntityName(tableName: string): string {
-      return this.convertCamelCaseToHaveSpaces(this.generatePluralName(tableName));
+      return convertCamelCaseToHaveSpaces(generatePluralName(tableName));
    }
 
    protected createNewUUID(): string {
@@ -1590,7 +1590,7 @@ export class ManageMetadataBase {
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
          '${newEntity.TableName}',
-         'vw${this.generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
+         'vw${generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
          1,
          ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0}
@@ -1608,64 +1608,7 @@ export class ManageMetadataBase {
       return sSQLInsert;
    }
 
-   protected stripTrailingChars(s:string, charsToStrip: string, skipIfExactMatch: boolean): string {
-      if (s && charsToStrip) {
-         if (s.endsWith(charsToStrip) && (skipIfExactMatch ? s !== charsToStrip : true))
-            return s.substring(0, s.length - charsToStrip.length);
-         else
-            return s
-      }
-      else
-         return s;
-   }
 
-   protected convertCamelCaseToHaveSpaces(s: string): string {
-      let result = '';
-      for (let i = 0; i < s.length; ++i) {
-         if ( s[i] === s[i].toUpperCase() && // current character is upper case
-              i > 0 && // not first character
-              s[i - 1] !== ' ' && // previous character is not a space - needed for strings like "Database Version" that already have spaces
-              (s[i - 1] !== s[i - 1].toUpperCase()) // previous character is not upper case handles not putting space between I and D in ID as an example of consecutive upper case
-            ) {
-            result += ' ';
-         }
-         result += s[i];
-      }
-      return result;
-   }
-
-   protected stripWhitespace(s: string): string {
-      return s.replace(/\s/g, '');
-   }
-
-   protected generatePluralName(singularName: string) {
-      if (singularName.endsWith('y') && singularName.length > 1) {
-          // Check if the letter before 'y' is a vowel
-          const secondLastChar = singularName[singularName.length - 2].toLowerCase();
-          if ('aeiou'.includes(secondLastChar)) {
-              // If it's a vowel, just add 's', example "key/keys"
-              return singularName + 's';
-          } else {
-              // If it's a consonant, replace 'y' with 'ies' - example "party/parties"
-              return singularName.substring(0, singularName.length - 1) + 'ies';
-          }
-      } else if (singularName.endsWith('y')) {
-          // If the string is just 'y', treat it like a vowel and just add 's'
-          return singularName + 's';
-      }
-      else if (singularName.endsWith('s')) {
-          // Singular name already ends with 's', so just return it
-          return singularName;
-      }
-      else if (singularName.endsWith('ch') || singularName.endsWith('sh') || singularName.endsWith('x') || singularName.endsWith('z')) {
-            // If the singular name ends with 'ch', 'sh', 'x', or 'z', add 'es' - example "box/boxes", "index/indexes", "church/churches", "dish/dishes", "buzz/buzzes"
-            return singularName + 'es';
-      }
-      else {
-          // For other cases, just add 's'
-          return singularName + 's';
-      }
-   }
 
    /**
     * Executes the given SQL query using the given DataSource object.

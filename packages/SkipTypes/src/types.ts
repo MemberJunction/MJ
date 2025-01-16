@@ -273,6 +273,11 @@ export class SkipLearningCycleQueryChange {
     changeType: 'add' | 'update' | 'delete';
 }
 
+export class SkipLearningCycleRequestChange {
+    request: SkipAPIAgentRequest;
+    changeType: 'add' | 'update' | 'delete';
+}
+
 export class SkipLearningCycleNoteChange {
     note: SkipAPIAgentNote;
     changeType: 'add' | 'update' | 'delete';
@@ -391,6 +396,71 @@ export class SkipAPIAgentNoteType {
     description: string;
 }
 
+
+export class SkipAPIAgentRequest {
+    /**
+     * The unique identifier for the request
+     */
+    id: string;
+
+    /**
+     * The unique identifier for the agent that made the request
+     */
+    agentId: string;
+    /**
+     * The name of the agent that made the request
+     */
+    agent: string;
+    /**
+     * The date and time the request was made
+     */
+    requestedAt: Date;
+    /**
+     * Optional, the unique identifier for the user that the request was made for by the Agent
+     */
+    requestForUserId?: string;
+    /**
+     * Only populated if the request was made for a user, the name of the user that the request was made for
+     */
+    requestForUser?: string;
+    /**
+     * Status of the request: 'Requested' | 'Approved' | 'Rejected' | 'Canceled'
+     */
+    status: 'Requested' | 'Approved' | 'Rejected' | 'Canceled';
+    /**
+     * Text body of the request the AI Agent is making
+     */
+    request: string;
+    /**
+     * Text body of the response that is being sent back to the AI Agent
+     */
+    response: string;
+    /**
+     * The unique identifier for the user that responded to the request
+     */
+    responseByUserId: string;
+    /**
+     * The name of the user that responded to the request
+     */
+    responseByUser: string;
+    /**
+     * The date and time the user responded to the request
+     */
+    respondedAt: Date;
+    /**
+     * Internal comments that are not intended to be shared with the AI Agent
+     */
+    comments: string;
+    /**
+     * The date and time the request record was created in the database
+     */
+    createdAt: Date;
+    /**
+     * The date and time the request record was last updated in the database
+     */
+    updatedAt: Date;
+}
+
 /**
  * Defines the shape of an individual Agent note that is stored in MJ that can be passed to Skip for additional context.
  */
@@ -402,11 +472,11 @@ export class SkipAPIAgentNote {
     /**
      * Unique type id (UUID) for the note type, maps to a SkipAPIAgentNoteType that was passed in the SkipAPIRequest
      */
-    typeId: string;
+    agentNoteTypeId: string;
     /**
      * Text name for the note type
      */
-    type: string;
+    agentNoteType: string;
     /**
      * Date/Time the note was initially created
      */
@@ -419,6 +489,18 @@ export class SkipAPIAgentNote {
      * The text of the note
      */
     note: string; 
+    /**
+     * This type field contains the scope of the note, either Global or User
+     */
+    type: 'User' | 'Global';
+    /**
+     * The unique identifier for the user that the note is associated with, only populated if type === 'User'
+     */
+    userId: string | null;
+    /**
+     * The name of the user that the note is associated with, only populated if type === 'User'
+     */
+    user: string | null;
 }
 
 export class SkipAPIRunScriptRequest extends SkipAPIRequest {
@@ -650,6 +732,11 @@ export class SkipAPILearningCycleRequest {
     noteTypes: SkipAPIAgentNoteType[];
 
     /**
+     * An array of the requests that Skip has previously made. Full history provided including requests of all status conditions.
+     */
+    requests: SkipAPIAgentRequest[];
+
+    /**
      * Optional, the date/time of the last learning cycle performed on this dataset
      */
     lastLearningCycleDate: Date;
@@ -690,4 +777,9 @@ export class SkipAPILearningCycleResponse {
      * This provides an array of changes requested by Skip to the MJ database for queries, adding, updating and/or deleting.
      */
     queryChanges: SkipLearningCycleQueryChange[];
+
+    /**
+     * This array should be populated by the agent with any changes to requests - deleting existing requests that have not been responded to yet and for whatever reason are not relevant anymore, updating existing requests that haven't yet been responded to, and adding new requests to help the agent learn.
+     */
+    requestChanges: SkipLearningCycleRequestChange[];
 }

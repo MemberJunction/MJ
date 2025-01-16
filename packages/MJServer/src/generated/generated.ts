@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, flyway_schema_historyEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, flyway_schema_historyEntity, AIAgentRequestEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -656,7 +656,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgent Models
+// ENTITY CLASS for AI Agent Models
 //****************************************************************************
 @ObjectType({ description: 'Table to store the relationship between AI agents and AI models.' })
 export class AIAgentModel_ {
@@ -697,7 +697,7 @@ export class AIAgentModel_ {
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Models
+// INPUT TYPE for AI Agent Models
 //****************************************************************************
 @InputType()
 export class CreateAIAgentModelInput {
@@ -716,7 +716,7 @@ export class CreateAIAgentModelInput {
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Models
+// INPUT TYPE for AI Agent Models
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentModelInput {
@@ -740,7 +740,7 @@ export class UpdateAIAgentModelInput {
 }
     
 //****************************************************************************
-// RESOLVER for AIAgent Models
+// RESOLVER for AI Agent Models
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentModelViewResult {
@@ -780,14 +780,14 @@ export class AIAgentModelResolver extends ResolverBase {
 
     @Query(() => RunAIAgentModelViewResult)
     async RunAIAgentModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgent Models';
+        input.EntityName = 'AI Agent Models';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentModel_, { nullable: true })
     async AIAgentModel(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentModel_ | null> {
-        this.CheckUserReadPermissions('AIAgent Models', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgent Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
@@ -797,7 +797,7 @@ export class AIAgentModelResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgent Models', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agent Models', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentModel_)
@@ -806,19 +806,19 @@ export class AIAgentModelResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgent Models', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agent Models', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentModel_)
     async DeleteAIAgentModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgent Models', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agent Models', key, options, dataSource, userPayload, pubSub);
     }
     
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgent Note Types
+// ENTITY CLASS for AI Agent Note Types
 //****************************************************************************
 @ObjectType()
 export class AIAgentNoteType_ {
@@ -847,7 +847,7 @@ export class AIAgentNoteType_ {
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Note Types
+// INPUT TYPE for AI Agent Note Types
 //****************************************************************************
 @InputType()
 export class CreateAIAgentNoteTypeInput {
@@ -860,7 +860,7 @@ export class CreateAIAgentNoteTypeInput {
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Note Types
+// INPUT TYPE for AI Agent Note Types
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentNoteTypeInput {
@@ -878,7 +878,7 @@ export class UpdateAIAgentNoteTypeInput {
 }
     
 //****************************************************************************
-// RESOLVER for AIAgent Note Types
+// RESOLVER for AI Agent Note Types
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentNoteTypeViewResult {
@@ -918,22 +918,22 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 
     @Query(() => RunAIAgentNoteTypeViewResult)
     async RunAIAgentNoteTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgent Note Types';
+        input.EntityName = 'AI Agent Note Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentNoteType_, { nullable: true })
     async AIAgentNoteType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNoteType_ | null> {
-        this.CheckUserReadPermissions('AIAgent Note Types', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNoteTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Note Types', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgent Note Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agent Note Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNoteTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Note Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Note Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIAgentNote_])
     async AIAgentNotes_AgentNoteTypeIDArray(@Root() aiagentnotetype_: AIAgentNoteType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Notes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentNoteTypeID]='${aiagentnotetype_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Notes', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentNoteTypeID]='${aiagentnotetype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
         return result;
     }
         
@@ -943,7 +943,7 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgent Note Types', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agent Note Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentNoteType_)
@@ -952,19 +952,19 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgent Note Types', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agent Note Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentNoteType_)
     async DeleteAIAgentNoteType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgent Note Types', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agent Note Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgents
+// ENTITY CLASS for AI Agents
 //****************************************************************************
 @ObjectType({ description: 'Table to store information about AI agents.' })
 export class AIAgent_ {
@@ -991,6 +991,9 @@ export class AIAgent_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => [AIAgentRequest_])
+    AIAgentRequests_AgentIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
+    
     @Field(() => [AIAgentLearningCycle_])
     AIAgentLearningCycles_AgentIDArray: AIAgentLearningCycle_[]; // Link to AIAgentLearningCycles
     
@@ -1006,7 +1009,7 @@ export class AIAgent_ {
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgents
+// INPUT TYPE for AI Agents
 //****************************************************************************
 @InputType()
 export class CreateAIAgentInput {
@@ -1022,7 +1025,7 @@ export class CreateAIAgentInput {
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgents
+// INPUT TYPE for AI Agents
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentInput {
@@ -1043,7 +1046,7 @@ export class UpdateAIAgentInput {
 }
     
 //****************************************************************************
-// RESOLVER for AIAgents
+// RESOLVER for AI Agents
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentViewResult {
@@ -1083,46 +1086,54 @@ export class AIAgentResolver extends ResolverBase {
 
     @Query(() => RunAIAgentViewResult)
     async RunAIAgentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgents';
+        input.EntityName = 'AI Agents';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgent_, { nullable: true })
     async AIAgent(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgent_ | null> {
-        this.CheckUserReadPermissions('AIAgents', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgents', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
+    @FieldResolver(() => [AIAgentRequest_])
+    async AIAgentRequests_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [AIAgentLearningCycle_])
     async AIAgentLearningCycles_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Learning Cycles', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Learning Cycles', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Learning Cycles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentModel_])
     async AIAgentModels_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Models', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Models', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentAction_])
     async AIAgentActions_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Actions', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentNote_])
     async AIAgentNotes_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Notes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Notes', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
         return result;
     }
         
@@ -1132,7 +1143,7 @@ export class AIAgentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgents', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgent_)
@@ -1141,19 +1152,19 @@ export class AIAgentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgents', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agents', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgent_)
     async DeleteAIAgent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgents', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agents', key, options, dataSource, userPayload, pubSub);
     }
     
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgent Notes
+// ENTITY CLASS for AI Agent Notes
 //****************************************************************************
 @ObjectType()
 export class AIAgentNote_ {
@@ -1180,6 +1191,14 @@ export class AIAgentNote_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: 'Indicates the type of note, either User-specific or Global.'}) 
+    @MaxLength(40)
+    Type: string;
+        
+    @Field({nullable: true, description: 'Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User'}) 
+    @MaxLength(16)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -1188,10 +1207,14 @@ export class AIAgentNote_ {
     @MaxLength(510)
     AgentNoteType?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Notes
+// INPUT TYPE for AI Agent Notes
 //****************************************************************************
 @InputType()
 export class CreateAIAgentNoteInput {
@@ -1203,11 +1226,17 @@ export class CreateAIAgentNoteInput {
 
     @Field({ nullable: true })
     Note?: string;
+
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Notes
+// INPUT TYPE for AI Agent Notes
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentNoteInput {
@@ -1223,12 +1252,18 @@ export class UpdateAIAgentNoteInput {
     @Field({ nullable: true })
     Note?: string;
 
+    @Field()
+    Type: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
     
 //****************************************************************************
-// RESOLVER for AIAgent Notes
+// RESOLVER for AI Agent Notes
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentNoteViewResult {
@@ -1268,14 +1303,14 @@ export class AIAgentNoteResolver extends ResolverBase {
 
     @Query(() => RunAIAgentNoteViewResult)
     async RunAIAgentNoteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgent Notes';
+        input.EntityName = 'AI Agent Notes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentNote_, { nullable: true })
     async AIAgentNote(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNote_ | null> {
-        this.CheckUserReadPermissions('AIAgent Notes', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Notes', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgent Notes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
@@ -1285,7 +1320,7 @@ export class AIAgentNoteResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgent Notes', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agent Notes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentNote_)
@@ -1294,19 +1329,19 @@ export class AIAgentNoteResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgent Notes', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agent Notes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentNote_)
     async DeleteAIAgentNote(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgent Notes', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agent Notes', key, options, dataSource, userPayload, pubSub);
     }
     
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgent Actions
+// ENTITY CLASS for AI Agent Actions
 //****************************************************************************
 @ObjectType({ description: 'Table to store the relationship between AI agents and actions.' })
 export class AIAgentAction_ {
@@ -1345,7 +1380,7 @@ export class AIAgentAction_ {
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Actions
+// INPUT TYPE for AI Agent Actions
 //****************************************************************************
 @InputType()
 export class CreateAIAgentActionInput {
@@ -1361,7 +1396,7 @@ export class CreateAIAgentActionInput {
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Actions
+// INPUT TYPE for AI Agent Actions
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentActionInput {
@@ -1382,7 +1417,7 @@ export class UpdateAIAgentActionInput {
 }
     
 //****************************************************************************
-// RESOLVER for AIAgent Actions
+// RESOLVER for AI Agent Actions
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentActionViewResult {
@@ -1422,14 +1457,14 @@ export class AIAgentActionResolver extends ResolverBase {
 
     @Query(() => RunAIAgentActionViewResult)
     async RunAIAgentActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgent Actions';
+        input.EntityName = 'AI Agent Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentAction_, { nullable: true })
     async AIAgentAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentAction_ | null> {
-        this.CheckUserReadPermissions('AIAgent Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgent Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
@@ -1439,7 +1474,7 @@ export class AIAgentActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgent Actions', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agent Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentAction_)
@@ -1448,13 +1483,13 @@ export class AIAgentActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgent Actions', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agent Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentAction_)
     async DeleteAIAgentAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgent Actions', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agent Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5679,8 +5714,17 @@ export class User_ {
     @Field(() => [ResourceLink_])
     ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
+    @Field(() => [AIAgentRequest_])
+    AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
+    
+    @Field(() => [AIAgentNote_])
+    AIAgentNotes_UserIDArray: AIAgentNote_[]; // Link to AIAgentNotes
+    
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
+    
+    @Field(() => [AIAgentRequest_])
+    AIAgentRequests_RequestForUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
 }
 
@@ -6093,11 +6137,35 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AIAgentRequest_])
+    async AIAgentRequests_ResponseByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ResponseByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentNote_])
+    async AIAgentNotes_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ResourcePermission_])
     async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRequest_])
+    async AIAgentRequests_RequestForUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [RequestForUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
         return result;
     }
         
@@ -11352,9 +11420,9 @@ export class AIModelResolver extends ResolverBase {
         
     @FieldResolver(() => [AIAgentModel_])
     async AIAgentModels_ModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Models', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Models', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Models', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL));
         return result;
     }
         
@@ -21895,9 +21963,9 @@ export class ActionResolver extends ResolverBase {
         
     @FieldResolver(() => [AIAgentAction_])
     async AIAgentActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AIAgent Actions', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('AIAgent Actions', await dataSource.query(sSQL));
+        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -27708,6 +27776,221 @@ export class flyway_schema_historyResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for AI Agent Requests
+//****************************************************************************
+@ObjectType()
+export class AIAgentRequest_ {
+    @Field({description: 'Primary key for the AIAgentRequest table, uniquely identifies each record.'}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: 'Foreign key referencing the ID column in the AIAgent table.'}) 
+    @MaxLength(16)
+    AgentID: string;
+        
+    @Field({description: 'Timestamp when the request was made by the agent.'}) 
+    @MaxLength(8)
+    RequestedAt: Date;
+        
+    @Field({nullable: true, description: 'Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.'}) 
+    @MaxLength(16)
+    RequestForUserID?: string;
+        
+    @Field({description: 'Current status of the request (Requested, Approved, Rejected, Canceled).'}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({description: 'Details of what the AI Agent is requesting.'}) 
+    Request: string;
+        
+    @Field({nullable: true, description: 'Response provided by the human to the agent request.'}) 
+    Response?: string;
+        
+    @Field({nullable: true, description: 'Populated when a user responds indicating which user responded to the request.'}) 
+    @MaxLength(16)
+    ResponseByUserID?: string;
+        
+    @Field({nullable: true, description: 'Timestamp when the response was provided by the human.'}) 
+    @MaxLength(8)
+    RespondedAt?: Date;
+        
+    @Field({nullable: true, description: 'Additional comments about the request. Not shared with the agent, purely record keeping.'}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    RequestForUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ResponseByUser?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Agent Requests
+//****************************************************************************
+@InputType()
+export class CreateAIAgentRequestInput {
+    @Field()
+    AgentID: string;
+
+    @Field()
+    RequestedAt: Date;
+
+    @Field({ nullable: true })
+    RequestForUserID?: string;
+
+    @Field()
+    Status: string;
+
+    @Field()
+    Request: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+
+    @Field({ nullable: true })
+    ResponseByUserID?: string;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Agent Requests
+//****************************************************************************
+@InputType()
+export class UpdateAIAgentRequestInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    AgentID: string;
+
+    @Field()
+    RequestedAt: Date;
+
+    @Field({ nullable: true })
+    RequestForUserID?: string;
+
+    @Field()
+    Status: string;
+
+    @Field()
+    Request: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+
+    @Field({ nullable: true })
+    ResponseByUserID?: string;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Agent Requests
+//****************************************************************************
+@ObjectType()
+export class RunAIAgentRequestViewResult {
+    @Field(() => [AIAgentRequest_])
+    Results: AIAgentRequest_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIAgentRequest_)
+export class AIAgentRequestResolver extends ResolverBase {
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Agent Requests';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIAgentRequest_, { nullable: true })
+    async AIAgentRequest(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRequest_ | null> {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => AIAgentRequest_)
+    async CreateAIAgentRequest(
+        @Arg('input', () => CreateAIAgentRequestInput) input: CreateAIAgentRequestInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAgentRequest_)
+    async UpdateAIAgentRequest(
+        @Arg('input', () => UpdateAIAgentRequestInput) input: UpdateAIAgentRequestInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIAgentRequest_)
+    async DeleteAIAgentRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Agent Requests', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for Query Entities
 //****************************************************************************
 @ObjectType({ description: 'Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries that can be executed and serve as examples for AI.' })
@@ -29734,7 +30017,7 @@ export class ContentItemTagResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for AIAgent Learning Cycles
+// ENTITY CLASS for AI Agent Learning Cycles
 //****************************************************************************
 @ObjectType({ description: 'Tracks the learning cycles for AI Agents where the Agent does offline reasoning, reflection, learning, and updates metadata.' })
 export class AIAgentLearningCycle_ {
@@ -29776,7 +30059,7 @@ export class AIAgentLearningCycle_ {
 }
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Learning Cycles
+// INPUT TYPE for AI Agent Learning Cycles
 //****************************************************************************
 @InputType()
 export class CreateAIAgentLearningCycleInput {
@@ -29798,7 +30081,7 @@ export class CreateAIAgentLearningCycleInput {
     
 
 //****************************************************************************
-// INPUT TYPE for AIAgent Learning Cycles
+// INPUT TYPE for AI Agent Learning Cycles
 //****************************************************************************
 @InputType()
 export class UpdateAIAgentLearningCycleInput {
@@ -29825,7 +30108,7 @@ export class UpdateAIAgentLearningCycleInput {
 }
     
 //****************************************************************************
-// RESOLVER for AIAgent Learning Cycles
+// RESOLVER for AI Agent Learning Cycles
 //****************************************************************************
 @ObjectType()
 export class RunAIAgentLearningCycleViewResult {
@@ -29865,14 +30148,14 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
 
     @Query(() => RunAIAgentLearningCycleViewResult)
     async RunAIAgentLearningCycleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AIAgent Learning Cycles';
+        input.EntityName = 'AI Agent Learning Cycles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentLearningCycle_, { nullable: true })
     async AIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentLearningCycle_ | null> {
-        this.CheckUserReadPermissions('AIAgent Learning Cycles', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AIAgent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AIAgent Learning Cycles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Learning Cycles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
@@ -29882,7 +30165,7 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.CreateRecord('AIAgent Learning Cycles', input, dataSource, userPayload, pubSub)
+        return this.CreateRecord('AI Agent Learning Cycles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentLearningCycle_)
@@ -29891,13 +30174,13 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        return this.UpdateRecord('AIAgent Learning Cycles', input, dataSource, userPayload, pubSub);
+        return this.UpdateRecord('AI Agent Learning Cycles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentLearningCycle_)
     async DeleteAIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AIAgent Learning Cycles', key, options, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('AI Agent Learning Cycles', key, options, dataSource, userPayload, pubSub);
     }
     
 }

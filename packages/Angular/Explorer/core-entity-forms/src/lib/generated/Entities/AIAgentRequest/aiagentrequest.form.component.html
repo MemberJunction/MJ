@@ -9,25 +9,13 @@
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section 
-                            Entity="AI Agent Note Types" 
+                            Entity="AI Agent Requests" 
                             Section="details" 
                             [record]="record" 
                             [EditMode]="this.EditMode">
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AIAgent Notes" [Visible]="record.IsSaved"> 
-                        AIAgent Notes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Notes','AgentNoteTypeID')"  
-                            [NewRecordValues]="NewRecordValues('AI Agent Notes')"
-                            [AllowLoad]="IsCurrentTab('AIAgent Notes')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
