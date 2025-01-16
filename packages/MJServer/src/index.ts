@@ -22,7 +22,7 @@ import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
-import { publicDirective } from './directives/index.js';
+import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import orm from './orm.js';
 
 import { LoadActionEntityServer } from '@memberjunction/actions';
@@ -125,19 +125,19 @@ export const serve = async (resolverPaths: Array<string>) => {
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
 
-  const schema = publicDirective.transformer(
-    mergeSchemas({
-      schemas: [
-        buildSchemaSync({
-          resolvers,
-          validate: false,
-          scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-          emitSchemaFile: websiteRunFromPackage !== 1,
-        }),
-      ],
-      typeDefs: [publicDirective.typeDefs],
-    })
-  );
+  let schema = mergeSchemas({
+    schemas: [
+      buildSchemaSync({
+        resolvers,
+        validate: false,
+        scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
+        emitSchemaFile: websiteRunFromPackage !== 1,
+      }),
+    ],
+    typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
+  });
+  schema = requireSystemUserDirective.transformer(schema);
+  schema = publicDirective.transformer(schema);
 
   const app = express();
   const httpServer = createServer(app);

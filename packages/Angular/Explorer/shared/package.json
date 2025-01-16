@@ -30,6 +30,7 @@
     "@memberjunction/core": "2.18.1",
     "@memberjunction/core-entities": "2.18.1",
     "@memberjunction/ng-notifications": "2.18.1",
+    "@memberjunction/ng-base-types": "2.18.1",
     "@memberjunction/graphql-dataprovider": "2.18.1",
     "@progress/kendo-angular-notification": "16.2.0",
     "tslib": "^2.3.0"

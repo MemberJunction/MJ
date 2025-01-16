@@ -7,6 +7,8 @@ export type UserPayload = {
   email: string;
   userRecord: any;
   sessionId: string;
+  isSystemUser?: boolean;
+  apiKey?: string;
 };
 
 export type AppContext = {
@@ -36,5 +38,5 @@ export type RunViewGenericParams = {
   auditLogDescription?: string;
   resultType?: string;
   userPayload?: UserPayload;
-  pubSub: PubSubEngine
-}
+  pubSub: PubSubEngine;
+};

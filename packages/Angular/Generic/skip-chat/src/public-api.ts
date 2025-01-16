@@ -8,4 +8,5 @@ export * from './lib/dynamic-report/skip-dynamic-report-wrapper';
 export * from './lib/dynamic-report/linear-report';
 export * from './lib/dynamic-report/dynamic-chart';
 export * from './lib/dynamic-report/dynamic-grid';
+export * from './lib/report-cache';
 export * from './lib/drill-down-info';

@@ -4,10 +4,12 @@ import { ReportEntity } from "@memberjunction/core-entities";
 import { DataContext } from "@memberjunction/data-context";
 import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
+import { BaseAngularComponent } from "@memberjunction/ng-base-types";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
+import { SkipConversationReportCache } from "../report-cache";
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
-export abstract class SkipDynamicReportBase implements AfterViewInit {
+export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ShowCreateReportButton: boolean = false;
     @Input() ConversationID: string | null = null;
@@ -15,10 +17,7 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
     @Input() ConversationDetailID: string | null = null;
     @Input() DataContext!: DataContext;
     @Input() ReportEntity?: ReportEntity;
-    /**
-     * Optional, specify a provider if you want to use a different provider than the default one
-     */
-    @Input() Provider: IMetadataProvider | null = null;
+
     @Output() UserNotification = new EventEmitter<{message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number}>();
 
     /**
@@ -27,18 +26,15 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
      */
     @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
-    constructor(protected cdRef: ChangeDetectorRef) {}
+    constructor(protected cdRef: ChangeDetectorRef) {
+      super();
+    }
     
     ngAfterViewInit() {
       this.RefreshMatchingReport();
     }
-    /**
-     * This property returns the provider to use, which will either be the one specified in the input or the default one, if nothing was specified.
-     */
-    public get ProviderToUse(): IMetadataProvider {
-        return this.Provider || Metadata.Provider;
-    }
 
+    
     public matchingReportID: string | null = null;
     public matchingReportName: string | null = null;
     private static _reportCache: { reportId: string; conversationId: string; reportName: string; conversationDetailId: string }[] = [];
@@ -55,14 +51,13 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
           if (cachedItem) {
             this.matchingReportID = cachedItem.reportId;
             this.matchingReportName = cachedItem.reportName;
-          } else {
-            const rv = new RunView(<IRunViewProvider><any>this.ProviderToUse);
-            const matchingReports = await rv.RunView({
-              EntityName: 'Reports',
-              ExtraFilter: `ConversationID = '${this.ConversationID}' AND ConversationDetailID = '${this.ConversationDetailID}'`,
-            });
-            if (matchingReports && matchingReports.Success && matchingReports.RowCount > 0) {
-              const item = matchingReports.Results[0];
+          } 
+          else {
+            // no cached items locally so use the generalized ReportCache which can load for us if needed
+            const reports = await SkipConversationReportCache.Instance.GetConversationReports(this.ConversationID, this.RunViewToUse); 
+            const matchingReports = reports ? reports.filter((x) => x.ConversationDetailID === this.ConversationDetailID) : [];
+            if (matchingReports && matchingReports.length > 0) {
+              const item = matchingReports[0];
               this.matchingReportID = item.ID;
               this.matchingReportName = item.Name;
               // cache for future to avoid db call
@@ -133,7 +128,15 @@ export abstract class SkipDynamicReportBase implements AfterViewInit {
           if (result && result.Success) {
             this.matchingReportID = result.ReportID;
             this.matchingReportName = result.ReportName;
+            // let the user know we saved the report
             this.RaiseUserNotification(`Report "${result.ReportName}"Saved`, 'success', 2500);
+
+            // tell our shared report cache about the new report
+            const report = await this.ProviderToUse.GetEntityObject<ReportEntity>('Reports', this.ProviderToUse.CurrentUser);
+            report.Load(result.ReportID).then(() => {
+              // do async so the user doesn't wait for this to finish
+              SkipConversationReportCache.Instance.AddConversationReport(this.ConversationID!, report);
+            });
           } else {
             this.RaiseUserNotification('Error saving report', 'error', 2500);
             this._isCreatingReport = false;

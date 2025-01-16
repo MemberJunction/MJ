@@ -206,7 +206,7 @@ const mjServerConfig = {
     updateCacheWhenNotFoundDelay: 5000,
     contextUserForNewUserCreation: 'not.set@nowhere.com',
     CreateUserApplicationRecords: true,
-    UserApplications: ['Admin']
+    UserApplications: ['Admin'],
   },
   databaseSettings: {
     connectionTimeout: 45000,
@@ -247,11 +247,11 @@ const config = {
    */
 
   // Used for MJCLI, CodeGenLib, and MJServer
-  dbHost: process.env.DB_HOST ?? 'localhost',  
-  dbPort: process.env.DB_PORT,  
-  dbDatabase: process.env.DB_DATABASE,  
-  codeGenLogin: process.env.CODEGEN_DB_USERNAME, 
-  codeGenPassword: process.env.CODEGEN_DB_PASSWORD,  
+  dbHost: process.env.DB_HOST ?? 'localhost',
+  dbPort: process.env.DB_PORT,
+  dbDatabase: process.env.DB_DATABASE,
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME,
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
@@ -279,6 +279,7 @@ const config = {
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
   auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
+  apiKey: process.env.MJ_API_KEY,
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
