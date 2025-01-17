@@ -1,8 +1,37 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Thu, 16 Jan 2025 22:06:37 GMT and should not be manually modified.
+This log was last generated on Fri, 17 Jan 2025 01:58:34 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.18.3
+
+Fri, 17 Jan 2025 01:58:34 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (craig@memberjunction.com)
+- Bump @memberjunction/actions to v2.18.3
+- Bump @memberjunction/ai to v2.18.3
+- Bump @memberjunction/ai-mistral to v2.18.3
+- Bump @memberjunction/ai-openai to v2.18.3
+- Bump @memberjunction/ai-vectors-pinecone to v2.18.3
+- Bump @memberjunction/aiengine to v2.18.3
+- Bump @memberjunction/core to v2.18.3
+- Bump @memberjunction/core-actions to v2.18.3
+- Bump @memberjunction/core-entities to v2.18.3
+- Bump @memberjunction/data-context to v2.18.3
+- Bump @memberjunction/data-context-server to v2.18.3
+- Bump @memberjunction/doc-utils to v2.18.3
+- Bump @memberjunction/entity-communications-server to v2.18.3
+- Bump @memberjunction/external-change-detection to v2.18.3
+- Bump @memberjunction/global to v2.18.3
+- Bump @memberjunction/graphql-dataprovider to v2.18.3
+- Bump @memberjunction/queue to v2.18.3
+- Bump @memberjunction/skip-types to v2.18.3
+- Bump @memberjunction/sqlserver-dataprovider to v2.18.3
+- Bump @memberjunction/storage to v2.18.3
+- Bump @memberjunction/templates to v2.18.3
 
 ## 2.18.2
 

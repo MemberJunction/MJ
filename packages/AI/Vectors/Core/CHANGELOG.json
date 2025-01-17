@@ -2,6 +2,51 @@
   "name": "@memberjunction/ai-vectors",
   "entries": [
     {
+      "date": "Fri, 17 Jan 2025 01:58:34 GMT",
+      "version": "2.18.3",
+      "tag": "@memberjunction/ai-vectors_v2.18.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/global to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/core-entities to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/aiengine to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectors",
+            "comment": "Bump @memberjunction/ai-vectordb to v2.18.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 16 Jan 2025 22:06:37 GMT",
       "version": "2.18.2",
       "tag": "@memberjunction/ai-vectors_v2.18.2",

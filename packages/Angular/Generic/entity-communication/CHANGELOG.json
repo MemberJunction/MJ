@@ -2,6 +2,63 @@
   "name": "@memberjunction/ng-entity-communications",
   "entries": [
     {
+      "date": "Fri, 17 Jan 2025 01:58:34 GMT",
+      "version": "2.18.3",
+      "tag": "@memberjunction/ng-entity-communications_v2.18.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/core-entities to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/global to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/core to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/communication-types to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/entity-communications-base to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/entity-communications-client to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.18.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-entity-communications",
+            "comment": "Bump @memberjunction/ng-shared to v2.18.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 16 Jan 2025 22:06:37 GMT",
       "version": "2.18.2",
       "tag": "@memberjunction/ng-entity-communications_v2.18.2",
