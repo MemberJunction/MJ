@@ -3,10 +3,9 @@ import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
 import { GetEntityNameFromSchemaAndViewString, LogError } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared'
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-import { SkipDynamicLinearReportComponent } from './linear-report';
 import { DrillDownInfo } from '../drill-down-info';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'skip-dynamic-grid',
@@ -137,7 +136,7 @@ export class SkipDynamicGridComponent implements AfterViewInit {
 
   public gridView!: GridDataResult;
 
-  constructor(private decimalPipe: DecimalPipe, private datePipe: DatePipe) { }
+  constructor(private decimalPipe: DecimalPipe, private datePipe: DatePipe, private notificationService: MJNotificationService) { }
 
   @ViewChild('excelExport', { read: ExcelExportComponent }) kendoExcelExport: ExcelExportComponent | null = null;
 
@@ -226,18 +225,18 @@ export class SkipDynamicGridComponent implements AfterViewInit {
 
       // next show an initial notification, but only if a lot of data
       if (this.exportData.length > 5000)
-        SharedService.Instance.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000)
+        this.notificationService.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000)
 
       // before we call the save, we need to let Angular do its thing that will result in the kendoExcelExport component binding properly to
       // the exportColumns and exportData arrays. So we wait for the next tick before we call save()
       setTimeout(() => {
         this.kendoExcelExport!.fileName = (this.SkipData?.reportTitle || 'Report_Grid_Export') + '.xlsx';
         this.kendoExcelExport!.save();
-        SharedService.Instance.CreateSimpleNotification("Excel Export Complete", 'success', 2000)
+        this.notificationService.CreateSimpleNotification("Excel Export Complete", 'success', 2000)
       }, 100);
     }
     catch (e) {
-      SharedService.Instance.CreateSimpleNotification("Error exporting data", 'error', 5000)
+      this.notificationService.CreateSimpleNotification("Error exporting data", 'error', 5000)
       LogError(e)
     }
   } 

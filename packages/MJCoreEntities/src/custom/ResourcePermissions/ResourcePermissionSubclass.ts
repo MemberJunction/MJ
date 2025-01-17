@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, LogError, Metadata } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { ResourcePermissionEntity, UserEntity, UserNotificationEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
@@ -16,8 +16,8 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
      * @param options 
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const md = new Metadata();
-        if (md.ProviderType === 'Database') {
+        const p = <IMetadataProvider><any>this.ProviderToUse;
+        if (p.ProviderType === 'Database') {
             // operating on the server side so we can do the notification logic
             // first check to see if we're a new record and the status is "Requested"
             const newRequest =  !this.IsSaved && this.Status === 'Requested';
@@ -25,15 +25,16 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
             const statusChangedfromRequested = this.IsSaved && statusField.Dirty && statusField.OldValue.trim().toLowerCase() === 'requested';
 
             // just in case, config the engine but it probably already has been configured in which case nothing will happen 
-            await ResourcePermissionEngine.Instance.Config(false, this.ContextCurrentUser);
-            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find((rt: any) => rt.ID === this.ResourceTypeID);
-            const rtEntityRecord = ResourcePermissionEngine.Instance.ResourceTypes.find((rt: any) => rt.Name.trim().toLowerCase() === "records")
+            const engine = <ResourcePermissionEngine> ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(p, ResourcePermissionEngine);
+            await engine.Config(false, this.ContextCurrentUser);
+            const rt = engine.ResourceTypes.find((rt: any) => rt.ID === this.ResourceTypeID);
+            const rtEntityRecord = engine.ResourceTypes.find((rt: any) => rt.Name.trim().toLowerCase() === "records")
 
             // now get the field names for the given resource type based on its entity metadata with this helper method in the engine
-            const resourceTypeFields = ResourcePermissionEngine.Instance.GetResourceTypeInfoFields(this.ResourceTypeID);
+            const resourceTypeFields = engine.GetResourceTypeInfoFields(this.ResourceTypeID);
             if (resourceTypeFields && resourceTypeFields.NameFieldName && resourceTypeFields.OwnerIDFieldName) {
                 // grab the data from the resource record itself so we have it for the notification so it is easy for the user to read
-                const resourceRecord = await md.GetEntityObject(rt.Entity, this.ContextCurrentUser);
+                const resourceRecord = await p.GetEntityObject(rt.Entity, this.ContextCurrentUser);
                 const ck = new CompositeKey([
                     {
                         FieldName: resourceTypeFields.PrimaryKeyFieldName,
@@ -51,10 +52,10 @@ export class ResourcePermissionEntityExtended extends ResourcePermissionEntity  
                 // after we call super.Save() to actually save the record
                 if (await super.Save(options)) {
                     // now proceed with workflow logic if we saved
-                    const notification = await md.GetEntityObject<UserNotificationEntity>('User Notifications', this.ContextCurrentUser);
+                    const notification = await p.GetEntityObject<UserNotificationEntity>('User Notifications', this.ContextCurrentUser);
                     if (newRequest) {
                         // notify the owner of the resource that a new request was made
-                        const user = await md.GetEntityObject<UserEntity>('Users', this.ContextCurrentUser);
+                        const user = await p.GetEntityObject<UserEntity>('Users', this.ContextCurrentUser);
                         await user.Load(this.UserID);
                         notification.Title = `New Request for Access to ${this.ResourceType}`;
                         notification.Message = `A new request for access to ${this.ResourceType} record "${recordName}" has been made by ${user.Name} (${user.Email})`;

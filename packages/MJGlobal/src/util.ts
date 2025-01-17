@@ -1,3 +1,6 @@
+import { MJGlobal } from ".";
+import { MJEventType } from "./interface";
+
 /**
  * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment, or something else in other contexts. The key here is that in some cases static variables are not truly shared
      * because it is possible that a given class might have copies of its code in multiple paths in a deployed application. This approach ensures that no matter how many code copies might exist, there is only one instance of the object in question by using the Global Object Store.
@@ -377,4 +380,20 @@ export function replaceAllSpaces(s: string): string {
     // Base case: No spaces left to replace
     return s;
 }
-  
+ 
+/**
+ * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
+ * the actual implementation on a specific device/browser/etc.
+ * @param delay 
+ * @param component 
+ */
+export function InvokeManualResize(delay: number = 50, component: any = null) {
+    setTimeout(() => {
+      MJGlobal.Instance.RaiseEvent({
+        event: MJEventType.ManualResizeRequest,
+        eventCode: '',
+        args: null,
+        component: component || this
+      })
+    }, delay ); // give the tabstrip time to render
+}

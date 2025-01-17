@@ -41,9 +41,13 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
 
   public resourcePermissions: ResourcePermissionEntity[] = [];
   async ngAfterViewInit() {
+    if (!this.ResourceTypeID || !this.ResourceRecordID) {
+      throw new Error('ResourceTypeID and ResourceRecordID must be set');
+    }
+
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
     const engine = this.GetEngine();
-    await engine.Config();
+    await engine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
     // now we can get the permissions for the specified resource
     const allResourcePermissions = engine.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
     this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
