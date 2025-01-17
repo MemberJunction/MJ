@@ -42,9 +42,10 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   public resourcePermissions: ResourcePermissionEntity[] = [];
   async ngAfterViewInit() {
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
-    await ResourcePermissionEngine.Instance.Config();
+    const engine = this.GetEngine();
+    await engine.Config();
     // now we can get the permissions for the specified resource
-    const allResourcePermissions = ResourcePermissionEngine.Instance.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
+    const allResourcePermissions = engine.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
     this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
     
     const p = this.ProviderToUse;
@@ -146,7 +147,8 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     if (await tg.Submit()) {
       this._pendingDeletes = [];
       this._pendingAdds = [];
-      await ResourcePermissionEngine.Instance.RefreshAllItems(); // refresh the permissions cache
+      const engine = this.GetEngine();
+      await engine.RefreshAllItems(); // refresh the permissions cache
       return true;
     }
     else {
@@ -157,5 +159,9 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       LogError('Error saving permissions in the transaction group');
       return false;
     }
+  }
+
+  protected GetEngine(): ResourcePermissionEngine {
+    return <ResourcePermissionEngine>ResourcePermissionEngine.GetProviderInstance(this.ProviderToUse, ResourcePermissionEngine);
   }
 }

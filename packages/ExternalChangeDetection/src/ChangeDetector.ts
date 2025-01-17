@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityField, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { RecordChangeEntity, RecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 
@@ -42,19 +42,21 @@ export class ChangeDetectionResult {
 /**
  * Engine to handle detection of external changes and "replay" them in MemberJunction to invoke all standard functionality
  * such as BaseEntity sub-classes as well as any custom logic that are tied to the system via Actions/AI Actions/etc...
+ * 
+ * This is a server only package
  */
 export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetectorEngine> {
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
-        const provider: SQLServerDataProvider = <SQLServerDataProvider>Metadata.Provider;
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
+        const p = <SQLServerDataProvider> ( provider || Metadata.Provider );
 
         const c = [
             {
                 EntityName: "Entities",
                 PropertyName: "_EligibleEntities",
-                Filter: `ID IN (SELECT ID FROM ${provider.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)` // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
+                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)` // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
             }
         ];
-        await this.Load(c, forceRefresh, contextUser);
+        await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     public static get Instance(): ExternalChangeDetectorEngine {
@@ -288,7 +290,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
     protected async GetLatestRecordChangesDataForEntityRecord(change: ChangeDetectionItem) {
-        const Provider = <SQLServerDataProvider>Metadata.Provider;
+        const Provider = <SQLServerDataProvider>this.ProviderToUse;
 
         const sql = `SELECT 
                         TOP 1 FullRecordJSON 
@@ -328,7 +330,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             // Step 1 - group by entity and get a complete list of entities from the changes
             const entities: {entity: EntityInfo, keys: CompositeKey[]}[] = [];
-            const provider = <SQLServerDataProvider>Metadata.Provider;
+            const provider = <SQLServerDataProvider>this.ProviderToUse;
             for (const c of changes) {
                 let e= entities.find(e => e.entity.ID === c.Entity.ID)
                 if (!e) {
@@ -736,7 +738,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             else
                 rc.FullRecordJSON = ''; // null not allowed
 
-            const provider = <SQLServerDataProvider>Metadata.Provider;
+            const provider = <SQLServerDataProvider>this.ProviderToUse;
             if (change.Type === 'Update')
                 rc.ChangesDescription = provider.CreateUserDescriptionOfChanges(changesObject);
             else if (change.Type === 'Create')

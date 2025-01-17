@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, RunViewParams, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, RunViewParams, UserInfo } from "@memberjunction/core";
 import { EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
@@ -29,12 +29,12 @@ export class EntityCommunicationResult {
 }
 
 export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCommunicationsEngineBase> {
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         // just rely on the metadata from the base engine, can do extra loading here down the road as needed
         // it is faster to use the base engine's metadata than to load it again here even though the metadata
         // is cached we still have to check to see if the dataset is up to date and that takes time
         await CommunicationEngineBase.Instance.Config(forceRefresh, contextUser);
-        await this.Load([], forceRefresh, contextUser); // even though we have NO configs, we need to call Load so that the lifecycle of this object is properly managed where the Loaded flag is set and AdditionalLoading is called
+        await this.Load([], provider, forceRefresh, contextUser); // even though we have NO configs, we need to call Load so that the lifecycle of this object is properly managed where the Loaded flag is set and AdditionalLoading is called
     }
  
 

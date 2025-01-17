@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
 import { ResourcePermissionEntity, ResourceTypeEntity } from "../../generated/entity_subclasses";
 
 /**
@@ -16,7 +16,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     private _ResourceTypes: {
         ResourceTypes: ResourceTypeEntity[];
     };
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
@@ -30,7 +30,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
                 DatasetResultHandling: "single_property"
             }
         ]
-        await this.Load(c, forceRefresh, contextUser);
+        await this.Load(c, provider, forceRefresh, contextUser);
     }
   
     public get ResourceTypes(): ResourceTypeEntity[] {

@@ -583,7 +583,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     /**
-     * Creates a key for the given datasetName and itemFilters combination
+     * Creates a unique key for the given datasetName and itemFilters combination coupled with the instance connection string to ensure uniqueness when 2+ connections exist
      * @param datasetName 
      * @param itemFilters 
      * @returns 

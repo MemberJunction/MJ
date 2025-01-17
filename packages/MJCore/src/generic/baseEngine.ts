@@ -89,6 +89,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     private _provider: IMetadataProvider;
 
     /**
+     * While the BaseEngine class is a singleton, normally, it is possible to have multiple instances of the class in an application if the class is used in multiple contexts that have different providers.
+     */
+    public constructor() {
+        super();
+    }
+
+    /**
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
@@ -110,7 +117,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         // do a full deep copy of the array to ensure no tampering
         return JSON.parse(JSON.stringify(this._metadataConfigs));
     }
-, 
+ 
     /**
      * Configures the engine by loading metadata from the database.  
      */
@@ -123,9 +130,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      * @returns 
      */
-    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        this._provider = provider; // stash this for later use
-
+    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
         if (Metadata.Provider.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
@@ -154,6 +159,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                 this._loadingSubject.next(false);
             }
         }
+    }
+
+    /**********************************************************************
+     * This section is for handling caching of multiple instances when needed
+     * We use the primary singleton as the instance to store a cache of instances
+     * that are tied to specific providers. This is useful when we have multiple
+     * providers in a given app going to different connections.
+     *********************************************************************/
+    private static _providerInstances: Map<IMetadataProvider, any> = new Map();
+    private static get ProviderInstances(): Map<IMetadataProvider, any> {
+        return BaseEngine._providerInstances;
+    }
+
+    /**
+     * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
+     */
+    public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
+        if (BaseEngine.ProviderInstances.has(provider)) {
+            return BaseEngine.ProviderInstances.get(provider);
+        }
+        else {
+            // we don't have an existing instance for this provider, so we need to create one
+            const newInstance = new subclassConstructor();// (new (this.constructor())) as BaseEngine<T>;
+            BaseEngine.ProviderInstances.set(provider, newInstance);
+            return newInstance;
+        }
+    }
+
+    /**
+     * Internal method to set the provider when an engine is loaded
+     * @param provider 
+     */
+    protected SetProvider(provider: IMetadataProvider) {
+        this._provider = provider;
+        BaseEngine.ProviderInstances.set(this.ProviderToUse /*use default provider if one wasn't provided to use*/, <T><any>this);
     }
 
     private _eventListener: Observable<MJEvent>;
@@ -412,7 +452,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
                         //adding them to the singleObject
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
-                            const entity: BaseEntity = await md.GetEntityObject(item.EntityName, contextUser);
+                            const entity: BaseEntity = await p.GetEntityObject(item.EntityName, contextUser);
                             entity.SetMany(entityData);
                             entities.push(entity);
                         }

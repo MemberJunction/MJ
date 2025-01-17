@@ -1,4 +1,4 @@
-import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError } from '@memberjunction/core';
+import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError, IMetadataProvider } from '@memberjunction/core';
 import { ListDetailEntityType, ListEntity, ListEntityType, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
@@ -18,7 +18,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     return this._RecommendationProviders;
   }
 
-  public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+  public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
     const params = [
       {
         PropertyName: '_RecommendationProviders',
@@ -26,7 +26,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       },
     ];
 
-    return await this.Load(params, forceRefresh, contextUser);
+    return await this.Load(params, provider, forceRefresh, contextUser);
   }
 
   public async Recommend<T>(request: RecommendationRequest<T>): Promise<RecommendationResult> {
