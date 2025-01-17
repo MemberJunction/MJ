@@ -1,10 +1,10 @@
 import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { GetEntityNameFromSchemaAndViewString, Metadata, RunView } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
 import { DrillDownInfo } from '../drill-down-info';
+import { InvokeManualResize } from '@memberjunction/global';
 
 @Component({
   selector: 'skip-dynamic-chart',
@@ -103,8 +103,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
     }
  
     setupResizeObserver() {
-        // Invoke manual resize from SharedService.Instance to ensure the chart is sized correctly
-        SharedService.Instance.InvokeManualResize();
+        // Invoke manual resize to ensure the chart is sized correctly
+        InvokeManualResize();
         // now wait 1ms - which really just results in the event loop being processed and the manual resize being invoked
         setTimeout(() => {
             this.resizeObserver = new ResizeObserver(entries => {

@@ -15,11 +15,10 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, Metadata, UserInfo, CompositeKey, LogStatus, ProviderBase, IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 import { Subscription } from 'rxjs';
 import { take, filter } from 'rxjs/operators';
@@ -31,16 +30,16 @@ import {
   SkipResponsePhase,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'skip-chat',
   templateUrl: './skip-chat.component.html',
   styleUrls: ['./skip-chat.component.css'],
 })
-@RegisterClass(BaseNavigationComponent, 'Ask Skip')
 export class SkipChatComponent extends BaseAngularComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
   @Input() public Messages: ConversationDetailEntity[] = [];
@@ -130,12 +129,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   constructor(
     private el: ElementRef,
-    public sharedService: SharedService,
     private renderer: Renderer2,
     private route: ActivatedRoute,
     private router: Router,
     private location: Location,
-    private cdRef: ChangeDetectorRef
+    private cdRef: ChangeDetectorRef,
+    private notificationService: MJNotificationService,
   ) {
     super();
   }
@@ -176,7 +175,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   public splitterCollapseStateChanged(e: boolean) {
-    this.sharedService.InvokeManualResize();
+    InvokeManualResize();
   }
 
   public GetConversationItemClass(item: ConversationEntity) {
@@ -312,7 +311,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
           if (!this._initialLoadComplete) {
             // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
-            this.sharedService.InvokeManualResize();
+            InvokeManualResize();
   
             // first do stuff if we're on "global" skip chat mode...
             if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
@@ -409,7 +408,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
       await this.CreateNewConversation();
-      this.sharedService.InvokeManualResize(1);
+      InvokeManualResize(1);
     } 
     else if (conversationIdToLoad) {
       // we have > 0 convos and we were asked to load a specific one
@@ -469,7 +468,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
     } 
     else 
-      this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000);
+      this.notificationService.CreateSimpleNotification('Error saving conversation name', 'error', 5000);
   }
 
   public confirmDeleteConversationDialogOpen: boolean = false;
@@ -508,7 +507,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.SelectConversation(this.Conversations[newIdx]);
       } else this.Messages = [];
     } else {
-      this.sharedService.CreateSimpleNotification('Error deleting conversation', 'error', 5000);
+      this.notificationService.CreateSimpleNotification('Error deleting conversation', 'error', 5000);
     }
   }
 
@@ -549,7 +548,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         }
         let dciSaveResult: boolean = await dci.Save();
         if (!dciSaveResult) {
-          this.sharedService.CreateSimpleNotification('Error creating data context item', 'error', 5000);
+          this.notificationService.CreateSimpleNotification('Error creating data context item', 'error', 5000);
           LogError('Error creating data context item', undefined, dci.LatestResult);
         }
       }
@@ -558,7 +557,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       this.DataContextID = dc.ID;
       const convoSaveResult: boolean = await convo.Save();
       if (!convoSaveResult) {
-        this.sharedService.CreateSimpleNotification('Error creating conversation', 'error', 5000);
+        this.notificationService.CreateSimpleNotification('Error creating conversation', 'error', 5000);
         LogError('Error creating conversation', undefined, convo.LatestResult);
         return;
       }
@@ -577,7 +576,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       await this.SelectConversation(convo);
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
     } else {
-      this.sharedService.CreateSimpleNotification('Error creating data context', 'error', 5000);
+      this.notificationService.CreateSimpleNotification('Error creating data context', 'error', 5000);
     }
   }
 
@@ -642,7 +641,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
 
       this._processingStatus[conversation.ID] = oldStatus; // set back to old status as it might have been processing
-      this.sharedService.InvokeManualResize(500);
+      InvokeManualResize(500);
 
       // ensure the list box has the conversation in view
       this.scrollToConversation(conversation.ID);
@@ -805,7 +804,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       this.cdRef.reattach();
       this.cdRef.detectChanges();
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
-      //this.sharedService.InvokeManualResize();
+      //InvokeManualResize();
 
       this.SetSkipStatusMessage('', 500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
       // now set focus on the input box
@@ -1001,12 +1000,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           } else if (type === 'full_entity') dci.EntityID = e.ID;
 
           if (!(await dci.Save())) {
-            SharedService.Instance.CreateSimpleNotification('Error creating data context item', 'error', 5000);
+            this.notificationService.CreateSimpleNotification('Error creating data context item', 'error', 5000);
             console.log('AskSkipComponent: Error creating data context item');
           }
         }
       } else {
-        SharedService.Instance.CreateSimpleNotification('Error creating data context', 'error', 5000);
+        this.notificationService.CreateSimpleNotification('Error creating data context', 'error', 5000);
         console.log('AskSkipComponent: Error creating data context');
       }
     }

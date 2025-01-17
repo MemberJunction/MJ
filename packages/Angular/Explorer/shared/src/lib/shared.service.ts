@@ -1,7 +1,7 @@
 import { ElementRef, Injectable } from '@angular/core';
 import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
-import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData, ConvertMarkdownStringToHtmlList } from '@memberjunction/global';
+import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
@@ -143,14 +143,7 @@ export class SharedService {
 
   
   public InvokeManualResize(delay: number = 50) {
-    setTimeout(() => {
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.ManualResizeRequest,
-        eventCode: '',
-        args: null,
-        component: this
-      })
-    }, delay ); // give the tabstrip time to render
+    return InvokeManualResize(delay, this);
   }
 
   public PushStatusUpdates(): Observable<string> {
