@@ -1,4 +1,4 @@
-import { BaseEngine, UserInfo } from "@memberjunction/core";
+import { BaseEngine, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended } from "./ActionEntity-Extended";
 
@@ -151,7 +151,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
     * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
     */
-   public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+   public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
       const config = [
          {
                EntityName: 'Actions',
@@ -174,7 +174,7 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
                PropertyName: '_ActionLibraries'
          }];
 
-      await this.Load(config, forceRefresh, contextUser);
+      await this.Load(config, provider, forceRefresh, contextUser);
    }
 
     public get Actions(): ActionEntityExtended[] {

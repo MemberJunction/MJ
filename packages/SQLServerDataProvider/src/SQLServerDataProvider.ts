@@ -83,6 +83,23 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return this._dataSource;
     }
 
+    /**
+     * For the SQLServerDataProvider the unique instance connection string which is used to identify, uniquely, a given connection is the following format:
+     * type://host:port/instanceName?/database
+     * instanceName is only inserted if it is provided in the options
+     */
+    public get InstanceConnectionString(): string {
+        const dbOptions: any = this._dataSource.options;
+        const options = {
+            type: dbOptions.type || '',
+            host: dbOptions.host || '',
+            port: dbOptions.port || '',
+            instanceName: dbOptions.instanceName ? '/' + dbOptions.instanceName : '',
+            database: dbOptions.database || ''
+        };
+        return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
+    }
+
     protected get AllowRefresh(): boolean {
         return this._bAllowRefresh;
     }

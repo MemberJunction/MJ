@@ -2,7 +2,7 @@ import { BaseLLM, BaseModel, BaseParams, BaseResult, ChatParams, GetAIAPIKey } f
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEngine, BaseEntity, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
@@ -39,7 +39,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
 
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
             {
                 PropertyName: '_models',
@@ -94,7 +94,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
                 EntityName: 'AI Agents'
             }
         ];
-        return await this.Load(params, forceRefresh, contextUser);
+        return await this.Load(params, provider, forceRefresh, contextUser);
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {

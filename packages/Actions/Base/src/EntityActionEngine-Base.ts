@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { ActionExecutionLogEntity, ActionResultCodeEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity, EntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, RunActionParams } from "./ActionEngine-Base";
 import { EntityActionEntityExtended } from "./EntityActionEntity-Extended";
@@ -95,7 +95,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
      * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
-    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Entity Action Invocation Types',
@@ -118,7 +118,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
                 PropertyName: '_EntityActionParams'
             }
         ]; 
-        await this.Load(configs, forceRefresh, contextUser);
+        await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
 
