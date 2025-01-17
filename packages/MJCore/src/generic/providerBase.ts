@@ -583,14 +583,20 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
     /**
-     * Creates a key for the given datasetName and itemFilters combination
+     * Creates a unique key for the given datasetName and itemFilters combination coupled with the instance connection string to ensure uniqueness when 2+ connections exist
      * @param datasetName 
      * @param itemFilters 
      * @returns 
      */
     public GetDatasetCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
-        return this.LocalStoragePrefix + ProviderBase.localStorageRootKey + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
+        return this.LocalStoragePrefix + ProviderBase.localStorageRootKey + this.InstanceConnectionString + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
     }
+
+    /**
+     * This property is implemented by each sub-class of ProviderBase and is intended to return a unique string that identifies the instance of the provider for the connection it is making. For example
+     * for network connections, the URL including a TCP port would be a good connection string, whereas on database connections the database host url/instance/port would be a good connection string.
+     */
+    public abstract get InstanceConnectionString(): string;
 
     protected ConvertItemFiltersToUniqueKey(itemFilters: DatasetItemFilterType[]): string {
         if (itemFilters) {

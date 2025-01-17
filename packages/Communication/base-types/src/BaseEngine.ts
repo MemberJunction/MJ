@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
 import { CommunicationBaseMessageTypeEntity, CommunicationLogEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
 import { CommunicationProviderEntityExtended, ProcessedMessage } from "./BaseProvider";
  
@@ -35,7 +35,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
      * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
      * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
-     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const config: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'dataset',
@@ -45,7 +45,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
             }
         ]
 
-        await this.Load(config, forceRefresh, contextUser); 
+        await this.Load(config, provider, forceRefresh, contextUser); 
      }
 
      protected override async AdditionalLoading(contextUser?: UserInfo) {

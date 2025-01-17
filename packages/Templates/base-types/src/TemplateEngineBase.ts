@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { TemplateEntityExtended } from "./TemplateEntityExtended";
 import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateParamEntity } from "@memberjunction/core-entities";
 
@@ -22,7 +22,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         TemplateParams: TemplateParamEntity[]
     };
 
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'dataset',
@@ -31,7 +31,7 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
                 PropertyName: "_Metadata"
             }
         ]
-        await this.Load(c, forceRefresh, contextUser);
+        await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {

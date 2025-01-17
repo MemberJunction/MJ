@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { JSDOM } from 'jsdom';
 
-import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, LogError, UserInfo, BaseEntity, IMetadataProvider } from "@memberjunction/core";
 import { LibraryEntity, LibraryItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from '@memberjunction/global';
 
@@ -62,7 +62,7 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
      * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
-    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Libraries',
@@ -73,7 +73,7 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
                 PropertyName: '_LibraryItems'
             },
         ]; 
-        await this.Load(configs, forceRefresh, contextUser);
+        await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
     private _baseURL: string = 'https://memberjunction.github.io/MJ/';

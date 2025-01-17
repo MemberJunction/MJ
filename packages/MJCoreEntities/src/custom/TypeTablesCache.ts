@@ -1,11 +1,11 @@
-import { BaseEngine, BaseEnginePropertyConfig, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { EntityRelationshipDisplayComponentEntity } from "../generated/entity_subclasses";
 
 /**
  * Simple cache for commonly used type tables across the system that are outside of what we have in the Metadata object
  */
 export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
@@ -13,7 +13,7 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
                 PropertyName: '_EntityRelationshipDisplayComponents'
             }
         ];
-        await this.Load(c, forceRefresh, contextUser);
+        await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     public static get Instance(): TypeTablesCache {

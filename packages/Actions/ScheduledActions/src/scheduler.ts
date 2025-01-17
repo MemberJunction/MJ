@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { ScheduledActionEntityExtended, ScheduledActionParamEntity } from "@memberjunction/core-entities";
 import { ActionEntityExtended, ActionParam, ActionResult } from "@memberjunction/actions-base";
 import * as cronParser from 'cron-parser';
@@ -13,7 +13,7 @@ LoadVectorizeEntityAction();
  * ScheduledActionEngine handles metadata caching and execution of scheduled actions based on their defined CronExpressions
  */
 export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo) {
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'Scheduled Actions',
@@ -24,7 +24,7 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
                 PropertyName: '_scheduledActionParams'
             },
         ];
-        return await this.Load(configs, forceRefresh, contextUser);
+        return await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
     protected override AdditionalLoading(contextUser?: UserInfo): Promise<void> {
