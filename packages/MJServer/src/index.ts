@@ -44,7 +44,7 @@ export * from './entitySubclasses/userViewEntity.server.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './entitySubclasses/DuplicateRunEntity.server.js';
 export * from './types.js';
-export { TokenExpiredError } from './auth/index.js';
+export { TokenExpiredError, getSystemUser } from './auth/index.js';
 
 export * from './generic/PushStatusResolver.js';
 export * from './generic/ResolverBase.js';
