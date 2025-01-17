@@ -41,6 +41,10 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
 
   public resourcePermissions: ResourcePermissionEntity[] = [];
   async ngAfterViewInit() {
+    if (!this.ResourceTypeID || !this.ResourceRecordID) {
+      throw new Error('ResourceTypeID and ResourceRecordID must be set');
+    }
+
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
     const engine = this.GetEngine();
     await engine.Config();
