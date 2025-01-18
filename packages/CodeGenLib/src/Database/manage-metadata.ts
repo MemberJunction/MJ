@@ -969,60 +969,68 @@ export class ManageMetadataBase {
       }
 
       return `
-      INSERT INTO [${mj_core_schema()}].EntityField
-      (
-         ID,
-         EntityID,
-         Sequence,
-         Name,
-         DisplayName,
-         Description,
-         Type,
-         Length,
-         Precision,
-         Scale,
-         AllowsNull,
-         DefaultValue,
-         AutoIncrement,
-         AllowUpdateAPI,
-         IsVirtual,
-         RelatedEntityID,
-         RelatedEntityFieldName,
-         IsNameField,
-         IncludeInUserSearchAPI,
-         IncludeRelatedEntityNameFieldInBaseView,
-         DefaultInView,
-         IsPrimaryKey,
-         IsUnique,
-         RelatedEntityDisplayType
+      IF NOT EXISTS (
+         SELECT 1 FROM [${mj_core_schema()}].EntityField 
+         WHERE ID = '${newEntityFieldUUID}')  OR 
+               (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
       )
-      VALUES
-      (
-         '${newEntityFieldUUID}',
-         '${n.EntityID}',
-         ${n.Sequence},
-         '${n.FieldName}',
-         '${fieldDisplayName}',
-         ${escapedDescription},
-         '${n.Type}',
-         ${n.Length},
-         ${n.Precision},
-         ${n.Scale},
-         ${n.AllowsNull ? 1 : 0},
-         '${this.parseDefaultValue(n.DefaultValue)}',
-         ${n.AutoIncrement ? 1 : 0},
-         ${n.AllowUpdateAPI ? 1 : 0},
-         ${n.IsVirtual ? 1 : 0},
-         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
-         ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
-         ${n.IsNameField !== null ? n.IsNameField : 0},
-         ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
-         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
-         ${bDefaultInView ? 1 : 0},
-         ${n.IsPrimaryKey},
-         ${n.IsUnique},
-         '${n.RelationshipDefaultDisplayType}'
-      )`
+      BEGIN
+         INSERT INTO [${mj_core_schema()}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '${newEntityFieldUUID}',
+            '${n.EntityID}',
+            ${n.Sequence},
+            '${n.FieldName}',
+            '${fieldDisplayName}',
+            ${escapedDescription},
+            '${n.Type}',
+            ${n.Length},
+            ${n.Precision},
+            ${n.Scale},
+            ${n.AllowsNull ? 1 : 0},
+            '${this.parseDefaultValue(n.DefaultValue)}',
+            ${n.AutoIncrement ? 1 : 0},
+            ${n.AllowUpdateAPI ? 1 : 0},
+            ${n.IsVirtual ? 1 : 0},
+            ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
+            ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
+            ${n.IsNameField !== null ? n.IsNameField : 0},
+            ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
+            ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
+            ${bDefaultInView ? 1 : 0},
+            ${n.IsPrimaryKey},
+            ${n.IsUnique},
+            '${n.RelationshipDefaultDisplayType}'
+         )
+      END`
    }
 
    /**
