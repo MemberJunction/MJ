@@ -1006,7 +1006,7 @@ export class ManageMetadataBase {
          VALUES
          (
             '${newEntityFieldUUID}',
-            '${n.EntityID}',
+            '${n.EntityID}' -- Entity: ${n.EntityName},
             ${n.Sequence},
             '${n.FieldName}',
             '${fieldDisplayName}',
