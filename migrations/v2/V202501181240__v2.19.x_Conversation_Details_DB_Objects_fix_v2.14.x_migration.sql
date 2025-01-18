@@ -188,7 +188,7 @@ GO
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateConversationDetail
 ON [${flyway:defaultSchema}].[ConversationDetail]
 AFTER UPDATE
-AS
+AS 
 BEGIN
     SET NOCOUNT ON;
     UPDATE

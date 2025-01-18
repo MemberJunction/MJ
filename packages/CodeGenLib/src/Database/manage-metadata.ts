@@ -336,8 +336,16 @@ export class ManageMetadataBase {
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
                   const newEntityRelationshipUUID = this.createNewUUID();
-                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                                          VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+                  batchSQL += `
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${mj_core_schema()}].EntityRelationship
+      WHERE ID = '${newEntityRelationshipUUID}'
+   )
+   BEGIN
+      INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+   END
                               `;
                   // now update the map for the relationship count
                   relationshipCountMap.set(f.EntityID, sequence);
