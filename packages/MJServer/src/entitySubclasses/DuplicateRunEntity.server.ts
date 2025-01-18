@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { DuplicateRunEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
-@RegisterClass(BaseEntity, 'Duplicate Runs', 3)
+@RegisterClass(BaseEntity, 'Duplicate Runs')
 export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
@@ -24,6 +24,4 @@ export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
     }
 }
 
-export function LoadDuplicateRunEntityServerSubClass() {
-
-}
+export function LoadDuplicateRunEntityServerSubClass() {}
