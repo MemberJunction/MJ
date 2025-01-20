@@ -164,6 +164,10 @@ const sqlOutputConfigSchema = z.object({
    * ${flyway:defaultSchema}
    */
   convertCoreSchemaToFlywayMigrationFile: z.boolean().default(true),
+  /**
+   * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
+   */
+  omitRecurringScriptsFromLog: z.boolean().default(false)
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;

@@ -8,7 +8,7 @@ import { ___codeGenAPIPort, ___codeGenAPISubmissionDelay, ___codeGenAPIURL } fro
  * Server-side only class that extends the entity permissions object to watch for changes to entity permissions, build a queue of entities that have been changed, and then from time to time, submit
  * them to an API server that will execute the underlying permission changes at the database level.
  */
-@RegisterClass(BaseEntity, 'Entity Permissions', 3)
+@RegisterClass(BaseEntity, 'Entity Permissions')
 export class EntityPermissionsEntity_Server extends EntityPermissionEntity {
   protected static _entityIDQueue: string[] = [];
   protected static _lastModifiedTime: Date | null = null;
