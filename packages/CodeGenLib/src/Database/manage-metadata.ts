@@ -336,8 +336,16 @@ export class ManageMetadataBase {
                   const relCount = relationshipCountMap.get(f.EntityID) || 0;
                   const sequence = relCount + 1;
                   const newEntityRelationshipUUID = this.createNewUUID();
-                  batchSQL += `INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                                          VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+                  batchSQL += `
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${mj_core_schema()}].EntityRelationship
+      WHERE ID = '${newEntityRelationshipUUID}'
+   )
+   BEGIN
+      INSERT INTO ${mj_core_schema()}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', 1, 1, '${e.Name}', ${sequence});
+   END
                               `;
                   // now update the map for the relationship count
                   relationshipCountMap.set(f.EntityID, sequence);
@@ -836,7 +844,7 @@ export class ManageMetadataBase {
    protected async setDefaultColumnWidthWhereNeeded(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         await this.LogSQLAndExecute(ds, sSQL, `SQL text to set default column width where needed`);
+         await this.LogSQLAndExecute(ds, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
       catch (e) {
@@ -969,60 +977,68 @@ export class ManageMetadataBase {
       }
 
       return `
-      INSERT INTO [${mj_core_schema()}].EntityField
-      (
-         ID,
-         EntityID,
-         Sequence,
-         Name,
-         DisplayName,
-         Description,
-         Type,
-         Length,
-         Precision,
-         Scale,
-         AllowsNull,
-         DefaultValue,
-         AutoIncrement,
-         AllowUpdateAPI,
-         IsVirtual,
-         RelatedEntityID,
-         RelatedEntityFieldName,
-         IsNameField,
-         IncludeInUserSearchAPI,
-         IncludeRelatedEntityNameFieldInBaseView,
-         DefaultInView,
-         IsPrimaryKey,
-         IsUnique,
-         RelatedEntityDisplayType
+      IF NOT EXISTS (
+         SELECT 1 FROM [${mj_core_schema()}].EntityField 
+         WHERE ID = '${newEntityFieldUUID}')  OR 
+               (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
       )
-      VALUES
-      (
-         '${newEntityFieldUUID}',
-         '${n.EntityID}',
-         ${n.Sequence},
-         '${n.FieldName}',
-         '${fieldDisplayName}',
-         ${escapedDescription},
-         '${n.Type}',
-         ${n.Length},
-         ${n.Precision},
-         ${n.Scale},
-         ${n.AllowsNull ? 1 : 0},
-         '${this.parseDefaultValue(n.DefaultValue)}',
-         ${n.AutoIncrement ? 1 : 0},
-         ${n.AllowUpdateAPI ? 1 : 0},
-         ${n.IsVirtual ? 1 : 0},
-         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
-         ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
-         ${n.IsNameField !== null ? n.IsNameField : 0},
-         ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
-         ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
-         ${bDefaultInView ? 1 : 0},
-         ${n.IsPrimaryKey},
-         ${n.IsUnique},
-         '${n.RelationshipDefaultDisplayType}'
-      )`
+      BEGIN
+         INSERT INTO [${mj_core_schema()}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '${newEntityFieldUUID}',
+            '${n.EntityID}' -- Entity: ${n.EntityName},
+            ${n.Sequence},
+            '${n.FieldName}',
+            '${fieldDisplayName}',
+            ${escapedDescription},
+            '${n.Type}',
+            ${n.Length},
+            ${n.Precision},
+            ${n.Scale},
+            ${n.AllowsNull ? 1 : 0},
+            '${this.parseDefaultValue(n.DefaultValue)}',
+            ${n.AutoIncrement ? 1 : 0},
+            ${n.AllowUpdateAPI ? 1 : 0},
+            ${n.IsVirtual ? 1 : 0},
+            ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
+            ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
+            ${n.IsNameField !== null ? n.IsNameField : 0},
+            ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
+            ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
+            ${bDefaultInView ? 1 : 0},
+            ${n.IsPrimaryKey},
+            ${n.IsUnique},
+            '${n.RelationshipDefaultDisplayType}'
+         )
+      END`
    }
 
    /**
@@ -1116,7 +1132,7 @@ export class ManageMetadataBase {
    protected async updateExistingEntitiesFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
          if (result && result.length > 0 ) {
@@ -1143,7 +1159,7 @@ export class ManageMetadataBase {
    protected async updateExistingEntityFieldsFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existingg entity fields from schema`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to update existing entity fields from schema`, true);
          // result contains the updated entity fields
          // there is a field in there called EntityName. Get a distinct list of entity names from this and add them
          // to the modified entity list if they're not already in there
@@ -1160,7 +1176,7 @@ export class ManageMetadataBase {
    protected async deleteUnneededEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`;
-         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`);
+         const result = await this.LogSQLAndExecute(ds, sSQL, `SQL text to delete unneeded entity fields`, true);
          // result contains the DELETED entity fields
          // there is a field in there called Entity. Get a distinct list of entity names from this and add them
          // to the modified entity list if they're not already in there
@@ -1617,9 +1633,10 @@ export class ManageMetadataBase {
     * @param ds - The DataSource object to use to execute the query.
     * @param query - The SQL query to execute.
     * @param description - A description of the query to append to the log file.
+    * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(ds: DataSource, query: string, description?: string): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(ds, query, description);
+   private async LogSQLAndExecute(ds: DataSource, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(ds, query, description, isRecurringScript);
    }
 }

@@ -55,6 +55,9 @@ export class ViewGridState {
     filter?: any;
 }
 
+/**
+ * This class represents a View in the system. A View is a saved set of filters, columns, and other settings that can be applied to a grid to show a specific set of data.
+ */
 export class ViewInfo extends BaseInfo {
     ID: string = null
     UserID: number = null

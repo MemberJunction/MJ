@@ -188,6 +188,7 @@ const codegenConfig = {
     folderPath: './migrations/v2/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
+    omitRecurringScriptsFromLog: true,
   },
 };
 

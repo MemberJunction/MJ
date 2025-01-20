@@ -1,6 +1,8 @@
 import { Location } from '@angular/common';
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseNavigationComponent } from '@memberjunction/ng-shared';
  
 
 /**
@@ -11,6 +13,7 @@ import { Router } from '@angular/router';
   templateUrl: './skip-chat-wrapper.component.html',
   styleUrls: ['./skip-chat-wrapper.component.css']
 })
+@RegisterClass(BaseNavigationComponent, 'Ask Skip')
 export class SkipChatWrapperComponent {  
   constructor (private router: Router, private location: Location) {  }
 

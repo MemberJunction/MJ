@@ -4,13 +4,21 @@ import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
 
+/**
+ * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
+ */
 export class SQLLogging {
     private static _SQLLoggingFilePath: string = '';
- 
-    protected static get SQLLoggingFilePath(): string {
+    private static _OmitRecurringScriptsFromLog: boolean = false;
+
+    public static get SQLLoggingFilePath(): string {
         return SQLLogging._SQLLoggingFilePath;   
     }
+    public static get OmitRecurringScriptsFromLog(): boolean {
+        return SQLLogging._OmitRecurringScriptsFromLog
+    }
     public static initSQLLogging() {
+        SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
             // not already set up, so proceed, otherwise we do nothing as we're already good to go
             const config = configInfo.SQLOutput;
@@ -68,20 +76,30 @@ export class SQLLogging {
         return fileName;
     }
   
-    public static async appendToSQLLogFile(contents: string, description?: string): Promise<void> {
+    /**
+     * Adds the provided SQL to the log file for the run
+     * @param contents - the executable SQL to log
+     * @param description - a description of what is being logged that will be emitted and wrapped in comments
+     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
+     * @returns 
+     */
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false): Promise<void> {
         try{
-           if(!contents || !this.SQLLoggingFilePath){
-              return;
-           }
+            if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
+                return; // is a recurring script and the flag to omit recurring scripts is set
+            }
+            if(!contents || !SQLLogging.SQLLoggingFilePath){
+                return;
+            }
+
+            if(description){
+                const comment = `/* ${description} */\n`;
+                contents = `${comment}${contents}`;
+            }
   
-           if(description){
-              const comment = `/* ${description} */\n`;
-              contents = `${comment}${contents}`;
-           }
-  
-           contents = `${contents}\n\n`;
-  
-           fs.appendFileSync(this.SQLLoggingFilePath, contents);
+            contents = `${contents}\n\n`;
+    
+            fs.appendFileSync(SQLLogging.SQLLoggingFilePath, contents);
         }
         catch(ex){
            logError("Unable to log metadata SQL text to file", ex);
@@ -95,10 +113,11 @@ export class SQLLogging {
     * @param ds - The DataSource object to use to execute the query. 
     * @param query - The SQL query to execute.
     * @param description - A description of the query to append to the log file.
+    * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: DataSource, query: string, description?: string): Promise<any> {
-        SQLLogging.appendToSQLLogFile(query, description);
+    public static async LogSQLAndExecute(ds: DataSource, query: string, description?: string, isRecurringScript: boolean = false): Promise<any> {
+        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript);
         return await ds.query(query);
     }
 
