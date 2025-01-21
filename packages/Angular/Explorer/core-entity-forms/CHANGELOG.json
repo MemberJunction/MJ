@@ -2,6 +2,75 @@
   "name": "@memberjunction/ng-core-entity-forms",
   "entries": [
     {
+      "date": "Tue, 21 Jan 2025 14:07:27 GMT",
+      "version": "2.19.1",
+      "tag": "@memberjunction/ng-core-entity-forms_v2.19.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/core-entities to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-explorer-core to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-form-toolbar to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-timeline to v2.19.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-core-entity-forms",
+            "comment": "Bump @memberjunction/ng-join-grid to v2.19.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 21 Jan 2025 00:15:48 GMT",
       "version": "2.19.0",
       "tag": "@memberjunction/ng-core-entity-forms_v2.19.0",

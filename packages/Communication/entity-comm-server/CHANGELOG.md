@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/entity-communications-server
 
-This log was last generated on Tue, 21 Jan 2025 00:15:48 GMT and should not be manually modified.
+This log was last generated on Tue, 21 Jan 2025 14:07:27 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.1
+
+Tue, 21 Jan 2025 14:07:27 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.19.1
+- Bump @memberjunction/core to v2.19.1
+- Bump @memberjunction/core-entities to v2.19.1
+- Bump @memberjunction/communication-engine to v2.19.1
+- Bump @memberjunction/entity-communications-base to v2.19.1
 
 ## 2.19.0
 

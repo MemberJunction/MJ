@@ -1,8 +1,28 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
-This log was last generated on Tue, 21 Jan 2025 00:15:47 GMT and should not be manually modified.
+This log was last generated on Tue, 21 Jan 2025 14:07:27 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.1
+
+Tue, 21 Jan 2025 14:07:27 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.19.1
+- Bump @memberjunction/core to v2.19.1
+- Bump @memberjunction/core-entities to v2.19.1
+- Bump @memberjunction/entity-communications-client to v2.19.1
+- Bump @memberjunction/communication-types to v2.19.1
+- Bump @memberjunction/templates-base-types to v2.19.1
+- Bump @memberjunction/actions-base to v2.19.1
+- Bump @memberjunction/ng-shared to v2.19.1
+- Bump @memberjunction/ng-entity-form-dialog to v2.19.1
+- Bump @memberjunction/ng-compare-records to v2.19.1
+- Bump @memberjunction/ng-container-directives to v2.19.1
+- Bump @memberjunction/ng-entity-communications to v2.19.1
+- Bump @memberjunction/ng-base-types to v2.19.1
 
 ## 2.19.0
 

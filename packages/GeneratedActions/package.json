@@ -20,12 +20,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/actions": "2.19.0",
-    "@memberjunction/global": "2.19.0",
-    "@memberjunction/core": "2.19.0",
-    "@memberjunction/core-entities": "2.19.0",
-    "@memberjunction/ai": "2.19.0",
-    "@memberjunction/aiengine": "2.19.0",
+    "@memberjunction/actions": "2.19.1",
+    "@memberjunction/global": "2.19.1",
+    "@memberjunction/core": "2.19.1",
+    "@memberjunction/core-entities": "2.19.1",
+    "@memberjunction/ai": "2.19.1",
+    "@memberjunction/aiengine": "2.19.1",
     "zod": "^3.23.8"
   }
 }
