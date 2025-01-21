@@ -1,45 +1,56 @@
 <div class = "chat-container" mjFillContainer #topLevelDiv [bottomMargin]="10" [rightMargin]="10">
-    <kendo-splitter orientation="horizontal">
-        <kendo-splitter-pane *ngIf="ShowConversationList" [collapsible]="true" [scrollable]="false" [resizable]="false" size="272px" (collapsedChange)="splitterCollapseStateChanged($event)">
-            <div class="conversation-history" *ngIf="ShowConversationList">
-                <div class="new-chat-area">
-                    <img [src]="SkipLogoURL" class="avatar" />
-                    <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()">+</button>
-                </div>
-                <kendo-listview
-                    class="conversation-list"
-                    [data]="Conversations"
-                    [style.height.px]="280"
-                    [itemClass]="{ 'item-border': true }" 
-                    mjFillContainer 
-                    [fillWidth]="false"
-                    [bottomMargin]="20"
-                    #conversationList
-                    >
-                    <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
-                        <div class="conversation-item" 
-                                [ngClass]="GetConversationItemClass(dataItem)"
-                                [title]="dataItem.Name" 
-                                (click)="SelectConversation(dataItem)"> 
-                            <span *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" class="fa-regular fa-clock"></span>
-                            <div class="text-container">
-                                <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
-                                <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
+    <div class="layout">
+        @if (IsConversationListVisible) {
+            <div class="left-panel">
+                <div class="conversation-history">
+                    <div class="new-chat-area">
+                        <span class="fa-solid fa-table-columns toggle-icon" (click)="DisplayConversationList(false)"></span>
+                        @if (ShowSkipLogoInConversationList) {
+                            <img [src]="SkipLogoURL" class="avatar" />
+                        }
+                        @if (AllowNewConversations) {
+                            <span class="fa-solid fa-pen-to-square new-convo-icon" (click)="CreateNewConversation()"></span>                            
+                        }
+                    </div>
+                    <kendo-listview
+                        class="conversation-list"
+                        [data]="Conversations"
+                        [style.height.px]="280"
+                        [itemClass]="{ 'item-border': true }" 
+                        mjFillContainer 
+                        [fillWidth]="false"
+                        [bottomMargin]="50"
+                        #conversationList
+                        >
+                        <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
+                            <div class="conversation-item" 
+                                    [ngClass]="GetConversationItemClass(dataItem)"
+                                    [title]="dataItem.Name" 
+                                    (click)="SelectConversation(dataItem)"> 
+                                <span *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" class="fa-regular fa-clock"></span>
+                                <div class="text-container">
+                                    <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
+                                    <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
+                                </div>
+                                <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
+                                    <span *ngIf="!ConversationEditMode" class="fa-solid fa-pen-to-square" (click)="editConvo(dataItem)"></span>
+                                    <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="showDeleteConvoDialog(dataItem)"></span>
+                                    <span *ngIf="ConversationEditMode" class="fa-solid fa-check" (click)="saveConvoName(dataItem)"></span>
+                                    <span *ngIf="ConversationEditMode" class="fa-solid fa-xmark" (click)="cancelConvoEdit(dataItem)"></span>
+                                </div>
                             </div>
-                            <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
-                                <span *ngIf="!ConversationEditMode" class="fa-solid fa-pen-to-square" (click)="editConvo(dataItem)"></span>
-                                <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="showDeleteConvoDialog(dataItem)"></span>
-                                <span *ngIf="ConversationEditMode" class="fa-solid fa-check" (click)="saveConvoName(dataItem)"></span>
-                                <span *ngIf="ConversationEditMode" class="fa-solid fa-xmark" (click)="cancelConvoEdit(dataItem)"></span>
-                            </div>
-                        </div>
-                    </ng-template>
-                </kendo-listview>
-                <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
-                        <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
+                        </ng-template>
+                    </kendo-listview>
+                    <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
+                            <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
+                </div>    
             </div>
-        </kendo-splitter-pane>
-        <kendo-splitter-pane>
+        }
+        @if (!IsConversationListVisible) {
+            <span class="fa-solid fa-table-columns toggle-icon" (click)="DisplayConversationList(true)"></span>
+        }
+
+        <div class="right-panel">
             <div class="conversation-wrapper" mjFillContainer>
                 <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
                     <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
@@ -86,7 +97,7 @@
                             (keyup.enter)="onEnter($event)" 
                             (input)="onInputChange($event)"
                             type="text" 
-                            placeholder="Ask Skip a question"></textarea>
+                            [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
                     </div>
                     @if (ShowDataContextButton) {
                         <button kendoButton >
@@ -100,9 +111,9 @@
                             <span class="fas fa-solid fa-arrow-up"></span>
                     </button>
                 </div>
-            </div>
-        </kendo-splitter-pane>
-    </kendo-splitter>
+            </div>    
+        </div>
+    </div> 
 </div>     
 
 <div *ngIf="isDataContextDialogVisible">

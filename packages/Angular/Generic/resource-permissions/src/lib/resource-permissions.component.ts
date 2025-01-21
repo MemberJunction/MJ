@@ -4,18 +4,46 @@ import { ResourcePermissionEngine, ResourcePermissionEntity, UserEntity } from '
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+/**
+ * Visual component used to display and manage permissions for a resource. You can wrap this in a dialog or display anywhere else within
+ * an Angular application or component.
+ */
 @Component({
   selector: 'mj-resource-permissions',
   templateUrl: './resource-permissions.component.html',
   styleUrls: ['./resource-permissions.component.css']
 })
 export class ResourcePermissionsComponent extends BaseAngularComponent implements AfterViewInit {
+  /**
+   * Required: the ID of the resource type record for the specified resource that the permissions are being set for.
+   */
   @Input() ResourceTypeID!: string;
+  /**
+   * Required: the record ID of the resource that the permissions are being set for.
+   */
   @Input() ResourceRecordID!: string;
+  /**
+   * If set to true, the component will show a Save button to the user and persist the changes to the 
+   * database when the user clicks the Save button. By default this is off to allow users of the component
+   * to wrap the component as desired, and handle the save themselves.
+   */
   @Input() ShowSaveButton: boolean = false;
+  /**
+   * By default, this component will not show any error messages to the user. 
+   * If you want to show error messages to the user, set this to true. The component will always throw exceptions when error occur internally.
+   */
   @Input() ShowUserErrorMessages: boolean = false;
+  /**
+   * Allows you to determine if the user is able to add new permissions for the resource.
+   */
   @Input() AllowAddPermissions: boolean = true;
+  /**
+   * Allows you to determine if the user is able to edit existing permissions for the resource.
+   */
   @Input() AllowEditPermissions: boolean = true;
+  /**
+   * Allows you to determine if the user is able to delete existing permissions for the resource.
+   */
   @Input() AllowDeletePermissions: boolean = true;
 
   // Define permission levels
