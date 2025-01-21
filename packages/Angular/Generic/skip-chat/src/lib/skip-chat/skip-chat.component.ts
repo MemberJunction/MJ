@@ -46,6 +46,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public Conversations: ConversationEntity[] = [];
   @Input() public SelectedConversation: ConversationEntity | undefined;
   @Input() public ConversationEditMode: boolean = false;
+  /**
+   * If true, the component will show the conversation list. Default is true.
+   */
   @Input() public ShowConversationList: boolean = true;
   @Input() public AllowNewConversations: boolean = true;
   @Input() public Title: string = 'Ask Skip';
@@ -67,6 +70,22 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public UpdateAppRoute: boolean = true;
 
   /**
+   * When set to true, the small Skip logo is shown in the conversation list on the top left of the component
+   */
+  @Input() public ShowSkipLogoInConversationList: boolean = false;
+
+  /**
+   * This property is used to set the placeholder text for the textbox where the user types their message to Skip. 
+   */
+  @Input() public DefaultTextboxPlaceholder: string = 'Type your message to Skip here...';
+  /**
+   * This property is used to set the placeholder text for the textbox where the user types their message to Skip when Skip is processing a request and the text area is disabled.
+   */
+  @Input() public ProcessingTextBoxPlaceholder: string = 'Please wait...';
+
+
+
+  /**
    * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
    */
   @Output() NavigateToMatchingReport = new EventEmitter<string>();
@@ -84,10 +103,17 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
   @ViewChild('topLevelDiv') topLevelDiv!: ElementRef;
 
+  /**
+   * Internal state variable to track if the conversation list is visible or not. Defaults to true. Conversation List only is shown if this is true and ShowConversationList is true.
+   */
+  public IsConversationListVisible: boolean = true;
+
   public SelectedConversationUser: UserInfo | undefined;
   public DataContext!: DataContext;
 
   public _showScrollToBottomIcon = false;
+
+  public _AskSkipTextboxPlaceholder: string = 'Type your message here...';
 
   private _messageInProgress: boolean = false;
   private _conversationsInProgress: { [key: string]: any } = {};
@@ -178,6 +204,18 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     InvokeManualResize();
   }
 
+  public get ConversationListCurrentlyVisible(): boolean {
+    return this.IsConversationListVisible && this.ShowConversationList;
+  }
+
+  public DisplayConversationList(show: boolean = true) {
+    if (show !== this.IsConversationListVisible) {
+      this.IsConversationListVisible = show;
+      this.cdRef.detectChanges();
+      InvokeManualResize();
+    }
+  }
+
   public GetConversationItemClass(item: ConversationEntity) {
     let classInfo: string = '';
     if (this.SelectedConversation?.ID === item.ID) classInfo += 'conversation-item-selected';
@@ -214,6 +252,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
             obj.RefreshMessage();
         }
       }
+      this._AskSkipTextboxPlaceholder = this.ProcessingTextBoxPlaceholder;
     } 
     else {
       if (this._temporaryMessage) {
@@ -221,6 +260,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.RemoveMessageFromCurrentConversation(this._temporaryMessage);
         this._temporaryMessage = undefined;
       }
+      this._AskSkipTextboxPlaceholder = this.DefaultTextboxPlaceholder;
     }
   }
 

@@ -1,3 +1,78 @@
+.layout {
+    display: flex;
+    flex-direction: row; /* Ensures left and right panels are side by side */
+    height: 100%; /* Fill the available height */
+    width: 100%; /* Fill the available width */
+    position: relative;
+}
+
+.left-panel {
+    width: 272px; /* Fixed width for the conversation list */
+    background-color: #f8f9fa; /* Optional: Background color */
+    border-right: 1px solid #ddd; /* Optional: Add a divider */
+    overflow-y: auto; /* Enable scrolling if content overflows */
+    overflow-x: hidden; /* Hide horizontal scrollbar */
+    position: relative;
+
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: #d3d3d3 #f8f9fa; /* Thumb color and track color */
+}
+
+/* For WebKit-based browsers (Chrome, Edge, Safari) */
+.left-panel::-webkit-scrollbar {
+    width: 8px; /* Narrower scrollbar */
+    background-color: #f8f9fa; /* Scrollbar track color */
+}
+
+.left-panel::-webkit-scrollbar-thumb {
+    background-color: #d3d3d3; /* Lighter gray scrollbar thumb */
+    border-radius: 4px; /* Rounded corners for the thumb */
+}
+
+.left-panel::-webkit-scrollbar-thumb:hover {
+    background-color: #c0c0c0; /* Slightly darker gray on hover */
+}
+
+.left-panel::-webkit-scrollbar-track {
+    background-color: #f8f9fa; /* Background of the scrollbar track */
+}
+
+.right-panel {
+    flex: 1; /* Take up the remaining space */
+    overflow-y: auto; /* Enable scrolling for the conversation content */
+}
+
+
+.new-convo-icon {
+    color: #808080; /* Mid-gray */
+    font-size: 18px; /* Adjust icon size */
+    cursor: pointer; /* Make it clear the icon is clickable */
+    z-index: 10; /* Ensure the icon is above other content */
+    padding: 5px;
+    border-radius: 4px;
+}
+
+.toggle-icon {
+    color: #808080; /* Mid-gray */
+    font-size: 18px; /* Adjust icon size */
+    cursor: pointer; /* Make it clear the icon is clickable */
+    z-index: 10; /* Ensure the icon is above other content */
+    margin-left: 6px;
+    padding: 3px;
+    border-radius: 3px;
+}
+ 
+
+.right-panel .toggle-icon {
+    margin-left: 3px;
+    margin-top: 2px;
+    position: absolute;
+    top: 10px;
+    left: auto;
+    right: 10px; /* For the right panel toggle */
+}
+
+
 .chat-container {
     padding: 5px;
     display: flex;
@@ -26,10 +101,11 @@
 }
 
 .conversation-history {
-    width: 260px;
-    min-width: 260px;
-    height: 100%;
+    width: 240px;
+    min-width: 240px;
+    height: 95%;
     overflow-y: auto; /* Add scroll if the content exceeds the height */
+    overflow-x: hidden; /* Hide horizontal scrollbar */
     margin-right: 10px;
     padding-top: 5px;
     background-color: #f9f9f9;
@@ -164,6 +240,27 @@
 
     background-color: #f9f9f9;
     flex: 1;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: #d3d3d3 #f8f9fa; /* Thumb color and track color */
+}
+
+/* For WebKit-based browsers (Chrome, Edge, Safari) */
+.messages::-webkit-scrollbar {
+width: 8px; /* Narrower scrollbar */
+background-color: #f8f9fa; /* Scrollbar track color */
+}
+
+.messages::-webkit-scrollbar-thumb {
+background-color: #d3d3d3; /* Lighter gray scrollbar thumb */
+border-radius: 4px; /* Rounded corners for the thumb */
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+background-color: #c0c0c0; /* Slightly darker gray on hover */
+}
+
+.messages::-webkit-scrollbar-track {
+background-color: #f8f9fa; /* Background of the scrollbar track */
 }
 
 
@@ -310,9 +407,9 @@
     background-color: #f9f9f9;
 }
 
-.text-area-wrapper > textarea:disabled {
+/* .text-area-wrapper > textarea:disabled {
     background-color: white;
-}
+} */
 
 .input-wrapper {
     flex-grow: 1; /* This will make the input-wrapper take the remaining space */
