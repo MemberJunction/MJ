@@ -26,6 +26,11 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
    */
   @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
+  /**
+   * This event fires whenever a new report is created.
+   */
+  @Output() NewReportCreated = new EventEmitter<string>();
+
   constructor(protected cdRef: ChangeDetectorRef) {
     super();
   }
@@ -137,6 +142,8 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
             // do async so the user doesn't wait for this to finish
             SkipConversationReportCache.Instance.AddConversationReport(this.ConversationID!, report);
           });
+
+          this.NewReportCreated.emit(result.ReportID); // finally emit the event
         } else {
           this.RaiseUserNotification('Error saving report', 'error', 2500);
           this._isCreatingReport = false;
