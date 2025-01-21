@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Thu, 16 Jan 2025 06:06:20 GMT and should not be manually modified.
+This log was last generated on Tue, 21 Jan 2025 00:15:48 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.0
+
+Tue, 21 Jan 2025 00:15:48 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.18.0
 

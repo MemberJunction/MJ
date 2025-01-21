@@ -2,6 +2,87 @@
   "name": "@memberjunction/ng-explorer-settings",
   "entries": [
     {
+      "date": "Tue, 21 Jan 2025 00:15:47 GMT",
+      "version": "2.19.0",
+      "tag": "@memberjunction/ng-explorer-settings_v2.19.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "4656685d154d577c63ff436435dfd52804524133",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v2.19.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.19.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 17 Jan 2025 01:58:34 GMT",
       "version": "2.18.3",
       "tag": "@memberjunction/ng-explorer-settings_v2.18.3",

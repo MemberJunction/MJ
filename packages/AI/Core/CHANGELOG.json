@@ -2,6 +2,27 @@
   "name": "@memberjunction/ai",
   "entries": [
     {
+      "date": "Tue, 21 Jan 2025 00:15:48 GMT",
+      "version": "2.19.0",
+      "tag": "@memberjunction/ai_v2.19.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ai",
+            "commit": "4656685d154d577c63ff436435dfd52804524133",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai",
+            "comment": "Bump @memberjunction/global to v2.19.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 17 Jan 2025 01:58:34 GMT",
       "version": "2.18.3",
       "tag": "@memberjunction/ai_v2.18.3",

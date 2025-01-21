@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
-This log was last generated on Tue, 14 Jan 2025 14:12:27 GMT and should not be manually modified.
+This log was last generated on Tue, 21 Jan 2025 00:15:47 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.0
+
+Tue, 21 Jan 2025 00:15:47 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
 
 ## 2.16.1
 
