@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/communication-engine
 
-This log was last generated on Tue, 21 Jan 2025 14:07:27 GMT and should not be manually modified.
+This log was last generated on Wed, 22 Jan 2025 16:39:41 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.2
+
+Wed, 22 Jan 2025 16:39:41 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.19.2
+- Bump @memberjunction/core to v2.19.2
+- Bump @memberjunction/templates to v2.19.2
+- Bump @memberjunction/core-entities to v2.19.2
+- Bump @memberjunction/communication-types to v2.19.2
 
 ## 2.19.1
 
