@@ -25,6 +25,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
         [ExpandAll]="true"
         [Provider]="Provider"
         (NavigateToMatchingReport)="bubbleNavigateToMatchingReport($event)"
+        (NewReportCreated)="bubbleNewReportCreated($event)"
     ></skip-dynamic-linear-report>
 </div>
 ` 
@@ -37,12 +38,21 @@ export class SkipDynamicReportWrapperComponent {
     @Input() DataContext!: DataContext;
     @Input() AllowDrillDown: boolean = true;
     @Input() Provider: IMetadataProvider | null = null;
+
     /**
      * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
      */
     @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
+    /**
+     * This event fires whenever a new report is created.
+     */
+    @Output() NewReportCreated = new EventEmitter<string>();
+
     public bubbleNavigateToMatchingReport(reportID: string) {
         this.NavigateToMatchingReport.emit(reportID);
+    }
+    public bubbleNewReportCreated(reportID: string) {
+        this.NewReportCreated.emit(reportID);
     }
 }
