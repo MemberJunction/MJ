@@ -147,6 +147,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         if (!this._loaded || forceRefresh) {
             this._loadingSubject.next(true);
             try {
+                this.SetProvider(provider);
                 this._contextUser = contextUser;
 
                 await this.LoadConfigs(configs, contextUser);
@@ -182,6 +183,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
         else {
             // we don't have an existing instance for this provider, so we need to create one
             const newInstance = new subclassConstructor();// (new (this.constructor())) as BaseEngine<T>;
+            newInstance.SetProvider(provider);
             BaseEngine.ProviderInstances.set(provider, newInstance);
             return newInstance;
         }
