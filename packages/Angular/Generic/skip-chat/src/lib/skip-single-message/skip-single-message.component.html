@@ -17,7 +17,12 @@
                     <span class="elapsed-time">{{ElapsedTimeSinceLoadFormatted}}</span>
                 }
                 {{Message}}
-                @if(IsTemporaryMessage && ElapsedTimeSinceLoadFormatted!.length > 0) {
+                @if(!IsTemporaryMessage && !IsAIMessage && !ConversationProcessing) {
+                    <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
+                    <div class="message-actions">
+                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()"></span>
+                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()"></span>
+                    </div>
                 }
             </div>
             <div #reportContainer>

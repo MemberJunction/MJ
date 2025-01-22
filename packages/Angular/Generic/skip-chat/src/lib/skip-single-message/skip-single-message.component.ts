@@ -19,7 +19,12 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
     @Input() public ConversationMessages!: ConversationDetailEntity[];
-
+    /**
+     * This variable should be set by the component instantiating this one, it should be bound to the state
+     * of the conversation processing, so that this component can handle its internal functionality correctly,
+     * for example when the conversation is processing, don't show the buttons to edit or delete the message
+     */
+    @Input() public ConversationProcessing: boolean = false;
     /**
      * Set this property in order to set the Skip logo. This can either be a URL or a Blob
      */
@@ -44,6 +49,15 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * This event fires whenever a new report is created.
      */
     @Output() NewReportCreated = new EventEmitter<string>();
+
+    /**
+     * This event fires when the user is requesting to edit a message, the container of this component will handle
+     */
+    @Output() EditMessageRequested = new EventEmitter<ConversationDetailEntity>();
+    /**
+     * This event fires when the user is requesting to delete a message, the container of this component will handle
+     */
+    @Output() DeleteMessageRequested = new EventEmitter<ConversationDetailEntity>();
 
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
@@ -180,6 +194,12 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     public RaiseSuggestedAnswerSelectedEvent(question: string) {
       this.SuggestedAnswerSelected.emit(question);
       this.SuggestedAnswersClicked = true;
+    }
+    public RaiseMessageDeleteRequest() {
+      this.DeleteMessageRequested.emit(this.ConversationDetailRecord);
+    }
+    public RaiseMessageEditRequest() {
+      this.EditMessageRequested.emit(this.ConversationDetailRecord);
     }
 
     protected AddReportToConversation() {

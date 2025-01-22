@@ -943,7 +943,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     obj.NewReportCreated.subscribe((reportId: string) => {
       this.NewReportCreated.emit(reportId);
     });
-    
+    obj.DeleteMessageRequested.subscribe((message: ConversationDetailEntity) => {
+      this.HandleMessageDeleteRequest(message);
+    });
+    obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
+      this.HandleMessageEditRequest(message);
+    });
+
     obj.Provider = this.ProviderToUse;
     obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
     obj.UserImage = this.UserImage;
@@ -952,6 +958,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     obj.DataContext = this.DataContext;
     obj.ConversationUser = this.SelectedConversationUser!;
     obj.ConversationMessages = this.Messages; // pass this on so that the single message has access to the full conversation, for example to know if it is the first/last/only message in the conversation/etc
+
+    // bind the processing status to the component
+    obj.ConversationProcessing = this._processingStatus[this.SelectedConversation!.ID];
 
     // Whenever the suggested question is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
     obj.SuggestedQuestionSelected.subscribe((question: string) => {
@@ -1172,5 +1181,76 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       const convoIDParam = params.conversationId;
       this.loadConversations(convoIDParam);
     });
+  }
+
+
+  public confirmMessageEditOrDeleteDialogOpen: boolean = false;
+  public messageToEditOrDelete: ConversationDetailEntity | undefined;
+  public messageEditOrDeleteType: 'edit' | 'delete' = 'edit';
+  public HandleMessageEditOrDeleteRequest(message: ConversationDetailEntity, type: 'edit' | 'delete') {
+    if (this.SelectedConversation && !this.IsSkipProcessing(this.SelectedConversation)) {
+      this.messageToEditOrDelete = message;
+      this.messageEditOrDeleteType = type;
+      this.confirmMessageEditOrDeleteDialogOpen = true;  
+    }
+  }
+  public HandleMessageEditRequest(message: ConversationDetailEntity) {
+    this.HandleMessageEditOrDeleteRequest(message, 'edit');
+  }
+  public HandleMessageDeleteRequest(message: ConversationDetailEntity) {
+    this.HandleMessageEditOrDeleteRequest(message, 'delete');
+  }
+
+  public closeMessageEditOrDeleteDialog(yesno: 'yes' | 'no') {
+    this.confirmMessageEditOrDeleteDialogOpen = false;
+    if (this.messageToEditOrDelete && yesno === 'yes') {
+      // the user has requested to either edit or delete the message. This situation calls
+      // for (a) removing all subsequent messages in the conversation in both cases
+      // in the case where they are editing an existing message, we edit the current message
+      // and then resubmit it. In both cases in the UI we have to update by removing all
+      // subsequent messages. 
+      if (this.messageEditOrDeleteType === 'edit') {
+        this.editMessage(this.messageToEditOrDelete);
+      } else {
+        this.deleteMessage(this.messageToEditOrDelete);
+      }
+    }    
+  }
+
+  protected async editMessage(message: ConversationDetailEntity) {
+    const oldMessageText = message.Message;
+    await this.deleteMessage(message);
+    // now add the text from the message to the input box
+    this.askSkipInput.nativeElement.value = oldMessageText;
+    // this will let the user edit the message and submit it
+  }
+
+  protected async deleteMessage(message: ConversationDetailEntity) {
+    // first find all the subsequent messages in the conversation
+    const idx = this.Messages.findIndex((m) => m.ID === message.ID);
+    if (idx >= 0) {
+      const subsequentMessages = this.Messages.slice(idx + 1);
+      const tg = await this.ProviderToUse.CreateTransactionGroup();
+      for (const m of subsequentMessages) {
+        m.TransactionGroup = tg;
+        m.Delete(); // no await as we'll await the transaciton group below
+      }
+
+      // now include the current message in the transaction group
+      message.TransactionGroup = tg;
+      message.Delete(); // no await
+
+      // now submit the transaction group
+      if (await tg.Submit()) {
+        for (const m of subsequentMessages) {
+          // now remove the message from the UI
+          this.RemoveMessageFromCurrentConversation(m);
+        }
+      }
+      else {
+        // alert the user to the error
+        this.notificationService.CreateSimpleNotification('Error deleting messages', 'error', 3000);
+      }
+    }
   }
 }
