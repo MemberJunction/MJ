@@ -25,7 +25,7 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
 
 /*********************************************/
 // Markdown
-//import { MarkdownModule } from 'ngx-markdown';
+import { MarkdownModule } from 'ngx-markdown';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -66,7 +66,7 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
-    //MarkdownModule.forRoot(),
+    MarkdownModule.forRoot(),
   ],
   exports: [
     SkipChatComponent,
