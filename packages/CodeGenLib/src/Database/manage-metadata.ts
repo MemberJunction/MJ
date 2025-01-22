@@ -979,7 +979,7 @@ export class ManageMetadataBase {
       return `
       IF NOT EXISTS (
          SELECT 1 FROM [${mj_core_schema()}].EntityField 
-         WHERE ID = '${newEntityFieldUUID}')  OR 
+         WHERE ID = '${newEntityFieldUUID}'  OR 
                (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
