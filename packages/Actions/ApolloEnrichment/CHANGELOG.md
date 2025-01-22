@@ -1,8 +1,19 @@
 # Change Log - @memberjunction/actions-apollo
 
-This log was last generated on Wed, 22 Jan 2025 16:39:41 GMT and should not be manually modified.
+This log was last generated on Wed, 22 Jan 2025 21:05:42 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.3
+
+Wed, 22 Jan 2025 21:05:42 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.19.3
+- Bump @memberjunction/core to v2.19.3
+- Bump @memberjunction/core-entities to v2.19.3
+- Bump @memberjunction/actions to v2.19.3
 
 ## 2.19.2
 

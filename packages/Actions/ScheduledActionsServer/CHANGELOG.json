@@ -2,6 +2,69 @@
   "name": "@memberjunction/scheduled-actions-server",
   "entries": [
     {
+      "date": "Wed, 22 Jan 2025 21:05:42 GMT",
+      "version": "2.19.3",
+      "tag": "@memberjunction/scheduled-actions-server_v2.19.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/core-entities to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/actions to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/scheduled-actions to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vector-sync to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-mistral to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/scheduled-actions-server",
+            "comment": "Bump @memberjunction/ai-openai to v2.19.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 22 Jan 2025 16:39:41 GMT",
       "version": "2.19.2",
       "tag": "@memberjunction/scheduled-actions-server_v2.19.2",

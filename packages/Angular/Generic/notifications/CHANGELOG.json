@@ -2,6 +2,39 @@
   "name": "@memberjunction/ng-notifications",
   "entries": [
     {
+      "date": "Wed, 22 Jan 2025 21:05:42 GMT",
+      "version": "2.19.3",
+      "tag": "@memberjunction/ng-notifications_v2.19.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-notifications",
+            "comment": "Bump @memberjunction/core to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-notifications",
+            "comment": "Bump @memberjunction/core-entities to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-notifications",
+            "comment": "Bump @memberjunction/global to v2.19.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-notifications",
+            "comment": "Bump @memberjunction/graphql-dataprovider to v2.19.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 22 Jan 2025 16:39:41 GMT",
       "version": "2.19.2",
       "tag": "@memberjunction/ng-notifications_v2.19.2",

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-permissions",
-  "version": "2.19.2",
+  "version": "2.19.3",
   "description": "MemberJunction: Angular components for displaying/editing permissions for an entity, and related components.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,11 +25,11 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.19.2",
-    "@memberjunction/global": "2.19.2",
-    "@memberjunction/core": "2.19.2",
-    "@memberjunction/ng-container-directives": "2.19.2",
-    "@memberjunction/ng-shared": "2.19.2",
+    "@memberjunction/core-entities": "2.19.3",
+    "@memberjunction/global": "2.19.3",
+    "@memberjunction/core": "2.19.3",
+    "@memberjunction/ng-container-directives": "2.19.3",
+    "@memberjunction/ng-shared": "2.19.3",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",

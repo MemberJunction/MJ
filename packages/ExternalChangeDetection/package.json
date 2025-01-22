@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/external-change-detection",
-  "version": "2.19.2",
+  "version": "2.19.3",
   "description": "Library used by server side applications to determine if changes have been made to entities by external systems/integrations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.19.2",
-    "@memberjunction/core-entities": "2.19.2",
-    "@memberjunction/global": "2.19.2",
-    "@memberjunction/sqlserver-dataprovider": "2.19.2"
+    "@memberjunction/core": "2.19.3",
+    "@memberjunction/core-entities": "2.19.3",
+    "@memberjunction/global": "2.19.3",
+    "@memberjunction/sqlserver-dataprovider": "2.19.3"
   }
 }
