@@ -40,6 +40,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      */
     @Output() NavigateToMatchingReport = new EventEmitter<string>();
 
+    /**
+     * This event fires whenever a new report is created.
+     */
+    @Output() NewReportCreated = new EventEmitter<string>();
+
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
 
@@ -192,6 +197,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
             const report = componentRef.instance;
             report.NavigateToMatchingReport.subscribe((reportID: string) => {
               this.NavigateToMatchingReport.emit(reportID); // bubble up
+            });
+            report.NewReportCreated.subscribe((reportID: string) => {
+              this.NewReportCreated.emit(reportID); // bubble up
             });
             report.Provider = this.ProviderToUse;
             report.SkipData = analysisResult;

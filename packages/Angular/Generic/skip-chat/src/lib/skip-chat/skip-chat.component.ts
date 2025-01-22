@@ -94,6 +94,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * Event emitted whenever a conversation is selected
    */
   @Output() ConversationSelected = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a new report is created.
+   */
+  @Output() NewReportCreated = new EventEmitter<string>();
+
   
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
@@ -930,9 +936,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     // Pass the message details to the component instance
     const obj = componentRef.instance;
 
+    // bubble up events from the single message component to the parent component
     obj.NavigateToMatchingReport.subscribe((reportId: string) => {
       this.NavigateToMatchingReport.emit(reportId);
     });
+    obj.NewReportCreated.subscribe((reportId: string) => {
+      this.NewReportCreated.emit(reportId);
+    });
+    
     obj.Provider = this.ProviderToUse;
     obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
     obj.UserImage = this.UserImage;
