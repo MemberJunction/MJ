@@ -21,7 +21,8 @@
   "peerDependencies": {
     "@angular/common": "18.0.2",
     "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2"
+    "@angular/forms": "18.0.2",
+    "@angular/platform-browser": "18.0.2"
   },
   "dependencies": {
     "@memberjunction/core-entities": "2.19.1",
@@ -46,7 +47,8 @@
     "angular-plotly.js": "^5.2.2",
     "plotly.js-dist-min": "^2.3.4",
     "@types/plotly.js-dist-min": "^2.3.4",
-    "@angular/cdk": "18.0.2"
+    "@angular/cdk": "18.0.2",
+    "ngx-markdown": "18.0.0"
   },
   "sideEffects": false
 }

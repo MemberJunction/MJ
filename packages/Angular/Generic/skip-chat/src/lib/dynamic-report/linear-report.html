@@ -39,10 +39,10 @@
         [title]="'Analysis'"
         [expanded]="ExpandAll"
         >
-        <div class="analysis" *ngIf="SkipData.analysis">
+        <!-- <div class="analysis" *ngIf="SkipData.analysis">
             {{SkipData.analysis}}
-        </div>
-        <!-- <markdown [data]="SkipData.analysis"></markdown> -->
+        </div> -->
+        <markdown [data]="SkipData.analysis"></markdown>
     </kendo-expansionpanel>                     
 
   <kendo-dialog
