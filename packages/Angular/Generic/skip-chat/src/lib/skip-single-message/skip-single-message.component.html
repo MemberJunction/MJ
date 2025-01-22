@@ -17,7 +17,7 @@
                     <span class="elapsed-time">{{ElapsedTimeSinceLoadFormatted}}</span>
                 }
                 {{Message}}
-                @if(!IsTemporaryMessage && !IsAIMessage) {
+                @if(!IsTemporaryMessage && !IsAIMessage && false) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
                     <div class="message-actions">
                         <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()"></span>
