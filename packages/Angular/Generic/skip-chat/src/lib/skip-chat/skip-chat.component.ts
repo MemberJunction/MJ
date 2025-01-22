@@ -551,8 +551,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       if (this.Conversations.length > 0) {
         const newIdx = idx > 0 ? idx - 1 : 0;
         this.SelectConversation(this.Conversations[newIdx]);
-      } else this.Messages = [];
-    } else {
+      } 
+      else {
+        this.Messages = [];
+      }
+    } 
+    else {
       this.notificationService.CreateSimpleNotification('Error deleting conversation', 'error', 5000);
     }
   }
@@ -631,12 +635,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   public async SelectConversation(conversation: ConversationEntity) {
+    if (this. IsSkipProcessing(conversation)) {
+      return; // already processing this conversation so don't go back and forth
+    }
+    
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // load up the conversation if not already the one that's loaded
       this._conversationLoadComplete = false;
       this.ClearMessages();
-      const oldStatus = this._processingStatus[conversation.ID];
-      this._processingStatus[conversation.ID] = true;
+      const oldStatus = this.IsSkipProcessing(conversation);
+      this.setProcessingStatus(conversation.ID, true);
       this.SelectedConversation = conversation;
       this.SetSelectedConversationUser();
       this.DataContextID = conversation.DataContextID ? conversation.DataContextID : '';
@@ -660,15 +668,15 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       } else {
         this._conversationsToReload[conversation.ID] = true;
 
-        const result = await this.RunViewToUse.RunView({
+        const result = await this.RunViewToUse.RunView<ConversationDetailEntity>({
           EntityName: 'Conversation Details',
           ExtraFilter: `ConversationID='${conversation.ID}'`,
-          OrderBy: '__mj_CreatedAt ASC', // show messages in order of creation
+          OrderBy: '__mj_CreatedAt ASC' // show messages in order of creation,
         });
 
         if (result && result.Success) {
           // copy the results into NEW objects into the array, we don't want to modify the original objects
-          this.Messages = [...(result.Results as ConversationDetailEntity[])];
+          this.Messages = result.Results;
 
           // also, cache the messages within the conversation, but create new array with the same objects
           convoAny._Messages = [...this.Messages];
@@ -686,7 +694,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.cdRef.reattach(); // resume change detection
       }
 
-      this._processingStatus[conversation.ID] = oldStatus; // set back to old status as it might have been processing
+      this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
       InvokeManualResize(500);
 
       // ensure the list box has the conversation in view
@@ -760,6 +768,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     return SkipChatComponent._startMessages[idx];
   }
 
+  protected setProcessingStatus(conversationId: string, status: boolean) {
+    if (conversationId) {
+      this._processingStatus[conversationId] = status;
+      // if the current conversation, update the panel messages so they know we've changed our processing state
+      if (this.SelectedConversation && this.SelectedConversation.ID === conversationId) {
+        this.UpdateAllPanelMessages();
+      }  
+    }
+  }
+
   public async sendPrompt(val: string) {
     const convoID: string = this.SelectedConversation ? this.SelectedConversation.ID : '';
     if (this._conversationsInProgress[convoID]) {
@@ -768,7 +786,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
 
     if (this.SelectedConversation) {
-      this._processingStatus[this.SelectedConversation?.ID] = true;
+      this.setProcessingStatus(this.SelectedConversation?.ID, true);
     }
 
     if (val && val.length > 0) {
@@ -797,19 +815,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
           // so we do nothing here other than update the status.
-          this._processingStatus[convoID] = false;
+          this.setProcessingStatus(convoID, false);
           //the next time the user selects this convo, we will fetch messages
           //from the server rather than using the ones in cache
           this._conversationsToReload[convoID] = true;
         } 
         else {
-          this._processingStatus[convoID] = false;
+          this.setProcessingStatus(convoID, false);
           const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result);
 
           if (!this.SelectedConversation) {
             const convo = <ConversationEntity>await p.GetEntityObject('Conversations', p.CurrentUser);
             await convo.Load(skipResult.ConversationId);
-            this._processingStatus[skipResult.ConversationId] = true;
+            this.setProcessingStatus(skipResult.ConversationId, true);
             this.Conversations.push(convo);
             this.SelectedConversation = convo;
             this.SetSelectedConversationUser();
@@ -840,7 +858,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
 
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
-      if (this.SelectedConversation) this._processingStatus[this.SelectedConversation?.ID] = false;
+      if (this.SelectedConversation) {
+        this.setProcessingStatus(this.SelectedConversation.ID, false);
+      }
 
       this.AllowSend = true;
       this._conversationsInProgress[convoID] = false;
@@ -874,8 +894,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
   public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean, cacheMessage: boolean) {
     // update the local binding for the UI
-    this.Messages.push(detail);
+    if (this.Messages.find((m) => m.ID === detail.ID) || this.Messages.find(m => m === detail)) {
+      // we already have this message, so don't add it again
+      return;
+    }
 
+    this.Messages.push(detail);
     if (cacheMessage) {
       // update the cache of messages for the selected conversation
       const convo = this.SelectedConversation;
@@ -926,6 +950,28 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
+  protected UpdatePanelMessage(messageDetail: ConversationDetailEntity, invokeChangeDetection: boolean = true) {
+    const ref = (<any>messageDetail)._componentRef;
+    if (ref) {
+      const obj = <SkipSingleMessageComponent>ref.instance;
+      obj.ConversationMessages = this.Messages; // update this so it can handle its rendering appropriately
+      obj.ConversationProcessing = this.IsSkipProcessing(this.SelectedConversation!); // update this so it can handle its rendering appropriately
+
+      if (invokeChangeDetection) {
+        this.cdRef.markForCheck();
+      }
+    }
+  }
+
+  protected UpdateAllPanelMessages() {
+    if (this.Messages && this.Messages.length > 0) {
+      this.Messages.forEach((m) => {
+        this.UpdatePanelMessage(m, false);
+      });
+      this.cdRef.markForCheck();  
+    }
+  }
+
   // Method to dynamically add a message
   protected AddMessageToPanel(messageDetail: ConversationDetailEntity, stopChangeDetection: boolean) {
     // Temporarily stop change detection for performance
@@ -960,7 +1006,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     obj.ConversationMessages = this.Messages; // pass this on so that the single message has access to the full conversation, for example to know if it is the first/last/only message in the conversation/etc
 
     // bind the processing status to the component
-    obj.ConversationProcessing = this._processingStatus[this.SelectedConversation!.ID];
+    obj.ConversationProcessing = this.IsSkipProcessing(this.SelectedConversation!); 
 
     // Whenever the suggested question is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
     obj.SuggestedQuestionSelected.subscribe((question: string) => {
@@ -1118,9 +1164,15 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   private _processingStatus: { [key: string]: any } = {};
   protected IsSkipProcessing(Conversation: ConversationEntity): boolean {
-    if (this._processingStatus[Conversation.ID]) {
+    if (!Conversation) {
+      return false;
+    }
+    else if (this._processingStatus[Conversation.ID]) {
       return this._processingStatus[Conversation.ID];
-    } else return false;
+    } 
+    else {
+      return false;
+    }
   }
 
   public IsTextAreaEmpty(): boolean {
@@ -1226,29 +1278,62 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   protected async deleteMessage(message: ConversationDetailEntity) {
+    if (!this.SelectedConversation || this.IsSkipProcessing(this.SelectedConversation)) {
+      return; // don't allow deleting messages while we're processing or don't have a selected convo
+    }
+
+    this.setProcessingStatus(this.SelectedConversation.ID, true);
     // first find all the subsequent messages in the conversation
     const idx = this.Messages.findIndex((m) => m.ID === message.ID);
     if (idx >= 0) {
-      const subsequentMessages = this.Messages.slice(idx + 1);
+      const currentAndSubsequentMessages = this.Messages.slice(idx);
       const tg = await this.ProviderToUse.CreateTransactionGroup();
-      for (const m of subsequentMessages) {
-        m.TransactionGroup = tg;
-        m.Delete(); // no await as we'll await the transaciton group below
+      for (const m of currentAndSubsequentMessages) {
+        // need to create the BaseEntity subclass for the conversation detail entity
+        // as our initial load of the conversation detail entity is not a full object it is 
+        // a simple javascript object.
+        const actualEntityObject = await this.ProviderToUse.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.ProviderToUse.CurrentUser);
+        if (await actualEntityObject.Load(m.ID)) {
+          // check to see if it loaded succesfully or not, sometimes it is already deleted
+          if (actualEntityObject.ConversationID === this.SelectedConversation.ID) {
+            actualEntityObject.TransactionGroup = tg;
+            actualEntityObject.Delete(); // no await as we'll await the transaciton group below    
+          }
+          else {
+            // didn't load successfully, drop to console, possibly the record was already deleted, non-fatal
+            console.log('Error loading conversation detail entity for deletion', m);
+          }
+        }
+        else {
+          // problem loading the entity, drop to console, possibly the record was already deleted, non-fatal
+          console.log('Error loading conversation detail entity for deletion', m);
+        }
       }
-
-      // now include the current message in the transaction group
-      message.TransactionGroup = tg;
-      message.Delete(); // no await
 
       // now submit the transaction group
       if (await tg.Submit()) {
-        for (const m of subsequentMessages) {
-          // now remove the message from the UI
-          this.RemoveMessageFromCurrentConversation(m);
-        }
+        // now clean up the arrays within this.Messages and also the current conversation's Messages array
+        // remove all messages inluding and after the idx
+        // this.Messages = this.Messages.slice(0, idx);
+        // const convoAny = <any>this.SelectedConversation;
+        // if (convoAny) {
+        //   convoAny._Messages = this.Messages;
+        // }
+
+        // for (const m of currentAndSubsequentMessages) {
+        //   // now remove the message from the UI
+        //   this.RemoveMessageFromCurrentConversation(m);
+        // }
+
+        // this.UpdateAllPanelMessages(); // update remaining messages in the panel so they have the correct messages array and processing status
+        this.setProcessingStatus(this.SelectedConversation.ID, false); // done
+        const convo = this.SelectedConversation;
+        this.SelectedConversation = undefined; // wipe out so the below does something
+        this.SelectConversation(convo); // reload the conversation to get the latest messages
       }
       else {
         // alert the user to the error
+        this.setProcessingStatus(this.SelectedConversation.ID, false); // done
         this.notificationService.CreateSimpleNotification('Error deleting messages', 'error', 3000);
       }
     }

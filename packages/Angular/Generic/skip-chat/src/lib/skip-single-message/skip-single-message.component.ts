@@ -205,7 +205,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
-      if (detail.ID.length > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
+      if (detail?.ID?.length > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
         const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
   
         if (resultObject.success) {
@@ -272,9 +272,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     }
 
     public get IsFirstMessageInConversation(): boolean {
-        return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;
+      const result = this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;
+      return result;
     }
     public get IsLastMessageInConversation(): boolean {
-        return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === this.ConversationMessages.length - 1;
+      const result = this.ConversationMessages.indexOf(this.ConversationDetailRecord) === this.ConversationMessages.length - 1;
+      return result;
     }
 }
