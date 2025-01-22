@@ -140,3 +140,23 @@
     </button>
     </kendo-dialog-actions>
 </kendo-dialog>    
+
+<kendo-dialog
+    title="Please confirm"
+    *ngIf="confirmMessageEditOrDeleteDialogOpen"
+    (close)="closeMessageEditOrDeleteDialog('no')"
+    [minWidth]="250"
+    [width]="450"
+>
+    <p style="margin: 30px; text-align: center;">
+        Would you like to {{messageEditOrDeleteType}} this message? Doing so will result in any subsequent messages in the conversation being deleted.
+    </p>
+    <kendo-dialog-actions>
+        <button kendoButton (click)="closeMessageEditOrDeleteDialog('yes')" themeColor="primary">
+            Yes
+        </button>
+    <button kendoButton (click)="closeMessageEditOrDeleteDialog('no')">
+        No
+    </button>
+    </kendo-dialog-actions>
+</kendo-dialog>  
