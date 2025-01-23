@@ -158,7 +158,7 @@ const mjServerConfig = {
    */
 
   userHandling: {
-    autoCreateNewUsers: false,
+    autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
     newUserRoles: ['UI'],
