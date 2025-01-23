@@ -1,8 +1,25 @@
 # Change Log - @memberjunction/ng-skip-chat
 
-This log was last generated on Thu, 23 Jan 2025 17:28:51 GMT and should not be manually modified.
+This log was last generated on Thu, 23 Jan 2025 21:51:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.5
+
+Thu, 23 Jan 2025 21:51:08 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.19.5
+- Bump @memberjunction/core to v2.19.5
+- Bump @memberjunction/global to v2.19.5
+- Bump @memberjunction/graphql-dataprovider to v2.19.5
+- Bump @memberjunction/skip-types to v2.19.5
+- Bump @memberjunction/data-context to v2.19.5
+- Bump @memberjunction/ng-container-directives to v2.19.5
+- Bump @memberjunction/ng-data-context to v2.19.5
+- Bump @memberjunction/ng-base-types to v2.19.5
+- Bump @memberjunction/ng-notifications to v2.19.5
 
 ## 2.19.4
 

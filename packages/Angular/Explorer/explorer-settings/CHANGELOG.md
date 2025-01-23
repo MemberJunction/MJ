@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
-This log was last generated on Thu, 23 Jan 2025 17:28:51 GMT and should not be manually modified.
+This log was last generated on Thu, 23 Jan 2025 21:51:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.5
+
+Thu, 23 Jan 2025 21:51:08 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v2.19.5
+- Bump @memberjunction/global to v2.19.5
+- Bump @memberjunction/core to v2.19.5
+- Bump @memberjunction/ng-container-directives to v2.19.5
+- Bump @memberjunction/ng-shared to v2.19.5
+- Bump @memberjunction/ng-entity-permissions to v2.19.5
+- Bump @memberjunction/ng-base-forms to v2.19.5
+- Bump @memberjunction/ng-entity-form-dialog to v2.19.5
+- Bump @memberjunction/ng-user-view-grid to v2.19.5
+- Bump @memberjunction/ng-simple-record-list to v2.19.5
+- Bump @memberjunction/ng-tabstrip to v2.19.5
 
 ## 2.19.4
 
