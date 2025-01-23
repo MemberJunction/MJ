@@ -24,10 +24,12 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { Subscription } from 'rxjs';
 
 export class ResolverBase {
   private _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+  private _eventSubscription: Subscription | null = null;
 
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -537,26 +539,28 @@ export class ResolverBase {
   }
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-    MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
-      if (event) {
-        await this.EmitCloudEvent(event);
+    if (!this._eventSubscription) {
+      // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
+      this._eventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
+        if (event) {
+          await this.EmitCloudEvent(event);
 
-        if (event.component === entityObject && event.args && event.args.message) {
-          // message from our entity object, relay it to the client
-          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-              status: 'OK',
-              type: 'EntityObjectStatusMessage',
-              entityName: entityObject.EntityInfo.Name,
-              primaryKey: entityObject.PrimaryKey,
-              message: event.args.message,
-            }),
-            sessionId: userPayload.sessionId,
-          });
+          if (event.component === entityObject && event.args && event.args.message) {
+            // message from our entity object, relay it to the client
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+              message: JSON.stringify({
+                status: 'OK',
+                type: 'EntityObjectStatusMessage',
+                entityName: entityObject.EntityInfo.Name,
+                primaryKey: entityObject.PrimaryKey,
+                message: event.args.message,
+              }),
+              sessionId: userPayload.sessionId,
+            });
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
@@ -776,6 +780,9 @@ export class ResolverBase {
       const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       await entityObject.InnerLoad(key);
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+
+      this.ListenForEntityMessages(entityObject, pubSub, userPayload);
+
       if (await entityObject.Delete(options)) {
         await this.AfterDelete(dataSource, key); // fire event
         return returnValue;
