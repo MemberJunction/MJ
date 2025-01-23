@@ -268,7 +268,8 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user);
+    const input = <SkipAPIRunScriptRequest>await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user);
+    input.scriptText = ScriptText;
     return this.handleSimpleSkipPostRequest(input);
   }
 

@@ -16,6 +16,24 @@
         max-width: 48rem;
     }
 }
+
+.message-actions {
+    margin-top: 5px;
+    top: 0; /* Align to the top of the parent container */
+    left: 0; /* Align to the right edge */
+    display: none; /* Hide by default */
+}
+
+.message:hover .message-actions {
+    display: flex; /* Show the actions when the message is hovered */
+}
+ 
+.message-actions > span {
+    margin-right: 5px;
+    color: #6e7072;
+    cursor: pointer;
+}
+
 .message-image {
     max-width: 24px;
     max-height: 24px;

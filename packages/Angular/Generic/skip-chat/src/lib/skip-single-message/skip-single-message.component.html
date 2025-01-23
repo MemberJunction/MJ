@@ -8,7 +8,7 @@
                 <span class="fa-solid fa-user default-user-image"></span>
             }
         </div>
-        <div class="message"
+        <div class="message" 
             [id]="'skip_message_' + ConversationDetailRecord.ID">
             <div class="message-user-name">{{IsAIMessage ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
             <div>
@@ -17,7 +17,7 @@
                     <span class="elapsed-time">{{ElapsedTimeSinceLoadFormatted}}</span>
                 }
                 {{Message}}
-                @if(!IsTemporaryMessage && !IsAIMessage && false) {
+                @if(!IsTemporaryMessage && !IsAIMessage && ShowMessageEditPanel) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
                     <div class="message-actions">
                         <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()"></span>
