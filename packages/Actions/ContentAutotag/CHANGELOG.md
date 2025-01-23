@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/actions-content-autotag
 
-This log was last generated on Wed, 22 Jan 2025 21:05:42 GMT and should not be manually modified.
+This log was last generated on Thu, 23 Jan 2025 17:28:51 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.4
+
+Thu, 23 Jan 2025 17:28:51 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v2.19.4
+- Bump @memberjunction/core to v2.19.4
+- Bump @memberjunction/core-entities to v2.19.4
+- Bump @memberjunction/actions to v2.19.4
+- Bump @memberjunction/core-actions to v2.19.4
+- Bump @memberjunction/content-autotagging to v2.19.4
 
 ## 2.19.3
 
