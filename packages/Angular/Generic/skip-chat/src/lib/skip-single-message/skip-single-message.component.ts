@@ -37,6 +37,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * Default user image to use if the user image is not set
      */
     @Input() public DefaultUserImage: string | Blob | undefined = undefined;
+
+    /**
+     * If set to true, user messages will be shown with a button to allow delete/edit
+     */
+    @Input() public ShowMessageEditPanel: boolean = true;
   
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
