@@ -18,7 +18,6 @@ export const requireSystemUserDirective: DirectiveBuilder = {
         ...fieldConfig,
         resolve: (source, args, context, info) => {
           if (directive) {
-            console.debug('RequireSystemUser directive found');
             if (!context.userPayload.isSystemUser) {
               throw new AuthorizationError('Operation not permitted for this user');
             }
