@@ -2,6 +2,45 @@
   "name": "@memberjunction/ng-find-record",
   "entries": [
     {
+      "date": "Thu, 23 Jan 2025 17:28:51 GMT",
+      "version": "2.19.4",
+      "tag": "@memberjunction/ng-find-record_v2.19.4",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/core-entities to v2.19.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/global to v2.19.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/core to v2.19.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.19.4",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-find-record",
+            "comment": "Bump @memberjunction/ng-shared to v2.19.4",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 22 Jan 2025 21:05:42 GMT",
       "version": "2.19.3",
       "tag": "@memberjunction/ng-find-record_v2.19.3",
