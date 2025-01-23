@@ -247,9 +247,10 @@ export class ResolverBase {
       const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
-      const [subject, rawData] = args instanceof BaseEntityEvent ? [args.baseEntity.EntityInfo.CodeName, args.payload] : [undefined, args];
-      const data = (typeof rawData === 'object' ? rawData : { payload: rawData }) ?? {};
-      const cloudEvent = new CloudEvent({ source, subject, type, data });
+      const subject = args instanceof BaseEntityEvent ? args.baseEntity.EntityInfo.CodeName : undefined;
+      const data = args?.baseEntity?.GetAll() ?? {};
+
+      const cloudEvent = new CloudEvent({ type, source, subject, data });
 
       try {
         const cloudeventTransportResponse = await this._emit(cloudEvent, { headers: this._cloudeventsHeaders });
@@ -573,11 +574,8 @@ export class ResolverBase {
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       }
       // save failed, return null
-      else 
-        throw entityObject.LatestResult?.Message;
-    } 
-    else 
-      return null;
+      else throw entityObject.LatestResult?.Message;
+    } else return null;
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override

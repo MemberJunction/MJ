@@ -73,7 +73,9 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const serve = async (resolverPaths: Array<string>) => {
+export const createApp = () => express();
+
+export const serve = async (resolverPaths: Array<string>, app = createApp()) => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -140,7 +142,6 @@ export const serve = async (resolverPaths: Array<string>) => {
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
-  const app = express();
   const httpServer = createServer(app);
 
   const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });

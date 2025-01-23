@@ -228,7 +228,8 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
 
       // it worked, refresh the report here
       const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
-      this.SkipData = newSkipData; // this drives binding to chart and table and so forth for a refresh
+      this.SkipData.analysis = newSkipData.analysis; // update the analysis
+      this.SkipData.executionResults = newSkipData.executionResults; // drives the chart/table bindings
       this.ReportEntity.Configuration = JSON.stringify(newSkipData);
 
       const saveResult: boolean = await this.ReportEntity.Save();
