@@ -24,10 +24,12 @@ import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { Subscription } from 'rxjs';
 
 export class ResolverBase {
   private _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+  private _eventSubscription: Subscription | null = null;
 
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -247,9 +249,10 @@ export class ResolverBase {
       const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
-      const [subject, rawData] = args instanceof BaseEntityEvent ? [args.baseEntity.EntityInfo.CodeName, args.payload] : [undefined, args];
-      const data = (typeof rawData === 'object' ? rawData : { payload: rawData }) ?? {};
-      const cloudEvent = new CloudEvent({ source, subject, type, data });
+      const subject = args instanceof BaseEntityEvent ? args.baseEntity.EntityInfo.CodeName : undefined;
+      const data = args?.baseEntity?.GetAll() ?? {};
+
+      const cloudEvent = new CloudEvent({ type, source, subject, data });
 
       try {
         const cloudeventTransportResponse = await this._emit(cloudEvent, { headers: this._cloudeventsHeaders });
@@ -536,26 +539,28 @@ export class ResolverBase {
   }
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-    MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
-      if (event) {
-        await this.EmitCloudEvent(event);
+    if (!this._eventSubscription) {
+      // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
+      this._eventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
+        if (event) {
+          await this.EmitCloudEvent(event);
 
-        if (event.component === entityObject && event.args && event.args.message) {
-          // message from our entity object, relay it to the client
-          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-              status: 'OK',
-              type: 'EntityObjectStatusMessage',
-              entityName: entityObject.EntityInfo.Name,
-              primaryKey: entityObject.PrimaryKey,
-              message: event.args.message,
-            }),
-            sessionId: userPayload.sessionId,
-          });
+          if (event.component === entityObject && event.args && event.args.message) {
+            // message from our entity object, relay it to the client
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+              message: JSON.stringify({
+                status: 'OK',
+                type: 'EntityObjectStatusMessage',
+                entityName: entityObject.EntityInfo.Name,
+                primaryKey: entityObject.PrimaryKey,
+                message: event.args.message,
+              }),
+              sessionId: userPayload.sessionId,
+            });
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
@@ -573,11 +578,8 @@ export class ResolverBase {
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       }
       // save failed, return null
-      else 
-        throw entityObject.LatestResult?.Message;
-    } 
-    else 
-      return null;
+      else throw entityObject.LatestResult?.Message;
+    } else return null;
   }
 
   // Before/After CREATE Event Hooks for Sub-Classes to Override
@@ -778,6 +780,9 @@ export class ResolverBase {
       const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       await entityObject.InnerLoad(key);
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+
+      this.ListenForEntityMessages(entityObject, pubSub, userPayload);
+
       if (await entityObject.Delete(options)) {
         await this.AfterDelete(dataSource, key); // fire event
         return returnValue;

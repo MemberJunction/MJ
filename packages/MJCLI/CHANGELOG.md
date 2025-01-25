@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/cli
 
-This log was last generated on Wed, 22 Jan 2025 21:05:42 GMT and should not be manually modified.
+This log was last generated on Thu, 23 Jan 2025 21:51:08 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.19.5
+
+Thu, 23 Jan 2025 21:51:08 GMT
+
+### Patches
+
+- Bump @memberjunction/codegen-lib to v2.19.5
+
+## 2.19.4
+
+Thu, 23 Jan 2025 17:28:51 GMT
+
+### Patches
+
+- Bump @memberjunction/codegen-lib to v2.19.4
 
 ## 2.19.3
 
