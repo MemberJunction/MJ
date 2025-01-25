@@ -10,9 +10,9 @@ export class ReportEntity_Server extends ReportEntity  {
      * @returns 
      */
     public async Save(): Promise<boolean> {
-        const wasNewRecord: boolean = !this.IsSaved;
+        const createSnapshot: boolean = !this.IsSaved || this.GetFieldByName('Configuration')?.Dirty; // do this only if we have a new record or the configuration has changed
         const saveResult: boolean = await super.Save();
-        if (saveResult && (wasNewRecord || this.GetFieldByName('Configuration')?.Dirty)) {
+        if (saveResult && createSnapshot) {
             // here we either have a new record or the configuration has changed, so we need to create a snapshot of the report
             const md = new Metadata();
             const snapshot = await md.GetEntityObject<ReportSnapshotEntity>('Report Snapshots', this.ContextCurrentUser);
