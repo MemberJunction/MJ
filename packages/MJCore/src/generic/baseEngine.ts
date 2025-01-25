@@ -131,7 +131,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @returns 
      */
     protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database && !contextUser)
+        if (this.ProviderToUse.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
             return new Promise<void>((resolve) => {
@@ -168,23 +168,33 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * that are tied to specific providers. This is useful when we have multiple
      * providers in a given app going to different connections.
      *********************************************************************/
-    private static _providerInstances: Map<IMetadataProvider, any> = new Map();
-    private static get ProviderInstances(): Map<IMetadataProvider, any> {
+    // private static _providerInstances: Map<{provider: IMetadataProvider, subclassConstructor: any}, any> = new Map();
+    // private static get ProviderInstances(): Map<{provider: IMetadataProvider, subclassConstructor: any}, any> {
+    //     return BaseEngine._providerInstances;
+    // }
+    private static _providerInstances: { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] = [];
+    private static get ProviderInstances(): { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] {
         return BaseEngine._providerInstances;
-    }
+    }    
 
     /**
      * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
      */
     public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
-        if (BaseEngine.ProviderInstances.has(provider)) {
-            return BaseEngine.ProviderInstances.get(provider);
+        const existingEntry = BaseEngine.ProviderInstances.find(
+            entry => entry.provider === provider && entry.subclassConstructor === subclassConstructor
+        );
+
+        if (existingEntry) {
+            return existingEntry.instance;
         }
         else {
             // we don't have an existing instance for this provider, so we need to create one
-            const newInstance = new subclassConstructor();// (new (this.constructor())) as BaseEngine<T>;
+            const newInstance = new subclassConstructor(); 
             newInstance.SetProvider(provider);
-            BaseEngine.ProviderInstances.set(provider, newInstance);
+//            BaseEngine.ProviderInstances.set({provider, subclassConstructor}, newInstance);
+            //BaseEngine.ProviderInstances.push({ provider, subclassConstructor, instance: newInstance });
+                    
             return newInstance;
         }
     }
@@ -195,8 +205,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     protected SetProvider(provider: IMetadataProvider) {
         this._provider = provider;
-        BaseEngine.ProviderInstances.set(this.ProviderToUse /*use default provider if one wasn't provided to use*/, <T><any>this);
+//        BaseEngine.ProviderInstances.set({provider: this.ProviderToUse, subclassConstructor: this.constructor} /*use default provider if one wasn't provided to use*/, <T><any>this);
+
+        this.CheckAddToProviderInstances(this.ProviderToUse);
     }
+
+    protected CheckAddToProviderInstances(provider: IMetadataProvider) {
+        const existingEntry = BaseEngine.ProviderInstances.find(
+            entry => entry.provider === provider && entry.subclassConstructor === this.constructor
+        );
+
+        if (!existingEntry) {
+            BaseEngine.ProviderInstances.push({
+                provider: provider,
+                subclassConstructor: this.constructor,
+                instance: this
+            });
+        }
+    }
+
+
+
 
     private _eventListener: Observable<MJEvent>;
     /**
@@ -384,7 +413,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      */
     protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        const rv = new RunView();
+        const rv = this.RunViewProviderToUse;
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ResultType: 'entity_object',
@@ -420,7 +449,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
         if (configs && configs.length > 0) {
-            const rv = new RunView();
+            const rv = this.RunViewProviderToUse;
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
