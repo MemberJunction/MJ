@@ -13,7 +13,7 @@ export class ResourceData {
     public ID!: number;
     public Name!: string;
     public ResourceTypeID!: string;
-    public ResourceRecordID!: any;
+    public ResourceRecordID!: any; 
     public Configuration: any;
 
     /**

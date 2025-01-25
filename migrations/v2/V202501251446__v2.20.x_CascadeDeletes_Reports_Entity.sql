@@ -1,0 +1,1 @@
+UPDATE ${flyway:defaultSchema}.Entity SET CascadeDeletes=1 WHERE ID='09248F34-2837-EF11-86D4-6045BDEE16E6' -- reports
