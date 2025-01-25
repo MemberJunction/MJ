@@ -6,7 +6,9 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
-
+/**
+ * Data structure to track the class registrations 
+ */
 export class ClassRegistration {
     BaseClass: any // The TYPE of the base class, NOT an instance of the base class
     SubClass: any // The TYPE of the sub-class, NOT an instance of the sub-class
@@ -14,7 +16,7 @@ export class ClassRegistration {
                 // in the registration list, so we'll use the key to identify which sub-class to use for a given entity
     Priority: number // if there are multiple entries for a given combination of baseClass and subClass and key, we will use the priority to determine which one to use. The higher the number, the higher the priority
 }
-
+ 
 
 /**
  * ClassFactory is used to register and create instances of classes. It is a singleton class that can be used to register a sub-class for a given base class and key. Do NOT directly attempt to instantiate this class, 
