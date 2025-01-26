@@ -1,9 +1,6 @@
 <div class = "chat-container" mjFillContainer #topLevelDiv [bottomMargin]="10" [rightMargin]="10">
     <div class="layout">
-        @if (_isLoading) {
-            <kendo-loader></kendo-loader>
-        }
-        @if (IsConversationListVisible && !_isLoading) {
+        @if (IsConversationListVisible) {
             <div class="left-panel">
                 <div class="conversation-history">
                     <div class="new-chat-area">
@@ -49,75 +46,73 @@
                 </div>    
             </div>
         }
-        @if (!IsConversationListVisible && !_isLoading) {
+        @if (!IsConversationListVisible) {
             <span class="fa-solid fa-table-columns toggle-icon" (click)="DisplayConversationList(true)"></span>
         }
 
-        @if (!_isLoading) {
-            <div class="right-panel">
-                <div class="conversation-wrapper" mjFillContainer>
-                    <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
-                        <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
-                            <!-- MOVED THIS TO INSIDE MESSAGE - REMOVE THIS ENTIRE DIV ---- <kendo-loader></kendo-loader> -->
+        <div class="right-panel">
+            <div class="conversation-wrapper" mjFillContainer>
+                <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
+                    <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
+                        <!-- MOVED THIS TO INSIDE MESSAGE - REMOVE THIS ENTIRE DIV ---- <kendo-loader></kendo-loader> -->
+                    </div>
+                    <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
+                        <div class='welcome-message'>
+                            <img [src]="SkipLogoURL" />
+                            <div class="welcome-header-text">What can I help with today?</div>
                         </div>
-                        <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
-                            <div class='welcome-message'>
-                                <img [src]="SkipLogoURL" />
-                                <div class="welcome-header-text">What can I help with today?</div>
+                        <div class='welcome-suggested-questions'>
+                            <div class="welcome-suggested-questions-col">
+                                <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[0].prompt)">
+                                    <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>
+                                    <span>{{WelcomeQuestions[0].bottomLine}}</span>
+                                </div>
+                                <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[1].prompt)">
+                                    <span class="welcome-question-header">{{WelcomeQuestions[1].topLine}}</span>
+                                    <span>{{WelcomeQuestions[1].bottomLine}}</span>
+                                </div>    
                             </div>
-                            <div class='welcome-suggested-questions'>
-                                <div class="welcome-suggested-questions-col">
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[0].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>
-                                        <span>{{WelcomeQuestions[0].bottomLine}}</span>
-                                    </div>
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[1].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[1].topLine}}</span>
-                                        <span>{{WelcomeQuestions[1].bottomLine}}</span>
-                                    </div>    
+                            <div class="welcome-suggested-questions-col">
+                                <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[2].prompt)">
+                                    <span class="welcome-question-header">{{WelcomeQuestions[2].topLine}}</span>
+                                    <span>{{WelcomeQuestions[2].bottomLine}}</span>
                                 </div>
-                                <div class="welcome-suggested-questions-col">
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[2].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[2].topLine}}</span>
-                                        <span>{{WelcomeQuestions[2].bottomLine}}</span>
-                                    </div>
-                                    <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[3].prompt)">
-                                        <span class="welcome-question-header">{{WelcomeQuestions[3].topLine}}</span>
-                                        <span>{{WelcomeQuestions[3].bottomLine}}</span>
-                                    </div>    
-                                </div>
-                            </div>    
-                        </div>
-                        <div mjContainer mjSkipResize="true"><!--mjSkipResize results in everything below this level NOT being resized, performance optimization-->
-                            <!-- Dynamic messages will be injected here -->
-                        </div>
-                        <span class="scroll-to-bottom-icon" *ngIf="_showScrollToBottomIcon && Messages && Messages.length > 0" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
+                                <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[3].prompt)">
+                                    <span class="welcome-question-header">{{WelcomeQuestions[3].topLine}}</span>
+                                    <span>{{WelcomeQuestions[3].bottomLine}}</span>
+                                </div>    
+                            </div>
+                        </div>    
                     </div>
-                    <div class="input-area">
-                        <div class="text-area-wrapper">
-                            <textarea
-                                #AskSkipInput 
-                                [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
-                                (keyup.enter)="onEnter($event)" 
-                                (input)="onInputChange($event)"
-                                type="text" 
-                                [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
-                        </div>
-                        @if (ShowDataContextButton) {
-                            <button kendoButton >
-                                <span class="fa-solid fa-gear" 
-                                        (click)="showDataContext()"></span>
-                            </button>    
-                        }
-                        <button kendoButton 
-                                [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
-                                (click)="sendSkipMessage()">
-                                <span class="fas fa-solid fa-arrow-up"></span>
-                        </button>
+                    <div mjContainer mjSkipResize="true"><!--mjSkipResize results in everything below this level NOT being resized, performance optimization-->
+                        <!-- Dynamic messages will be injected here -->
                     </div>
-                </div>    
-            </div>
-        }
+                    <span class="scroll-to-bottom-icon" *ngIf="_showScrollToBottomIcon && Messages && Messages.length > 0" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
+                </div>
+                <div class="input-area">
+                    <div class="text-area-wrapper">
+                        <textarea
+                            #AskSkipInput 
+                            [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
+                            (keyup.enter)="onEnter($event)" 
+                            (input)="onInputChange($event)"
+                            type="text" 
+                            [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
+                    </div>
+                    @if (ShowDataContextButton) {
+                        <button kendoButton >
+                            <span class="fa-solid fa-gear" 
+                                    (click)="showDataContext()"></span>
+                        </button>    
+                    }
+                    <button kendoButton 
+                            [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
+                            (click)="sendSkipMessage()">
+                            <span class="fas fa-solid fa-arrow-up"></span>
+                    </button>
+                </div>
+            </div>    
+        </div>
     </div> 
 </div>     
 
