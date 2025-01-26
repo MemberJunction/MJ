@@ -342,6 +342,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   public async Load(forceRefresh: boolean = false) {
     if (!this._initialLoadComplete || forceRefresh) {
       this.updateParentTabPanelStyling();
+      SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // set to zero each time we are called here
 
       // create an intersection observer to see if we are visible
       this._intersectionObserver = new IntersectionObserver(async (entries) => {
@@ -355,7 +356,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         } else {
           // we are now visible, increment the count of visible instances
           SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
-          if (!this._initialLoadComplete) {
+          if (!this._initialLoadComplete || forceRefresh) {
             // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
             InvokeManualResize();
   
@@ -393,6 +394,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // now fire up the observer on the top level div
       this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
     }
+  }
+
+  /**
+   * This method is used to refresh the data in the component. This will reload the conversations and messages from the server.
+   */
+  public Refresh() {
+    this.Load(true);
   }
 
   private _scrollToBottom: boolean = false;
