@@ -167,4 +167,4 @@ INSERT (ID, EntityID, Sequence, Name, DisplayName, Description, Type, Length, Pr
 
 
 /* SQL text to set default column width where needed */
-EXEC __mj.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
+EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
