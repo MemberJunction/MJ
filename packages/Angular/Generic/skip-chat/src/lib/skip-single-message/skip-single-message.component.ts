@@ -42,7 +42,8 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * If set to true, user messages will be shown with a button to allow delete/edit
      */
     @Input() public ShowMessageEditPanel: boolean = true;
-  
+
+
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
     /**

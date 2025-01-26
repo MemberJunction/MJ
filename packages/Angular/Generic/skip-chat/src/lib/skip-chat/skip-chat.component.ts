@@ -341,29 +341,34 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public AutoLoad: boolean = true;
   public async Load(forceRefresh: boolean = false) {
     if (!this._initialLoadComplete || forceRefresh) {
+      MJGlobal.Instance.ObjectCache.Remove('Conversations'); // clear the cache so we reload the conversations
+      if (this.paramsSubscription) {
+          this.paramsSubscription.unsubscribe();
+      }
       this.updateParentTabPanelStyling();
+      SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // set to zero each time we are called here
 
       // create an intersection observer to see if we are visible
       this._intersectionObserver = new IntersectionObserver(async (entries) => {
         const [entry] = entries;
         if (!entry.isIntersecting) {
           // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
-          if (this._initialLoadComplete) {
+          if (this._initialLoadComplete || forceRefresh) {
             // don't go below 0
             SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
           }
         } else {
           // we are now visible, increment the count of visible instances
           SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
-          if (!this._initialLoadComplete) {
+          if (!this._initialLoadComplete || forceRefresh) {
             // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
             InvokeManualResize();
   
             // first do stuff if we're on "global" skip chat mode...
             if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
               // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
-              this.paramsSubscription = this.route.params.subscribe(async (params) => {
-                if (!this._initialLoadComplete) {
+                this.paramsSubscription = this.route.params.subscribe(async (params) => {
+                if (!this._initialLoadComplete || forceRefresh) {
                   this._initialLoadComplete = true; // do this once
                   const conversationId = params.conversationId;
                   if (conversationId) {
@@ -376,7 +381,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
               });
             } else if (this.LinkedEntity && this.CompositeKeyIsPopulated()) {
               // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
-              if (!this._initialLoadComplete) {
+              if (!this._initialLoadComplete || forceRefresh) {
                 this._initialLoadComplete = true; // do this once
                 await this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
               }
@@ -393,6 +398,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // now fire up the observer on the top level div
       this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
     }
+  }
+
+  /**
+   * This method is used to refresh the data in the component. This will reload the conversations and messages from the server.
+   */
+  public Refresh() {
+    this.Load(true);
   }
 
   private _scrollToBottom: boolean = false;
@@ -425,7 +437,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       });
       if (result && result.Success) {
         // now, cache the conversations for future use
-        MJGlobal.Instance.ObjectCache.Add('Conversations', result.Results);
+        MJGlobal.Instance.ObjectCache.Replace('Conversations', result.Results); // use Replace for safety in case someone else has added to the cache between when we checked and now
         // also set the local variable so we can use it below
         cachedConversations = <ConversationEntity[]>result.Results;
       }
