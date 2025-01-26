@@ -2,6 +2,35 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Sun, 26 Jan 2025 20:07:04 GMT",
+      "version": "2.20.0",
+      "tag": "@memberjunction/core_v2.20.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core",
+            "commit": "d9e9a0bb27585b12fc741a10afbb704aa1d2380b",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/core",
+            "commit": "5cf158e3b1d27deabb7fcaa537dcd7cc80cf5bf0",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v2.20.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 Jan 2025 21:51:08 GMT",
       "version": "2.19.5",
       "tag": "@memberjunction/core_v2.19.5",

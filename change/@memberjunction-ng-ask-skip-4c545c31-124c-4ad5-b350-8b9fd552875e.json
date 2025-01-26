@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ng-ask-skip",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

@@ -1,8 +1,41 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Thu, 23 Jan 2025 21:51:08 GMT and should not be manually modified.
+This log was last generated on Sun, 26 Jan 2025 20:07:03 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.0
+
+Sun, 26 Jan 2025 20:07:03 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+- Bump @memberjunction/actions to v2.20.0
+- Bump @memberjunction/ai to v2.20.0
+- Bump @memberjunction/ai-mistral to v2.20.0
+- Bump @memberjunction/ai-openai to v2.20.0
+- Bump @memberjunction/ai-vectors-pinecone to v2.20.0
+- Bump @memberjunction/aiengine to v2.20.0
+- Bump @memberjunction/core to v2.20.0
+- Bump @memberjunction/core-actions to v2.20.0
+- Bump @memberjunction/core-entities to v2.20.0
+- Bump @memberjunction/data-context to v2.20.0
+- Bump @memberjunction/data-context-server to v2.20.0
+- Bump @memberjunction/doc-utils to v2.20.0
+- Bump @memberjunction/entity-communications-server to v2.20.0
+- Bump @memberjunction/external-change-detection to v2.20.0
+- Bump @memberjunction/global to v2.20.0
+- Bump @memberjunction/graphql-dataprovider to v2.20.0
+- Bump @memberjunction/queue to v2.20.0
+- Bump @memberjunction/skip-types to v2.20.0
+- Bump @memberjunction/sqlserver-dataprovider to v2.20.0
+- Bump @memberjunction/storage to v2.20.0
+- Bump @memberjunction/templates to v2.20.0
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
 
 ## 2.19.5
 

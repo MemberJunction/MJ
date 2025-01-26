@@ -2,6 +2,65 @@
   "name": "@memberjunction/codegen-lib",
   "entries": [
     {
+      "date": "Sun, 26 Jan 2025 20:07:04 GMT",
+      "version": "2.20.0",
+      "tag": "@memberjunction/codegen-lib_v2.20.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "5cf158e3b1d27deabb7fcaa537dcd7cc80cf5bf0",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/ai to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/actions to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core-entities to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/global to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.20.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "3289e3f446e2c585420cbf0f418d2c2b0e51c0a1",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 Jan 2025 21:51:08 GMT",
       "version": "2.19.5",
       "tag": "@memberjunction/codegen-lib_v2.19.5",

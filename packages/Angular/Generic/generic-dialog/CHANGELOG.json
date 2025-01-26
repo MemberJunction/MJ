@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-generic-dialog",
   "entries": [
     {
+      "date": "Sun, 26 Jan 2025 20:07:04 GMT",
+      "version": "2.20.0",
+      "tag": "@memberjunction/ng-generic-dialog_v2.20.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ng-generic-dialog",
+            "commit": "5cf158e3b1d27deabb7fcaa537dcd7cc80cf5bf0",
+            "comment": "Bump minor version"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 21 Jan 2025 00:15:47 GMT",
       "version": "2.19.0",
       "tag": "@memberjunction/ng-generic-dialog_v2.19.0",

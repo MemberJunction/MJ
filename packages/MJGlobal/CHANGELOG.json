@@ -2,6 +2,27 @@
   "name": "@memberjunction/global",
   "entries": [
     {
+      "date": "Sun, 26 Jan 2025 20:07:04 GMT",
+      "version": "2.20.0",
+      "tag": "@memberjunction/global_v2.20.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/global",
+            "commit": "5cf158e3b1d27deabb7fcaa537dcd7cc80cf5bf0",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/global",
+            "commit": "ecfb31d4c87eaef8b746e6b0f4bc5dd60fe6bb6d",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Tue, 21 Jan 2025 00:15:48 GMT",
       "version": "2.19.0",
       "tag": "@memberjunction/global_v2.19.0",

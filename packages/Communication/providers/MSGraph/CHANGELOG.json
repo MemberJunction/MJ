@@ -2,6 +2,69 @@
   "name": "@memberjunction/communication-ms-graph",
   "entries": [
     {
+      "date": "Sun, 26 Jan 2025 20:07:04 GMT",
+      "version": "2.20.0",
+      "tag": "@memberjunction/communication-ms-graph_v2.20.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/communication-ms-graph",
+            "commit": "5cf158e3b1d27deabb7fcaa537dcd7cc80cf5bf0",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/communication-types to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/ai to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/ai-openai to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/aiengine to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/core to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/core-entities to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/global to v2.20.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/communication-ms-graph",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v2.20.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 Jan 2025 21:51:08 GMT",
       "version": "2.19.5",
       "tag": "@memberjunction/communication-ms-graph_v2.19.5",
