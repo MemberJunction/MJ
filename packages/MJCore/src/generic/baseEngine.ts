@@ -413,7 +413,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      * @param contextUser 
      */
     protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        const rv = this.RunViewProviderToUse;
+        const p = this.RunViewProviderToUse;
+        const rv = new RunView(p);
         const result = await rv.RunView({
             EntityName: config.EntityName,
             ResultType: 'entity_object',
@@ -449,7 +450,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
         if (configs && configs.length > 0) {
-            const rv = this.RunViewProviderToUse;
+            const p = this.RunViewProviderToUse;
+            const rv = new RunView(p);
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
