@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
-This log was last generated on Sun, 26 Jan 2025 20:07:03 GMT and should not be manually modified.
+This log was last generated on Mon, 27 Jan 2025 02:32:09 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.1
+
+Mon, 27 Jan 2025 02:32:09 GMT
+
+### Patches
+
+- Bump @memberjunction/actions to v2.20.1
+- Bump @memberjunction/ai to v2.20.1
+- Bump @memberjunction/ai-vector-dupe to v2.20.1
+- Bump @memberjunction/aiengine to v2.20.1
+- Bump @memberjunction/core to v2.20.1
+- Bump @memberjunction/core-entities to v2.20.1
+- Bump @memberjunction/global to v2.20.1
+- Bump @memberjunction/queue to v2.20.1
 
 ## 2.20.0
 

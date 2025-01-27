@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/ai-mistral
 
-This log was last generated on Sun, 26 Jan 2025 20:07:04 GMT and should not be manually modified.
+This log was last generated on Mon, 27 Jan 2025 02:32:09 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.1
+
+Mon, 27 Jan 2025 02:32:09 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v2.20.1
+- Bump @memberjunction/global to v2.20.1
 
 ## 2.20.0
 

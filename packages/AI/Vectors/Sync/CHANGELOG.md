@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ai-vector-sync
 
-This log was last generated on Sun, 26 Jan 2025 20:07:04 GMT and should not be manually modified.
+This log was last generated on Mon, 27 Jan 2025 02:32:09 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.1
+
+Mon, 27 Jan 2025 02:32:09 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v2.20.1
+- Bump @memberjunction/ai-vectordb to v2.20.1
+- Bump @memberjunction/ai-vectors to v2.20.1
+- Bump @memberjunction/ai-vectors-pinecone to v2.20.1
+- Bump @memberjunction/ai-mistral to v2.20.1
+- Bump @memberjunction/aiengine to v2.20.1
+- Bump @memberjunction/core to v2.20.1
+- Bump @memberjunction/global to v2.20.1
+- Bump @memberjunction/templates to v2.20.1
+- Bump @memberjunction/templates-base-types to v2.20.1
+- Bump @memberjunction/ai-openai to v2.20.1
 
 ## 2.20.0
 
