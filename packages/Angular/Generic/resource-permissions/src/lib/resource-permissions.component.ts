@@ -59,6 +59,8 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   public SelectedType: 'User' | 'Role' = 'Role';
   public SelectedPermissionLevel: 'View' | 'Edit' | 'Owner' = 'View';
 
+  public _Loading: boolean = false;
+
   public async UpdateResourceRecordID(ResourceRecordID: string) {
     this.ResourceRecordID = ResourceRecordID;
     // now go through all of our permissions and update the ResourceRecordID
@@ -73,6 +75,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       throw new Error('ResourceTypeID and ResourceRecordID must be set');
     }
 
+    this._Loading = true;
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
     const engine = this.GetEngine();
     await engine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
@@ -95,6 +98,8 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       this.SelectedUser = this.AllUsers[0];
     if (this.AllRoles.length > 0)
       this.SelectedRole = this.AllRoles[0];
+
+    this._Loading = false;
   }
 
   private _pendingDeletes: ResourcePermissionEntity[] = [];
@@ -147,13 +152,14 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
 
   public async SavePermissions(): Promise<boolean> {
     // first delete any permissions that were marked for deletion
+    this._Loading = true;
     const p = this.ProviderToUse;
     const tg = await p.CreateTransactionGroup();
     for (const permission of this._pendingDeletes) {
       if (permission.IsSaved) {
         // only delete records previously saved, sometimes a user adds a new permission and deletes it before saving it
         permission.TransactionGroup = tg;
-        if (!permission.Delete()) { // no await - we await the tg.submit below  
+        if (!await permission.Delete()) { // we use await here because the promise will resolve before the actual save occurs --- the internals will not call the network until tg.Submit() below
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
@@ -169,7 +175,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (this._pendingDeletes.includes(permission)) {
         // don't save a permission record that is new, if it was also marked for deletion
         permission.TransactionGroup = tg;
-        if (!permission.Save()) { // no await - we await the tg.submit below
+        if (!permission.Save()) { // no await on saves, use tg.Submit() below
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
@@ -185,7 +191,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       // make sure not in the delete array
       if (!this._pendingDeletes.includes(permission)) {
         permission.TransactionGroup = tg;
-        if (!permission.Save()) { // no await - we await the tg.submit below
+        if (!permission.Save()) { // no await on saves, use tg.Submit() below
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
@@ -198,6 +204,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
 
     // now save the changes
     if (await tg.Submit()) {
+      this._Loading = false;
       this._pendingDeletes = [];
       this._pendingAdds = [];
       const engine = this.GetEngine();
@@ -206,6 +213,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     }
     else {
       // we had an error, show the user via SharedService
+      this._Loading = false;
       if (this.ShowUserErrorMessages)
         MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', );
   

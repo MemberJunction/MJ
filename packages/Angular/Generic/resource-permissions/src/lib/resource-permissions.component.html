@@ -1,4 +1,7 @@
 <div class="container">
+  @if(_Loading) {
+    <kendo-loader></kendo-loader>
+  }
   @if(ShowSaveButton) {
     <button kendoButton (click)="SavePermissions()">Save</button>
   }
