@@ -153,7 +153,14 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (permission.IsSaved) {
         // only delete records previously saved, sometimes a user adds a new permission and deletes it before saving it
         permission.TransactionGroup = tg;
-        permission.Delete(); // no await - we await the tg.submit below  
+        if (!permission.Delete()) { // no await - we await the tg.submit below  
+          // validation errors come back here
+          if (this.ShowUserErrorMessages)
+            MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
+
+          LogError('Error deleting permission record in the transaction group: ' + permission.LatestResult.Error);
+          return false;
+        }  
       }      
     }
 
@@ -162,7 +169,14 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (this._pendingDeletes.includes(permission)) {
         // don't save a permission record that is new, if it was also marked for deletion
         permission.TransactionGroup = tg;
-        permission.Save(); // no await - we await the tg.submit below
+        if (!permission.Save()) { // no await - we await the tg.submit below
+          // validation errors come back here
+          if (this.ShowUserErrorMessages)
+            MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
+
+          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);          
+          return false;
+        }
       }
     }
 
@@ -171,7 +185,14 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       // make sure not in the delete array
       if (!this._pendingDeletes.includes(permission)) {
         permission.TransactionGroup = tg;
-        permission.Save(); // no await - we await the tg.submit below
+        if (!permission.Save()) { // no await - we await the tg.submit below
+          // validation errors come back here
+          if (this.ShowUserErrorMessages)
+            MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
+
+          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);
+          return false;
+        }
       }
     }
 
