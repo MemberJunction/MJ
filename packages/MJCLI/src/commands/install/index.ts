@@ -11,7 +11,6 @@ import { ZodError, z } from 'zod';
 
 // Directories are relative to execution cwd
 const GENERATED_ENTITIES_DIR = 'GeneratedEntities';
-const CODEGEN_DIR = 'CodeGen';
 const SQL_SCRIPTS_DIR = 'SQL Scripts';
 const GENERATED_DIR = 'generated';
 const MJ_BASE_DIR = 'MJ_BASE';
@@ -136,13 +135,6 @@ ASK_SKIP_API_URL = 'http://localhost:8000'
 ASK_SKIP_ORGANIZATION_ID = 1
 `;
     fs.writeFileSync('.env', dotenvContent);
-
-    //*******************************************************************
-    // Process CodeGen
-    //*******************************************************************
-    this.log('\nProcessing CodeGen...');
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
 
     //*******************************************************************
     // Process MJAPI
