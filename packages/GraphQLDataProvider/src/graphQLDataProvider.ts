@@ -22,6 +22,7 @@ import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
+import { RolesAndUsersInput } from "./rolesAndUsersType";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -1475,6 +1476,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         });
         this._pushStatusRequests.push({sessionId, observable: newObservable});
         return newObservable;
+    }
+
+
+    /**
+     * Utility method to call the Sync Roles and Users mutation on the MJ API server, this can only be invoked by the system user
+     * @param data 
+     */
+    public async SyncRolesAndUsers(data: RolesAndUsersInput): Promise<boolean> {
+        // call the resolver to sync the roles and users
+        const query = gql`mutation SyncRolesAndUsers($data: RolesAndUsersInput!) {
+            SyncRolesAndUsers(data: $data) {
+                Success
+            }
+        }`
+        const d = await this.ExecuteGQL(query, {data});
+        return d.SyncRolesAndUsers.Success;
     }
 }
 
