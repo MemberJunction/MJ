@@ -251,7 +251,7 @@ export class SyncRolesAndUsersResolver {
         // go through the future users and update any that are in the current users
         let ok: boolean = true;
         for (const update of futureUsers) {
-            const current = currentUsers.find(c => c.Email.trim().toLowerCase() === update.Email.trim().toLowerCase());
+            const current = currentUsers.find(c => c.Email?.trim().toLowerCase() === update.Email?.trim().toLowerCase());
             if (current) {
                 current.Name = update.Name;
                 current.Type = update.Type;
@@ -383,7 +383,7 @@ export class SyncRolesAndUsersResolver {
                     const thisUserDBRoles = dbUserRoles.filter(ur => ur.UserID === dbUser.ID);
                     for (const dbUserRole of thisUserDBRoles) {
                         const role = user.Roles.find(r => r.Name.trim().toLowerCase() === dbRoles.find(rr => rr.ID === dbUserRole.RoleID)?.Name.trim().toLowerCase());
-                        if (!role) {
+                        if (!role && !this.IsStandardRole(dbUserRole.Role)) {
                             // this user role is no longer in the user's roles, we need to remove it
                             //dbUserRole.TransactionGroup = tg;
                             ok = ok && await dbUserRole.Delete(); // remove the user role - we use await for the DELETE, not the save
