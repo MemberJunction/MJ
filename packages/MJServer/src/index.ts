@@ -60,7 +60,7 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
-export * from './resolvers/SyncRolesUsers.js';
+export * from './resolvers/SyncRolesUsersResolver.js';
 
 export * from './generated/generated.js';
 
