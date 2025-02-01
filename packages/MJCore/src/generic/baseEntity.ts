@@ -441,7 +441,7 @@ export abstract class BaseEntity<T = unknown> {
         if (type === 'save' || type === 'delete') {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
-            event.payload = null;
+            event.payload = payload;
             event.type = type;
 
             MJGlobal.Instance.RaiseEvent({
@@ -1087,7 +1087,7 @@ export abstract class BaseEntity<T = unknown> {
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
                 
                 // stash the old values for the event
-                const oldVals =  this.GetDataObject({
+                const oldVals =  await this.GetDataObject({
                     oldValues: false,
                     omitNullValues: false,
                     omitEmptyStrings: false,
