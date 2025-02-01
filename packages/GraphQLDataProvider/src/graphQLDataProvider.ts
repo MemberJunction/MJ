@@ -22,6 +22,7 @@ import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
+import { RolesAndUsersInput } from "./rolesAndUsersType";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -36,6 +37,16 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get Token(): string { return this.Data.Token }
 
     set Token(token: string) { this.Data.Token = token}
+
+    /**
+     * This optional parameter is used when using a shared secret key that is static and provided by the publisher of the MJAPI server. Providing this value will result in 
+     * a special header x-mj-api-key being set with this value in the HTTP request to the server. This is useful when the server is configured to require this key for certain requests.
+     * 
+     * WARNING: This should NEVER BE USED IN A CLIENT APP like a browser. The only suitable use for this is if you are using GraphQLDataProvider on the server side from another MJAPI, or 
+     * some other secure computing environment where the key can be kept secure.
+     */
+    get MJAPIKey(): string { return this.Data.MJAPIKey }
+    set MJAPIKey(key: string) { this.Data.MJAPIKey = key }
 
     /**
      * URL is the URL to the GraphQL endpoint
@@ -61,6 +72,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param MJCoreSchemaName the name of the MJ Core schema, if it is not the default name of __mj
      * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
+     * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server. 
      */
     constructor(token: string,
                 url: string,
@@ -68,12 +80,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 refreshTokenFunction: RefreshTokenFunction,
                 MJCoreSchemaName?: string,
                 includeSchemas?: string[],
-                excludeSchemas?: string[]) {
+                excludeSchemas?: string[],
+                mjAPIKey?: string) {
         super(
                 {
                     Token: token,
                     URL: url,
                     WSURL: wsurl,
+                    MJAPIKey: mjAPIKey,
                     RefreshTokenFunction: refreshTokenFunction,
                 },
                 MJCoreSchemaName,
@@ -155,7 +169,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (separateConnection) {
                 this._sessionId = newUUID;
                 this._configData = configData;
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId);
+                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey);
             }
             else {
                 if (GraphQLDataProvider.Instance._sessionId === undefined)
@@ -165,7 +179,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     
                 // now create the new client, if it isn't alreayd created
                 if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId);    
+                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);    
             }
             return super.Config(configData); // now parent class can do it's config
         }
@@ -1348,7 +1362,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._configData.Token = newToken; // update the token
                 this._client = this.CreateNewGraphQLClient(this._configData.URL,
                                                            this._configData.Token,
-                                                           this._sessionId);
+                                                           this._sessionId,
+                                                           this._configData.MJAPIKey);  
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');
@@ -1363,12 +1378,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider.Instance.RefreshToken();
     }
 
-    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
+    protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string): GraphQLClient {
+        const headers: Record<string, string> = { 
+            'x-session-id': sessionId,
+        };
+        if (token)
+            headers.authorization = 'Bearer ' + token;
+        if (mjAPIKey)
+            headers['x-mj-api-key'] = mjAPIKey;
+
         return new GraphQLClient(url, {
-            headers: {
-                authorization: 'Bearer ' + token,
-                'x-session-id': sessionId
-            }
+            headers
         });
     }
 
@@ -1475,6 +1495,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         });
         this._pushStatusRequests.push({sessionId, observable: newObservable});
         return newObservable;
+    }
+
+
+    /**
+     * Utility method to call the Sync Roles and Users mutation on the MJ API server, this can only be invoked by the system user
+     * @param data 
+     */
+    public async SyncRolesAndUsers(data: RolesAndUsersInput): Promise<boolean> {
+        // call the resolver to sync the roles and users
+        const query = gql`mutation SyncRolesAndUsers($data: RolesAndUsersInputType!) {
+            SyncRolesAndUsers(data: $data) {
+                Success
+            }
+        }`
+        const d = await this.ExecuteGQL(query, {data});
+        return d.SyncRolesAndUsers.Success;
     }
 }
 
