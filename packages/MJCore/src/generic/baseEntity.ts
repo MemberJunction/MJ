@@ -441,7 +441,7 @@ export abstract class BaseEntity<T = unknown> {
         if (type === 'save' || type === 'delete') {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
-            event.payload = null;
+            event.payload = payload;
             event.type = type;
 
             MJGlobal.Instance.RaiseEvent({
@@ -860,7 +860,7 @@ export abstract class BaseEntity<T = unknown> {
                             if (result)
                                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
 
-                            this.RaiseEvent('save', null)
+                            this.RaiseEvent('save', null);
 
                             return true;
                         }
@@ -1086,11 +1086,20 @@ export abstract class BaseEntity<T = unknown> {
             else{
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
                 
+                // stash the old values for the event
+                const oldVals =  await this.GetDataObject({
+                    oldValues: false,
+                    omitNullValues: false,
+                    omitEmptyStrings: false,
+                    excludeFields: null,
+                    includeRelatedEntityData: false,
+                    relatedEntityList: null
+                });
                 if (await this.ProviderToUse.Delete(this, options, this.ActiveUser)) {
                     // record deleted correctly
-                    // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                    this.RaiseEvent('delete', null);
+                    this.RaiseEvent('delete', {OldValues: oldVals});
 
+                    // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                     this.NewRecord(); // will trigger a new record event here too
                     return true;
                 }
