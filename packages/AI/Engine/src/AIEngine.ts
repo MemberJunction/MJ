@@ -545,4 +545,45 @@ export class AIEngine extends BaseEngine<AIEngine> {
         cacheItem.RunAt = new Date();
         return await cacheItem.Save();
     }
+
+    /**
+     * Helper method that will return a BaseLLM instance and APIName for the specified model name.
+     * @param modelName 
+     * @returns 
+     */
+    public GetBaseLLMByName(modelName: string): {BaseLLM: BaseLLM, APIName: string} | null {
+        let model: AIModelEntityExtended | undefined = this.Models.find((model: AIModelEntityExtended) => model.Name === modelName);
+        if(!model){
+            LogError(`Base LLM with name ${modelName} not found.`);
+            return null;
+        }
+
+        const APIName: string = model.APIName;
+
+        const apiKey: string = GetAIAPIKey(model.DriverClass);
+        if(!apiKey){
+            LogError(`Could not get API key for model ${modelName}.`);
+            return null;
+        }
+
+        const instance: BaseLLM | null = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
+        if (!instance){
+            LogError(`Could not create BaseModel instance for model ${modelName}.`);
+            return null;
+        }
+
+        // check that the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
+        // dont have a registration for the class we are looking for
+        if (instance.constructor.name === 'BaseModel' || instance.constructor.name === 'BaseLLM'){
+            LogError(`driverClass ${model.DriverClass} returned an instance of the base class.`);
+            return null;
+        }
+
+        const result = {
+            BaseLLM: instance,
+            APIName: APIName
+        };
+
+        return result;
+    }
 }
