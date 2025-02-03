@@ -20,7 +20,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
 VALUES
 (
 	'Llama 3.3 70b versatile',
-    'Llama 3.1 70 billion parameters',
+    'Llama 3.3 70 billion parameters',
     'Groq',
     'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E',
     '4',

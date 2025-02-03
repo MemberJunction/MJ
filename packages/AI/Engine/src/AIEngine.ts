@@ -436,7 +436,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
             throw new Error(`Model ${params.modelId} is not active.`);
 
         // figure out the driver for the requested model
-        const driver: BaseModel = await this.getDriver(model, GetAIAPIKey(model.DriverClass));
+        const driver: BaseModel = this.getDriver(model, GetAIAPIKey(model.DriverClass));
         if (driver) {
             const modelParams = <ChatParams>{
                 model: params.modelName,
@@ -485,22 +485,9 @@ export class AIEngine extends BaseEngine<AIEngine> {
         }
     }
 
-    protected async getDriver(model: AIModelEntityExtended, apiKey: string): Promise<BaseModel> {
+    protected getDriver(model: AIModelEntityExtended, apiKey: string): BaseModel {
         const driverClassName = model.DriverClass;
-        const driverModuleName = model.DriverImportPath;
-        try {
-            if (driverModuleName && driverModuleName.length > 0) {
-                const driverModule = await import(driverModuleName);
-                if (!driverModule)
-                    throw new Error(`Error loading driver module '${driverModuleName}'`);
-            }
-            // now the module is loaded (or wasn't specified, so assumed to be loaded already)
-            // so just use ClassFactory as we would in any other case
-            return MJGlobal.Instance.ClassFactory.CreateInstance<BaseModel>(BaseModel, driverClassName, apiKey);
-        }
-        catch (e) {
-            throw new Error(`Error loading driver '${driverModuleName}' / '${driverClassName}' : ${e.message}`);
-        }
+        return MJGlobal.Instance.ClassFactory.CreateInstance<BaseModel>(BaseModel, driverClassName, apiKey);
     }
 
 
@@ -547,18 +534,16 @@ export class AIEngine extends BaseEngine<AIEngine> {
     }
 
     /**
-     * Helper method that will return a BaseLLM instance and APIName for the specified model name.
+     * Helper method that will return a BaseModel instance and an AIModelEntityExtended entity for the specified model name.
      * @param modelName 
      * @returns 
      */
-    public GetBaseLLMByName(modelName: string): {BaseLLM: BaseLLM, APIName: string} | null {
+    public GetDriverByName(modelName: string): {BaseLLM: BaseModel, Model: AIModelEntityExtended} | null {
         let model: AIModelEntityExtended | undefined = this.Models.find((model: AIModelEntityExtended) => model.Name === modelName);
         if(!model){
             LogError(`Base LLM with name ${modelName} not found.`);
             return null;
         }
-
-        const APIName: string = model.APIName;
 
         const apiKey: string = GetAIAPIKey(model.DriverClass);
         if(!apiKey){
@@ -566,22 +551,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
             return null;
         }
 
-        const instance: BaseLLM | null = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, apiKey);
-        if (!instance){
-            LogError(`Could not create BaseModel instance for model ${modelName}.`);
-            return null;
-        }
-
-        // check that the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
-        // dont have a registration for the class we are looking for
-        if (instance.constructor.name === 'BaseModel' || instance.constructor.name === 'BaseLLM'){
-            LogError(`driverClass ${model.DriverClass} returned an instance of the base class.`);
-            return null;
-        }
+        const driver: BaseModel  = this.getDriver(model, apiKey);
 
         const result = {
-            BaseLLM: instance,
-            APIName: APIName
+            BaseLLM: driver,
+            Model: model
         };
 
         return result;
