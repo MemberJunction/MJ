@@ -66,6 +66,10 @@ export * from './generated/generated.js';
 
 import { resolve } from 'node:path';
 
+export type MJServerOptions = {
+  onBeforeServe?: () => void | Promise<void>;
+};
+
 const localPath = (p: string) => {
   // Convert import.meta.url to a local directory path
   const dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -76,7 +80,7 @@ const localPath = (p: string) => {
 
 export const createApp = () => express();
 
-export const serve = async (resolverPaths: Array<string>, app = createApp()) => {
+export const serve = async (resolverPaths: Array<string>, app = createApp(), options?: MJServerOptions) => {
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -168,6 +172,10 @@ export const serve = async (resolverPaths: Array<string>, app = createApp()) => 
       context: contextFunction({ setupComplete$, dataSource }),
     })
   );
+
+  if (options?.onBeforeServe) {
+    await Promise.resolve(options.onBeforeServe());
+  }
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
