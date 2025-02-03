@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/queue
 
-This log was last generated on Mon, 27 Jan 2025 02:32:09 GMT and should not be manually modified.
+This log was last generated on Mon, 03 Feb 2025 01:16:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.2
+
+Mon, 03 Feb 2025 01:16:07 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v2.20.2
+- Bump @memberjunction/aiengine to v2.20.2
+- Bump @memberjunction/core to v2.20.2
+- Bump @memberjunction/global to v2.20.2
+- Bump @memberjunction/core-entities to v2.20.2
 
 ## 2.20.1
 

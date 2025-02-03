@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
-This log was last generated on Mon, 27 Jan 2025 02:32:09 GMT and should not be manually modified.
+This log was last generated on Mon, 03 Feb 2025 01:16:07 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.2
+
+Mon, 03 Feb 2025 01:16:07 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v2.20.2
+- Bump @memberjunction/core-entities to v2.20.2
+- Bump @memberjunction/actions to v2.20.2
+- Bump @memberjunction/scheduled-actions to v2.20.2
+- Bump @memberjunction/ai to v2.20.2
+- Bump @memberjunction/ai-vector-sync to v2.20.2
+- Bump @memberjunction/ai-vectors-pinecone to v2.20.2
+- Bump @memberjunction/ai-mistral to v2.20.2
+- Bump @memberjunction/ai-openai to v2.20.2
 
 ## 2.20.1
 

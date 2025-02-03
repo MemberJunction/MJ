@@ -2,6 +2,39 @@
   "name": "@memberjunction/graphql-dataprovider",
   "entries": [
     {
+      "date": "Mon, 03 Feb 2025 01:16:07 GMT",
+      "version": "2.20.2",
+      "tag": "@memberjunction/graphql-dataprovider_v2.20.2",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "e55ad17bc6a822a262537c7f6d3a01c2cf09189e",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v2.20.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v2.20.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v2.20.2",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 27 Jan 2025 02:32:09 GMT",
       "version": "2.20.1",
       "tag": "@memberjunction/graphql-dataprovider_v2.20.1",
