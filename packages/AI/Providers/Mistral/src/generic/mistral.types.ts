@@ -44,7 +44,8 @@ export type ChatCompletetionRequest = {
     top_p?: number,
     random_seed?: number,
     stream?: boolean,
-    safe_prompt?: boolean
+    safe_prompt?: boolean,
+    response_format?: any
 }
 
 export interface ChatCompletionResponseChoice {
