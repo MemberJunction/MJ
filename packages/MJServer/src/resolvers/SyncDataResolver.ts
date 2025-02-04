@@ -22,13 +22,16 @@ export class SyncDataResultType {
 }
 
 /**
- * This type defines the possible list of actions that can be taken in syncing data: Create, Update, CreateOrUpdate, Delete
+ * This type defines the possible list of actions that can be taken in syncing data: Create, Update, CreateOrUpdate, Delete, or DeleteWithFilter
+ * DeleteWithFilter is where you specify a valid SQL expression that can be used in a where clause to get a list of records in a given entity to delete
+ * this can be used to ensure cleaning out data from a subset of a given table.
  */
 export enum SyncDataActionType {
   Create = "Create",
   Update = "Update",
   CreateOrUpdate = "CreateOrUpdate",
-  Delete = "Delete"
+  Delete = "Delete",
+  DeleteWithFilter = "DeleteWithFilter"
 }
 
 registerEnumType(SyncDataActionType, {
@@ -49,8 +52,17 @@ export class ActionItemInputType {
     @Field(() => SyncDataActionType) 
     Type!: SyncDataActionType;
 
-    @Field(() => String)
-    RecordJSON!: string;
+    /**
+     * This field is a JSON representation of the field values of the entity to be created or updated. It is used for all ActionTypes except for 
+     */
+    @Field(() => String, {nullable: true})
+    RecordJSON?: string;
+
+    /**
+     * This field is only provided when the Action Type is DeleteWithFilter. It is a valid SQL expression that can be used in a where clause to get a list of records in a given entity to delete
+     */
+    @Field(() => String, {nullable: true})
+    DeleteFilter?: string;
 }
 
 
@@ -91,8 +103,8 @@ export class SyncDataResolver {
             const e = md.Entities.find((e) => e.Name === item.EntityName);
             if (e) {
                 const pk = new CompositeKey(item.PrimaryKey.KeyValuePairs);
-                const entityObject = await md.GetEntityObject(e.Name, context.userPayload.userRecord);
-                const fieldValues = JSON.parse(item.RecordJSON);
+                const entityObject = item.Type === SyncDataActionType.DeleteWithFilter ? null : await md.GetEntityObject(e.Name, context.userPayload.userRecord);
+                const fieldValues = item.RecordJSON ? JSON.parse(item.RecordJSON) : {};
                 switch (item.Type) {
                     case SyncDataActionType.Create:
                         await this.SyncSingleItemCreate(entityObject, fieldValues, result);
@@ -102,25 +114,13 @@ export class SyncDataResolver {
                         break;
                     case SyncDataActionType.CreateOrUpdate:
                         // in this case we attempt to load the item first, if it is not possible to load the item, then we create it
-                        if (await entityObject.InnerLoad(pk)) {
-                            await this.InnerSyncSingleItemUpdate(entityObject, pk, fieldValues, result);
-                        }
-                        else {
-                            await this.SyncSingleItemCreate(entityObject, fieldValues, result);
-                        }
+                        await this.SyncSingleItemCreateOrUpdate(entityObject, pk, fieldValues, result);
                         break;
                     case SyncDataActionType.Delete:
-                        if (await entityObject.InnerLoad(pk)) {
-                            if (await entityObject.Delete()) {
-                                result.success = true;
-                            }
-                            else {
-                                result.errorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
-                            }
-                        }
-                        else {
-                            result.errorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
-                        }
+                        await this.SyncSingleItemDelete(entityObject, pk, result);
+                        break;
+                    case SyncDataActionType.DeleteWithFilter:
+                        await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord);
                         break;
                     default:
                         throw new Error('Invalid SyncDataActionType');
@@ -136,6 +136,63 @@ export class SyncDataResolver {
         }
         finally {
             return result;
+        }
+    }
+
+
+    protected async SyncSingleItemDeleteWithFilter(entityName: string, filter: string, result: ActionItemOutputType, user: UserInfo) {
+        try {
+            // here we will iterate through the result of a RunView on the entityname/filter and delete each matching record
+            let overallSuccess: boolean = true;
+            let combinedErrorMessage: string = "";
+            const rv = new RunView();
+            const result = await rv.RunView<BaseEntity>({
+                EntityName: entityName,
+                ExtraFilter: filter,
+                ResultType: 'entity_object'
+            }, user);
+            if (result && result.Success) {
+                for (const entityObject of result.Results) {
+                    if (!await entityObject.Delete()) {
+                        overallSuccess = false;
+                        combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.Message + '\n';
+                    }
+                }
+                result.Success = overallSuccess
+                if (!overallSuccess) {
+                    result.ErrorMessage = combinedErrorMessage
+                }
+            }
+            else {
+                result.Success = false;
+                result.ErrorMessage = 'Failed to run the view to get the list of items to delete for entity: ' + entityName + ' with filter: ' + filter + '\n';
+            }
+        }
+        catch (e) {
+            result.errorMessage = typeof e === 'string' ? e : (e as any).message;
+        }
+    }
+
+    protected async SyncSingleItemCreateOrUpdate(entityObject: BaseEntity, pk: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+        if (await entityObject.InnerLoad(pk)) {
+            await this.InnerSyncSingleItemUpdate(entityObject, pk, fieldValues, result);
+        }
+        else {
+            await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+        }
+    }
+
+    protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, result: ActionItemOutputType) {
+        if (await entityObject.InnerLoad(pk)) {
+            if (await entityObject.Delete()) {
+                result.success = true;
+            }
+            else {
+                result.errorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+            }
+        }
+        else {
+            result.errorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
         }
     }
 
