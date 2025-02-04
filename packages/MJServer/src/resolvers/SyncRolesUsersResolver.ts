@@ -1,6 +1,6 @@
-import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver, registerEnumType } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, TransactionGroupBase, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
 
