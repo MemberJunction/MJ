@@ -10,17 +10,17 @@
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR Query
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spDeleteQuery]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteQuery]
 GO
 
-CREATE PROCEDURE [__mj].[spDeleteQuery]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteQuery]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [__mj].[Query]
+        [${flyway:defaultSchema}].[Query]
     WHERE
         [ID] = @ID
 
@@ -28,7 +28,7 @@ BEGIN
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [__mj].[spDeleteQuery] TO [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Integration]
 
 
     

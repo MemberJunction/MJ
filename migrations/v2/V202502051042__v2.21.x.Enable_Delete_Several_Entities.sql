@@ -1,5 +1,5 @@
 -- Make it possible for these entities to support Deletes
-UPDATE __mj.Entity SET AllowDeleteAPI=1 WHERE ID IN (
+UPDATE ${flyway:defaultSchema}.Entity SET AllowDeleteAPI=1 WHERE ID IN (
 '47248F34-2837-EF11-86D4-6045BDEE16E6', --Communication Base Message Types
 '43248F34-2837-EF11-86D4-6045BDEE16E6', --	Communication Providers
 'DE238F34-2837-EF11-86D4-6045BDEE16E6', -- Company Integrations
