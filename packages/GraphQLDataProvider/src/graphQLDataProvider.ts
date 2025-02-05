@@ -1520,7 +1520,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async SyncData(items: ActionItemInput[]): Promise<SyncDataResult> {
         // call the resolver to sync the roles and users
         const query = gql`mutation SyncData($items: [ActionItemInputType!]!) {
-            SyncData(data: $items) {
+            SyncData(items: $items) {
                 Success
                 Results
             }

@@ -2,24 +2,9 @@ import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } fr
 import { AppContext } from '../types.js';
 import { BaseEntity, CompositeKey, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
+import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 
 
-
-@ObjectType()
-export class ActionItemOutputType {
-    input: ActionItemInputType;
-    success: boolean;
-    errorMessage: string;
-}
-
-@ObjectType()
-export class SyncDataResultType {
-  @Field(() => Boolean)
-  Success: boolean;
-
-  Results: ActionItemOutputType[] = [];
-}
 
 /**
  * This type defines the possible list of actions that can be taken in syncing data: Create, Update, CreateOrUpdate, Delete, or DeleteWithFilter
@@ -27,27 +12,63 @@ export class SyncDataResultType {
  * this can be used to ensure cleaning out data from a subset of a given table.
  */
 export enum SyncDataActionType {
-  Create = "Create",
-  Update = "Update",
-  CreateOrUpdate = "CreateOrUpdate",
-  Delete = "Delete",
-  DeleteWithFilter = "DeleteWithFilter"
-}
+    Create = "Create",
+    Update = "Update",
+    CreateOrUpdate = "CreateOrUpdate",
+    Delete = "Delete",
+    DeleteWithFilter = "DeleteWithFilter"
+  }
+  
+  registerEnumType(SyncDataActionType, {
+    name: "SyncDataActionType", // GraphQL Enum Name
+    description: "Specifies the type of action to be taken in syncing, Create, Update, CreateOrUpdate, Delete" // Description,
+  });
+  
 
-registerEnumType(SyncDataActionType, {
-  name: "SyncDataActionType", // GraphQL Enum Name
-  description: "Specifies the type of action to be taken in syncing, Create, Update, CreateOrUpdate, Delete" // Description,
-});
+  @InputType() 
+  export class ActionItemInputType {
+      @Field(() => String)
+      EntityName!: string;
+  
+      @Field(() => CompositeKeyInputType, {nullable: true})
+      PrimaryKey?: CompositeKeyInputType;
+  
+      @Field(() => CompositeKeyInputType, {nullable: true})
+      AlternateKey?: CompositeKeyInputType;
+  
+      @Field(() => SyncDataActionType) 
+      Type!: SyncDataActionType;
+  
+      /**
+       * This field is a JSON representation of the field values of the entity to be created or updated. It is used for all ActionTypes except for 
+       */
+      @Field(() => String, {nullable: true})
+      RecordJSON?: string;
+  
+      /**
+       * This field is only provided when the Action Type is DeleteWithFilter. It is a valid SQL expression that can be used in a where clause to get a list of records in a given entity to delete
+       */
+      @Field(() => String, {nullable: true})
+      DeleteFilter?: string;
+  }
+  
+  
+@ObjectType()
+export class ActionItemOutputType {
+    @Field(() => Boolean)
+    Success: boolean;
 
-@InputType()
+    @Field(() => String)
+    ErrorMessage: string;
 
-@InputType()
-export class ActionItemInputType {
     @Field(() => String)
     EntityName!: string;
 
-    @Field(() => CompositeKeyInputType)
-    PrimaryKey!: CompositeKeyInputType;
+    @Field(() => CompositeKeyOutputType, {nullable: true})
+    PrimaryKey?: CompositeKeyOutputType;
+
+    @Field(() => CompositeKeyOutputType, {nullable: true})
+    AlternateKey?: CompositeKeyOutputType;
 
     @Field(() => SyncDataActionType) 
     Type!: SyncDataActionType;
@@ -65,6 +86,14 @@ export class ActionItemInputType {
     DeleteFilter?: string;
 }
 
+@ObjectType()
+export class SyncDataResultType {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => [ActionItemOutputType])
+  Results: ActionItemOutputType[] = [];
+}
 
 export class SyncDataResolver {
     /**
@@ -85,7 +114,7 @@ export class SyncDataResolver {
                 results.push(await this.SyncSingleItem(item, context, md)); 
             }
 
-            const overallSuccess = results.some((r) => !r.success);
+            const overallSuccess = results.some((r) => !r.Success);
             return { Success: overallSuccess, Results: results };
         } 
         catch (err) {
@@ -96,13 +125,19 @@ export class SyncDataResolver {
 
     protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: Metadata): Promise<ActionItemOutputType> {
         const result = new ActionItemOutputType();
-        result.input = item;
-        result.success = false;
-        result.errorMessage = '';
+        result.AlternateKey = item.AlternateKey;
+        result.PrimaryKey = item.PrimaryKey;
+        result.DeleteFilter = item.DeleteFilter;
+        result.EntityName = item.EntityName;
+        result.RecordJSON = item.RecordJSON;
+        result.Type = item.Type;
+        result.Success = false;
+        result.ErrorMessage = '';
         try {
             const e = md.Entities.find((e) => e.Name === item.EntityName);
             if (e) {
                 const pk = new CompositeKey(item.PrimaryKey.KeyValuePairs);
+                const ak = new CompositeKey(item.AlternateKey.KeyValuePairs);
                 const entityObject = item.Type === SyncDataActionType.DeleteWithFilter ? null : await md.GetEntityObject(e.Name, context.userPayload.userRecord);
                 const fieldValues = item.RecordJSON ? JSON.parse(item.RecordJSON) : {};
                 switch (item.Type) {
@@ -110,14 +145,14 @@ export class SyncDataResolver {
                         await this.SyncSingleItemCreate(entityObject, fieldValues, result);
                         break;
                     case SyncDataActionType.Update:
-                        await this.SyncSingleItemUpdate(entityObject, pk, fieldValues, result);
+                        await this.SyncSingleItemUpdate(entityObject, pk, ak, fieldValues, result);
                         break;
                     case SyncDataActionType.CreateOrUpdate:
                         // in this case we attempt to load the item first, if it is not possible to load the item, then we create it
-                        await this.SyncSingleItemCreateOrUpdate(entityObject, pk, fieldValues, result);
+                        await this.SyncSingleItemCreateOrUpdate(entityObject, pk, ak, fieldValues, result);
                         break;
                     case SyncDataActionType.Delete:
-                        await this.SyncSingleItemDelete(entityObject, pk, result);
+                        await this.SyncSingleItemDelete(entityObject, pk, ak, result);
                         break;
                     case SyncDataActionType.DeleteWithFilter:
                         await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord);
@@ -125,13 +160,13 @@ export class SyncDataResolver {
                     default:
                         throw new Error('Invalid SyncDataActionType');
                 }
-                result.success = true;
+                result.Success = true;
             } else {
                 throw new Error('Entity not found');
             }
         } 
         catch (err) {
-            result.errorMessage = typeof err === 'string' ? err : (err as any).message;
+            result.ErrorMessage = typeof err === 'string' ? err : (err as any).message;
             LogError(err);
         }
         finally {
@@ -169,30 +204,87 @@ export class SyncDataResolver {
             }
         }
         catch (e) {
-            result.errorMessage = typeof e === 'string' ? e : (e as any).message;
+            result.ErrorMessage = typeof e === 'string' ? e : (e as any).message;
         }
     }
 
-    protected async SyncSingleItemCreateOrUpdate(entityObject: BaseEntity, pk: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
-        if (await entityObject.InnerLoad(pk)) {
-            await this.InnerSyncSingleItemUpdate(entityObject, pk, fieldValues, result);
-        }
-        else {
-            await this.SyncSingleItemCreate(entityObject, fieldValues, result);
-        }
-    }
-
-    protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, result: ActionItemOutputType) {
-        if (await entityObject.InnerLoad(pk)) {
-            if (await entityObject.Delete()) {
-                result.success = true;
+    protected async LoadFromAlternateKey(entityName: string, alternateKey: CompositeKey, user: UserInfo): Promise<BaseEntity> {
+        try {
+            // no primary key provided, attempt to look up the primary key based on the 
+            const rv = new RunView();
+            const md = new Metadata();
+            const entity = md.EntityByName(entityName);
+            const result = await rv.RunView<BaseEntity>({
+                EntityName: entityName,
+                ExtraFilter: alternateKey.KeyValuePairs.map((kvp) => {
+                    const fieldInfo = entity.Fields.find((f) => f.Name === kvp.FieldName);
+                    const quotes = fieldInfo.NeedsQuotes ? "'" : '';
+                    return `${kvp.FieldName} = ${quotes}${kvp.Value}${quotes}`;
+                }).join(' AND '),
+                ResultType: 'entity_object'
+            }, user);
+            if (result && result.Success && result.Results.length === 1) {
+                return result.Results[0];
             }
             else {
-                result.errorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+                LogError (`Failed to load the item with alternate key: ${alternateKey.KeyValuePairs.map((kvp) => `${kvp.FieldName} = ${kvp.Value}`).join(' AND ')}. Result: ${result.Success} and ${result.Results?.length} items returned`);
+                return null;
+            }
+        }
+        catch (e) {
+            LogError(e);
+            return null;
+        }
+    }
+
+    protected async SyncSingleItemCreateOrUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+        if (!pk || pk.KeyValuePairs.length === 0) {
+            // no primary key try to load from alt key
+            const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
+            if (!altKeyResult) {
+                // no record found, create a new one
+                await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+            }
+            else {
+                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result);
             }
         }
         else {
-            result.errorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
+            // have a primary key do the usual load
+            if (await entityObject.InnerLoad(pk)) {
+                await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result);
+            }
+            else {
+                await this.SyncSingleItemCreate(entityObject, fieldValues, result);
+            }    
+        }
+    }
+
+    protected async SyncSingleItemDelete(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, result: ActionItemOutputType) {
+        if (!pk || pk.KeyValuePairs.length === 0) {
+            const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
+            if (!altKeyResult) {
+                result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
+            }
+            else {
+                if (await altKeyResult.Delete()) {
+                    result.Success = true;
+                }
+                else {
+                    result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+                }
+            }
+        }
+        else if (await entityObject.InnerLoad(pk)) {
+            if (await entityObject.Delete()) {
+                result.Success = true;
+            }
+            else {
+                result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+            }
+        }
+        else {
+            result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
         }
     }
 
@@ -200,31 +292,41 @@ export class SyncDataResolver {
         entityObject.NewRecord();
         entityObject.SetMany(fieldValues);
         if (await entityObject.Save()) {
-            result.success = true;
+            result.Success = true;
         }
         else {
-            result.errorMessage = 'Failed to create the item :' + entityObject.LatestResult.Message;
+            result.ErrorMessage = 'Failed to create the item :' + entityObject.LatestResult.Message;
         }
     }
 
-    protected async SyncSingleItemUpdate(entityObject: BaseEntity, pk: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
-        // attempt to load by pkey
-        if (await entityObject.InnerLoad(pk)) {
-            await this.InnerSyncSingleItemUpdate(entityObject, pk, fieldValues, result);
+    protected async SyncSingleItemUpdate(entityObject: BaseEntity, pk: CompositeKey, ak: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+        if (!pk || pk.KeyValuePairs.length === 0) {
+            // no pk, attempt to load by alt key
+            const altKeyResult = await this.LoadFromAlternateKey(entityObject.EntityInfo.Name, ak, entityObject.ContextCurrentUser);
+            if (!altKeyResult) {
+                // no record found, create a new one
+                result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified alternate key does not exist';
+            }
+            else {
+                await this.InnerSyncSingleItemUpdate(altKeyResult, fieldValues, result);
+            }
+        }
+        else if (await entityObject.InnerLoad(pk)) {
+            await this.InnerSyncSingleItemUpdate(entityObject, fieldValues, result);
         }
         else {
             // failed to load the item
-            result.errorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
+            result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
         }
     }
 
-    protected async InnerSyncSingleItemUpdate(entityObject: BaseEntity, pk: CompositeKey, fieldValues: any, result: ActionItemOutputType) {
+    protected async InnerSyncSingleItemUpdate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType) {
         entityObject.SetMany(fieldValues);
         if (await entityObject.Save()) {
-            result.success = true;
+            result.Success = true;
         }
         else {
-            result.errorMessage = 'Failed to update the item :' + entityObject.LatestResult.Message;
+            result.ErrorMessage = 'Failed to update the item :' + entityObject.LatestResult.Message;
         }
     }
 }

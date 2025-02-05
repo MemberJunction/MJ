@@ -44,9 +44,21 @@ export enum SyncDataActionType {
 }
   
 export class ActionItemInput {
+    /**
+     * The name of the entity where action is to be taken
+     */
     EntityName!: string;
-    PrimaryKey!: CompositeKey;
-
+    /**
+     * For Update, CreateOrUpdate and Delete operations either a PrimaryKey or an AlternateKey must be provided. For Create and DeleteWithFilter operations, neither is used. 
+     */
+    PrimaryKey?: CompositeKey;
+    /**
+     * For Update, CreateOrUpdate and Delete operations either a PrimaryKey or an AlternateKey must be provided. For Create and DeleteWithFilter operations, neither is used. 
+     */
+    AlternateKey?: CompositeKey;
+    /**
+     * The type of action requested. The possible values are Create, Update, CreateOrUpdate, Delete, DeleteWithFilter
+     */
     Type!: SyncDataActionType;
     /**
      * This field is a JSON representation of the field values of the entity to be created or updated. It is used for all ActionTypes except for 
