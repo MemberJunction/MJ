@@ -35,7 +35,8 @@ export class GroqLLM extends BaseLLM {
         const chatResponse = await this.client.chat.completions.create({
             model: params.model,
             messages: params.messages, 
-            max_tokens: params.maxOutputTokens
+            max_tokens: params.maxOutputTokens,
+            response_format: params.responseFormat
         });
         const endTime = new Date();
 

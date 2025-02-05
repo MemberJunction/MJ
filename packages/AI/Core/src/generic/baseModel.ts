@@ -26,6 +26,14 @@ export class BaseParams {
     temperature?: number
 
     /**
+     * Specifies the format that the model must output.
+     * 
+     * **Important:** when using a JSON response, you **must** also instruct the model to
+     * produce JSON yourself via a system or user message.
+     */
+    responseFormat?: any
+
+    /**
      * Model max output response tokens, optional.
      */
     maxOutputTokens?: number
