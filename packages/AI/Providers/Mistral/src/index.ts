@@ -1,2 +1,2 @@
 export * from './models/mistral';
-export * from './models/mistralEmbedding';
+export * from './models/mistralEmbedding'; 
