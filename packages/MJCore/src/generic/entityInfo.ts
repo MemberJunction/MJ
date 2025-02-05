@@ -80,6 +80,16 @@ export class EntityRelationshipInfo extends BaseInfo  {
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
 
+    /**
+    * * Field Name: AutoUpdateFromSchema
+    * * Display Name: Auto Update From Schema
+    * * SQL Data Type: bit
+    * * Default Value: true
+    * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to true.
+    */
+    AutoUpdateFromSchema: boolean = true
+
+
     // virtual fields - returned by the database VIEW
     Entity: string = null 
     EntityBaseTable: string = null 
@@ -299,6 +309,38 @@ export class EntityFieldInfo extends BaseInfo {
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
+
+    /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.
+    */
+    ScopeDefault: string | null = null; 
+
+    /**
+    * * Field Name: AutoUpdateRelatedEntityInfo
+    * * Display Name: Auto Update Related Entity Info
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.
+    */
+    AutoUpdateRelatedEntityInfo: boolean = true 
+
+    /**
+    * * Field Name: ValuesToPackWithSchema
+    * * Display Name: Values To Pack With Schema
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * None
+    *   * All
+    * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.
+    */
+    ValuesToPackWithSchema: 'Auto' | 'None' | 'All' = 'Auto';
+    
     
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -313,6 +355,8 @@ export class EntityFieldInfo extends BaseInfo {
     RelatedEntityBaseView: string = null 
     RelatedEntityCodeName: string = null 
     RelatedEntityClassName: string = null 
+
+
 
     // These are not in the database view and are added in code
     IsFloat: boolean
@@ -638,6 +682,60 @@ export class EntityInfo extends BaseInfo {
     Icon: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
+
+    /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
+    */
+    ScopeDefault: string | null = null; 
+
+    /**
+    * * Field Name: RowsToPackWithSchema
+    * * Display Name: Rows To Pack With Schema
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Sample
+    *   * All
+    * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.
+    */
+    RowsToPackWithSchema: 'None' | 'Sample' | 'All' = 'None';
+   
+    /**
+    * * Field Name: RowsToPackSampleMethod
+    * * Display Name: Rows To Pack Sample Method
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: random
+    * * Value List Type: List
+    * * Possible Values 
+    *   * random
+    *   * top n
+    *   * bottom n
+    * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.
+    */
+    RowsToPackSampleMethod: 'random' | 'top n' | 'bottom n' = 'random'; 
+
+    /**
+    * * Field Name: RowsToPackSampleCount
+    * * Display Name: Rows To Pack Sample Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.
+    */
+    RowsToPackSampleCount: number = 0; 
+
+    /**
+    * * Field Name: RowsToPackSampleOrder
+    * * Display Name: Rows To Pack Sample Order
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.
+    */
+    RowsToPackSampleOrder: string | null = null; 
+
 
     // virtual fields - returned by the database VIEW
     /**
