@@ -46,10 +46,27 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
    */
   @Input() AllowDeletePermissions: boolean = true;
 
-  // Define permission levels
-  public permissionLevels = ['View', 'Edit', 'Owner']; // these are the possible permission levels
+  /**
+   * List of possible permission levels that can be set for the resource. An array of strings, defaults to ['View', 'Edit', 'Owner']
+   */
+  @Input() PermissionLevels = ['View', 'Edit', 'Owner']; // these are the possible permission levels
 
-  public permissionTypes = ['User', 'Role'];
+  /**
+   * Specifies the types of permissions the UI will allow settings for. An array of strings, defaults to ['User', 'Role']
+   */
+  @Input() PermissionTypes = ['User', 'Role'];
+
+  /**
+   * This optional input allows you to exclude certain roles from the list of roles that can be selected for permissions. If existing permissions have been created with roles that are in this list they will still be displayed, 
+   * but the user will not be able to add new permissions with these roles. This is an array of strings with the NAMES of the roles.
+   */
+  @Input() ExcludedRoleNames: string[] = [];
+
+  /**
+   * This optional input allows you to exclude certain users from the list of users that can be selected for permissions. If existing permissions have been created with users that are in this list they will still be displayed, 
+   * but the user will not be able to add new permissions with these users. This is an array of strings with EMAILS.
+   */
+  @Input() ExcludedUserEmails: string[] = [];
 
   public AllUsers: UserEntity[] = [];
   public AllRoles: RoleInfo[] = [];
@@ -91,8 +108,10 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       OrderBy: "Name",
       ExtraFilter: "IsActive=1"
     });
-    this.AllUsers = result.Results;
-    this.AllRoles = p.Roles;
+    // filter out any users that are in the ExcludedUserEmails list
+    this.AllUsers = result.Results.filter((u) => !this.ExcludedUserEmails.includes(u.Email));
+    // filter out any roles that are in the ExcludedRoleNames list
+    this.AllRoles = p.Roles.filter((r) => !this.ExcludedRoleNames.includes(r.Name));
 
     if (this.AllUsers.length > 0)
       this.SelectedUser = this.AllUsers[0];
