@@ -31,13 +31,27 @@ export class OpenAILLM extends BaseLLM {
 
 
         const startTime = new Date();
-        const result = await this.OpenAI.chat.completions.create({
+        const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
-            max_tokens: params.maxOutputTokens,
-            response_format: params.responseFormat
-        });
+            max_tokens: params.maxOutputTokens
+        };
+
+        switch (params.responseFormat) {
+            case 'Any':
+            case 'Text':
+            case 'Markdown':
+                break;
+            case 'JSON':
+                openAIParams.response_format = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                openAIParams.response_format = params.modelSpecificResponseFormat;
+                break;
+        }
+
+        const result = await this.OpenAI.chat.completions.create(openAIParams);
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
