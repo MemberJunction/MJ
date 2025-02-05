@@ -48,8 +48,7 @@ export const ActionAuthorizationSchema = z.object({
     Authorization: z.string().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ActionAuthorizationEntityType = z.infer<typeof ActionAuthorizationSchema>;
@@ -1187,6 +1186,12 @@ export const AIModelSchema = z.object({
         * * Display Name: Input Token Limit
         * * SQL Data Type: int
     * * Description: Stores the maximum number of tokens that fit in the context window for the model.`),
+    SupportedResponseFormats: z.string().describe(`
+        * * Field Name: SupportedResponseFormats
+        * * Display Name: Supported Response Formats
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -1333,6 +1338,24 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific')]).describe(`
+        * * Field Name: ResponseFormat
+        * * Display Name: Response Format
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Text
+    *   * Markdown
+    *   * JSON
+    *   * ModelSpecific
+    * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
+    ModelSpecificResponseFormat: z.string().nullish().describe(`
+        * * Field Name: ModelSpecificResponseFormat
+        * * Display Name: Model Specific Response Format
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -1523,8 +1546,7 @@ export const ApplicationSettingSchema = z.object({
     Application: z.string().describe(`
         * * Field Name: Application
         * * Display Name: Application
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ApplicationSettingEntityType = z.infer<typeof ApplicationSettingSchema>;
@@ -1612,8 +1634,7 @@ export const AuditLogTypeSchema = z.object({
     Authorization: z.string().nullish().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
@@ -1685,13 +1706,11 @@ export const AuditLogSchema = z.object({
     AuditLogType: z.string().describe(`
         * * Field Name: AuditLogType
         * * Display Name: Audit Log Type
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
     Authorization: z.string().nullish().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().nullish().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -1741,13 +1760,11 @@ export const AuthorizationRoleSchema = z.object({
     Authorization: z.string().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AuthorizationRoleEntityType = z.infer<typeof AuthorizationRoleSchema>;
@@ -2671,23 +2688,19 @@ export const ContentItemSchema = z.object({
     ContentSource: z.string().nullish().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ContentItemEntityType = z.infer<typeof ContentItemSchema>;
@@ -2899,18 +2912,15 @@ export const ContentSourceSchema = z.object({
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
         * * Display Name: Content Source Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
         * * Display Name: Content File Type
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ContentSourceEntityType = z.infer<typeof ContentSourceSchema>;
@@ -3452,8 +3462,7 @@ export const DatasetItemSchema = z.object({
     Dataset: z.string().describe(`
         * * Field Name: Dataset
         * * Display Name: Dataset
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
@@ -4186,6 +4195,44 @@ export const EntitySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ScopeDefault: z.string().nullish().describe(`
+        * * Field Name: ScopeDefault
+        * * Display Name: Scope Default
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
+    RowsToPackWithSchema: z.union([z.literal('None'), z.literal('Sample'), z.literal('All')]).describe(`
+        * * Field Name: RowsToPackWithSchema
+        * * Display Name: Rows To Pack With Schema
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Sample
+    *   * All
+    * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`),
+    RowsToPackSampleMethod: z.union([z.literal('random'), z.literal('top n'), z.literal('bottom n')]).describe(`
+        * * Field Name: RowsToPackSampleMethod
+        * * Display Name: Rows To Pack Sample Method
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: random
+    * * Value List Type: List
+    * * Possible Values 
+    *   * random
+    *   * top n
+    *   * bottom n
+    * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`),
+    RowsToPackSampleCount: z.number().describe(`
+        * * Field Name: RowsToPackSampleCount
+        * * Display Name: Rows To Pack Sample Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`),
+    RowsToPackSampleOrder: z.string().nullish().describe(`
+        * * Field Name: RowsToPackSampleOrder
+        * * Display Name: Rows To Pack Sample Order
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
     CodeName: z.string().nullish().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -4852,18 +4899,15 @@ export const EntityDocumentSchema = z.object({
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type EntityDocumentEntityType = z.infer<typeof EntityDocumentSchema>;
@@ -5170,6 +5214,28 @@ export const EntityFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ScopeDefault: z.string().nullish().describe(`
+        * * Field Name: ScopeDefault
+        * * Display Name: Scope Default
+        * * SQL Data Type: nvarchar(100)
+    * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.`),
+    AutoUpdateRelatedEntityInfo: z.boolean().describe(`
+        * * Field Name: AutoUpdateRelatedEntityInfo
+        * * Display Name: Auto Update Related Entity Info
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`),
+    ValuesToPackWithSchema: z.union([z.literal('Auto'), z.literal('None'), z.literal('All')]).describe(`
+        * * Field Name: ValuesToPackWithSchema
+        * * Display Name: Values To Pack With Schema
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * None
+    *   * All
+    * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -5378,18 +5444,15 @@ export const EntityRecordDocumentSchema = z.object({
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().describe(`
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
-        * * SQL Data Type: nvarchar(250)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(250)`),
     VectorIndex: z.string().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type EntityRecordDocumentEntityType = z.infer<typeof EntityRecordDocumentSchema>;
@@ -5558,6 +5621,12 @@ export const EntityRelationshipSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AutoUpdateFromSchema: z.boolean().describe(`
+        * * Field Name: AutoUpdateFromSchema
+        * * Display Name: Auto Update From Schema
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -6268,13 +6337,11 @@ export const ListCategorySchema = z.object({
     Parent: z.string().nullish().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
@@ -6397,8 +6464,7 @@ export const ListSchema = z.object({
     Category: z.string().nullish().describe(`
         * * Field Name: Category
         * * Display Name: Category
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
@@ -6792,13 +6858,11 @@ export const QueryPermissionSchema = z.object({
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     Role: z.string().describe(`
         * * Field Name: Role
         * * Display Name: Role
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type QueryPermissionEntityType = z.infer<typeof QueryPermissionSchema>;
@@ -7500,8 +7564,7 @@ export const RecordMergeLogSchema = z.object({
     ApprovedByUser: z.string().nullish().describe(`
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type RecordMergeLogEntityType = z.infer<typeof RecordMergeLogSchema>;
@@ -8060,13 +8123,11 @@ export const ScheduledActionParamSchema = z.object({
     ScheduledAction: z.string().describe(`
         * * Field Name: ScheduledAction
         * * Display Name: Scheduled Action
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
         * * Display Name: Action Param
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ScheduledActionParamEntityType = z.infer<typeof ScheduledActionParamSchema>;
@@ -8169,13 +8230,11 @@ export const ScheduledActionSchema = z.object({
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     Action: z.string().describe(`
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(425)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(425)`),
 });
 
 export type ScheduledActionEntityType = z.infer<typeof ScheduledActionSchema>;
@@ -9044,8 +9103,7 @@ export const UserViewCategorySchema = z.object({
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -9895,7 +9953,6 @@ export class ActionAuthorizationEntity extends BaseEntity<ActionAuthorizationEnt
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string {
         return this.Get('Authorization');
@@ -12781,6 +12838,20 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: SupportedResponseFormats
+    * * Display Name: Supported Response Formats
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
+    */
+    get SupportedResponseFormats(): string {
+        return this.Get('SupportedResponseFormats');
+    }
+    set SupportedResponseFormats(value: string) {
+        this.Set('SupportedResponseFormats', value);
+    }
+
+    /**
     * * Field Name: AIModelType
     * * Display Name: AIModel Type
     * * SQL Data Type: nvarchar(50)
@@ -13155,6 +13226,40 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ResponseFormat
+    * * Display Name: Response Format
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Text
+    *   * Markdown
+    *   * JSON
+    *   * ModelSpecific
+    * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
+    */
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' {
+        return this.Get('ResponseFormat');
+    }
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific') {
+        this.Set('ResponseFormat', value);
+    }
+
+    /**
+    * * Field Name: ModelSpecificResponseFormat
+    * * Display Name: Model Specific Response Format
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.
+    */
+    get ModelSpecificResponseFormat(): string | null {
+        return this.Get('ModelSpecificResponseFormat');
+    }
+    set ModelSpecificResponseFormat(value: string | null) {
+        this.Set('ModelSpecificResponseFormat', value);
     }
 
     /**
@@ -13639,7 +13744,6 @@ export class ApplicationSettingEntity extends BaseEntity<ApplicationSettingEntit
     * * Field Name: Application
     * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Application(): string {
         return this.Get('Application');
@@ -13903,7 +14007,6 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string | null {
         return this.Get('Authorization');
@@ -14100,7 +14203,6 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Field Name: AuditLogType
     * * Display Name: Audit Log Type
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get AuditLogType(): string {
         return this.Get('AuditLogType');
@@ -14110,7 +14212,6 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string | null {
         return this.Get('Authorization');
@@ -14257,7 +14358,6 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Field Name: Authorization
     * * Display Name: Authorization
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Authorization(): string {
         return this.Get('Authorization');
@@ -14267,7 +14367,6 @@ export class AuthorizationRoleEntity extends BaseEntity<AuthorizationRoleEntityT
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get Role(): string {
         return this.Get('Role');
@@ -16770,7 +16869,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentSource
     * * Display Name: Content Source
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSource(): string | null {
         return this.Get('ContentSource');
@@ -16780,7 +16878,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentType(): string {
         return this.Get('ContentType');
@@ -16790,7 +16887,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentSourceType
     * * Display Name: Content Source Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSourceType(): string {
         return this.Get('ContentSourceType');
@@ -16800,7 +16896,6 @@ export class ContentItemEntity extends BaseEntity<ContentItemEntityType> {
     * * Field Name: ContentFileType
     * * Display Name: Content File Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
@@ -17378,7 +17473,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentType
     * * Display Name: Content Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentType(): string {
         return this.Get('ContentType');
@@ -17388,7 +17482,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentSourceType
     * * Display Name: Content Source Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentSourceType(): string {
         return this.Get('ContentSourceType');
@@ -17398,7 +17491,6 @@ export class ContentSourceEntity extends BaseEntity<ContentSourceEntityType> {
     * * Field Name: ContentFileType
     * * Display Name: Content File Type
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ContentFileType(): string {
         return this.Get('ContentFileType');
@@ -18838,7 +18930,6 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     * * Field Name: Dataset
     * * Display Name: Dataset
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Dataset(): string {
         return this.Get('Dataset');
@@ -20753,6 +20844,84 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
 
     /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
+    */
+    get ScopeDefault(): string | null {
+        return this.Get('ScopeDefault');
+    }
+    set ScopeDefault(value: string | null) {
+        this.Set('ScopeDefault', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackWithSchema
+    * * Display Name: Rows To Pack With Schema
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Sample
+    *   * All
+    * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.
+    */
+    get RowsToPackWithSchema(): 'None' | 'Sample' | 'All' {
+        return this.Get('RowsToPackWithSchema');
+    }
+    set RowsToPackWithSchema(value: 'None' | 'Sample' | 'All') {
+        this.Set('RowsToPackWithSchema', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleMethod
+    * * Display Name: Rows To Pack Sample Method
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: random
+    * * Value List Type: List
+    * * Possible Values 
+    *   * random
+    *   * top n
+    *   * bottom n
+    * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.
+    */
+    get RowsToPackSampleMethod(): 'random' | 'top n' | 'bottom n' {
+        return this.Get('RowsToPackSampleMethod');
+    }
+    set RowsToPackSampleMethod(value: 'random' | 'top n' | 'bottom n') {
+        this.Set('RowsToPackSampleMethod', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleCount
+    * * Display Name: Rows To Pack Sample Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.
+    */
+    get RowsToPackSampleCount(): number {
+        return this.Get('RowsToPackSampleCount');
+    }
+    set RowsToPackSampleCount(value: number) {
+        this.Set('RowsToPackSampleCount', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleOrder
+    * * Display Name: Rows To Pack Sample Order
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.
+    */
+    get RowsToPackSampleOrder(): string | null {
+        return this.Get('RowsToPackSampleOrder');
+    }
+    set RowsToPackSampleOrder(value: string | null) {
+        this.Set('RowsToPackSampleOrder', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -22447,7 +22616,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: VectorDatabase
     * * Display Name: Vector Database
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get VectorDatabase(): string {
         return this.Get('VectorDatabase');
@@ -22457,7 +22625,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: Template
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Template(): string {
         return this.Get('Template');
@@ -22467,7 +22634,6 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Field Name: AIModel
     * * Display Name: AI Model
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get AIModel(): string {
         return this.Get('AIModel');
@@ -23187,6 +23353,52 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.
+    */
+    get ScopeDefault(): string | null {
+        return this.Get('ScopeDefault');
+    }
+    set ScopeDefault(value: string | null) {
+        this.Set('ScopeDefault', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateRelatedEntityInfo
+    * * Display Name: Auto Update Related Entity Info
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.
+    */
+    get AutoUpdateRelatedEntityInfo(): boolean {
+        return this.Get('AutoUpdateRelatedEntityInfo');
+    }
+    set AutoUpdateRelatedEntityInfo(value: boolean) {
+        this.Set('AutoUpdateRelatedEntityInfo', value);
+    }
+
+    /**
+    * * Field Name: ValuesToPackWithSchema
+    * * Display Name: Values To Pack With Schema
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * None
+    *   * All
+    * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.
+    */
+    get ValuesToPackWithSchema(): 'Auto' | 'None' | 'All' {
+        return this.Get('ValuesToPackWithSchema');
+    }
+    set ValuesToPackWithSchema(value: 'Auto' | 'None' | 'All') {
+        this.Set('ValuesToPackWithSchema', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
@@ -23723,7 +23935,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Entity(): string {
         return this.Get('Entity');
@@ -23733,7 +23944,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: EntityDocument
     * * Display Name: Entity Document
     * * SQL Data Type: nvarchar(250)
-    * * Default Value: null
     */
     get EntityDocument(): string {
         return this.Get('EntityDocument');
@@ -23743,7 +23953,6 @@ export class EntityRecordDocumentEntity extends BaseEntity<EntityRecordDocumentE
     * * Field Name: VectorIndex
     * * Display Name: Vector Index
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get VectorIndex(): string {
         return this.Get('VectorIndex');
@@ -24178,6 +24387,20 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AutoUpdateFromSchema
+    * * Display Name: Auto Update From Schema
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.
+    */
+    get AutoUpdateFromSchema(): boolean {
+        return this.Get('AutoUpdateFromSchema');
+    }
+    set AutoUpdateFromSchema(value: boolean) {
+        this.Set('AutoUpdateFromSchema', value);
     }
 
     /**
@@ -26078,7 +26301,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Parent(): string | null {
         return this.Get('Parent');
@@ -26088,7 +26310,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string {
         return this.Get('User');
@@ -26406,7 +26627,6 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get Category(): string | null {
         return this.Get('Category');
@@ -27523,7 +27743,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Field Name: Query
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Query(): string {
         return this.Get('Query');
@@ -27533,7 +27752,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get Role(): string {
         return this.Get('Role');
@@ -29462,7 +29680,6 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Field Name: ApprovedByUser
     * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
@@ -30927,7 +31144,6 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Field Name: ScheduledAction
     * * Display Name: Scheduled Action
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ScheduledAction(): string {
         return this.Get('ScheduledAction');
@@ -30937,7 +31153,6 @@ export class ScheduledActionParamEntity extends BaseEntity<ScheduledActionParamE
     * * Field Name: ActionParam
     * * Display Name: Action Param
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ActionParam(): string {
         return this.Get('ActionParam');
@@ -31189,7 +31404,6 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Field Name: CreatedByUser
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get CreatedByUser(): string {
         return this.Get('CreatedByUser');
@@ -31199,7 +31413,6 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Field Name: Action
     * * Display Name: Action
     * * SQL Data Type: nvarchar(425)
-    * * Default Value: null
     */
     get Action(): string {
         return this.Get('Action');
@@ -33515,7 +33728,6 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     * * Field Name: Entity
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Entity(): string {
         return this.Get('Entity');

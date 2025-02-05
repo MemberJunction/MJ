@@ -1540,6 +1540,13 @@ export class AIPrompt_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`}) 
+    @MaxLength(40)
+    ResponseFormat: string;
+        
+    @Field({nullable: true, description: `A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`}) 
+    ModelSpecificResponseFormat?: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -1585,6 +1592,12 @@ export class CreateAIPromptInput {
 
     @Field(() => Float)
     CacheExpiration: number;
+
+    @Field()
+    ResponseFormat: string;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseFormat?: string;
 }
     
 
@@ -1619,6 +1632,12 @@ export class UpdateAIPromptInput {
 
     @Field(() => Float)
     CacheExpiration: number;
+
+    @Field()
+    ResponseFormat: string;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseFormat?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4299,6 +4318,17 @@ export class EntityField_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.`}) 
+    @MaxLength(200)
+    ScopeDefault?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`}) 
+    AutoUpdateRelatedEntityInfo: boolean;
+        
+    @Field({description: `Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`}) 
+    @MaxLength(20)
+    ValuesToPackWithSchema: string;
+        
     @Field() 
     @MaxLength(510)
     Entity: string;
@@ -4430,6 +4460,15 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     EntityIDFieldName?: string;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string;
+
+    @Field(() => Boolean)
+    AutoUpdateRelatedEntityInfo: boolean;
+
+    @Field()
+    ValuesToPackWithSchema: string;
 }
     
 
@@ -4518,6 +4557,15 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     EntityIDFieldName?: string;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string;
+
+    @Field(() => Boolean)
+    AutoUpdateRelatedEntityInfo: boolean;
+
+    @Field()
+    ValuesToPackWithSchema: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4785,6 +4833,24 @@ export class Entity_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`}) 
+    @MaxLength(200)
+    ScopeDefault?: string;
+        
+    @Field({description: `Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`}) 
+    @MaxLength(40)
+    RowsToPackWithSchema: string;
+        
+    @Field({description: `Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`}) 
+    @MaxLength(40)
+    RowsToPackSampleMethod: string;
+        
+    @Field(() => Int, {description: `The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`}) 
+    RowsToPackSampleCount: number;
+        
+    @Field({nullable: true, description: `An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`}) 
+    RowsToPackSampleOrder?: string;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -5046,6 +5112,21 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string;
+
+    @Field()
+    RowsToPackWithSchema: string;
+
+    @Field()
+    RowsToPackSampleMethod: string;
+
+    @Field(() => Int)
+    RowsToPackSampleCount: number;
+
+    @Field({ nullable: true })
+    RowsToPackSampleOrder?: string;
 }
     
 
@@ -5182,6 +5263,21 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Icon?: string;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string;
+
+    @Field()
+    RowsToPackWithSchema: string;
+
+    @Field()
+    RowsToPackSampleMethod: string;
+
+    @Field(() => Int)
+    RowsToPackSampleCount: number;
+
+    @Field({ nullable: true })
+    RowsToPackSampleOrder?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6313,6 +6409,9 @@ export class EntityRelationship_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`}) 
+    AutoUpdateFromSchema: boolean;
+        
     @Field() 
     @MaxLength(510)
     Entity: string;
@@ -6410,6 +6509,9 @@ export class CreateEntityRelationshipInput {
 
     @Field({ nullable: true })
     DisplayComponentConfiguration?: string;
+
+    @Field(() => Boolean)
+    AutoUpdateFromSchema: boolean;
 }
     
 
@@ -6474,6 +6576,9 @@ export class UpdateEntityRelationshipInput {
 
     @Field({ nullable: true })
     DisplayComponentConfiguration?: string;
+
+    @Field(() => Boolean)
+    AutoUpdateFromSchema: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11211,6 +11316,10 @@ export class AIModel_ {
     @Field(() => Int, {nullable: true, description: `Stores the maximum number of tokens that fit in the context window for the model.`}) 
     InputTokenLimit?: number;
         
+    @Field({description: `A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`}) 
+    @MaxLength(200)
+    SupportedResponseFormats: string;
+        
     @Field() 
     @MaxLength(100)
     AIModelType: string;
@@ -11284,6 +11393,9 @@ export class CreateAIModelInput {
 
     @Field(() => Int, { nullable: true })
     InputTokenLimit?: number;
+
+    @Field()
+    SupportedResponseFormats: string;
 }
     
 
@@ -11333,6 +11445,9 @@ export class UpdateAIModelInput {
 
     @Field(() => Int, { nullable: true })
     InputTokenLimit?: number;
+
+    @Field()
+    SupportedResponseFormats: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
