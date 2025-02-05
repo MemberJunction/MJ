@@ -114,7 +114,7 @@ export class SyncDataResolver {
                 results.push(await this.SyncSingleItem(item, context, md)); 
             }
 
-            const overallSuccess = results.some((r) => !r.Success);
+            const overallSuccess = !results.some((r) => !r.Success); // if any element in the array of results has a Success value of false, then the overall success is false
             return { Success: overallSuccess, Results: results };
         } 
         catch (err) {
@@ -136,8 +136,8 @@ export class SyncDataResolver {
         try {
             const e = md.Entities.find((e) => e.Name === item.EntityName);
             if (e) {
-                const pk = new CompositeKey(item.PrimaryKey.KeyValuePairs);
-                const ak = new CompositeKey(item.AlternateKey.KeyValuePairs);
+                const pk = item.PrimaryKey ? new CompositeKey(item.PrimaryKey.KeyValuePairs) : null;
+                const ak = item.AlternateKey ? new CompositeKey(item.AlternateKey.KeyValuePairs) : null;
                 const entityObject = item.Type === SyncDataActionType.DeleteWithFilter ? null : await md.GetEntityObject(e.Name, context.userPayload.userRecord);
                 const fieldValues = item.RecordJSON ? JSON.parse(item.RecordJSON) : {};
                 switch (item.Type) {
@@ -160,7 +160,6 @@ export class SyncDataResolver {
                     default:
                         throw new Error('Invalid SyncDataActionType');
                 }
-                result.Success = true;
             } else {
                 throw new Error('Entity not found');
             }
@@ -181,13 +180,13 @@ export class SyncDataResolver {
             let overallSuccess: boolean = true;
             let combinedErrorMessage: string = "";
             const rv = new RunView();
-            const result = await rv.RunView<BaseEntity>({
+            const data = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
                 ExtraFilter: filter,
                 ResultType: 'entity_object'
             }, user);
-            if (result && result.Success) {
-                for (const entityObject of result.Results) {
+            if (data && data.Success) {
+                for (const entityObject of data.Results) {
                     if (!await entityObject.Delete()) {
                         overallSuccess = false;
                         combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.Message + '\n';
@@ -214,7 +213,7 @@ export class SyncDataResolver {
             const rv = new RunView();
             const md = new Metadata();
             const entity = md.EntityByName(entityName);
-            const result = await rv.RunView<BaseEntity>({
+            const r = await rv.RunView<BaseEntity>({
                 EntityName: entityName,
                 ExtraFilter: alternateKey.KeyValuePairs.map((kvp) => {
                     const fieldInfo = entity.Fields.find((f) => f.Name === kvp.FieldName);
@@ -223,11 +222,11 @@ export class SyncDataResolver {
                 }).join(' AND '),
                 ResultType: 'entity_object'
             }, user);
-            if (result && result.Success && result.Results.length === 1) {
-                return result.Results[0];
+            if (r && r.Success && r.Results.length === 1) {
+                return r.Results[0];
             }
             else {
-                LogError (`Failed to load the item with alternate key: ${alternateKey.KeyValuePairs.map((kvp) => `${kvp.FieldName} = ${kvp.Value}`).join(' AND ')}. Result: ${result.Success} and ${result.Results?.length} items returned`);
+                //LogError (`Failed to load the item with alternate key: ${alternateKey.KeyValuePairs.map((kvp) => `${kvp.FieldName} = ${kvp.Value}`).join(' AND ')}. Result: ${r.Success} and ${r.Results?.length} items returned`);
                 return null;
             }
         }
@@ -289,10 +288,15 @@ export class SyncDataResolver {
     }
 
     protected async SyncSingleItemCreate(entityObject: BaseEntity, fieldValues: any, result: ActionItemOutputType) {
-        entityObject.NewRecord();
-        entityObject.SetMany(fieldValues);
+        // make sure we strip out the primary key from fieldValues before we pass it in because otherwise it will appear to be an existing record to the BaseEntity
+        const noPKValues = {...fieldValues};
+        entityObject.EntityInfo.PrimaryKeys.forEach((pk) => {
+            delete noPKValues[pk.Name];
+        });
+        entityObject.SetMany(noPKValues);
         if (await entityObject.Save()) {
             result.Success = true;
+            result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
         }
         else {
             result.ErrorMessage = 'Failed to create the item :' + entityObject.LatestResult.Message;
