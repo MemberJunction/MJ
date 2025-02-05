@@ -33,8 +33,6 @@ VALUES
     null
 )
 
-GO 
-
 UPDATE [${flyway:defaultSchema}].[AIModel]
 SET IsActive = 0
 where ID = 'F126ED5B-97B3-49E7-BD3B-E796B2099231'
