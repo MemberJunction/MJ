@@ -31,23 +31,25 @@ export class AllMetadata {
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
+}
 
-    // Create a new instance of AllMetadata from a simple object
-    public static FromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
-        try {
-            const newObject = new AllMetadata();
-            newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
-            // we now have to loop through the AllMetadataArray and use that info to build the metadata object with proper strongly typed object instances
-            for (let m of AllMetadataArrays) {
-                if (data.hasOwnProperty(m.key)) {
-                    newObject[m.key] = data[m.key].map((d: any) => new m.class(d, md));
-                }
+// Create a new instance of AllMetadata from a simple object
+export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
+    try {
+        const newObject = new AllMetadata();
+        newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
+
+        // we now have to loop through the AllMetadataArray and use that info to build the metadata object with proper strongly typed object instances
+        for (let m of AllMetadataArrays) {
+            if (data.hasOwnProperty(m.key)) {
+                newObject[m.key] = data[m.key].map((d: any) => new m.class(d, md));
             }
-            return newObject;
         }
-        catch (e) {
-            LogError(e);
-        }
+
+        return newObject;
+    }
+    catch (e) {
+        LogError(e);
     }
 }
 
@@ -730,7 +732,8 @@ export abstract class ProviderBase implements IMetadataProvider {
                 const temp = JSON.parse(await ls.getItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
                 if (temp) {
                     // we have local metadata
-                    const metadata = AllMetadata.FromSimpleObject(temp, this); // create a new object to start this up
+                    LogStatus('Metadata loaded from local storage')
+                    const metadata = MetadataFromSimpleObject(temp, this); // create a new object to start this up
                     this.UpdateLocalMetadata(metadata);
                 }
             }
