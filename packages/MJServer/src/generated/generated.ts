@@ -18,13 +18,13 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, flyway_schema_historyEntity, AIAgentRequestEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, QueryEntityEntity, flyway_schema_historyEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
 // ENTITY CLASS for Scheduled Actions
 //****************************************************************************
-@ObjectType({ description: 'Track scheduled actions and their details' })
+@ObjectType({ description: `Track scheduled actions and their details` })
 export class ScheduledAction_ {
     @Field() 
     @MaxLength(16)
@@ -45,33 +45,33 @@ export class ScheduledAction_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field({description: 'Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)'}) 
+    @Field({description: `Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)`}) 
     @MaxLength(40)
     Type: string;
         
-    @Field({nullable: true, description: 'Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this'}) 
+    @Field({nullable: true, description: `Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this`}) 
     @MaxLength(200)
     CronExpression?: string;
         
-    @Field({description: 'Timezone for the scheduled action, if not specified defaults to UTC/Z'}) 
+    @Field({description: `Timezone for the scheduled action, if not specified defaults to UTC/Z`}) 
     @MaxLength(200)
     Timezone: string;
         
-    @Field({description: 'Status of the scheduled action (Pending, Active, Disabled, Expired)'}) 
+    @Field({description: `Status of the scheduled action (Pending, Active, Disabled, Expired)`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field(() => Int, {nullable: true, description: 'Interval in days for the scheduled action'}) 
+    @Field(() => Int, {nullable: true, description: `Interval in days for the scheduled action`}) 
     IntervalDays?: number;
         
-    @Field({nullable: true, description: 'Day of the week for the scheduled action'}) 
+    @Field({nullable: true, description: `Day of the week for the scheduled action`}) 
     @MaxLength(40)
     DayOfWeek?: string;
         
-    @Field(() => Int, {nullable: true, description: 'Day of the month for the scheduled action'}) 
+    @Field(() => Int, {nullable: true, description: `Day of the month for the scheduled action`}) 
     DayOfMonth?: number;
         
-    @Field({nullable: true, description: 'Month for the scheduled action'}) 
+    @Field({nullable: true, description: `Month for the scheduled action`}) 
     @MaxLength(40)
     Month?: string;
         
@@ -458,40 +458,40 @@ export class ScheduledActionParamResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Explorer Navigation Items
 //****************************************************************************
-@ObjectType({ description: 'Table to store navigation items for MemberJunction Explorer' })
+@ObjectType({ description: `Table to store navigation items for MemberJunction Explorer` })
 export class ExplorerNavigationItem_ {
-    @Field({description: 'Unique identifier for each navigation item'}) 
+    @Field({description: `Unique identifier for each navigation item`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field(() => Int, {description: 'Sequence number for the navigation item, must be unique and greater than 0'}) 
+    @Field(() => Int, {description: `Sequence number for the navigation item, must be unique and greater than 0`}) 
     Sequence: number;
         
-    @Field({description: 'Unique name of the navigation item displayed to the user'}) 
+    @Field({description: `Unique name of the navigation item displayed to the user`}) 
     @MaxLength(200)
     Name: string;
         
-    @Field({description: 'The route for the navigation item relative to the app main URL, using Angular syntax like "entity/:entityName"'}) 
+    @Field({description: `The route for the navigation item relative to the app main URL, using Angular syntax like "entity/:entityName"`}) 
     @MaxLength(510)
     Route: string;
         
-    @Field(() => Boolean, {description: 'Indicates if the navigation item is active; allows turning off items in the UI without deleting them from the metadata'}) 
+    @Field(() => Boolean, {description: `Indicates if the navigation item is active; allows turning off items in the UI without deleting them from the metadata`}) 
     IsActive: boolean;
         
-    @Field(() => Boolean, {description: 'Controls if the navigation item is shown on the Home screen for MJ Explorer'}) 
+    @Field(() => Boolean, {description: `Controls if the navigation item is shown on the Home screen for MJ Explorer`}) 
     ShowInHomeScreen: boolean;
         
-    @Field(() => Boolean, {description: 'Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.'}) 
+    @Field(() => Boolean, {description: `Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.`}) 
     ShowInNavigationDrawer: boolean;
         
-    @Field({nullable: true, description: 'Optional, CSS class for an icon to be displayed with the navigation item'}) 
+    @Field({nullable: true, description: `Optional, CSS class for an icon to be displayed with the navigation item`}) 
     @MaxLength(200)
     IconCSSClass?: string;
         
-    @Field({nullable: true, description: 'Description of the navigation item, shown to the user on hover or in larger displays'}) 
+    @Field({nullable: true, description: `Description of the navigation item, shown to the user on hover or in larger displays`}) 
     Description?: string;
         
-    @Field({nullable: true, description: 'Administrator comments, not shown to the end user in MJ Explorer app'}) 
+    @Field({nullable: true, description: `Administrator comments, not shown to the end user in MJ Explorer app`}) 
     Comments?: string;
         
     @Field() 
@@ -658,24 +658,24 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Models
 //****************************************************************************
-@ObjectType({ description: 'Table to store the relationship between AI agents and AI models.' })
+@ObjectType({ description: `Table to store the relationship between AI agents and AI models.` })
 export class AIAgentModel_ {
-    @Field({description: 'The unique identifier for each AI agent-model mapping. Serves as the primary key.'}) 
+    @Field({description: `The unique identifier for each AI agent-model mapping. Serves as the primary key.`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field({nullable: true, description: 'References the unique identifier of the associated AI agent from AIAgent table.'}) 
+    @Field({nullable: true, description: `References the unique identifier of the associated AI agent from AIAgent table.`}) 
     @MaxLength(16)
     AgentID?: string;
         
-    @Field({nullable: true, description: 'The unique identifier of the associated AI model.'}) 
+    @Field({nullable: true, description: `The unique identifier of the associated AI model.`}) 
     @MaxLength(16)
     ModelID?: string;
         
     @Field(() => Boolean, {nullable: true}) 
     Active?: boolean;
         
-    @Field(() => Int, {nullable: true, description: 'The priority level of the AI model for the agent, where higher values indicate higher priority.'}) 
+    @Field(() => Int, {nullable: true, description: `The priority level of the AI model for the agent, where higher values indicate higher priority.`}) 
     Priority?: number;
         
     @Field() 
@@ -966,17 +966,17 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agents
 //****************************************************************************
-@ObjectType({ description: 'Table to store information about AI agents.' })
+@ObjectType({ description: `Table to store information about AI agents.` })
 export class AIAgent_ {
-    @Field({description: 'The unique identifier for each AI agent. Serves as the primary key.'}) 
+    @Field({description: `The unique identifier for each AI agent. Serves as the primary key.`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field({nullable: true, description: 'The name of the AI agent.'}) 
+    @Field({nullable: true, description: `The name of the AI agent.`}) 
     @MaxLength(510)
     Name?: string;
         
-    @Field({nullable: true, description: 'A detailed description of the AI agent.'}) 
+    @Field({nullable: true, description: `A detailed description of the AI agent.`}) 
     Description?: string;
         
     @Field({nullable: true}) 
@@ -1191,11 +1191,11 @@ export class AIAgentNote_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: 'Indicates the type of note, either User-specific or Global.'}) 
+    @Field({description: `Indicates the type of note, either User-specific or Global.`}) 
     @MaxLength(40)
     Type: string;
         
-    @Field({nullable: true, description: 'Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User'}) 
+    @Field({nullable: true, description: `Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User`}) 
     @MaxLength(16)
     UserID?: string;
         
@@ -1343,17 +1343,17 @@ export class AIAgentNoteResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Actions
 //****************************************************************************
-@ObjectType({ description: 'Table to store the relationship between AI agents and actions.' })
+@ObjectType({ description: `Table to store the relationship between AI agents and actions.` })
 export class AIAgentAction_ {
-    @Field({description: 'The unique identifier for each AI agent-action mapping. Serves as the primary key.'}) 
+    @Field({description: `The unique identifier for each AI agent-action mapping. Serves as the primary key.`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field({nullable: true, description: 'References the unique identifier of the associated AI agent from the AIAgent table.'}) 
+    @Field({nullable: true, description: `References the unique identifier of the associated AI agent from the AIAgent table.`}) 
     @MaxLength(16)
     AgentID?: string;
         
-    @Field({nullable: true, description: 'References the unique identifier of the associated action from the Action table.'}) 
+    @Field({nullable: true, description: `References the unique identifier of the associated action from the Action table.`}) 
     @MaxLength(16)
     ActionID?: string;
         
@@ -1497,7 +1497,7 @@ export class AIAgentActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Prompts
 //****************************************************************************
-@ObjectType({ description: 'Stores AI prompts, including references to categories, types, and templates.' })
+@ObjectType({ description: `Stores AI prompts, including references to categories, types, and templates.` })
 export class AIPrompt_ {
     @Field() 
     @MaxLength(16)
@@ -1510,15 +1510,15 @@ export class AIPrompt_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: 'Reference to the template used for the prompt.'}) 
+    @Field({description: `Reference to the template used for the prompt.`}) 
     @MaxLength(16)
     TemplateID: string;
         
-    @Field({nullable: true, description: 'Reference to the category the prompt belongs to.'}) 
+    @Field({nullable: true, description: `Reference to the category the prompt belongs to.`}) 
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field({description: 'Reference to the type of the prompt.'}) 
+    @Field({description: `Reference to the type of the prompt.`}) 
     @MaxLength(16)
     TypeID: string;
         
@@ -1526,10 +1526,10 @@ export class AIPrompt_ {
     @MaxLength(100)
     Status: string;
         
-    @Field(() => Boolean, {description: 'Indicates whether the results of the prompt should be cached.'}) 
+    @Field(() => Boolean, {description: `Indicates whether the results of the prompt should be cached.`}) 
     CacheResults: boolean;
         
-    @Field(() => Float, {description: 'Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.'}) 
+    @Field(() => Float, {description: `Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.`}) 
     CacheExpiration: number;
         
     @Field() 
@@ -1713,35 +1713,35 @@ export class AIPromptResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Result Cache
 //****************************************************************************
-@ObjectType({ description: 'Stores cached results of AI prompts, including multiple runs for history and tracking purposes.' })
+@ObjectType({ description: `Stores cached results of AI prompts, including multiple runs for history and tracking purposes.` })
 export class AIResultCache_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Reference to the AI prompt this result corresponds to.'}) 
+    @Field({description: `Reference to the AI prompt this result corresponds to.`}) 
     @MaxLength(16)
     AIPromptID: string;
         
-    @Field({description: 'Reference to the AI model that generated this result.'}) 
+    @Field({description: `Reference to the AI model that generated this result.`}) 
     @MaxLength(16)
     AIModelID: string;
         
-    @Field({description: 'Timestamp of when this result was generated.'}) 
+    @Field({description: `Timestamp of when this result was generated.`}) 
     @MaxLength(10)
     RunAt: Date;
         
-    @Field({description: 'The prompt text used to generate this result.'}) 
+    @Field({description: `The prompt text used to generate this result.`}) 
     PromptText: string;
         
-    @Field({nullable: true, description: 'The text of the result generated by the AI model.'}) 
+    @Field({nullable: true, description: `The text of the result generated by the AI model.`}) 
     ResultText?: string;
         
-    @Field({description: 'The status of this result, indicating whether it is currently active or expired.'}) 
+    @Field({description: `The status of this result, indicating whether it is currently active or expired.`}) 
     @MaxLength(100)
     Status: string;
         
-    @Field({nullable: true, description: 'Timestamp of when this result was marked as expired.'}) 
+    @Field({nullable: true, description: `Timestamp of when this result was marked as expired.`}) 
     @MaxLength(10)
     ExpiredOn?: Date;
         
@@ -1905,7 +1905,7 @@ export class AIResultCacheResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Prompt Categories
 //****************************************************************************
-@ObjectType({ description: 'Categories for organizing AI prompts in a hierarchical structure.' })
+@ObjectType({ description: `Categories for organizing AI prompts in a hierarchical structure.` })
 export class AIPromptCategory_ {
     @Field() 
     @MaxLength(16)
@@ -1915,7 +1915,7 @@ export class AIPromptCategory_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Parent category ID for hierarchical organization.'}) 
+    @Field({nullable: true, description: `Parent category ID for hierarchical organization.`}) 
     @MaxLength(16)
     ParentID?: string;
         
@@ -2076,7 +2076,7 @@ export class AIPromptCategoryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Prompt Types
 //****************************************************************************
-@ObjectType({ description: 'Types of AI prompts such as Chat, Text-to-Image, Text-to-Video, etc.' })
+@ObjectType({ description: `Types of AI prompts such as Chat, Text-to-Image, Text-to-Video, etc.` })
 export class AIPromptType_ {
     @Field() 
     @MaxLength(16)
@@ -2222,7 +2222,7 @@ export class AIPromptTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Companies
 //****************************************************************************
-@ObjectType({ description: 'A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.' })
+@ObjectType({ description: `A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.` })
 export class Company_ {
     @Field() 
     @MaxLength(16)
@@ -2429,7 +2429,7 @@ export class CompanyResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employees
 //****************************************************************************
-@ObjectType({ description: 'A list of employees across all units of your organization' })
+@ObjectType({ description: `A list of employees across all units of your organization` })
 export class Employee_ {
     @Field() 
     @MaxLength(16)
@@ -2711,7 +2711,7 @@ export class EmployeeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Favorites
 //****************************************************************************
-@ObjectType({ description: 'Records that each user can mark as a favorite for easy access' })
+@ObjectType({ description: `Records that each user can mark as a favorite for easy access` })
 export class UserFavorite_ {
     @Field() 
     @MaxLength(16)
@@ -3097,6 +3097,12 @@ export class EmployeeRoleResolver extends ResolverBase {
         return this.UpdateRecord('Employee Roles', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EmployeeRole_)
+    async DeleteEmployeeRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Employee Roles', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -3209,12 +3215,18 @@ export class EmployeeSkillResolver extends ResolverBase {
         return this.UpdateRecord('Employee Skills', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EmployeeSkill_)
+    async DeleteEmployeeSkill(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Employee Skills', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Roles
 //****************************************************************************
-@ObjectType({ description: 'Roles are used for security administration and can have zero to many Users as members' })
+@ObjectType({ description: `Roles are used for security administration and can have zero to many Users as members` })
 export class Role_ {
     @Field() 
     @MaxLength(16)
@@ -3224,14 +3236,14 @@ export class Role_ {
     @MaxLength(100)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the role'}) 
+    @Field({nullable: true, description: `Description of the role`}) 
     Description?: string;
         
-    @Field({nullable: true, description: 'The unique ID of the role in the directory being used for authentication, for example an ID in Azure.'}) 
+    @Field({nullable: true, description: `The unique ID of the role in the directory being used for authentication, for example an ID in Azure.`}) 
     @MaxLength(500)
     DirectoryID?: string;
         
-    @Field({nullable: true, description: 'The name of the role in the database, this is used for auto-generating permission statements by CodeGen'}) 
+    @Field({nullable: true, description: `The name of the role in the database, this is used for auto-generating permission statements by CodeGen`}) 
     @MaxLength(500)
     SQLName?: string;
         
@@ -3443,7 +3455,7 @@ export class RoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Skills
 //****************************************************************************
-@ObjectType({ description: 'A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity' })
+@ObjectType({ description: `A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity` })
 export class Skill_ {
     @Field() 
     @MaxLength(16)
@@ -3557,7 +3569,7 @@ export class SkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integration URL Formats
 //****************************************************************************
-@ObjectType({ description: 'Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.' })
+@ObjectType({ description: `Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.` })
 export class IntegrationURLFormat_ {
     @Field() 
     @MaxLength(16)
@@ -3571,7 +3583,7 @@ export class IntegrationURLFormat_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field({description: 'The URL Format for the given integration including the ability to include markup with fields from the integration'}) 
+    @Field({description: `The URL Format for the given integration including the ability to include markup with fields from the integration`}) 
     @MaxLength(1000)
     URLFormat: string;
         
@@ -3693,12 +3705,18 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         return this.UpdateRecord('Integration URL Formats', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => IntegrationURLFormat_)
+    async DeleteIntegrationURLFormat(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Integration URL Formats', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Integrations
 //****************************************************************************
-@ObjectType({ description: 'Catalog of all integrations that have been configured in the system.' })
+@ObjectType({ description: `Catalog of all integrations that have been configured in the system.` })
 export class Integration_ {
     @Field() 
     @MaxLength(200)
@@ -3875,12 +3893,18 @@ export class IntegrationResolver extends ResolverBase {
         return this.UpdateRecord('Integrations', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => Integration_)
+    async DeleteIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Integrations', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Company Integrations
 //****************************************************************************
-@ObjectType({ description: 'Links individual company records to specific integrations' })
+@ObjectType({ description: `Links individual company records to specific integrations` })
 export class CompanyIntegration_ {
     @Field() 
     @MaxLength(16)
@@ -4123,12 +4147,18 @@ export class CompanyIntegrationResolver extends ResolverBase {
         return this.UpdateRecord('Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => CompanyIntegration_)
+    async DeleteCompanyIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Company Integrations', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Fields
 //****************************************************************************
-@ObjectType({ description: 'List of all fields within each entity with metadata about each field' })
+@ObjectType({ description: `List of all fields within each entity with metadata about each field` })
 export class EntityField_ {
     @Field() 
     @MaxLength(16)
@@ -4138,126 +4168,126 @@ export class EntityField_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field(() => Int, {description: 'Display order of the field within the entity'}) 
+    @Field(() => Int, {description: `Display order of the field within the entity`}) 
     Sequence: number;
         
-    @Field({description: 'Name of the field within the database table'}) 
+    @Field({description: `Name of the field within the database table`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'A user friendly alternative to the field name'}) 
+    @Field({nullable: true, description: `A user friendly alternative to the field name`}) 
     @MaxLength(510)
     DisplayName?: string;
         
-    @Field({nullable: true, description: 'Descriptive text explaining the purpose of the field'}) 
+    @Field({nullable: true, description: `Descriptive text explaining the purpose of the field`}) 
     Description?: string;
         
-    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+    @Field(() => Boolean, {description: `When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`}) 
     AutoUpdateDescription: boolean;
         
-    @Field(() => Boolean, {description: 'Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)'}) 
+    @Field(() => Boolean, {description: `Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)`}) 
     IsPrimaryKey: boolean;
         
-    @Field(() => Boolean, {description: 'Indicates if the field must have unique values within the entity.'}) 
+    @Field(() => Boolean, {description: `Indicates if the field must have unique values within the entity.`}) 
     IsUnique: boolean;
         
-    @Field({nullable: true, description: 'Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category'}) 
+    @Field({nullable: true, description: `Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`}) 
     @MaxLength(510)
     Category?: string;
         
-    @Field({description: 'SQL Data type (auto maintained by CodeGen)'}) 
+    @Field({description: `SQL Data type (auto maintained by CodeGen)`}) 
     @MaxLength(200)
     Type: string;
         
-    @Field(() => Int, {nullable: true, description: 'SQL data length (auto maintained by CodeGen)'}) 
+    @Field(() => Int, {nullable: true, description: `SQL data length (auto maintained by CodeGen)`}) 
     Length?: number;
         
-    @Field(() => Int, {nullable: true, description: 'SQL precision (auto maintained by CodeGen)'}) 
+    @Field(() => Int, {nullable: true, description: `SQL precision (auto maintained by CodeGen)`}) 
     Precision?: number;
         
-    @Field(() => Int, {nullable: true, description: 'SQL scale (auto maintained by CodeGen)'}) 
+    @Field(() => Int, {nullable: true, description: `SQL scale (auto maintained by CodeGen)`}) 
     Scale?: number;
         
-    @Field(() => Boolean, {description: 'Does the column allow null or not (auto maintained by CodeGen)'}) 
+    @Field(() => Boolean, {description: `Does the column allow null or not (auto maintained by CodeGen)`}) 
     AllowsNull: boolean;
         
-    @Field({nullable: true, description: 'If a default value is defined for the field it is stored here (auto maintained by CodeGen)'}) 
+    @Field({nullable: true, description: `If a default value is defined for the field it is stored here (auto maintained by CodeGen)`}) 
     @MaxLength(510)
     DefaultValue?: string;
         
-    @Field(() => Boolean, {description: 'If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)'}) 
+    @Field(() => Boolean, {description: `If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)`}) 
     AutoIncrement: boolean;
         
-    @Field({description: 'Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.'}) 
+    @Field({description: `Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`}) 
     @MaxLength(40)
     ValueListType: string;
         
-    @Field({nullable: true, description: 'Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.'}) 
+    @Field({nullable: true, description: `Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`}) 
     @MaxLength(100)
     ExtendedType?: string;
         
-    @Field({nullable: true, description: 'The type of code associated with this field. Only used when the ExtendedType field is set to "Code"'}) 
+    @Field({nullable: true, description: `The type of code associated with this field. Only used when the ExtendedType field is set to "Code"`}) 
     @MaxLength(100)
     CodeType?: string;
         
-    @Field(() => Boolean, {description: 'If set to 1, this field will be included by default in any new view created by a user.'}) 
+    @Field(() => Boolean, {description: `If set to 1, this field will be included by default in any new view created by a user.`}) 
     DefaultInView: boolean;
         
-    @Field({nullable: true, description: 'NULL'}) 
+    @Field({nullable: true, description: `NULL`}) 
     ViewCellTemplate?: string;
         
-    @Field(() => Int, {nullable: true, description: 'Determines the default width for this field when included in a view'}) 
+    @Field(() => Int, {nullable: true, description: `Determines the default width for this field when included in a view`}) 
     DefaultColumnWidth?: number;
         
-    @Field(() => Boolean, {description: 'If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)'}) 
+    @Field(() => Boolean, {description: `If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)`}) 
     AllowUpdateAPI: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.'}) 
+    @Field(() => Boolean, {description: `If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.`}) 
     AllowUpdateInView: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, this column will be included in user search queries for both traditional and full text search'}) 
+    @Field(() => Boolean, {description: `If set to 1, this column will be included in user search queries for both traditional and full text search`}) 
     IncludeInUserSearchAPI: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.'}) 
+    @Field(() => Boolean, {description: `If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.`}) 
     FullTextSearchEnabled: boolean;
         
-    @Field({nullable: true, description: 'NULL'}) 
+    @Field({nullable: true, description: `NULL`}) 
     @MaxLength(1000)
     UserSearchParamFormatAPI?: string;
         
-    @Field(() => Boolean, {description: 'If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.'}) 
+    @Field(() => Boolean, {description: `If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.`}) 
     IncludeInGeneratedForm: boolean;
         
-    @Field({description: 'When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details'}) 
+    @Field({description: `When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`}) 
     @MaxLength(20)
     GeneratedFormSection: string;
         
-    @Field(() => Boolean, {description: 'NULL'}) 
+    @Field(() => Boolean, {description: `NULL`}) 
     IsVirtual: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.'}) 
+    @Field(() => Boolean, {description: `If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`}) 
     IsNameField: boolean;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     RelatedEntityID?: string;
         
-    @Field({nullable: true, description: 'Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)'}) 
+    @Field({nullable: true, description: `Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)`}) 
     @MaxLength(510)
     RelatedEntityFieldName?: string;
         
-    @Field(() => Boolean, {description: 'If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field'}) 
+    @Field(() => Boolean, {description: `If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field`}) 
     IncludeRelatedEntityNameFieldInBaseView: boolean;
         
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
         
-    @Field({description: 'Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown'}) 
+    @Field({description: `Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown`}) 
     @MaxLength(40)
     RelatedEntityDisplayType: string;
         
-    @Field({nullable: true, description: 'Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.'}) 
+    @Field({nullable: true, description: `Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.`}) 
     @MaxLength(200)
     EntityIDFieldName?: string;
         
@@ -4590,7 +4620,7 @@ export class EntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entities
 //****************************************************************************
-@ObjectType({ description: 'Catalog of all entities across all schemas' })
+@ObjectType({ description: `Catalog of all entities across all schemas` })
 export class Entity_ {
     @Field() 
     @MaxLength(16)
@@ -4611,7 +4641,7 @@ export class Entity_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+    @Field(() => Boolean, {description: `When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`}) 
     AutoUpdateDescription: boolean;
         
     @Field() 
@@ -4622,7 +4652,7 @@ export class Entity_ {
     @MaxLength(510)
     BaseView: string;
         
-    @Field(() => Boolean, {description: 'When set to 0, CodeGen no longer generates a base view for the entity.'}) 
+    @Field(() => Boolean, {description: `When set to 0, CodeGen no longer generates a base view for the entity.`}) 
     BaseViewGenerated: boolean;
         
     @Field() 
@@ -4632,34 +4662,34 @@ export class Entity_ {
     @Field(() => Boolean) 
     VirtualEntity: boolean;
         
-    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.'}) 
+    @Field(() => Boolean, {description: `When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table. In addition, when turned on CodeGen will ensure that your table has two fields: __mj_CreatedAt and __mj_UpdatedAt which are special fields used in conjunction with the RecordChange table to track changes to rows in your entity.`}) 
     TrackRecordChanges: boolean;
         
-    @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
+    @Field(() => Boolean, {description: `When set to 1, accessing a record by an end-user will result in an Audit Log record being created`}) 
     AuditRecordAccess: boolean;
         
-    @Field(() => Boolean, {description: 'When set to 1, users running a view against this entity will result in an Audit Log record being created.'}) 
+    @Field(() => Boolean, {description: `When set to 1, users running a view against this entity will result in an Audit Log record being created.`}) 
     AuditViewRuns: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 0, the entity will not be available at all in the GraphQL API or the object model.'}) 
+    @Field(() => Boolean, {description: `If set to 0, the entity will not be available at all in the GraphQL API or the object model.`}) 
     IncludeInAPI: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.'}) 
+    @Field(() => Boolean, {description: `If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.`}) 
     AllowAllRowsAPI: boolean;
         
-    @Field(() => Boolean, {description: 'Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+    @Field(() => Boolean, {description: `Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.`}) 
     AllowUpdateAPI: boolean;
         
-    @Field(() => Boolean, {description: 'Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+    @Field(() => Boolean, {description: `Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.`}) 
     AllowCreateAPI: boolean;
         
-    @Field(() => Boolean, {description: 'Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
+    @Field(() => Boolean, {description: `Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.`}) 
     AllowDeleteAPI: boolean;
         
-    @Field(() => Boolean, {description: 'Set to 1 if a custom resolver has been created for the entity.'}) 
+    @Field(() => Boolean, {description: `Set to 1 if a custom resolver has been created for the entity.`}) 
     CustomResolverAPI: boolean;
         
-    @Field(() => Boolean, {description: 'Enabling this bit will result in search being possible at the API and UI layers'}) 
+    @Field(() => Boolean, {description: `Enabling this bit will result in search being possible at the API and UI layers`}) 
     AllowUserSearchAPI: boolean;
         
     @Field(() => Boolean) 
@@ -4710,21 +4740,21 @@ export class Entity_ {
     @Field(() => Boolean) 
     spDeleteGenerated: boolean;
         
-    @Field(() => Boolean, {description: 'When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0'}) 
+    @Field(() => Boolean, {description: `When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0`}) 
     CascadeDeletes: boolean;
         
-    @Field({description: 'Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity\'s basetable by the CodeGen tool.'}) 
+    @Field({description: `Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.`}) 
     @MaxLength(20)
     DeleteType: string;
         
-    @Field(() => Boolean, {description: 'This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft'}) 
+    @Field(() => Boolean, {description: `This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft`}) 
     AllowRecordMerge: boolean;
         
-    @Field({nullable: true, description: 'When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.'}) 
+    @Field({nullable: true, description: `When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.`}) 
     @MaxLength(510)
     spMatch?: string;
         
-    @Field({description: 'When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.'}) 
+    @Field({description: `When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.`}) 
     @MaxLength(40)
     RelationshipDefaultDisplayType: string;
         
@@ -4739,11 +4769,11 @@ export class Entity_ {
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
         
-    @Field({nullable: true, description: 'Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.'}) 
+    @Field({nullable: true, description: `Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.`}) 
     @MaxLength(510)
     PreferredCommunicationField?: string;
         
-    @Field({nullable: true, description: 'Optional, specify an icon (CSS Class) for each entity for display in the UI'}) 
+    @Field({nullable: true, description: `Optional, specify an icon (CSS Class) for each entity for display in the UI`}) 
     @MaxLength(1000)
     Icon?: string;
         
@@ -5534,7 +5564,7 @@ export class EntityResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Users
 //****************************************************************************
-@ObjectType({ description: 'A list of all users who have or had access to the system' })
+@ObjectType({ description: `A list of all users who have or had access to the system` })
 export class User_ {
     @Field() 
     @MaxLength(16)
@@ -6198,7 +6228,7 @@ export class UserResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Relationships
 //****************************************************************************
-@ObjectType({ description: 'Metadata about relationships between entities including display preferences for the UI' })
+@ObjectType({ description: `Metadata about relationships between entities including display preferences for the UI` })
 export class EntityRelationship_ {
     @Field() 
     @MaxLength(16)
@@ -6208,7 +6238,7 @@ export class EntityRelationship_ {
     @MaxLength(16)
     EntityID: string;
         
-    @Field(() => Int, {description: 'Used for display order in generated forms and in other places in the UI where relationships for an entity are shown'}) 
+    @Field(() => Int, {description: `Used for display order in generated forms and in other places in the UI where relationships for an entity are shown`}) 
     Sequence: number;
         
     @Field() 
@@ -6245,22 +6275,22 @@ export class EntityRelationship_ {
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
         
-    @Field(() => Boolean, {description: 'When unchecked the relationship will NOT be displayed on the generated form'}) 
+    @Field(() => Boolean, {description: `When unchecked the relationship will NOT be displayed on the generated form`}) 
     DisplayInForm: boolean;
         
     @Field() 
     @MaxLength(100)
     DisplayLocation: string;
         
-    @Field({nullable: true, description: 'Optional, when specified this value overrides the related entity name for the label on the tab'}) 
+    @Field({nullable: true, description: `Optional, when specified this value overrides the related entity name for the label on the tab`}) 
     @MaxLength(510)
     DisplayName?: string;
         
-    @Field({description: 'When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed'}) 
+    @Field({description: `When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed`}) 
     @MaxLength(100)
     DisplayIconType: string;
         
-    @Field({nullable: true, description: 'If specified, the icon '}) 
+    @Field({nullable: true, description: `If specified, the icon `}) 
     @MaxLength(510)
     DisplayIcon?: string;
         
@@ -6272,7 +6302,7 @@ export class EntityRelationship_ {
     @MaxLength(16)
     DisplayComponentID?: string;
         
-    @Field({nullable: true, description: 'If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.'}) 
+    @Field({nullable: true, description: `If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.`}) 
     DisplayComponentConfiguration?: string;
         
     @Field() 
@@ -6697,7 +6727,7 @@ export class UserRecordLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Views
 //****************************************************************************
-@ObjectType({ description: 'Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.' })
+@ObjectType({ description: `Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.` })
 export class UserView_ {
     @Field() 
     @MaxLength(16)
@@ -7071,14 +7101,14 @@ export class CompanyIntegrationRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: 'Status of the integration run. Possible values: Pending, In Progress, Success, Failed.'}) 
+    @Field({description: `Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'Optional error log information for the integration run.'}) 
+    @Field({nullable: true, description: `Optional error log information for the integration run.`}) 
     ErrorLog?: string;
         
-    @Field({nullable: true, description: 'Optional configuration data in JSON format for the request that started the integration run for audit purposes.'}) 
+    @Field({nullable: true, description: `Optional configuration data in JSON format for the request that started the integration run for audit purposes.`}) 
     ConfigData?: string;
         
     @Field() 
@@ -7656,7 +7686,7 @@ export class ErrorLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Applications
 //****************************************************************************
-@ObjectType({ description: 'Applications are used to group entities in the user interface for ease of user access' })
+@ObjectType({ description: `Applications are used to group entities in the user interface for ease of user access` })
 export class Application_ {
     @Field() 
     @MaxLength(16)
@@ -7669,11 +7699,11 @@ export class Application_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true, description: 'Specify the CSS class information for the display icon for each application.'}) 
+    @Field({nullable: true, description: `Specify the CSS class information for the display icon for each application.`}) 
     @MaxLength(1000)
     Icon?: string;
         
-    @Field(() => Boolean, {description: 'If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.'}) 
+    @Field(() => Boolean, {description: `If turned on, when a new user first uses the MJ Explorer app, the application records with this turned on will have this application included in their selected application list.`}) 
     DefaultForNewUser: boolean;
         
     @Field() 
@@ -7851,7 +7881,7 @@ export class ApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Application Entities
 //****************************************************************************
-@ObjectType({ description: 'List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.' })
+@ObjectType({ description: `List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.` })
 export class ApplicationEntity_ {
     @Field() 
     @MaxLength(16)
@@ -7868,7 +7898,7 @@ export class ApplicationEntity_ {
     @Field(() => Int) 
     Sequence: number;
         
-    @Field(() => Boolean, {description: 'When set to 1, the entity will be included by default for a new user when they first access the application in question'}) 
+    @Field(() => Boolean, {description: `When set to 1, the entity will be included by default for a new user when they first access the application in question`}) 
     DefaultForNewUser: boolean;
         
     @Field() 
@@ -8026,7 +8056,7 @@ export class ApplicationEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Permissions
 //****************************************************************************
-@ObjectType({ description: 'Security settings for each entity' })
+@ObjectType({ description: `Security settings for each entity` })
 export class EntityPermission_ {
     @Field() 
     @MaxLength(16)
@@ -8771,7 +8801,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Lists
 //****************************************************************************
-@ObjectType({ description: 'Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.' })
+@ObjectType({ description: `Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.` })
 export class List_ {
     @Field() 
     @MaxLength(16)
@@ -8990,7 +9020,7 @@ export class ListResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for List Details
 //****************************************************************************
-@ObjectType({ description: 'Tracks the records within each list.' })
+@ObjectType({ description: `Tracks the records within each list.` })
 export class ListDetail_ {
     @Field() 
     @MaxLength(16)
@@ -9015,11 +9045,11 @@ export class ListDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: 'Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.'}) 
+    @Field({description: `Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.`}) 
     @MaxLength(60)
     Status: string;
         
-    @Field({nullable: true, description: 'Optional column that allows for tracking any additional data for each ListDetail row'}) 
+    @Field({nullable: true, description: `Optional column that allows for tracking any additional data for each ListDetail row`}) 
     AdditionalData?: string;
         
     @Field() 
@@ -9158,7 +9188,7 @@ export class ListDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Runs
 //****************************************************************************
-@ObjectType({ description: 'User Views can be logged when run to capture the date and user that ran the view as well as the output results.' })
+@ObjectType({ description: `User Views can be logged when run to capture the date and user that ran the view as well as the output results.` })
 export class UserViewRun_ {
     @Field() 
     @MaxLength(16)
@@ -9317,7 +9347,7 @@ export class UserViewRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Run Details
 //****************************************************************************
-@ObjectType({ description: 'Tracks the set of records that were included in each run of a given user view.' })
+@ObjectType({ description: `Tracks the set of records that were included in each run of a given user view.` })
 export class UserViewRunDetail_ {
     @Field() 
     @MaxLength(16)
@@ -9619,17 +9649,17 @@ export class Workflow_ {
     @MaxLength(200)
     ExternalSystemRecordID: string;
         
-    @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
+    @Field(() => Boolean, {description: `If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields`}) 
     AutoRunEnabled: boolean;
         
-    @Field({nullable: true, description: 'Minutes, Hours, Days, Weeks, Months, Years'}) 
+    @Field({nullable: true, description: `Minutes, Hours, Days, Weeks, Months, Years`}) 
     @MaxLength(40)
     AutoRunIntervalUnits?: string;
         
-    @Field(() => Int, {nullable: true, description: 'The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.'}) 
+    @Field(() => Int, {nullable: true, description: `The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.`}) 
     AutoRunInterval?: number;
         
-    @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
+    @Field({nullable: true, description: `If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.`}) 
     @MaxLength(400)
     SubclassName?: string;
         
@@ -9897,12 +9927,18 @@ export class WorkflowEngineResolver extends ResolverBase {
         return this.UpdateRecord('Workflow Engines', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => WorkflowEngine_)
+    async DeleteWorkflowEngine(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workflow Engines', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Changes
 //****************************************************************************
-@ObjectType({ description: 'For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.' })
+@ObjectType({ description: `For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.` })
 export class RecordChange_ {
     @Field() 
     @MaxLength(16)
@@ -9920,28 +9956,28 @@ export class RecordChange_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field({description: 'Create, Update, or Delete'}) 
+    @Field({description: `Create, Update, or Delete`}) 
     @MaxLength(40)
     Type: string;
         
-    @Field({description: 'Internal or External'}) 
+    @Field({description: `Internal or External`}) 
     @MaxLength(40)
     Source: string;
         
-    @Field({description: 'The date/time that the change occured.'}) 
+    @Field({description: `The date/time that the change occured.`}) 
     @MaxLength(10)
     ChangedAt: Date;
         
-    @Field({description: 'JSON structure that describes what was changed in a structured format.'}) 
+    @Field({description: `JSON structure that describes what was changed in a structured format.`}) 
     ChangesJSON: string;
         
-    @Field({description: 'A generated, human-readable description of what was changed.'}) 
+    @Field({description: `A generated, human-readable description of what was changed.`}) 
     ChangesDescription: string;
         
-    @Field({description: 'A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.'}) 
+    @Field({description: `A complete snapshot of the record AFTER the change was applied in a JSON format that can be parsed.`}) 
     FullRecordJSON: string;
         
-    @Field({description: 'For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error'}) 
+    @Field({description: `For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error`}) 
     @MaxLength(100)
     Status: string;
         
@@ -10605,7 +10641,7 @@ export class Authorization_ {
     @Field(() => Boolean) 
     IsActive: boolean;
         
-    @Field(() => Boolean, {description: 'When set to 1, Audit Log records are created whenever this authorization is invoked for a user'}) 
+    @Field(() => Boolean, {description: `When set to 1, Audit Log records are created whenever this authorization is invoked for a user`}) 
     UseAuditLog: boolean;
         
     @Field({nullable: true}) 
@@ -11116,7 +11152,7 @@ export class EntityFieldValueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
-@ObjectType({ description: 'Catalog of all AI Models configured in the system' })
+@ObjectType({ description: `Catalog of all AI Models configured in the system` })
 export class AIModel_ {
     @Field() 
     @MaxLength(16)
@@ -11137,7 +11173,7 @@ export class AIModel_ {
     @MaxLength(16)
     AIModelTypeID: string;
         
-    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.'}) 
+    @Field(() => Int, {nullable: true, description: `Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`}) 
     PowerRank?: number;
         
     @Field(() => Boolean) 
@@ -11151,7 +11187,7 @@ export class AIModel_ {
     @MaxLength(510)
     DriverImportPath?: string;
         
-    @Field({nullable: true, description: 'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls'}) 
+    @Field({nullable: true, description: `The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls`}) 
     @MaxLength(200)
     APIName?: string;
         
@@ -11163,16 +11199,16 @@ export class AIModel_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.'}) 
+    @Field(() => Int, {nullable: true, description: `Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.`}) 
     SpeedRank?: number;
         
-    @Field(() => Int, {nullable: true, description: 'Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.'}) 
+    @Field(() => Int, {nullable: true, description: `Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.`}) 
     CostRank?: number;
         
-    @Field({nullable: true, description: 'This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.'}) 
+    @Field({nullable: true, description: `This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`}) 
     ModelSelectionInsights?: string;
         
-    @Field(() => Int, {nullable: true, description: 'Stores the maximum number of tokens that fit in the context window for the model.'}) 
+    @Field(() => Int, {nullable: true, description: `Stores the maximum number of tokens that fit in the context window for the model.`}) 
     InputTokenLimit?: number;
         
     @Field() 
@@ -11455,7 +11491,7 @@ export class AIModelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Actions
 //****************************************************************************
-@ObjectType({ description: 'List of all actions that are possible across all AI Models' })
+@ObjectType({ description: `List of all actions that are possible across all AI Models` })
 export class AIAction_ {
     @Field() 
     @MaxLength(16)
@@ -11652,7 +11688,7 @@ export class AIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Actions
 //****************************************************************************
-@ObjectType({ description: 'Tracks the actions supported by each AI Model' })
+@ObjectType({ description: `Tracks the actions supported by each AI Model` })
 export class AIModelAction_ {
     @Field() 
     @MaxLength(16)
@@ -11813,7 +11849,7 @@ export class AIModelActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity AI Actions
 //****************************************************************************
-@ObjectType({ description: 'Tracks the AI actions that should be invoked based on changes to records within a given entity.' })
+@ObjectType({ description: `Tracks the AI actions that should be invoked based on changes to records within a given entity.` })
 export class EntityAIAction_ {
     @Field() 
     @MaxLength(16)
@@ -12069,7 +12105,7 @@ export class EntityAIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Types
 //****************************************************************************
-@ObjectType({ description: 'Types of AI Models' })
+@ObjectType({ description: `Types of AI Models` })
 export class AIModelType_ {
     @Field() 
     @MaxLength(16)
@@ -12324,7 +12360,7 @@ export class QueueTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queues
 //****************************************************************************
-@ObjectType({ description: 'Queues can be used to async execute long running tasks' })
+@ObjectType({ description: `Queues can be used to async execute long running tasks` })
 export class Queue_ {
     @Field() 
     @MaxLength(16)
@@ -12805,7 +12841,7 @@ export class QueueTaskResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dashboards
 //****************************************************************************
-@ObjectType({ description: 'Dashboards are used to group resources into a single display pane for an end-user' })
+@ObjectType({ description: `Dashboards are used to group resources into a single display pane for an end-user` })
 export class Dashboard_ {
     @Field() 
     @MaxLength(16)
@@ -13743,7 +13779,7 @@ export class ResourceType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: 'Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.'}) 
+    @Field({nullable: true, description: `Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`}) 
     @MaxLength(16)
     CategoryEntityID?: string;
         
@@ -13857,7 +13893,7 @@ export class ResourceTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tags
 //****************************************************************************
-@ObjectType({ description: 'Tags are used to arbitrarily associate any record in any entity with addtional information.' })
+@ObjectType({ description: `Tags are used to arbitrarily associate any record in any entity with addtional information.` })
 export class Tag_ {
     @Field() 
     @MaxLength(16)
@@ -13970,7 +14006,7 @@ export class TagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tagged Items
 //****************************************************************************
-@ObjectType({ description: 'Tracks the links between any record in any entity with Tags' })
+@ObjectType({ description: `Tracks the links between any record in any entity with Tags` })
 export class TaggedItem_ {
     @Field() 
     @MaxLength(16)
@@ -14062,7 +14098,7 @@ export class TaggedItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspaces
 //****************************************************************************
-@ObjectType({ description: 'A user can have one or more workspaces' })
+@ObjectType({ description: `A user can have one or more workspaces` })
 export class Workspace_ {
     @Field() 
     @MaxLength(16)
@@ -14222,7 +14258,7 @@ export class WorkspaceResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspace Items
 //****************************************************************************
-@ObjectType({ description: 'Tracks the resources that are active within a given worksapce' })
+@ObjectType({ description: `Tracks the resources that are active within a given worksapce` })
 export class WorkspaceItem_ {
     @Field() 
     @MaxLength(16)
@@ -14413,7 +14449,7 @@ export class WorkspaceItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Datasets
 //****************************************************************************
-@ObjectType({ description: 'Cacheable sets of data that can span one or more items' })
+@ObjectType({ description: `Cacheable sets of data that can span one or more items` })
 export class Dataset_ {
     @Field() 
     @MaxLength(16)
@@ -14503,7 +14539,7 @@ export class DatasetResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dataset Items
 //****************************************************************************
-@ObjectType({ description: 'A single item in a Dataset and can be sourced from multiple methods.' })
+@ObjectType({ description: `A single item in a Dataset and can be sourced from multiple methods.` })
 export class DatasetItem_ {
     @Field() 
     @MaxLength(16)
@@ -14542,7 +14578,7 @@ export class DatasetItem_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: 'Optional column to store a comma-delimited list of columns for the DatasetItem'}) 
+    @Field({nullable: true, description: `Optional column to store a comma-delimited list of columns for the DatasetItem`}) 
     Columns?: string;
         
     @Field() 
@@ -14646,16 +14682,16 @@ export class ConversationDetail_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Int, {nullable: true, description: 'This column is used to capture user feedback as a rating scale. The scale ranges from 1 to 10, where 1 might represent thumbs down, and 10 might represent thumbs up or the highest rating in a star-based scale.'}) 
+    @Field(() => Int, {nullable: true, description: `This column is used to capture user feedback as a rating scale. The scale ranges from 1 to 10, where 1 might represent thumbs down, and 10 might represent thumbs up or the highest rating in a star-based scale.`}) 
     UserRating?: number;
         
-    @Field({nullable: true, description: 'This column is used to store user text feedback about a given AI response, describing what they liked or disliked.'}) 
+    @Field({nullable: true, description: `This column is used to store user text feedback about a given AI response, describing what they liked or disliked.`}) 
     UserFeedback?: string;
         
-    @Field({nullable: true, description: 'This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.'}) 
+    @Field({nullable: true, description: `This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`}) 
     ReflectionInsights?: string;
         
-    @Field({nullable: true, description: 'This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.'}) 
+    @Field({nullable: true, description: `This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`}) 
     SummaryOfEarlierConversation?: string;
         
     @Field({nullable: true}) 
@@ -15274,7 +15310,7 @@ export class UserNotificationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Schema Info
 //****************************************************************************
-@ObjectType({ description: 'Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.' })
+@ObjectType({ description: `Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.` })
 export class SchemaInfo_ {
     @Field() 
     @MaxLength(16)
@@ -15986,11 +16022,11 @@ export class QueryField_ {
     @Field(() => Int) 
     Sequence: number;
         
-    @Field({description: 'The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn\'t include type parameters. The SQLFullType field provides that information.'}) 
+    @Field({description: `The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.`}) 
     @MaxLength(100)
     SQLBaseType: string;
         
-    @Field({description: 'The full SQL type for the field, for example datetime or nvarchar(10) etc.'}) 
+    @Field({description: `The full SQL type for the field, for example datetime or nvarchar(10) etc.`}) 
     @MaxLength(200)
     SQLFullType: string;
         
@@ -16193,6 +16229,12 @@ export class QueryFieldResolver extends ResolverBase {
         return this.UpdateRecord('Query Fields', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => QueryField_)
+    async DeleteQueryField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Query Fields', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -16383,7 +16425,7 @@ export class QueryCategoryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queries
 //****************************************************************************
-@ObjectType({ description: 'Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.' })
+@ObjectType({ description: `Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.` })
 export class Query_ {
     @Field() 
     @MaxLength(16)
@@ -16419,10 +16461,10 @@ export class Query_ {
     @MaxLength(30)
     Status: string;
         
-    @Field(() => Int, {nullable: true, description: 'Value indicating the quality of the query, higher values mean a better quality'}) 
+    @Field(() => Int, {nullable: true, description: `Value indicating the quality of the query, higher values mean a better quality`}) 
     QualityRank?: number;
         
-    @Field(() => Int, {nullable: true, description: 'Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.'}) 
+    @Field(() => Int, {nullable: true, description: `Higher numbers indicate more execution overhead/time required. Useful for planning which queries to use in various scenarios.`}) 
     ExecutionCostRank?: number;
         
     @Field() 
@@ -16638,6 +16680,12 @@ export class QueryResolver extends ResolverBase {
         return this.UpdateRecord('Queries', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => Query_)
+    async DeleteQuery(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Queries', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -16774,6 +16822,12 @@ export class QueryPermissionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Query Permissions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QueryPermission_)
+    async DeleteQueryPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Query Permissions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16944,6 +16998,12 @@ export class VectorIndexResolver extends ResolverBase {
         return this.UpdateRecord('Vector Indexes', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => VectorIndex_)
+    async DeleteVectorIndex(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Vector Indexes', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17084,6 +17144,12 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         return this.UpdateRecord('Entity Document Types', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityDocumentType_)
+    async DeleteEntityDocumentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Document Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17107,7 +17173,7 @@ export class EntityDocumentRun_ {
     @MaxLength(8)
     EndedAt?: Date;
         
-    @Field({description: 'Can be Pending, In Progress, Completed, or Failed'}) 
+    @Field({description: `Can be Pending, In Progress, Completed, or Failed`}) 
     @MaxLength(30)
     Status: string;
         
@@ -17409,6 +17475,12 @@ export class VectorDatabaseResolver extends ResolverBase {
         return this.UpdateRecord('Vector Databases', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => VectorDatabase_)
+    async DeleteVectorDatabase(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Vector Databases', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17648,10 +17720,10 @@ export class EntityDocument_ {
     @MaxLength(16)
     AIModelID: string;
         
-    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+    @Field(() => Float, {description: `Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`}) 
     PotentialMatchThreshold: number;
         
-    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+    @Field(() => Float, {description: `Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`}) 
     AbsoluteMatchThreshold: number;
         
     @Field() 
@@ -17865,7 +17937,7 @@ export class EntityDocumentResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Data Context Items
 //****************************************************************************
-@ObjectType({ description: 'Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.' })
+@ObjectType({ description: `Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.` })
 export class DataContextItem_ {
     @Field() 
     @MaxLength(16)
@@ -17875,7 +17947,7 @@ export class DataContextItem_ {
     @MaxLength(16)
     DataContextID: string;
         
-    @Field({description: 'The type of the item, either "view", "query", "full_entity", "single_record", or "sql"'}) 
+    @Field({description: `The type of the item, either "view", "query", "full_entity", "single_record", or "sql"`}) 
     @MaxLength(100)
     Type: string;
         
@@ -17891,17 +17963,17 @@ export class DataContextItem_ {
     @MaxLength(16)
     EntityID?: string;
         
-    @Field({nullable: true, description: 'The Primary Key value for the record, only used when Type=\'single_record\''}) 
+    @Field({nullable: true, description: `The Primary Key value for the record, only used when Type='single_record'`}) 
     @MaxLength(900)
     RecordID?: string;
         
-    @Field({nullable: true, description: 'Only used when Type=sql'}) 
+    @Field({nullable: true, description: `Only used when Type=sql`}) 
     SQL?: string;
         
-    @Field({nullable: true, description: 'Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.'}) 
+    @Field({nullable: true, description: `Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.`}) 
     DataJSON?: string;
         
-    @Field({nullable: true, description: 'If DataJSON is populated, this field will show the date the the data was captured'}) 
+    @Field({nullable: true, description: `If DataJSON is populated, this field will show the date the the data was captured`}) 
     @MaxLength(8)
     LastRefreshedAt?: Date;
         
@@ -18085,7 +18157,7 @@ export class DataContextItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Data Contexts
 //****************************************************************************
-@ObjectType({ description: 'Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.' })
+@ObjectType({ description: `Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.` })
 export class DataContext_ {
     @Field() 
     @MaxLength(16)
@@ -19019,6 +19091,12 @@ export class FileStorageProviderResolver extends ResolverBase {
         return this.UpdateRecord('File Storage Providers', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => FileStorageProvider_)
+    async DeleteFileStorageProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('File Storage Providers', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -19053,7 +19131,7 @@ export class File_ {
     @MaxLength(1000)
     ProviderKey?: string;
         
-    @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'}) 
+    @Field({description: `Pending, Uploading, Uploaded, Deleting, Deleted`}) 
     @MaxLength(40)
     Status: string;
         
@@ -19542,6 +19620,12 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         return this.UpdateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => FileEntityRecordLink_)
+    async DeleteFileEntityRecordLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('File Entity Record Links', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -19562,7 +19646,7 @@ export class VersionInstallation_ {
     @Field(() => Int) 
     PatchVersion: number;
         
-    @Field({nullable: true, description: 'What type of installation was applied'}) 
+    @Field({nullable: true, description: `What type of installation was applied`}) 
     @MaxLength(40)
     Type?: string;
         
@@ -19570,14 +19654,14 @@ export class VersionInstallation_ {
     @MaxLength(8)
     InstalledAt: Date;
         
-    @Field({description: 'Pending, Complete, Failed'}) 
+    @Field({description: `Pending, Complete, Failed`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'Any logging that was saved from the installation process'}) 
+    @Field({nullable: true, description: `Any logging that was saved from the installation process`}) 
     InstallLog?: string;
         
-    @Field({nullable: true, description: 'Optional, comments the administrator wants to save for each installed version'}) 
+    @Field({nullable: true, description: `Optional, comments the administrator wants to save for each installed version`}) 
     Comments?: string;
         
     @Field() 
@@ -19746,7 +19830,7 @@ export class DuplicateRunDetailMatch_ {
     @MaxLength(16)
     DuplicateRunDetailID: string;
         
-    @Field({description: 'Either Vector or SP'}) 
+    @Field({description: `Either Vector or SP`}) 
     @MaxLength(40)
     MatchSource: string;
         
@@ -19754,7 +19838,7 @@ export class DuplicateRunDetailMatch_ {
     @MaxLength(1000)
     MatchRecordID: string;
         
-    @Field(() => Float, {description: 'Value between 0 and 1 designating the computed probability of a match'}) 
+    @Field(() => Float, {description: `Value between 0 and 1 designating the computed probability of a match`}) 
     MatchProbability: number;
         
     @Field() 
@@ -20092,6 +20176,12 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         return this.UpdateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityDocumentSetting_)
+    async DeleteEntityDocumentSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Document Settings', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -20242,6 +20332,12 @@ export class EntitySettingResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Settings', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntitySetting_)
+    async DeleteEntitySetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Settings', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20502,10 +20598,10 @@ export class DuplicateRunDetail_ {
     @MaxLength(40)
     MatchStatus: string;
         
-    @Field({nullable: true, description: 'If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped'}) 
+    @Field({nullable: true, description: `If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped`}) 
     SkippedReason?: string;
         
-    @Field({nullable: true, description: 'If MatchStatus=\'Error\' this field can be used to track the error from that phase of the process for logging/diagnostics.'}) 
+    @Field({nullable: true, description: `If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.`}) 
     MatchErrorMessage?: string;
         
     @Field() 
@@ -20830,24 +20926,24 @@ export class ApplicationSettingResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Categories
 //****************************************************************************
-@ObjectType({ description: 'Organizes actions into categories, including name, description, and optional parent category for hierarchy.' })
+@ObjectType({ description: `Organizes actions into categories, including name, description, and optional parent category for hierarchy.` })
 export class ActionCategory_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the action category.'}) 
+    @Field({description: `Name of the action category.`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the action category.'}) 
+    @Field({nullable: true, description: `Description of the action category.`}) 
     Description?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     ParentID?: string;
         
-    @Field({description: 'Status of the action category (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the action category (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -21011,7 +21107,7 @@ export class ActionCategoryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Actions
 //****************************************************************************
-@ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
+@ObjectType({ description: `Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.` })
 export class EntityAction_ {
     @Field() 
     @MaxLength(16)
@@ -21021,7 +21117,7 @@ export class EntityAction_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field({description: 'Status of the entity action (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the entity action (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -21198,7 +21294,7 @@ export class EntityActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Action Invocations
 //****************************************************************************
-@ObjectType({ description: 'Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.' })
+@ObjectType({ description: `Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.` })
 export class EntityActionInvocation_ {
     @Field() 
     @MaxLength(16)
@@ -21212,7 +21308,7 @@ export class EntityActionInvocation_ {
     @MaxLength(16)
     InvocationTypeID: string;
         
-    @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the entity action invocation (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -21348,7 +21444,7 @@ export class EntityActionInvocationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Authorizations
 //****************************************************************************
-@ObjectType({ description: 'Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.' })
+@ObjectType({ description: `Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.` })
 export class ActionAuthorization_ {
     @Field() 
     @MaxLength(16)
@@ -21501,17 +21597,17 @@ export class ActionAuthorizationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Action Invocation Types
 //****************************************************************************
-@ObjectType({ description: 'Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.' })
+@ObjectType({ description: `Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.` })
 export class EntityActionInvocationType_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the invocation type such as Record Created/Updated/etc.'}) 
+    @Field({description: `Name of the invocation type such as Record Created/Updated/etc.`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the invocation type.'}) 
+    @Field({nullable: true, description: `Description of the invocation type.`}) 
     Description?: string;
         
     @Field(() => Int) 
@@ -21656,7 +21752,7 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Actions
 //****************************************************************************
-@ObjectType({ description: 'Stores action definitions, including prompts, generated code, user comments, and status.' })
+@ObjectType({ description: `Stores action definitions, including prompts, generated code, user comments, and status.` })
 export class Action_ {
     @Field() 
     @MaxLength(16)
@@ -21673,47 +21769,47 @@ export class Action_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: 'Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.'}) 
+    @Field({description: `Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.`}) 
     @MaxLength(40)
     Type: string;
         
     @Field({nullable: true}) 
     UserPrompt?: string;
         
-    @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'}) 
+    @Field({nullable: true, description: `User's comments not shared with the LLM.`}) 
     UserComments?: string;
         
     @Field({nullable: true}) 
     Code?: string;
         
-    @Field({nullable: true, description: 'AI\'s explanation of the code.'}) 
+    @Field({nullable: true, description: `AI's explanation of the code.`}) 
     CodeComments?: string;
         
-    @Field({description: 'An action won\'t be usable until the code is approved.'}) 
+    @Field({description: `An action won't be usable until the code is approved.`}) 
     @MaxLength(40)
     CodeApprovalStatus: string;
         
-    @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'}) 
+    @Field({nullable: true, description: `Optional comments when an individual (or an AI) reviews and approves the code.`}) 
     CodeApprovalComments?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     CodeApprovedByUserID?: string;
         
-    @Field({nullable: true, description: 'When the code was approved.'}) 
+    @Field({nullable: true, description: `When the code was approved.`}) 
     @MaxLength(8)
     CodeApprovedAt?: Date;
         
-    @Field(() => Boolean, {description: 'If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit'}) 
+    @Field(() => Boolean, {description: `If set to 1, Code will never be generated by the AI system. This overrides all other settings including the ForceCodeGeneration bit`}) 
     CodeLocked: boolean;
         
-    @Field(() => Boolean, {description: 'If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn\'t changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.'}) 
+    @Field(() => Boolean, {description: `If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.`}) 
     ForceCodeGeneration: boolean;
         
-    @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'}) 
+    @Field(() => Int, {nullable: true, description: `Number of days to retain execution logs; NULL for indefinite.`}) 
     RetentionPeriod?: number;
         
-    @Field({description: 'Status of the action (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the action (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -22030,7 +22126,7 @@ export class ActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Action Filters
 //****************************************************************************
-@ObjectType({ description: 'Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.' })
+@ObjectType({ description: `Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.` })
 export class EntityActionFilter_ {
     @Field() 
     @MaxLength(16)
@@ -22044,10 +22140,10 @@ export class EntityActionFilter_ {
     @MaxLength(16)
     ActionFilterID: string;
         
-    @Field(() => Int, {description: 'Order of filter execution.'}) 
+    @Field(() => Int, {description: `Order of filter execution.`}) 
     Sequence: number;
         
-    @Field({description: 'Status of the entity action filter (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the entity action filter (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -22185,7 +22281,7 @@ export class EntityActionFilterResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Filters
 //****************************************************************************
-@ObjectType({ description: 'Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.' })
+@ObjectType({ description: `Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.` })
 export class ActionFilter_ {
     @Field() 
     @MaxLength(16)
@@ -22348,17 +22444,17 @@ export class ActionFilterResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Context Types
 //****************************************************************************
-@ObjectType({ description: 'Lists possible contexts for action execution with optional descriptions.' })
+@ObjectType({ description: `Lists possible contexts for action execution with optional descriptions.` })
 export class ActionContextType_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the context type.'}) 
+    @Field({description: `Name of the context type.`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the context type.'}) 
+    @Field({nullable: true, description: `Description of the context type.`}) 
     Description?: string;
         
     @Field() 
@@ -22494,7 +22590,7 @@ export class ActionContextTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Result Codes
 //****************************************************************************
-@ObjectType({ description: 'Defines the possible result codes for each action.' })
+@ObjectType({ description: `Defines the possible result codes for each action.` })
 export class ActionResultCode_ {
     @Field() 
     @MaxLength(16)
@@ -22508,10 +22604,10 @@ export class ActionResultCode_ {
     @MaxLength(510)
     ResultCode: string;
         
-    @Field(() => Boolean, {description: 'Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.'}) 
+    @Field(() => Boolean, {description: `Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.`}) 
     IsSuccess: boolean;
         
-    @Field({nullable: true, description: 'Description of the result code.'}) 
+    @Field({nullable: true, description: `Description of the result code.`}) 
     Description?: string;
         
     @Field() 
@@ -22652,7 +22748,7 @@ export class ActionResultCodeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Contexts
 //****************************************************************************
-@ObjectType({ description: 'Links actions to their supported context types enabling a given action to be executable in more than one context.' })
+@ObjectType({ description: `Links actions to their supported context types enabling a given action to be executable in more than one context.` })
 export class ActionContext_ {
     @Field() 
     @MaxLength(16)
@@ -22666,7 +22762,7 @@ export class ActionContext_ {
     @MaxLength(16)
     ContextTypeID?: string;
         
-    @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
+    @Field({description: `Status of the action context (Pending, Active, Disabled).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -22806,7 +22902,7 @@ export class ActionContextResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Execution Logs
 //****************************************************************************
-@ObjectType({ description: 'Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.' })
+@ObjectType({ description: `Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.` })
 export class ActionExecutionLog_ {
     @Field() 
     @MaxLength(16)
@@ -22816,11 +22912,11 @@ export class ActionExecutionLog_ {
     @MaxLength(16)
     ActionID: string;
         
-    @Field({description: 'Timestamp of when the action started execution.'}) 
+    @Field({description: `Timestamp of when the action started execution.`}) 
     @MaxLength(8)
     StartedAt: Date;
         
-    @Field({nullable: true, description: 'Timestamp of when the action ended execution.'}) 
+    @Field({nullable: true, description: `Timestamp of when the action ended execution.`}) 
     @MaxLength(8)
     EndedAt?: Date;
         
@@ -22835,7 +22931,7 @@ export class ActionExecutionLog_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
+    @Field(() => Int, {nullable: true, description: `Number of days to retain the log; NULL for indefinite retention.`}) 
     RetentionPeriod?: number;
         
     @Field() 
@@ -22998,7 +23094,7 @@ export class ActionExecutionLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Params
 //****************************************************************************
-@ObjectType({ description: 'Tracks the input and output parameters for Actions.' })
+@ObjectType({ description: `Tracks the input and output parameters for Actions.` })
 export class ActionParam_ {
     @Field() 
     @MaxLength(16)
@@ -23019,7 +23115,7 @@ export class ActionParam_ {
     @MaxLength(20)
     Type: string;
         
-    @Field({description: 'Tracks the basic value type of the parameter, additional information can be provided in the Description field'}) 
+    @Field({description: `Tracks the basic value type of the parameter, additional information can be provided in the Description field`}) 
     @MaxLength(60)
     ValueType: string;
         
@@ -23216,7 +23312,7 @@ export class ActionParamResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Action Libraries
 //****************************************************************************
-@ObjectType({ description: 'Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.' })
+@ObjectType({ description: `Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.` })
 export class ActionLibrary_ {
     @Field() 
     @MaxLength(16)
@@ -23230,7 +23326,7 @@ export class ActionLibrary_ {
     @MaxLength(16)
     LibraryID: string;
         
-    @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'}) 
+    @Field({nullable: true, description: `List of classes and functions used by the action from the library.`}) 
     ItemsUsed?: string;
         
     @Field() 
@@ -23369,7 +23465,7 @@ export class ActionLibraryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Libraries
 //****************************************************************************
-@ObjectType({ description: 'Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.' })
+@ObjectType({ description: `Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.` })
 export class Library_ {
     @Field() 
     @MaxLength(16)
@@ -23382,14 +23478,14 @@ export class Library_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: 'Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.'}) 
+    @Field({description: `Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'}) 
+    @Field({nullable: true, description: `Code showing the types and functions defined in the library to be used for reference by humans and AI`}) 
     TypeDefinitions?: string;
         
-    @Field({nullable: true, description: 'Examples of code use of the classes and/or functions from within the library'}) 
+    @Field({nullable: true, description: `Examples of code use of the classes and/or functions from within the library`}) 
     SampleCode?: string;
         
     @Field() 
@@ -23541,6 +23637,12 @@ export class LibraryResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Libraries', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => Library_)
+    async DeleteLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Libraries', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -23722,12 +23824,18 @@ export class ListCategoryResolver extends ResolverBase {
         return this.UpdateRecord('List Categories', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => ListCategory_)
+    async DeleteListCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('List Categories', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Providers
 //****************************************************************************
-@ObjectType({ description: 'All supported communication providers.' })
+@ObjectType({ description: `All supported communication providers.` })
 export class CommunicationProvider_ {
     @Field() 
     @MaxLength(16)
@@ -23740,14 +23848,14 @@ export class CommunicationProvider_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: 'The status of the communication provider (Disabled or Active).'}) 
+    @Field({description: `The status of the communication provider (Disabled or Active).`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field(() => Boolean, {description: 'Indicates if the provider supports sending messages.'}) 
+    @Field(() => Boolean, {description: `Indicates if the provider supports sending messages.`}) 
     SupportsSending: boolean;
         
-    @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'}) 
+    @Field(() => Boolean, {description: `Indicates if the provider supports receiving messages.`}) 
     SupportsReceiving: boolean;
         
     @Field() 
@@ -23758,7 +23866,7 @@ export class CommunicationProvider_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => Boolean, {description: 'Whether or not the provider supports sending messages at a specific time'}) 
+    @Field(() => Boolean, {description: `Whether or not the provider supports sending messages at a specific time`}) 
     SupportsScheduledSending: boolean;
         
     @Field(() => [CommunicationLog_])
@@ -23910,12 +24018,18 @@ export class CommunicationProviderResolver extends ResolverBase {
         return this.UpdateRecord('Communication Providers', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => CommunicationProvider_)
+    async DeleteCommunicationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Providers', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Communication Runs
 //****************************************************************************
-@ObjectType({ description: 'Runs of bulk message sends and receives.' })
+@ObjectType({ description: `Runs of bulk message sends and receives.` })
 export class CommunicationRun_ {
     @Field() 
     @MaxLength(16)
@@ -23925,11 +24039,11 @@ export class CommunicationRun_ {
     @MaxLength(16)
     UserID: string;
         
-    @Field({description: 'The direction of the communication run (Sending or Receiving).'}) 
+    @Field({description: `The direction of the communication run (Sending or Receiving).`}) 
     @MaxLength(40)
     Direction: string;
         
-    @Field({description: 'The status of the communication run (Pending, In-Progress, Complete, Failed).'}) 
+    @Field({description: `The status of the communication run (Pending, In-Progress, Complete, Failed).`}) 
     @MaxLength(40)
     Status: string;
         
@@ -23944,7 +24058,7 @@ export class CommunicationRun_ {
     @Field({nullable: true}) 
     Comments?: string;
         
-    @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
+    @Field({nullable: true, description: `The error message if the communication run failed.`}) 
     ErrorMessage?: string;
         
     @Field() 
@@ -24108,7 +24222,7 @@ export class CommunicationRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Communication Provider Message Types
 //****************************************************************************
-@ObjectType({ description: 'Providers and their supported message types with additional attributes.' })
+@ObjectType({ description: `Providers and their supported message types with additional attributes.` })
 export class CommunicationProviderMessageType_ {
     @Field() 
     @MaxLength(16)
@@ -24126,11 +24240,11 @@ export class CommunicationProviderMessageType_ {
     @MaxLength(510)
     Name: string;
         
-    @Field({description: 'The status of the provider message type (Disabled or Active).'}) 
+    @Field({description: `The status of the provider message type (Disabled or Active).`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'}) 
+    @Field({nullable: true, description: `Additional attributes specific to the provider message type.`}) 
     AdditionalAttributes?: string;
         
     @Field() 
@@ -24292,7 +24406,7 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Communication Logs
 //****************************************************************************
-@ObjectType({ description: 'Logs of sent and received messages.' })
+@ObjectType({ description: `Logs of sent and received messages.` })
 export class CommunicationLog_ {
     @Field() 
     @MaxLength(16)
@@ -24310,22 +24424,22 @@ export class CommunicationLog_ {
     @MaxLength(16)
     CommunicationRunID?: string;
         
-    @Field({description: 'The direction of the communication log (Sending or Receiving).'}) 
+    @Field({description: `The direction of the communication log (Sending or Receiving).`}) 
     @MaxLength(40)
     Direction: string;
         
-    @Field({description: 'The date and time when the message was logged.'}) 
+    @Field({description: `The date and time when the message was logged.`}) 
     @MaxLength(8)
     MessageDate: Date;
         
-    @Field({description: 'The status of the logged message (Pending, In-Progress, Complete, Failed).'}) 
+    @Field({description: `The status of the logged message (Pending, In-Progress, Complete, Failed).`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'The content of the logged message.'}) 
+    @Field({nullable: true, description: `The content of the logged message.`}) 
     MessageContent?: string;
         
-    @Field({nullable: true, description: 'The error message if the message sending failed.'}) 
+    @Field({nullable: true, description: `The error message if the message sending failed.`}) 
     ErrorMessage?: string;
         
     @Field() 
@@ -24488,7 +24602,7 @@ export class CommunicationLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Communication Base Message Types
 //****************************************************************************
-@ObjectType({ description: 'Base message types and their supported functionalities.' })
+@ObjectType({ description: `Base message types and their supported functionalities.` })
 export class CommunicationBaseMessageType_ {
     @Field() 
     @MaxLength(16)
@@ -24498,16 +24612,16 @@ export class CommunicationBaseMessageType_ {
     @MaxLength(200)
     Type: string;
         
-    @Field(() => Boolean, {description: 'Indicates if attachments are supported.'}) 
+    @Field(() => Boolean, {description: `Indicates if attachments are supported.`}) 
     SupportsAttachments: boolean;
         
-    @Field(() => Boolean, {description: 'Indicates if a subject line is supported.'}) 
+    @Field(() => Boolean, {description: `Indicates if a subject line is supported.`}) 
     SupportsSubjectLine: boolean;
         
-    @Field(() => Boolean, {description: 'Indicates if HTML content is supported.'}) 
+    @Field(() => Boolean, {description: `Indicates if HTML content is supported.`}) 
     SupportsHtml: boolean;
         
-    @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'}) 
+    @Field(() => Int, {nullable: true, description: `The maximum size in bytes for the message.`}) 
     MaxBytes?: number;
         
     @Field() 
@@ -24661,44 +24775,50 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
         return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => CommunicationBaseMessageType_)
+    async DeleteCommunicationBaseMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Communication Base Message Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Templates
 //****************************************************************************
-@ObjectType({ description: 'Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic' })
+@ObjectType({ description: `Templates are used for dynamic expansion of a static template with data from a given context. Templates can be used to create documents, messages and anything else that requires dynamic document creation merging together static text, data and lightweight logic` })
 export class Template_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the template'}) 
+    @Field({description: `Name of the template`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the template'}) 
+    @Field({nullable: true, description: `Description of the template`}) 
     Description?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     CategoryID?: string;
         
-    @Field({nullable: true, description: 'This prompt will be used by the AI to generate template content as requested by the user.'}) 
+    @Field({nullable: true, description: `This prompt will be used by the AI to generate template content as requested by the user.`}) 
     UserPrompt?: string;
         
     @Field() 
     @MaxLength(16)
     UserID: string;
         
-    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1'}) 
+    @Field({nullable: true, description: `Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1`}) 
     @MaxLength(8)
     ActiveAt?: Date;
         
-    @Field({nullable: true, description: 'Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.'}) 
+    @Field({nullable: true, description: `Optional, if provided, this template will not be available for use after the specified date. If IsActive=0, this has no effect.`}) 
     @MaxLength(8)
     DisabledAt?: Date;
         
-    @Field(() => Boolean, {description: 'If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. '}) 
+    @Field(() => Boolean, {description: `If set to 0, the template will be disabled regardless of the values in ActiveAt/DisabledAt. `}) 
     IsActive: boolean;
         
     @Field() 
@@ -24900,22 +25020,28 @@ export class TemplateResolver extends ResolverBase {
         return this.UpdateRecord('Templates', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => Template_)
+    async DeleteTemplate(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Templates', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Categories
 //****************************************************************************
-@ObjectType({ description: 'Template categories for organizing templates' })
+@ObjectType({ description: `Template categories for organizing templates` })
 export class TemplateCategory_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the template category'}) 
+    @Field({description: `Name of the template category`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the template category'}) 
+    @Field({nullable: true, description: `Description of the template category`}) 
     Description?: string;
         
     @Field({nullable: true}) 
@@ -25079,12 +25205,18 @@ export class TemplateCategoryResolver extends ResolverBase {
         return this.UpdateRecord('Template Categories', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => TemplateCategory_)
+    async DeleteTemplateCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Template Categories', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Contents
 //****************************************************************************
-@ObjectType({ description: 'Template content for different versions of a template for purposes like HTML/Text/etc' })
+@ObjectType({ description: `Template content for different versions of a template for purposes like HTML/Text/etc` })
 export class TemplateContent_ {
     @Field() 
     @MaxLength(16)
@@ -25098,13 +25230,13 @@ export class TemplateContent_ {
     @MaxLength(16)
     TypeID: string;
         
-    @Field({nullable: true, description: 'The actual text content for the template'}) 
+    @Field({nullable: true, description: `The actual text content for the template`}) 
     TemplateText?: string;
         
-    @Field(() => Int, {description: 'Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type'}) 
+    @Field(() => Int, {description: `Priority of the content version, higher priority versions will be used ahead of lower priority versions for a given Type`}) 
     Priority: number;
         
-    @Field(() => Boolean, {description: 'Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it'}) 
+    @Field(() => Boolean, {description: `Indicates whether the content is active or not. Use this to disable a particular Template Content item without having to remove it`}) 
     IsActive: boolean;
         
     @Field() 
@@ -25244,12 +25376,18 @@ export class TemplateContentResolver extends ResolverBase {
         return this.UpdateRecord('Template Contents', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => TemplateContent_)
+    async DeleteTemplateContent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Template Contents', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Params
 //****************************************************************************
-@ObjectType({ description: 'Parameters allowed for use inside the template' })
+@ObjectType({ description: `Parameters allowed for use inside the template` })
 export class TemplateParam_ {
     @Field() 
     @MaxLength(16)
@@ -25259,39 +25397,39 @@ export class TemplateParam_ {
     @MaxLength(16)
     TemplateID: string;
         
-    @Field({description: 'Name of the parameter'}) 
+    @Field({description: `Name of the parameter`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the parameter'}) 
+    @Field({nullable: true, description: `Description of the parameter`}) 
     Description?: string;
         
-    @Field({description: 'Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.'}) 
+    @Field({description: `Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.`}) 
     @MaxLength(40)
     Type: string;
         
-    @Field({nullable: true, description: 'Default value of the parameter'}) 
+    @Field({nullable: true, description: `Default value of the parameter`}) 
     DefaultValue?: string;
         
     @Field(() => Boolean) 
     IsRequired: boolean;
         
-    @Field({nullable: true, description: 'Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.'}) 
+    @Field({nullable: true, description: `Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`}) 
     @MaxLength(510)
     LinkedParameterName?: string;
         
-    @Field({nullable: true, description: 'If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.'}) 
+    @Field({nullable: true, description: `If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.`}) 
     @MaxLength(1000)
     LinkedParameterField?: string;
         
-    @Field({nullable: true, description: 'Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.'}) 
+    @Field({nullable: true, description: `Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.`}) 
     ExtraFilter?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
     EntityID?: string;
         
-    @Field({nullable: true, description: 'Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.'}) 
+    @Field({nullable: true, description: `Record ID, used only when Type is Record and a specific hardcoded record ID is desired, this is an uncommon use case, helpful for pulling in static types and metadata in some cases.`}) 
     @MaxLength(4000)
     RecordID?: string;
         
@@ -25303,7 +25441,7 @@ export class TemplateParam_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: 'This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.'}) 
+    @Field({nullable: true, description: `This field is used only when the Type of the TemplateParam table is "Entity". It is an optional field used to specify the sorting order for the related entity data that is used in the template for the Entity specified.`}) 
     OrderBy?: string;
         
     @Field() 
@@ -25477,25 +25615,31 @@ export class TemplateParamResolver extends ResolverBase {
         return this.UpdateRecord('Template Params', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => TemplateParam_)
+    async DeleteTemplateParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Template Params', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Template Content Types
 //****************************************************************************
-@ObjectType({ description: 'Template content types for categorizing content within templates' })
+@ObjectType({ description: `Template content types for categorizing content within templates` })
 export class TemplateContentType_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Name of the template content type'}) 
+    @Field({description: `Name of the template content type`}) 
     @MaxLength(510)
     Name: string;
         
-    @Field({nullable: true, description: 'Description of the template content type'}) 
+    @Field({nullable: true, description: `Description of the template content type`}) 
     Description?: string;
         
-    @Field({description: 'Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc'}) 
+    @Field({description: `Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc`}) 
     @MaxLength(50)
     CodeType: string;
         
@@ -25627,12 +25771,18 @@ export class TemplateContentTypeResolver extends ResolverBase {
         return this.UpdateRecord('Template Content Types', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => TemplateContentType_)
+    async DeleteTemplateContentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Template Content Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendations
 //****************************************************************************
-@ObjectType({ description: 'Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID' })
+@ObjectType({ description: `Recommendation headers that store the left side of the recommendation which we track in the SourceEntityID/SourceEntityRecordID` })
 export class Recommendation_ {
     @Field() 
     @MaxLength(16)
@@ -25646,7 +25796,7 @@ export class Recommendation_ {
     @MaxLength(16)
     SourceEntityID: string;
         
-    @Field({description: 'The record ID of the source entity'}) 
+    @Field({description: `The record ID of the source entity`}) 
     SourceEntityRecordID: string;
         
     @Field() 
@@ -25786,7 +25936,7 @@ export class RecommendationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Recommendation Providers
 //****************************************************************************
-@ObjectType({ description: 'Recommendation providers details' })
+@ObjectType({ description: `Recommendation providers details` })
 export class RecommendationProvider_ {
     @Field() 
     @MaxLength(16)
@@ -25921,12 +26071,18 @@ export class RecommendationProviderResolver extends ResolverBase {
         return this.UpdateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => RecommendationProvider_)
+    async DeleteRecommendationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Recommendation Providers', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Recommendation Runs
 //****************************************************************************
-@ObjectType({ description: 'Recommendation runs log each time a provider is requested to provide recommendations' })
+@ObjectType({ description: `Recommendation runs log each time a provider is requested to provide recommendations` })
 export class RecommendationRun_ {
     @Field() 
     @MaxLength(16)
@@ -25936,15 +26092,15 @@ export class RecommendationRun_ {
     @MaxLength(16)
     RecommendationProviderID: string;
         
-    @Field({description: 'The start date of the recommendation run'}) 
+    @Field({description: `The start date of the recommendation run`}) 
     @MaxLength(8)
     StartDate: Date;
         
-    @Field({nullable: true, description: 'The end date of the recommendation run'}) 
+    @Field({nullable: true, description: `The end date of the recommendation run`}) 
     @MaxLength(8)
     EndDate?: Date;
         
-    @Field({description: 'The status of the recommendation run'}) 
+    @Field({description: `The status of the recommendation run`}) 
     @MaxLength(100)
     Status: string;
         
@@ -26114,7 +26270,7 @@ export class RecommendationRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Recommendation Items
 //****************************************************************************
-@ObjectType({ description: 'Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID' })
+@ObjectType({ description: `Table to store individual recommendation items that are the right side of the recommendation which we track in the DestinationEntityID/DestinationEntityRecordID` })
 export class RecommendationItem_ {
     @Field() 
     @MaxLength(16)
@@ -26128,11 +26284,11 @@ export class RecommendationItem_ {
     @MaxLength(16)
     DestinationEntityID: string;
         
-    @Field({description: 'The record ID of the destination entity'}) 
+    @Field({description: `The record ID of the destination entity`}) 
     @MaxLength(900)
     DestinationEntityRecordID: string;
         
-    @Field(() => Float, {nullable: true, description: 'A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.'}) 
+    @Field(() => Float, {nullable: true, description: `A value between 0 and 1 indicating the probability of the match, higher numbers indicating a more certain match/recommendation.`}) 
     MatchProbability?: number;
         
     @Field() 
@@ -26267,7 +26423,7 @@ export class RecommendationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Communication Message Types
 //****************************************************************************
-@ObjectType({ description: 'Mapping between entities and communication base message types' })
+@ObjectType({ description: `Mapping between entities and communication base message types` })
 export class EntityCommunicationMessageType_ {
     @Field() 
     @MaxLength(16)
@@ -26281,7 +26437,7 @@ export class EntityCommunicationMessageType_ {
     @MaxLength(16)
     BaseMessageTypeID: string;
         
-    @Field(() => Boolean, {description: 'Indicates whether the message type is active'}) 
+    @Field(() => Boolean, {description: `Indicates whether the message type is active`}) 
     IsActive: boolean;
         
     @Field() 
@@ -26420,12 +26576,18 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
         return this.UpdateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityCommunicationMessageType_)
+    async DeleteEntityCommunicationMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Communication Message Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Communication Fields
 //****************************************************************************
-@ObjectType({ description: 'Mapping between entity fields and communication base message types with priority' })
+@ObjectType({ description: `Mapping between entity fields and communication base message types with priority` })
 export class EntityCommunicationField_ {
     @Field() 
     @MaxLength(16)
@@ -26435,11 +26597,11 @@ export class EntityCommunicationField_ {
     @MaxLength(16)
     EntityCommunicationMessageTypeID: string;
         
-    @Field({description: 'Name of the field in the entity that maps to the communication base message type'}) 
+    @Field({description: `Name of the field in the entity that maps to the communication base message type`}) 
     @MaxLength(1000)
     FieldName: string;
         
-    @Field(() => Int, {description: 'Priority of the field for the communication base message type'}) 
+    @Field(() => Int, {description: `Priority of the field for the communication base message type`}) 
     Priority: number;
         
     @Field() 
@@ -26559,26 +26721,32 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
         return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityCommunicationField_)
+    async DeleteEntityCommunicationField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Communication Fields', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Record Change Replay Runs
 //****************************************************************************
-@ObjectType({ description: 'Table to track the runs of replaying external record changes' })
+@ObjectType({ description: `Table to track the runs of replaying external record changes` })
 export class RecordChangeReplayRun_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Timestamp when the replay run started'}) 
+    @Field({description: `Timestamp when the replay run started`}) 
     @MaxLength(8)
     StartedAt: Date;
         
-    @Field({nullable: true, description: 'Timestamp when the replay run ended'}) 
+    @Field({nullable: true, description: `Timestamp when the replay run ended`}) 
     @MaxLength(8)
     EndedAt?: Date;
         
-    @Field({description: 'Status of the replay run (Pending, In Progress, Complete, Error)'}) 
+    @Field({description: `Status of the replay run (Pending, In Progress, Complete, Error)`}) 
     @MaxLength(100)
     Status: string;
         
@@ -26729,7 +26897,7 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Library Items
 //****************************************************************************
-@ObjectType({ description: 'Table to store individual library items' })
+@ObjectType({ description: `Table to store individual library items` })
 export class LibraryItem_ {
     @Field() 
     @MaxLength(16)
@@ -26743,7 +26911,7 @@ export class LibraryItem_ {
     @MaxLength(16)
     LibraryID: string;
         
-    @Field({description: 'Type of the library item for example Class, Interface, etc.'}) 
+    @Field({description: `Type of the library item for example Class, Interface, etc.`}) 
     @MaxLength(100)
     Type: string;
         
@@ -26868,12 +27036,18 @@ export class LibraryItemResolver extends ResolverBase {
         return this.UpdateRecord('Library Items', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => LibraryItem_)
+    async DeleteLibraryItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Library Items', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
 // ENTITY CLASS for Entity Relationship Display Components
 //****************************************************************************
-@ObjectType({ description: 'This table stores a list of components that are available for displaying relationships in the MJ Explorer UI' })
+@ObjectType({ description: `This table stores a list of components that are available for displaying relationships in the MJ Explorer UI` })
 export class EntityRelationshipDisplayComponent_ {
     @Field() 
     @MaxLength(16)
@@ -26886,7 +27060,7 @@ export class EntityRelationshipDisplayComponent_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({description: 'The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".'}) 
+    @Field({description: `The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".`}) 
     @MaxLength(40)
     RelationshipType: string;
         
@@ -27023,7 +27197,7 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Action Params
 //****************************************************************************
-@ObjectType({ description: 'Stores paramater mappings to enable Entity Actions to automatically invoke Actions' })
+@ObjectType({ description: `Stores paramater mappings to enable Entity Actions to automatically invoke Actions` })
 export class EntityActionParam_ {
     @Field() 
     @MaxLength(16)
@@ -27037,14 +27211,14 @@ export class EntityActionParam_ {
     @MaxLength(16)
     ActionParamID: string;
         
-    @Field({description: 'Type of the value, which can be Static, Entity Object, or Script.'}) 
+    @Field({description: `Type of the value, which can be Static, Entity Object, or Script.`}) 
     @MaxLength(40)
     ValueType: string;
         
-    @Field({nullable: true, description: 'Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.'}) 
+    @Field({nullable: true, description: `Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.`}) 
     Value?: string;
         
-    @Field({nullable: true, description: 'Additional comments regarding the parameter.'}) 
+    @Field({nullable: true, description: `Additional comments regarding the parameter.`}) 
     Comments?: string;
         
     @Field() 
@@ -27191,29 +27365,29 @@ export class EntityActionParamResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Resource Permissions
 //****************************************************************************
-@ObjectType({ description: 'Table for managing sharing of resources to users or roles with time constraints and permission levels' })
+@ObjectType({ description: `Table for managing sharing of resources to users or roles with time constraints and permission levels` })
 export class ResourcePermission_ {
     @Field() 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Reference to the type of resource being shared (View, Dashboard, Report, etc.)'}) 
+    @Field({description: `Reference to the type of resource being shared (View, Dashboard, Report, etc.)`}) 
     @MaxLength(16)
     ResourceTypeID: string;
         
-    @Field({description: 'ID of the specific resource being shared'}) 
+    @Field({description: `ID of the specific resource being shared`}) 
     @MaxLength(510)
     ResourceRecordID: string;
         
-    @Field({description: 'The level of sharing either Role or User'}) 
+    @Field({description: `The level of sharing either Role or User`}) 
     @MaxLength(20)
     Type: string;
         
-    @Field({nullable: true, description: 'Optional: Date when sharing starts'}) 
+    @Field({nullable: true, description: `Optional: Date when sharing starts`}) 
     @MaxLength(10)
     StartSharingAt?: Date;
         
-    @Field({nullable: true, description: 'Optional: Date when sharing ends'}) 
+    @Field({nullable: true, description: `Optional: Date when sharing ends`}) 
     @MaxLength(10)
     EndSharingAt?: Date;
         
@@ -27225,7 +27399,7 @@ export class ResourcePermission_ {
     @MaxLength(16)
     UserID?: string;
         
-    @Field({nullable: true, description: 'Permission level defining the type of access (View, Edit, Owner)'}) 
+    @Field({nullable: true, description: `Permission level defining the type of access (View, Edit, Owner)`}) 
     @MaxLength(40)
     PermissionLevel?: string;
         
@@ -27237,7 +27411,7 @@ export class ResourcePermission_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field({description: 'Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.'}) 
+    @Field({description: `Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.`}) 
     @MaxLength(40)
     Status: string;
         
@@ -27409,25 +27583,25 @@ export class ResourcePermissionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Resource Links
 //****************************************************************************
-@ObjectType({ description: 'Table to track user links to shared resources such as views, dashboards, etc.' })
+@ObjectType({ description: `Table to track user links to shared resources such as views, dashboards, etc.` })
 export class ResourceLink_ {
-    @Field({description: 'Unique identifier for each resource link'}) 
+    @Field({description: `Unique identifier for each resource link`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Foreign key to the user linking the resource'}) 
+    @Field({description: `Foreign key to the user linking the resource`}) 
     @MaxLength(16)
     UserID: string;
         
-    @Field({description: 'Foreign key to the resource type (view, dashboard, etc.)'}) 
+    @Field({description: `Foreign key to the resource type (view, dashboard, etc.)`}) 
     @MaxLength(16)
     ResourceTypeID: string;
         
-    @Field({description: 'ID of the specific resource being linked'}) 
+    @Field({description: `ID of the specific resource being linked`}) 
     @MaxLength(510)
     ResourceRecordID: string;
         
-    @Field({nullable: true, description: 'Optional folder where the user organizes the linked resource'}) 
+    @Field({nullable: true, description: `Optional folder where the user organizes the linked resource`}) 
     @MaxLength(510)
     FolderID?: string;
         
@@ -27566,6 +27740,365 @@ export class ResourceLinkResolver extends ResolverBase {
     async DeleteResourceLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Resource Links', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for AI Agent Requests
+//****************************************************************************
+@ObjectType()
+export class AIAgentRequest_ {
+    @Field({description: `Primary key for the AIAgentRequest table, uniquely identifies each record.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Foreign key referencing the ID column in the AIAgent table.`}) 
+    @MaxLength(16)
+    AgentID: string;
+        
+    @Field({description: `Timestamp when the request was made by the agent.`}) 
+    @MaxLength(8)
+    RequestedAt: Date;
+        
+    @Field({nullable: true, description: `Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.`}) 
+    @MaxLength(16)
+    RequestForUserID?: string;
+        
+    @Field({description: `Current status of the request (Requested, Approved, Rejected, Canceled).`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({description: `Details of what the AI Agent is requesting.`}) 
+    Request: string;
+        
+    @Field({nullable: true, description: `Response provided by the human to the agent request.`}) 
+    Response?: string;
+        
+    @Field({nullable: true, description: `Populated when a user responds indicating which user responded to the request.`}) 
+    @MaxLength(16)
+    ResponseByUserID?: string;
+        
+    @Field({nullable: true, description: `Timestamp when the response was provided by the human.`}) 
+    @MaxLength(8)
+    RespondedAt?: Date;
+        
+    @Field({nullable: true, description: `Additional comments about the request. Not shared with the agent, purely record keeping.`}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    RequestForUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ResponseByUser?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for AI Agent Requests
+//****************************************************************************
+@InputType()
+export class CreateAIAgentRequestInput {
+    @Field()
+    AgentID: string;
+
+    @Field()
+    RequestedAt: Date;
+
+    @Field({ nullable: true })
+    RequestForUserID?: string;
+
+    @Field()
+    Status: string;
+
+    @Field()
+    Request: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+
+    @Field({ nullable: true })
+    ResponseByUserID?: string;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for AI Agent Requests
+//****************************************************************************
+@InputType()
+export class UpdateAIAgentRequestInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    AgentID: string;
+
+    @Field()
+    RequestedAt: Date;
+
+    @Field({ nullable: true })
+    RequestForUserID?: string;
+
+    @Field()
+    Status: string;
+
+    @Field()
+    Request: string;
+
+    @Field({ nullable: true })
+    Response?: string;
+
+    @Field({ nullable: true })
+    ResponseByUserID?: string;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for AI Agent Requests
+//****************************************************************************
+@ObjectType()
+export class RunAIAgentRequestViewResult {
+    @Field(() => [AIAgentRequest_])
+    Results: AIAgentRequest_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AIAgentRequest_)
+export class AIAgentRequestResolver extends ResolverBase {
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunAIAgentRequestViewResult)
+    async RunAIAgentRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'AI Agent Requests';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => AIAgentRequest_, { nullable: true })
+    async AIAgentRequest(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRequest_ | null> {
+        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => AIAgentRequest_)
+    async CreateAIAgentRequest(
+        @Arg('input', () => CreateAIAgentRequestInput) input: CreateAIAgentRequestInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AIAgentRequest_)
+    async UpdateAIAgentRequest(
+        @Arg('input', () => UpdateAIAgentRequestInput) input: UpdateAIAgentRequestInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIAgentRequest_)
+    async DeleteAIAgentRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Agent Requests', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Query Entities
+//****************************************************************************
+@ObjectType({ description: `Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries that can be executed and serve as examples for AI.` })
+export class QueryEntity_ {
+    @Field({description: `Unique identifier for the QueryEntity record.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `References the ID of the query in the Queries table.`}) 
+    @MaxLength(16)
+    QueryID: string;
+        
+    @Field({description: `References the ID of the entity in the Entities table.`}) 
+    @MaxLength(16)
+    EntityID: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Query: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Query Entities
+//****************************************************************************
+@InputType()
+export class CreateQueryEntityInput {
+    @Field()
+    QueryID: string;
+
+    @Field()
+    EntityID: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Query Entities
+//****************************************************************************
+@InputType()
+export class UpdateQueryEntityInput {
+    @Field()
+    ID: string;
+
+    @Field()
+    QueryID: string;
+
+    @Field()
+    EntityID: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Query Entities
+//****************************************************************************
+@ObjectType()
+export class RunQueryEntityViewResult {
+    @Field(() => [QueryEntity_])
+    Results: QueryEntity_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QueryEntity_)
+export class QueryEntityResolver extends ResolverBase {
+    @Query(() => RunQueryEntityViewResult)
+    async RunQueryEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryEntityViewResult)
+    async RunQueryEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryEntityViewResult)
+    async RunQueryEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Query Entities';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QueryEntity_, { nullable: true })
+    async QueryEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryEntity_ | null> {
+        this.CheckUserReadPermissions('Query Entities', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => QueryEntity_)
+    async CreateQueryEntity(
+        @Arg('input', () => CreateQueryEntityInput) input: CreateQueryEntityInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Query Entities', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => QueryEntity_)
+    async UpdateQueryEntity(
+        @Arg('input', () => UpdateQueryEntityInput) input: UpdateQueryEntityInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Query Entities', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => QueryEntity_)
+    async DeleteQueryEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Query Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -27771,365 +28304,6 @@ export class flyway_schema_historyResolver extends ResolverBase {
     async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
         return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for AI Agent Requests
-//****************************************************************************
-@ObjectType()
-export class AIAgentRequest_ {
-    @Field({description: 'Primary key for the AIAgentRequest table, uniquely identifies each record.'}) 
-    @MaxLength(16)
-    ID: string;
-        
-    @Field({description: 'Foreign key referencing the ID column in the AIAgent table.'}) 
-    @MaxLength(16)
-    AgentID: string;
-        
-    @Field({description: 'Timestamp when the request was made by the agent.'}) 
-    @MaxLength(8)
-    RequestedAt: Date;
-        
-    @Field({nullable: true, description: 'Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.'}) 
-    @MaxLength(16)
-    RequestForUserID?: string;
-        
-    @Field({description: 'Current status of the request (Requested, Approved, Rejected, Canceled).'}) 
-    @MaxLength(40)
-    Status: string;
-        
-    @Field({description: 'Details of what the AI Agent is requesting.'}) 
-    Request: string;
-        
-    @Field({nullable: true, description: 'Response provided by the human to the agent request.'}) 
-    Response?: string;
-        
-    @Field({nullable: true, description: 'Populated when a user responds indicating which user responded to the request.'}) 
-    @MaxLength(16)
-    ResponseByUserID?: string;
-        
-    @Field({nullable: true, description: 'Timestamp when the response was provided by the human.'}) 
-    @MaxLength(8)
-    RespondedAt?: Date;
-        
-    @Field({nullable: true, description: 'Additional comments about the request. Not shared with the agent, purely record keeping.'}) 
-    Comments?: string;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Agent?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    RequestForUser?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    ResponseByUser?: string;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for AI Agent Requests
-//****************************************************************************
-@InputType()
-export class CreateAIAgentRequestInput {
-    @Field()
-    AgentID: string;
-
-    @Field()
-    RequestedAt: Date;
-
-    @Field({ nullable: true })
-    RequestForUserID?: string;
-
-    @Field()
-    Status: string;
-
-    @Field()
-    Request: string;
-
-    @Field({ nullable: true })
-    Response?: string;
-
-    @Field({ nullable: true })
-    ResponseByUserID?: string;
-
-    @Field({ nullable: true })
-    RespondedAt?: Date;
-
-    @Field({ nullable: true })
-    Comments?: string;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for AI Agent Requests
-//****************************************************************************
-@InputType()
-export class UpdateAIAgentRequestInput {
-    @Field()
-    ID: string;
-
-    @Field()
-    AgentID: string;
-
-    @Field()
-    RequestedAt: Date;
-
-    @Field({ nullable: true })
-    RequestForUserID?: string;
-
-    @Field()
-    Status: string;
-
-    @Field()
-    Request: string;
-
-    @Field({ nullable: true })
-    Response?: string;
-
-    @Field({ nullable: true })
-    ResponseByUserID?: string;
-
-    @Field({ nullable: true })
-    RespondedAt?: Date;
-
-    @Field({ nullable: true })
-    Comments?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for AI Agent Requests
-//****************************************************************************
-@ObjectType()
-export class RunAIAgentRequestViewResult {
-    @Field(() => [AIAgentRequest_])
-    Results: AIAgentRequest_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(AIAgentRequest_)
-export class AIAgentRequestResolver extends ResolverBase {
-    @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'AI Agent Requests';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => AIAgentRequest_, { nullable: true })
-    async AIAgentRequest(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRequest_ | null> {
-        this.CheckUserReadPermissions('AI Agent Requests', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => AIAgentRequest_)
-    async CreateAIAgentRequest(
-        @Arg('input', () => CreateAIAgentRequestInput) input: CreateAIAgentRequestInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => AIAgentRequest_)
-    async UpdateAIAgentRequest(
-        @Arg('input', () => UpdateAIAgentRequestInput) input: UpdateAIAgentRequestInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => AIAgentRequest_)
-    async DeleteAIAgentRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('AI Agent Requests', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for Query Entities
-//****************************************************************************
-@ObjectType({ description: 'Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries that can be executed and serve as examples for AI.' })
-export class QueryEntity_ {
-    @Field({description: 'Unique identifier for the QueryEntity record.'}) 
-    @MaxLength(16)
-    ID: string;
-        
-    @Field({description: 'References the ID of the query in the Queries table.'}) 
-    @MaxLength(16)
-    QueryID: string;
-        
-    @Field({description: 'References the ID of the entity in the Entities table.'}) 
-    @MaxLength(16)
-    EntityID: string;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(510)
-    Query: string;
-        
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for Query Entities
-//****************************************************************************
-@InputType()
-export class CreateQueryEntityInput {
-    @Field()
-    QueryID: string;
-
-    @Field()
-    EntityID: string;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for Query Entities
-//****************************************************************************
-@InputType()
-export class UpdateQueryEntityInput {
-    @Field()
-    ID: string;
-
-    @Field()
-    QueryID: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Query Entities
-//****************************************************************************
-@ObjectType()
-export class RunQueryEntityViewResult {
-    @Field(() => [QueryEntity_])
-    Results: QueryEntity_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(QueryEntity_)
-export class QueryEntityResolver extends ResolverBase {
-    @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Query Entities';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => QueryEntity_, { nullable: true })
-    async QueryEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryEntity_ | null> {
-        this.CheckUserReadPermissions('Query Entities', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => QueryEntity_)
-    async CreateQueryEntity(
-        @Arg('input', () => CreateQueryEntityInput) input: CreateQueryEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Query Entities', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => QueryEntity_)
-    async UpdateQueryEntity(
-        @Arg('input', () => UpdateQueryEntityInput) input: UpdateQueryEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Query Entities', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => QueryEntity_)
-    async DeleteQueryEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Query Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -30019,29 +30193,29 @@ export class ContentItemTagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Learning Cycles
 //****************************************************************************
-@ObjectType({ description: 'Tracks the learning cycles for AI Agents where the Agent does offline reasoning, reflection, learning, and updates metadata.' })
+@ObjectType({ description: `Tracks the learning cycles for AI Agents where the Agent does offline reasoning, reflection, learning, and updates metadata.` })
 export class AIAgentLearningCycle_ {
-    @Field({description: 'Unique identifier for the learning cycle.'}) 
+    @Field({description: `Unique identifier for the learning cycle.`}) 
     @MaxLength(16)
     ID: string;
         
-    @Field({description: 'Identifier for the AI Agent associated with this learning cycle.'}) 
+    @Field({description: `Identifier for the AI Agent associated with this learning cycle.`}) 
     @MaxLength(16)
     AgentID: string;
         
-    @Field({description: 'Timestamp indicating when the learning cycle started.'}) 
+    @Field({description: `Timestamp indicating when the learning cycle started.`}) 
     @MaxLength(10)
     StartedAt: Date;
         
-    @Field({nullable: true, description: 'Timestamp indicating when the learning cycle ended.'}) 
+    @Field({nullable: true, description: `Timestamp indicating when the learning cycle ended.`}) 
     @MaxLength(10)
     EndedAt?: Date;
         
-    @Field({description: 'Status of the learning cycle (In-Progress, Complete, or Failed).'}) 
+    @Field({description: `Status of the learning cycle (In-Progress, Complete, or Failed).`}) 
     @MaxLength(40)
     Status: string;
         
-    @Field({nullable: true, description: 'Text summary provided by the agent about what it learned and any changes it requested for stored metadata.'}) 
+    @Field({nullable: true, description: `Text summary provided by the agent about what it learned and any changes it requested for stored metadata.`}) 
     AgentSummary?: string;
         
     @Field() 
