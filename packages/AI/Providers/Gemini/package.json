@@ -21,6 +21,6 @@
   "dependencies": {
     "@memberjunction/ai": "2.20.2",
     "@memberjunction/global": "2.20.2",
-    "@google/generative-ai": "0.12.0"
+    "@google/generative-ai": "0.21.0"
   }
 }
