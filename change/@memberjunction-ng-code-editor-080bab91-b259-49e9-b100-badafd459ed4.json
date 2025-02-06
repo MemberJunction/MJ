@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ng-code-editor",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}

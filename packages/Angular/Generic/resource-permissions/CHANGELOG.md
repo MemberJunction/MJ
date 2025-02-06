@@ -1,8 +1,27 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
-This log was last generated on Mon, 03 Feb 2025 01:16:07 GMT and should not be manually modified.
+This log was last generated on Thu, 06 Feb 2025 04:34:25 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.20.3
+
+Thu, 06 Feb 2025 04:34:25 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/global to v2.20.3
+- Bump @memberjunction/core to v2.20.3
+- Bump @memberjunction/core-entities to v2.20.3
+- Bump @memberjunction/ng-container-directives to v2.20.3
+- Bump @memberjunction/ng-notifications to v2.20.3
+- Bump @memberjunction/ng-generic-dialog to v2.20.3
+- Bump @memberjunction/ng-base-types to v2.20.3
 
 ## 2.20.2
 

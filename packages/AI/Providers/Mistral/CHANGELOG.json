@@ -2,6 +2,47 @@
   "name": "@memberjunction/ai-mistral",
   "entries": [
     {
+      "date": "Thu, 06 Feb 2025 04:34:26 GMT",
+      "version": "2.20.3",
+      "tag": "@memberjunction/ai-mistral_v2.20.3",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ai-mistral",
+            "commit": "3fea308f148eb1f5c8f85b121559552e02a06289",
+            "comment": "Bump minor version"
+          }
+        ],
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-mistral",
+            "commit": "457790ef010fbf91120e08e5a7a38c6218963ed7",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-mistral",
+            "commit": "8ddf14bd217c4db79e5c551f499a998fbd0fc8b1",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-mistral",
+            "comment": "Bump @memberjunction/ai to v2.20.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-mistral",
+            "comment": "Bump @memberjunction/global to v2.20.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 03 Feb 2025 01:16:07 GMT",
       "version": "2.20.2",
       "tag": "@memberjunction/ai-mistral_v2.20.2",
