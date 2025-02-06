@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ng-skip-chat",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "minor"
-}

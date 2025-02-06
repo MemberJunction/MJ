@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ai-vector-sync",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "minor"
-}

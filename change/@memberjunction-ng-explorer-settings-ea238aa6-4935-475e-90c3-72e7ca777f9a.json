@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/ng-explorer-settings",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "minor"
-}

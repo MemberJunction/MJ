@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/doc-utils",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "minor"
-}

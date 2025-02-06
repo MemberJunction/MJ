@@ -2,6 +2,75 @@
   "name": "@memberjunction/ng-base-forms",
   "entries": [
     {
+      "date": "Thu, 06 Feb 2025 05:11:44 GMT",
+      "version": "2.21.0",
+      "tag": "@memberjunction/ng-base-forms_v2.21.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig@memberjunction.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "62a891b16a732ec5014f35f0b86a2d016c04b2be",
+            "comment": "Bump minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/global to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/core to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-code-editor to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-shared to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-link-directives to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-container-directives to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-record-changes to v2.21.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-base-types to v2.21.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 06 Feb 2025 04:34:26 GMT",
       "version": "2.20.3",
       "tag": "@memberjunction/ng-base-forms_v2.20.3",
