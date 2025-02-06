@@ -43,6 +43,7 @@ const configInfoSchema = z.object({
   askSkip: askSkipInfoSchema.optional(),
 
   apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
 
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),
@@ -107,6 +108,7 @@ export const {
   auth0WebClientID,
   auth0ClientSecret,
   apiKey,
+  baseUrl,
   mjCoreSchema: mj_core_schema,
 } = configInfo;
 

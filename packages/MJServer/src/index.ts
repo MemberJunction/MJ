@@ -62,6 +62,7 @@ export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
+export * from './resolvers/GetDataResolver.js';
 
 export * from './generated/generated.js';
 
