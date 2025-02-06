@@ -106,7 +106,6 @@ export class GetDataResolver {
     @Query(() => GetDataOutputType)
     async GetData(
     @Arg('input', () => GetDataInputType) input: GetDataInputType,
-    @Arg('token', () => String) token: string,
     @Ctx() context: AppContext
     ) {
         try { 
