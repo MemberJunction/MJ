@@ -3,5 +3,5 @@
   "comment": "Bump minor version",
   "packageName": "@memberjunction/ng-base-types",
   "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
+  "dependentChangeType": "minor"
 }
