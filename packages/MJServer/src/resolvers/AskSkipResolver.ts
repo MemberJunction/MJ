@@ -24,6 +24,7 @@ import {
   SkipAPIAgentNoteType,
   SkipEntityFieldInfo,
   SkipEntityRelationshipInfo,
+  SkipEntityFieldValueInfo,
 } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -236,8 +237,9 @@ export class AskSkipResolver {
     includeNotes: boolean,
     contextUser: UserInfo,
     dataSource: DataSource,
+    forceEntitiesRefresh: boolean = false
   ): Promise<SkipAPIRequest> {
-    const entities = includeEntities ? await this.BuildSkipEntities(dataSource) : [];
+    const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
     const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []}; 
     const input: SkipAPIRequest = {
@@ -309,7 +311,8 @@ export class AskSkipResolver {
     @Arg('ConversationId', () => String) ConversationId: string,
     @Ctx() { dataSource, userPayload }: AppContext,
     @PubSub() pubSub: PubSubEngine,
-    @Arg('DataContextId', () => String, { nullable: true }) DataContextId?: string
+    @Arg('DataContextId', () => String, { nullable: true }) DataContextId?: string,
+    @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
   ) {
     const md = new Metadata();
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
@@ -333,7 +336,7 @@ export class AskSkipResolver {
     );
 
     const conversationDetailCount = 1
-    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource);
+    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh);
 
     return this.HandleSkipRequest(
       input,
@@ -441,7 +444,7 @@ export class AskSkipResolver {
       }
     }
     catch (e) {
-      LogError(e);
+      LogError(`AskSkipResolver::BuildSkipAgentNotes: ${e}`);
       return {notes: [], noteTypes: []}; // non- fatal error just return empty arrays
     }
   }
@@ -451,10 +454,10 @@ export class AskSkipResolver {
       if (e.RowsToPackWithSchema === 'None')
         return [];
 
-      // only include columns that have a scopes including either All and/or AI
+      // only include columns that have a scopes including either All and/or AI or have Null for ScopeDefault
       const fields = e.Fields.filter((f) => {
-        const scopes = f.ScopeDefault.split(',').map((s) => s.trim().toLowerCase());
-        return scopes.includes('all') || scopes.includes('ai');
+        const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
+        return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
       }).map(f => `[${f.Name}]`).join(',');
 
       // now run the query based on the row packing method
@@ -466,17 +469,19 @@ export class AskSkipResolver {
         case 'Sample':
           switch (e.RowsToPackSampleMethod) {
             case 'random':
-              sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM ${e.SchemaName}.${e.BaseView} ORDER BY newid()`; // SQL Server newid() function returns a new uniqueidentifier value for each row and when sorted it will be random
+              sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM [${e.SchemaName}].[${e.BaseView}] ORDER BY newid()`; // SQL Server newid() function returns a new uniqueidentifier value for each row and when sorted it will be random
               break;
             case 'top n':
-              sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM ${e.SchemaName}.${e.BaseView}`;
+              const orderBy = e.RowsToPackSampleOrder ? ` ORDER BY [${e.RowsToPackSampleOrder}]` : '';
+              sql = `SELECT TOP ${e.RowsToPackSampleCount} ${fields} FROM [${e.SchemaName}].[${e.BaseView}]${orderBy}`;
               break;
             case 'bottom n':
               const firstPrimaryKey = e.FirstPrimaryKey.Name;
+              const innerOrderBy = e.RowsToPackSampleOrder ? `[${e.RowsToPackSampleOrder}]` : `[${firstPrimaryKey}] DESC`;
               sql = `SELECT * FROM (
                         SELECT TOP ${e.RowsToPackSampleCount} ${fields} 
-                        FROM ${e.SchemaName}.${e.BaseView}
-                        ORDER BY [${firstPrimaryKey}] DESC
+                        FROM [${e.SchemaName}].[${e.BaseView}]
+                        ORDER BY ${innerOrderBy}
                     ) sub
                     ORDER BY [${firstPrimaryKey}] ASC;`;
               break;
@@ -491,35 +496,54 @@ export class AskSkipResolver {
       }
     }
     catch (e) {
-      LogError(e);
+      LogError(`AskSkipResolver::PackEntityRows: ${e}`);
       return [];
     }
   }
 
-  protected async PackFieldPossibleValues(f: EntityFieldInfo, dataSource: DataSource): Promise<string[]> {
-    if (f.ValueListTypeEnum === 'List') {
-      // simple list of values in the Entity Field Values table
-      return f.EntityFieldValues.map((v) => v.Value);
-    }
-    else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
-      // could be a user provided value, OR the values in the list of possible values. 
-      // get the distinct list of values from the DB and concat that with the f.EntityFieldValues array - deduped and return
-      const values = await this.GetFieldDistinctValues(f, dataSource);
-      if (!values || values.length === 0) {
-        // no result, just return the EntityFieldValues
-        return f.EntityFieldValues.map((v) => v.Value);
+  protected async PackFieldPossibleValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
+    try {
+      if (f.ValuesToPackWithSchema === 'None') {
+        return []; // don't pack anything
       }
-      else {
-        return [...new Set([...f.EntityFieldValues.map((v) => v.Value), ...values])];
+      else if (f.ValuesToPackWithSchema === 'All') {
+        // wants ALL of the distinct values
+        return await this.GetFieldDistinctValues(f, dataSource);
       }
+      else if (f.ValuesToPackWithSchema === 'Auto') {
+        // default setting - pack based on the ValueListType
+        if (f.ValueListTypeEnum === 'List') {
+          // simple list of values in the Entity Field Values table
+          return f.EntityFieldValues.map((v) => {
+            return {value: v.Value, displayValue: v.Value};
+          });
+        }
+        else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
+          // could be a user provided value, OR the values in the list of possible values. 
+          // get the distinct list of values from the DB and concat that with the f.EntityFieldValues array - deduped and return
+          const values = await this.GetFieldDistinctValues(f, dataSource);
+          if (!values || values.length === 0) {
+            // no result, just return the EntityFieldValues
+            return f.EntityFieldValues.map((v) => {
+              return {value: v.Value, displayValue: v.Value};
+            });
+          }
+          else {
+            return [...new Set([...f.EntityFieldValues.map((v) => {
+              return {value: v.Value, displayValue: v.Value};
+            }), ...values])];
+          }
+        }
+      }
+      return []; // if we get here, nothing to pack
     }
-    else {
-      // no simple value list available, just use the values from the GetFieldDistinctValues method
-      return await this.GetFieldDistinctValues(f, dataSource);
+    catch (e) {
+      LogError(`AskSkipResolver::PackFieldPossibleValues: ${e}`);
+      return [];
     }
   }
 
-  protected async GetFieldDistinctValues(f: EntityFieldInfo, dataSource: DataSource): Promise<string[]> {
+  protected async GetFieldDistinctValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
     try {
       const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
       const result = await dataSource.query(sql);
@@ -527,11 +551,16 @@ export class AskSkipResolver {
         return [];
       }
       else {
-        return result.map((r) => r[f.Name]);
+        return result.map((r) => {
+          return {
+            value: r[f.Name], 
+            displayValue: r[f.Name]
+          };  
+        });
       }
     }
     catch (e) {
-      LogError(e);
+      LogError(`AskSkipResolver::GetFieldDistinctValues: ${e}`);
       return [];      
     }
   }
@@ -543,116 +572,146 @@ export class AskSkipResolver {
   private static __lastRefreshTime: number = 0;
 
   private async refreshSkipEntities(dataSource: DataSource): Promise<SkipEntityInfo[]> {
-    LogStatus('Refreshing Skip Entities...');
-
-    const md = new Metadata();
-    const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSendSkip?.includeEntitiesFromExcludedSchemas ?? [])
-      .map((e) => e.trim().toLowerCase());
-
-    // get the list of entities
-    const entities = md.Entities.filter((e) => {
-      if (e.SchemaName !== mj_core_schema || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
-        const scopes = e.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
-        return scopes.includes('all') || scopes.includes('ai') || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase());
-      }
-      return false;
-    });
-
-    // now we have our list of entities, pack em up
-    const result = await Promise.all(entities.map((e) => this.PackSingleSkipEntityInfo(e, dataSource)));
-
-    AskSkipResolver.__lastRefreshTime = Date.now(); // Update last refresh time
-    return result;
+    try {
+      const md = new Metadata();
+      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSendSkip?.includeEntitiesFromExcludedSchemas ?? [])
+        .map((e) => e.trim().toLowerCase());
+  
+      // get the list of entities
+      const entities = md.Entities.filter((e) => {
+        if (e.SchemaName !== mj_core_schema || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
+          const scopes = e.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
+          return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai') || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase());
+        }
+        return false;
+      });
+  
+      // now we have our list of entities, pack em up
+      const result = await Promise.all(entities.map((e) => this.PackSingleSkipEntityInfo(e, dataSource)));
+  
+      AskSkipResolver.__lastRefreshTime = Date.now(); // Update last refresh time
+      return result;        
+    }
+    catch (e) {
+      LogError(`AskSkipResolver::refreshSkipEntities: ${e}`);
+      return [];
+    }
   }
 
   public async BuildSkipEntities(dataSource: DataSource, forceRefresh: boolean = false, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
-    const now = Date.now();
-    const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
-
-    // If force refresh is requested OR cache expired OR cache is empty, refresh
-    if (forceRefresh || cacheExpired || AskSkipResolver.__skipEntitiesCache$.value === null) {
-      console.log(`Forcing refresh: ${forceRefresh}, Cache Expired: ${cacheExpired}`);
-      const newData = this.refreshSkipEntities(dataSource);
-      AskSkipResolver.__skipEntitiesCache$.next(newData);
+    try {
+      const now = Date.now();
+      const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
+  
+      // If force refresh is requested OR cache expired OR cache is empty, refresh
+      if (forceRefresh || cacheExpired || AskSkipResolver.__skipEntitiesCache$.value === null) {
+        console.log(`Forcing Skip Entities refresh: ${forceRefresh}, Cache Expired: ${cacheExpired}`);
+        const newData = this.refreshSkipEntities(dataSource);
+        AskSkipResolver.__skipEntitiesCache$.next(newData);
+      }
+  
+      return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();  
     }
-
-    return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();
+    catch (e) {
+      LogError(`AskSkipResolver::BuildSkipEntities: ${e}`);
+      return [];
+    }
   }
 
   protected async PackSingleSkipEntityInfo(e: EntityInfo, dataSource: DataSource): Promise<SkipEntityInfo> {
-    const ret: SkipEntityInfo = {
-      id: e.ID,
-      name: e.Name,
-      schemaName: e.SchemaName,
-      baseView: e.BaseView,
-      description: e.Description,
-
-      fields: await Promise.all(e.Fields.filter(f => {
-        // we want to check the scopes for the field level and make sure it is either All or AI or has both
-        const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
-        return scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-      }).map(f => this.PackSingleSkipEntityField(f, dataSource))),
-
-      relatedEntities: e.RelatedEntities.map((r) => {
-        return this.PackSingleSkipEntityRelationship(r);
-      }),
-
-      rowsPacked: e.RowsToPackWithSchema,
-      rowsSampleMethod: e.RowsToPackSampleMethod,
-      rows: await this.PackEntityRows(e, dataSource)
-    };
-    return ret;
+    try {
+      const ret: SkipEntityInfo = {
+        id: e.ID,
+        name: e.Name,
+        schemaName: e.SchemaName,
+        baseView: e.BaseView,
+        description: e.Description,
+  
+        fields: await Promise.all(e.Fields.filter(f => {
+          // we want to check the scopes for the field level and make sure it is either All or AI or has both
+          const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
+          return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
+        }).map(f => {
+          return this.PackSingleSkipEntityField(f, dataSource);
+        })),
+  
+        relatedEntities: e.RelatedEntities.map((r) => {
+          return this.PackSingleSkipEntityRelationship(r);
+        }),
+  
+        rowsPacked: e.RowsToPackWithSchema,
+        rowsSampleMethod: e.RowsToPackSampleMethod,
+        rows: await this.PackEntityRows(e, dataSource)
+      };
+      return ret;
+    }
+    catch (e) {
+      LogError(`AskSkipResolver::PackSingleSkipEntityInfo: ${e}`);
+      return null;
+    }
   }
 
   protected PackSingleSkipEntityRelationship(r: EntityRelationshipInfo): SkipEntityRelationshipInfo {
-    return {
-      entityID: r.EntityID,
-      relatedEntityID: r.RelatedEntityID,
-      type: r.Type,
-      entityKeyField: r.EntityKeyField,
-      relatedEntityJoinField: r.RelatedEntityJoinField,
-      joinView: r.JoinView,
-      joinEntityJoinField: r.JoinEntityJoinField,
-      joinEntityInverseJoinField: r.JoinEntityInverseJoinField,
-      entity: r.Entity,
-      entityBaseView: r.EntityBaseView,
-      relatedEntity: r.RelatedEntity,
-      relatedEntityBaseView: r.RelatedEntityBaseView,
-    };
+    try {
+      return {
+        entityID: r.EntityID,
+        relatedEntityID: r.RelatedEntityID,
+        type: r.Type,
+        entityKeyField: r.EntityKeyField,
+        relatedEntityJoinField: r.RelatedEntityJoinField,
+        joinView: r.JoinView,
+        joinEntityJoinField: r.JoinEntityJoinField,
+        joinEntityInverseJoinField: r.JoinEntityInverseJoinField,
+        entity: r.Entity,
+        entityBaseView: r.EntityBaseView,
+        relatedEntity: r.RelatedEntity,
+        relatedEntityBaseView: r.RelatedEntityBaseView,
+      };
+    }
+    catch (e) {
+      LogError(`AskSkipResolver::PackSingleSkipEntityRelationship: ${e}`);
+      return null;
+    }
   }
 
   protected async PackSingleSkipEntityField(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldInfo> {
-    return {
-      //id: f.ID,
-      entityID: f.EntityID,
-      sequence: f.Sequence,
-      name: f.Name,
-      displayName: f.DisplayName,
-      category: f.Category,
-      type: f.Type,
-      description: f.Description,
-      isPrimaryKey: f.IsPrimaryKey,
-      allowsNull: f.AllowsNull,
-      isUnique: f.IsUnique,
-      length: f.Length,
-      precision: f.Precision,
-      scale: f.Scale,
-      sqlFullType: f.SQLFullType,
-      defaultValue: f.DefaultValue,
-      autoIncrement: f.AutoIncrement,
-      valueListType: f.ValueListType,
-      extendedType: f.ExtendedType,
-      defaultInView: f.DefaultInView,
-      defaultColumnWidth: f.DefaultColumnWidth,
-      isVirtual: f.IsVirtual,
-      isNameField: f.IsNameField,
-      relatedEntityID: f.RelatedEntityID,
-      relatedEntityFieldName: f.RelatedEntityFieldName,
-      relatedEntity: f.RelatedEntity,
-      relatedEntitySchemaName: f.RelatedEntitySchemaName,
-      relatedEntityBaseView: f.RelatedEntityBaseView,
-      possibleValues: await this.PackFieldPossibleValues(f, dataSource),
-    };
+    try {
+      return {
+        //id: f.ID,
+        entityID: f.EntityID,
+        sequence: f.Sequence,
+        name: f.Name,
+        displayName: f.DisplayName,
+        category: f.Category,
+        type: f.Type,
+        description: f.Description,
+        isPrimaryKey: f.IsPrimaryKey,
+        allowsNull: f.AllowsNull,
+        isUnique: f.IsUnique,
+        length: f.Length,
+        precision: f.Precision,
+        scale: f.Scale,
+        sqlFullType: f.SQLFullType,
+        defaultValue: f.DefaultValue,
+        autoIncrement: f.AutoIncrement,
+        valueListType: f.ValueListType,
+        extendedType: f.ExtendedType,
+        defaultInView: f.DefaultInView,
+        defaultColumnWidth: f.DefaultColumnWidth,
+        isVirtual: f.IsVirtual,
+        isNameField: f.IsNameField,
+        relatedEntityID: f.RelatedEntityID,
+        relatedEntityFieldName: f.RelatedEntityFieldName,
+        relatedEntity: f.RelatedEntity,
+        relatedEntitySchemaName: f.RelatedEntitySchemaName,
+        relatedEntityBaseView: f.RelatedEntityBaseView,
+        possibleValues: await this.PackFieldPossibleValues(f, dataSource),
+      };
+    }
+    catch (e) {
+      LogError(`AskSkipResolver::PackSingleSkipEntityField: ${e}`);
+      return null;
+    }
   }
 
   protected async HandleSkipInitialObjectLoading(
