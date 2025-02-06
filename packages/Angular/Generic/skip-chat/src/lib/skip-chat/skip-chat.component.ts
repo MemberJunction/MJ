@@ -30,7 +30,7 @@ import {
   SkipResponsePhase,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -182,26 +182,48 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   protected SubscribeToNotifications() {
     try {
+      // subscribe to MJ events for push status updates 
       MJGlobal.Instance.GetEventListener().subscribe((event: MJEvent) => {
         if (event.event === MJEventType.ComponentEvent) {
           if (!event.args) {
             return;
           }
+          this.HandlePushStatusUpdate(event.args);
+        }
+      });
 
-          const obj: { type?: string; status?: string; conversationID?: string; message?: string } = event.args;
-          if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
-            if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
-              if (obj.conversationID === this.SelectedConversation?.ID) {
-                if (obj.message && obj.message.length > 0) {
-                  // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
-                  this.SetSkipStatusMessage(obj.message, 0);
-                }
-              }
-            }
+
+      // Directly subscribe to the push status updates from the GraphQLDataProvider. If SkipChat is running in an environment where someone else is NOT 
+      // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
+      // near instant from the user's perspective.
+      (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
+        if (status && status.message) {
+          const statusObj = SafeJSONParse(status.message);
+          if (statusObj) {
+            this.HandlePushStatusUpdate(statusObj);  
           }
         }
       });
     } catch (e) {
+      LogError(e);
+    }
+  }
+
+  protected HandlePushStatusUpdate(statusObj: any) {
+    try {
+      const obj: { type?: string; status?: string; conversationID?: string; message?: string } = statusObj;
+      if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
+        if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
+          if (obj.conversationID === this.SelectedConversation?.ID) {
+            if (obj.message && obj.message.length > 0) {
+              // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+              this.SetSkipStatusMessage(obj.message, 0);
+            }
+          }
+        }
+      }
+    }
+    catch (e) {
       LogError(e);
     }
   }
