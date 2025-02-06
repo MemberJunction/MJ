@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Bump minor version",
+  "packageName": "@memberjunction/ng-simple-record-list",
+  "email": "craig@memberjunction.com",
+  "dependentChangeType": "minor"
+}

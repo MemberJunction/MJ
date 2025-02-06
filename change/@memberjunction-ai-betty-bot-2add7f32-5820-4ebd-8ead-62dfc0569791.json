@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Bump minor version",
+  "packageName": "@memberjunction/ai-betty-bot",
+  "email": "craig@memberjunction.com",
+  "dependentChangeType": "minor"
+}
