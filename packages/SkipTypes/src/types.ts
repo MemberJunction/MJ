@@ -413,6 +413,22 @@ export class SkipAPIRequest {
      * Optional, list of the possible types of notes that an agent can store in the source MJ system
      */
     noteTypes?: SkipAPIAgentNoteType[];
+
+    /**
+     * Optional, if the calling server wants to enable the AI agent to call back to interact and request data or otherwise, this is the URL that the AI agent can use to call back to the source server
+     */
+    callingServerURL?: string
+
+    /**
+     * Optional, if the calling server wants to enable the AI agent to call back to interact and request data or otherwise, this is the API key that the AI agent can use to call back to the source server
+     */
+    callingServerAPIKey?: string
+
+    /**
+     * Optional, if the calling server requires the use of an additional short-lived access token beyond the API key, this is the token that the AI agent can use to call back to the source server during the lifecycle
+     * of the request
+     */
+    callingServerAccessToken?: string
 }
 
 

@@ -36,7 +36,7 @@ import {
   UserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl, configInfo, mj_core_schema } from '../config.js';
+import { ___skipAPIOrgId, ___skipAPIurl, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -44,6 +44,7 @@ import { sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
+import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -154,7 +155,7 @@ export class AskSkipResolver {
       }
     }
 
-    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user, dataSource);
+    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user, dataSource, false, false);
     messages.push({
       content: UserQuestion,
       role: 'user',
@@ -237,11 +238,30 @@ export class AskSkipResolver {
     includeNotes: boolean,
     contextUser: UserInfo,
     dataSource: DataSource,
-    forceEntitiesRefresh: boolean = false
+    forceEntitiesRefresh: boolean = false,
+    includeCallBackKeyAndAccessToken: boolean = false
   ): Promise<SkipAPIRequest> {
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
     const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []}; 
+
+    // setup a secure access token that is short lived for use with the Skip API
+    let accessToken: GetDataAccessToken;
+    if (includeCallBackKeyAndAccessToken) {
+      accessToken = registerAccessToken(
+        undefined,
+        1000 * 60 * 10 /*10 minutes*/, 
+        {
+          type: 'skip_api_request',
+          userEmail: contextUser.Email,
+          userName: contextUser.Name,
+          userID: contextUser.ID,
+          conversationId: conversationId,
+          requestPhase: requestPhase,
+        } 
+      );  
+    }
+
     const input: SkipAPIRequest = {
       apiKeys: this.buildSkipAPIKeys(),
       organizationInfo: configInfo?.askSkip?.organizationInfo,
@@ -253,7 +273,10 @@ export class AskSkipResolver {
       entities: entities,
       queries: queries,
       notes: notes,
-      noteTypes: noteTypes
+      noteTypes: noteTypes,
+      callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
+      callingServerAPIKey: accessToken ? apiKey : undefined,
+      callingServerAccessToken: accessToken ? accessToken.Token : undefined
     };
     return input;
   }
@@ -275,7 +298,7 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = <SkipAPIRunScriptRequest>await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user, dataSource);
+    const input = <SkipAPIRunScriptRequest>await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user, dataSource, false, false);
     input.scriptText = ScriptText;
     return this.handleSimpleSkipPostRequest(input);
   }
@@ -336,7 +359,7 @@ export class AskSkipResolver {
     );
 
     const conversationDetailCount = 1
-    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh);
+    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
 
     return this.HandleSkipRequest(
       input,
@@ -1145,6 +1168,12 @@ export class AskSkipResolver {
     // analysis is complete
     // all done, wrap things up
     const md = new Metadata();
+
+    // if we created an access token, it will expire soon anyway but let's remove it for extra safety now
+    if (apiRequest.callingServerAccessToken && tokenExists(apiRequest.callingServerAccessToken)) {
+      deleteAccessToken(apiRequest.callingServerAccessToken);
+    }
+
     const { AIMessageConversationDetailID } = await this.FinishConversationAndNotifyUser(
       apiResponse,
       dataContext,
