@@ -6,6 +6,11 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      targetVersion:
+        description: 'The version to target for this publish'
+        required: false
+
 
 permissions:
   contents: write
@@ -62,7 +67,7 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Determine next expected version
-        if: ${{ env.BRANCH == 'main' }}
+        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion }}
         id: version_check
         run: |
           git fetch --tags
@@ -80,7 +85,7 @@ jobs:
       - name: Preview version to be published
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          EXPECTED_NEXT_VERSION="${{ steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
+          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npx beachball bump --no-commit --branch origin/main
           NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
