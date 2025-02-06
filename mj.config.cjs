@@ -222,6 +222,8 @@ const mjServerConfig = {
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
       includeEntitiesFromExcludedSchemas: [
+        'Entities',
+        'Entity Fields',
         'Content Items',
         'Content Item Tags',
         'Content Item Attributes',

@@ -167,6 +167,13 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="AutoUpdateFromSchema"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"

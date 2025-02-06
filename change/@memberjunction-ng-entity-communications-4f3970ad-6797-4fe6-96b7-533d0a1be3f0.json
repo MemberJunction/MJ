@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Bump minor version",
+  "packageName": "@memberjunction/ng-entity-communications",
+  "email": "craig@memberjunction.com",
+  "dependentChangeType": "patch"
+}

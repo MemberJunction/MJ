@@ -1,7 +1,7 @@
 
 
 // Google Gemini Import
-import { Content, GoogleGenerativeAI, TextPart } from "@google/generative-ai";
+import { Content, GenerationConfig, GoogleGenerativeAI, TextPart } from "@google/generative-ai";
 
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
@@ -45,8 +45,9 @@ export class GeminiLLM extends BaseLLM {
         try {
             // For text-only input, use the gemini-pro model
             const startTime = new Date();
-            const config = {
+            const config: GenerationConfig = {
                 temperature: params.temperature || 0.5,
+                responseMimeType: params.responseFormat
             };
             const model = this.GeminiClient.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config}, {apiVersion: "v1beta"});
             const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);

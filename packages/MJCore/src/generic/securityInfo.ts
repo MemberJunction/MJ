@@ -37,31 +37,18 @@ export class UserInfo extends BaseInfo {
         return this._UserRoles;
     } 
 
-    constructor (md: IMetadataProvider, initData: any = null) {
+    /**
+     * Constructs a new instance of the UserInfo class, optionally initializing it with the provided metadata and initial data.
+     * If newGlobalRoles are provided, the user roles will be set up to validate against those roles instead of fetching them from the metadata provider.
+     * @param md 
+     * @param initData 
+     * @param newGlobalRoles 
+     */
+    constructor (md: IMetadataProvider = null, initData: any = null) {
         super();
         this.copyInitData(initData);
         if (initData){
-            const userRoles: UserRoleInfo[] = initData.UserRoles || initData._UserRoles;
-            this.SetupUserRoles(md, userRoles);
-        }
-    }
-
-    public SetupUserRoles(md: IMetadataProvider, userRoles: UserRoleInfo[]) {
-        if (userRoles) {
-            const mdRoles = md.Roles;
-            this._UserRoles=  [];
-            for(const userRole of userRoles){
-                const roleInfo: UserRoleInfo = new UserRoleInfo(userRole);
-                this._UserRoles.push(roleInfo);
-
-                const match: RoleInfo | undefined = mdRoles.find(r => r.ID == roleInfo.RoleID) 
-                if (match){
-                    roleInfo._setRole(match);
-                }
-                else{
-                    LogError(`User ${this.Email} has a role that does not exist in the system: ${roleInfo.Role} ID: ${roleInfo.RoleID}`)
-                }
-            }
+            this._UserRoles = initData.UserRoles || initData._UserRoles;
         }
     }
 }
@@ -78,21 +65,11 @@ export class UserRoleInfo extends BaseInfo {
     // virtual fields - returned by the database VIEW
     User: string = null
     Role: string = null
-
-    private _RoleInfo: RoleInfo = null
-    public get RoleInfo(): RoleInfo {
-        return this._RoleInfo
-    }
-
-    _setRole(role: RoleInfo) {
-        this._RoleInfo = role
-    }
-
+    
     constructor (initData: any) {
         super();
         this.copyInitData(initData);
     }
-
 }
 
 /**

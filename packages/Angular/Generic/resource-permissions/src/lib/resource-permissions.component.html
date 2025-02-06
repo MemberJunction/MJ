@@ -10,7 +10,7 @@
       <div class="add-permission-section">
         <span class="add-permission-label">Add Permission</span>
         <kendo-dropdownlist 
-          [data]="permissionTypes"
+          [data]="PermissionTypes"
           [(ngModel)]="SelectedType"
           style="width: 100px;">
         </kendo-dropdownlist>
@@ -36,7 +36,7 @@
           SelectedType: {{ SelectedType }}
         }
         <kendo-dropdownlist 
-          [data]="permissionLevels"
+          [data]="PermissionLevels"
           [(ngModel)]="SelectedPermissionLevel"
           style="width: 100px;">
         </kendo-dropdownlist>
@@ -63,7 +63,7 @@
               @if (AllowEditPermissions) {
                 <kendo-dropdownlist 
                   [(ngModel)]="p.PermissionLevel"
-                  [data]="permissionLevels"
+                  [data]="PermissionLevels"
                   style="width: 100px;">
                 </kendo-dropdownlist>
               }

@@ -26,6 +26,16 @@ export class BaseParams {
     temperature?: number
 
     /**
+     * Specifies the format that the model should output. Not all models support all formats. If not specified, the default is 'Any'.
+     */
+    responseFormat?: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';
+
+    /**
+     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific'. 
+     */
+    modelSpecificResponseFormat?: any
+
+    /**
      * Model max output response tokens, optional.
      */
     maxOutputTokens?: number

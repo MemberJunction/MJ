@@ -1,6 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import Groq from 'groq-sdk';
+import { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/chat/completions';
 
 /**
  * Groq implementation of the BaseLLM class
@@ -21,8 +22,7 @@ export class GroqLLM extends BaseLLM {
     }
 
     /**
-     * Read only getter method to get the Groq client instance, deprecated
-     * @deprecated
+     * Read only getter method to get the Groq client instance
      */
     public get client(): Groq {
         return this.GroqClient;
@@ -31,12 +31,26 @@ export class GroqLLM extends BaseLLM {
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
 
-
-        const chatResponse = await this.client.chat.completions.create({
+        const groqParams: ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: params.messages, 
-            max_tokens: params.maxOutputTokens
-        });
+            max_tokens: params.maxOutputTokens,
+            temperature: params.temperature
+        };
+        switch (params.responseFormat) {
+            case 'Any':
+            case 'Text':
+            case 'Markdown':
+                break;
+            case 'JSON':
+                groqParams.response_format = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                groqParams.response_format = params.modelSpecificResponseFormat;
+                break;
+        }
+
+        const chatResponse = await this.client.chat.completions.create(groqParams);
         const endTime = new Date();
 
         let choices: ChatResultChoice[] = chatResponse.choices.map((choice: any) => {

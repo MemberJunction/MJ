@@ -197,6 +197,20 @@ export const SkipRequestPhase = {
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
+/**
+ * Enumerates the possible values for a given field  
+ */
+export class SkipEntityFieldValueInfo {
+    /**
+     * Actual value for the possible value for the field
+     */
+    value: string;
+    /**
+     * Optional, the display value for the field value
+     */
+    displayValue?: string;
+}
+
 export class SkipEntityFieldInfo {
     entityID: string;
     sequence: number;
@@ -225,6 +239,8 @@ export class SkipEntityFieldInfo {
     relatedEntity?: string;
     relatedEntitySchemaName?: string;
     relatedEntityBaseView?: string;
+
+    possibleValues?: SkipEntityFieldValueInfo[];
 }
 
 export class SkipEntityRelationshipInfo {
@@ -250,6 +266,19 @@ export class SkipEntityInfo {
     baseView!: string;
     fields: SkipEntityFieldInfo[] =[];
     relatedEntities: SkipEntityRelationshipInfo[] = [];
+
+    /**
+     * If rows packed is set to anything other than none, the data is provided in the rows property.
+     */
+    rowsPacked?: 'None' | 'Sample' | 'All' = 'None';
+    /**
+     * If rowsPacked === 'Sample', this additional property is used to indicate the method used to sample the rows
+     */
+    rowsSampleMethod?: 'random' | 'top n' | 'bottom n' = 'random';
+    /**
+     * Optional, the metadata can include an array of rows that can be used to provide context to Skip for the data that is being passed in. 
+     */
+    rows?: any[] = [];
 }
 
 export class SkipQueryInfo {
@@ -384,6 +413,22 @@ export class SkipAPIRequest {
      * Optional, list of the possible types of notes that an agent can store in the source MJ system
      */
     noteTypes?: SkipAPIAgentNoteType[];
+
+    /**
+     * Optional, if the calling server wants to enable the AI agent to call back to interact and request data or otherwise, this is the URL that the AI agent can use to call back to the source server
+     */
+    callingServerURL?: string
+
+    /**
+     * Optional, if the calling server wants to enable the AI agent to call back to interact and request data or otherwise, this is the API key that the AI agent can use to call back to the source server
+     */
+    callingServerAPIKey?: string
+
+    /**
+     * Optional, if the calling server requires the use of an additional short-lived access token beyond the API key, this is the token that the AI agent can use to call back to the source server during the lifecycle
+     * of the request
+     */
+    callingServerAccessToken?: string
 }
 
 

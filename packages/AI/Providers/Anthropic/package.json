@@ -19,7 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.22.0",
+    "@anthropic-ai/sdk": "0.36.3",
     "@memberjunction/ai": "2.20.2",
     "@memberjunction/global": "2.20.2"
   }

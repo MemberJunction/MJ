@@ -894,8 +894,7 @@ export const AIAgentNoteSchema = z.object({
     User: z.string().nullish().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIAgentNoteEntityType = z.infer<typeof AIAgentNoteSchema>;
@@ -981,13 +980,11 @@ export const AIAgentRequestSchema = z.object({
     RequestForUser: z.string().nullish().describe(`
         * * Field Name: RequestForUser
         * * Display Name: Request For User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullish().describe(`
         * * Field Name: ResponseByUser
         * * Display Name: Response By User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIAgentRequestEntityType = z.infer<typeof AIAgentRequestSchema>;
@@ -1189,6 +1186,12 @@ export const AIModelSchema = z.object({
         * * Display Name: Input Token Limit
         * * SQL Data Type: int
     * * Description: Stores the maximum number of tokens that fit in the context window for the model.`),
+    SupportedResponseFormats: z.string().describe(`
+        * * Field Name: SupportedResponseFormats
+        * * Display Name: Supported Response Formats
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -1335,6 +1338,24 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific')]).describe(`
+        * * Field Name: ResponseFormat
+        * * Display Name: Response Format
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Text
+    *   * Markdown
+    *   * JSON
+    *   * ModelSpecific
+    * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
+    ModelSpecificResponseFormat: z.string().nullish().describe(`
+        * * Field Name: ModelSpecificResponseFormat
+        * * Display Name: Model Specific Response Format
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -4174,6 +4195,44 @@ export const EntitySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ScopeDefault: z.string().nullish().describe(`
+        * * Field Name: ScopeDefault
+        * * Display Name: Scope Default
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
+    RowsToPackWithSchema: z.union([z.literal('None'), z.literal('Sample'), z.literal('All')]).describe(`
+        * * Field Name: RowsToPackWithSchema
+        * * Display Name: Rows To Pack With Schema
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Sample
+    *   * All
+    * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`),
+    RowsToPackSampleMethod: z.union([z.literal('random'), z.literal('top n'), z.literal('bottom n')]).describe(`
+        * * Field Name: RowsToPackSampleMethod
+        * * Display Name: Rows To Pack Sample Method
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: random
+    * * Value List Type: List
+    * * Possible Values 
+    *   * random
+    *   * top n
+    *   * bottom n
+    * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`),
+    RowsToPackSampleCount: z.number().describe(`
+        * * Field Name: RowsToPackSampleCount
+        * * Display Name: Rows To Pack Sample Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`),
+    RowsToPackSampleOrder: z.string().nullish().describe(`
+        * * Field Name: RowsToPackSampleOrder
+        * * Display Name: Rows To Pack Sample Order
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
     CodeName: z.string().nullish().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -4847,7 +4906,7 @@ export const EntityDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AIModel
+        * * Display Name: AI Model
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -5155,6 +5214,28 @@ export const EntityFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ScopeDefault: z.string().nullish().describe(`
+        * * Field Name: ScopeDefault
+        * * Display Name: Scope Default
+        * * SQL Data Type: nvarchar(100)
+    * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.`),
+    AutoUpdateRelatedEntityInfo: z.boolean().describe(`
+        * * Field Name: AutoUpdateRelatedEntityInfo
+        * * Display Name: Auto Update Related Entity Info
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`),
+    ValuesToPackWithSchema: z.union([z.literal('Auto'), z.literal('None'), z.literal('All')]).describe(`
+        * * Field Name: ValuesToPackWithSchema
+        * * Display Name: Values To Pack With Schema
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * None
+    *   * All
+    * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -5540,6 +5621,12 @@ export const EntityRelationshipSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AutoUpdateFromSchema: z.boolean().describe(`
+        * * Field Name: AutoUpdateFromSchema
+        * * Display Name: Auto Update From Schema
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -11995,7 +12082,6 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string | null {
         return this.Get('User');
@@ -12202,7 +12288,6 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     * * Field Name: RequestForUser
     * * Display Name: Request For User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get RequestForUser(): string | null {
         return this.Get('RequestForUser');
@@ -12212,7 +12297,6 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     * * Field Name: ResponseByUser
     * * Display Name: Response By User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get ResponseByUser(): string | null {
         return this.Get('ResponseByUser');
@@ -12754,6 +12838,20 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * * Field Name: SupportedResponseFormats
+    * * Display Name: Supported Response Formats
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
+    */
+    get SupportedResponseFormats(): string {
+        return this.Get('SupportedResponseFormats');
+    }
+    set SupportedResponseFormats(value: string) {
+        this.Set('SupportedResponseFormats', value);
+    }
+
+    /**
     * * Field Name: AIModelType
     * * Display Name: AIModel Type
     * * SQL Data Type: nvarchar(50)
@@ -13128,6 +13226,40 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ResponseFormat
+    * * Display Name: Response Format
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Any
+    *   * Text
+    *   * Markdown
+    *   * JSON
+    *   * ModelSpecific
+    * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
+    */
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' {
+        return this.Get('ResponseFormat');
+    }
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific') {
+        this.Set('ResponseFormat', value);
+    }
+
+    /**
+    * * Field Name: ModelSpecificResponseFormat
+    * * Display Name: Model Specific Response Format
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.
+    */
+    get ModelSpecificResponseFormat(): string | null {
+        return this.Get('ModelSpecificResponseFormat');
+    }
+    set ModelSpecificResponseFormat(value: string | null) {
+        this.Set('ModelSpecificResponseFormat', value);
     }
 
     /**
@@ -14431,18 +14563,6 @@ export class CommunicationBaseMessageTypeEntity extends BaseEntity<Communication
     }
 
     /**
-    * Communication Base Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof CommunicationBaseMessageTypeEntity
-    * @throws {Error} - Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -14925,18 +15045,6 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Communication Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof CommunicationProviderEntity
-    * @throws {Error} - Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -16059,18 +16167,6 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Company Integrations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof CompanyIntegrationEntity
-    * @throws {Error} - Delete is not allowed for Company Integrations, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Company Integrations, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -18701,18 +18797,6 @@ export class DatasetItemEntity extends BaseEntity<DatasetItemEntityType> {
     }
 
     /**
-    * Dataset Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof DatasetItemEntity
-    * @throws {Error} - Delete is not allowed for Dataset Items, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Dataset Items, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -18902,18 +18986,6 @@ export class DatasetEntity extends BaseEntity<DatasetEntityType> {
     */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
         throw new Error('Save is not allowed for Datasets, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
-    }
-
-    /**
-    * Datasets - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof DatasetEntity
-    * @throws {Error} - Delete is not allowed for Datasets, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Datasets, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -19764,18 +19836,6 @@ export class EmployeeRoleEntity extends BaseEntity<EmployeeRoleEntityType> {
     }
 
     /**
-    * Employee Roles - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EmployeeRoleEntity
-    * @throws {Error} - Delete is not allowed for Employee Roles, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Employee Roles, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -19869,18 +19929,6 @@ export class EmployeeSkillEntity extends BaseEntity<EmployeeSkillEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Employee Skills - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EmployeeSkillEntity
-    * @throws {Error} - Delete is not allowed for Employee Skills, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Employee Skills, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -20793,6 +20841,84 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
+    */
+    get ScopeDefault(): string | null {
+        return this.Get('ScopeDefault');
+    }
+    set ScopeDefault(value: string | null) {
+        this.Set('ScopeDefault', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackWithSchema
+    * * Display Name: Rows To Pack With Schema
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * Sample
+    *   * All
+    * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.
+    */
+    get RowsToPackWithSchema(): 'None' | 'Sample' | 'All' {
+        return this.Get('RowsToPackWithSchema');
+    }
+    set RowsToPackWithSchema(value: 'None' | 'Sample' | 'All') {
+        this.Set('RowsToPackWithSchema', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleMethod
+    * * Display Name: Rows To Pack Sample Method
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: random
+    * * Value List Type: List
+    * * Possible Values 
+    *   * random
+    *   * top n
+    *   * bottom n
+    * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.
+    */
+    get RowsToPackSampleMethod(): 'random' | 'top n' | 'bottom n' {
+        return this.Get('RowsToPackSampleMethod');
+    }
+    set RowsToPackSampleMethod(value: 'random' | 'top n' | 'bottom n') {
+        this.Set('RowsToPackSampleMethod', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleCount
+    * * Display Name: Rows To Pack Sample Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.
+    */
+    get RowsToPackSampleCount(): number {
+        return this.Get('RowsToPackSampleCount');
+    }
+    set RowsToPackSampleCount(value: number) {
+        this.Set('RowsToPackSampleCount', value);
+    }
+
+    /**
+    * * Field Name: RowsToPackSampleOrder
+    * * Display Name: Rows To Pack Sample Order
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.
+    */
+    get RowsToPackSampleOrder(): string | null {
+        return this.Get('RowsToPackSampleOrder');
+    }
+    set RowsToPackSampleOrder(value: string | null) {
+        this.Set('RowsToPackSampleOrder', value);
     }
 
     /**
@@ -21743,18 +21869,6 @@ export class EntityCommunicationFieldEntity extends BaseEntity<EntityCommunicati
     }
 
     /**
-    * Entity Communication Fields - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EntityCommunicationFieldEntity
-    * @throws {Error} - Delete is not allowed for Entity Communication Fields, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Entity Communication Fields, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -21853,18 +21967,6 @@ export class EntityCommunicationMessageTypeEntity extends BaseEntity<EntityCommu
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Entity Communication Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EntityCommunicationMessageTypeEntity
-    * @throws {Error} - Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Entity Communication Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -22125,18 +22227,6 @@ export class EntityDocumentSettingEntity extends BaseEntity<EntityDocumentSettin
     }
 
     /**
-    * Entity Document Settings - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EntityDocumentSettingEntity
-    * @throws {Error} - Delete is not allowed for Entity Document Settings, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Entity Document Settings, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -22253,18 +22343,6 @@ export class EntityDocumentTypeEntity extends BaseEntity<EntityDocumentTypeEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Entity Document Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EntityDocumentTypeEntity
-    * @throws {Error} - Delete is not allowed for Entity Document Types, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Entity Document Types, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -22554,7 +22632,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AIModel
+    * * Display Name: AI Model
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
@@ -23272,6 +23350,52 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ScopeDefault
+    * * Display Name: Scope Default
+    * * SQL Data Type: nvarchar(100)
+    * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.
+    */
+    get ScopeDefault(): string | null {
+        return this.Get('ScopeDefault');
+    }
+    set ScopeDefault(value: string | null) {
+        this.Set('ScopeDefault', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateRelatedEntityInfo
+    * * Display Name: Auto Update Related Entity Info
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.
+    */
+    get AutoUpdateRelatedEntityInfo(): boolean {
+        return this.Get('AutoUpdateRelatedEntityInfo');
+    }
+    set AutoUpdateRelatedEntityInfo(value: boolean) {
+        this.Set('AutoUpdateRelatedEntityInfo', value);
+    }
+
+    /**
+    * * Field Name: ValuesToPackWithSchema
+    * * Display Name: Values To Pack With Schema
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * None
+    *   * All
+    * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.
+    */
+    get ValuesToPackWithSchema(): 'Auto' | 'None' | 'All' {
+        return this.Get('ValuesToPackWithSchema');
+    }
+    set ValuesToPackWithSchema(value: 'Auto' | 'None' | 'All') {
+        this.Set('ValuesToPackWithSchema', value);
     }
 
     /**
@@ -24266,6 +24390,20 @@ export class EntityRelationshipEntity extends BaseEntity<EntityRelationshipEntit
     }
 
     /**
+    * * Field Name: AutoUpdateFromSchema
+    * * Display Name: Auto Update From Schema
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.
+    */
+    get AutoUpdateFromSchema(): boolean {
+        return this.Get('AutoUpdateFromSchema');
+    }
+    set AutoUpdateFromSchema(value: boolean) {
+        this.Set('AutoUpdateFromSchema', value);
+    }
+
+    /**
     * * Field Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
@@ -24383,18 +24521,6 @@ export class EntitySettingEntity extends BaseEntity<EntitySettingEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Entity Settings - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof EntitySettingEntity
-    * @throws {Error} - Delete is not allowed for Entity Settings, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Entity Settings, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -24973,18 +25099,6 @@ export class FileEntityRecordLinkEntity extends BaseEntity<FileEntityRecordLinkE
     }
 
     /**
-    * File Entity Record Links - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof FileEntityRecordLinkEntity
-    * @throws {Error} - Delete is not allowed for File Entity Record Links, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for File Entity Record Links, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -25099,18 +25213,6 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * File Storage Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof FileStorageProviderEntity
-    * @throws {Error} - Delete is not allowed for File Storage Providers, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for File Storage Providers, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -25586,18 +25688,6 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
     }
 
     /**
-    * Integration URL Formats - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof IntegrationURLFormatEntity
-    * @throws {Error} - Delete is not allowed for Integration URL Formats, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Integration URL Formats, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
@@ -25733,18 +25823,6 @@ export class IntegrationEntity extends BaseEntity<IntegrationEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Integrations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof IntegrationEntity
-    * @throws {Error} - Delete is not allowed for Integrations, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Integrations, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -25893,18 +25971,6 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     }
 
     /**
-    * Libraries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof LibraryEntity
-    * @throws {Error} - Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -26036,18 +26102,6 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     }
 
     /**
-    * Library Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof LibraryItemEntity
-    * @throws {Error} - Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Library Items, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -26161,18 +26215,6 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * List Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof ListCategoryEntity
-    * @throws {Error} - Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -26962,18 +27004,6 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     }
 
     /**
-    * Queries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof QueryEntity
-    * @throws {Error} - Delete is not allowed for Queries, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Queries, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -27425,18 +27455,6 @@ export class QueryFieldEntity extends BaseEntity<QueryFieldEntityType> {
     }
 
     /**
-    * Query Fields - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof QueryFieldEntity
-    * @throws {Error} - Delete is not allowed for Query Fields, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Query Fields, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -27663,18 +27681,6 @@ export class QueryPermissionEntity extends BaseEntity<QueryPermissionEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Query Permissions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof QueryPermissionEntity
-    * @throws {Error} - Delete is not allowed for Query Permissions, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Query Permissions, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -27989,18 +27995,6 @@ export class QueueTypeEntity extends BaseEntity<QueueTypeEntityType> {
     */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
         throw new Error('Save is not allowed for Queue Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
-    }
-
-    /**
-    * Queue Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof QueueTypeEntity
-    * @throws {Error} - Delete is not allowed for Queue Types, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Queue Types, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -28537,18 +28531,6 @@ export class RecommendationProviderEntity extends BaseEntity<RecommendationProvi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Recommendation Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof RecommendationProviderEntity
-    * @throws {Error} - Delete is not allowed for Recommendation Providers, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Recommendation Providers, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -30966,18 +30948,6 @@ export class RowLevelSecurityFilterEntity extends BaseEntity<RowLevelSecurityFil
     }
 
     /**
-    * Row Level Security Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof RowLevelSecurityFilterEntity
-    * @throws {Error} - Delete is not allowed for Row Level Security Filters, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Row Level Security Filters, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -31615,18 +31585,6 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     }
 
     /**
-    * Skills - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof SkillEntity
-    * @throws {Error} - Delete is not allowed for Skills, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Skills, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
@@ -31863,18 +31821,6 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     }
 
     /**
-    * Tags - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TagEntity
-    * @throws {Error} - Delete is not allowed for Tags, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Tags, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -31992,18 +31938,6 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Template Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TemplateCategoryEntity
-    * @throws {Error} - Delete is not allowed for Template Categories, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Template Categories, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -32139,18 +32073,6 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     }
 
     /**
-    * Template Content Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TemplateContentTypeEntity
-    * @throws {Error} - Delete is not allowed for Template Content Types, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Template Content Types, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -32259,18 +32181,6 @@ export class TemplateContentEntity extends BaseEntity<TemplateContentEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Template Contents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TemplateContentEntity
-    * @throws {Error} - Delete is not allowed for Template Contents, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Template Contents, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -32417,18 +32327,6 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Template Params - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TemplateParamEntity
-    * @throws {Error} - Delete is not allowed for Template Params, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Template Params, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -32673,18 +32571,6 @@ export class TemplateEntity extends BaseEntity<TemplateEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Templates - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof TemplateEntity
-    * @throws {Error} - Delete is not allowed for Templates, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Templates, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -34710,18 +34596,6 @@ export class VectorDatabaseEntity extends BaseEntity<VectorDatabaseEntityType> {
     }
 
     /**
-    * Vector Databases - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof VectorDatabaseEntity
-    * @throws {Error} - Delete is not allowed for Vector Databases, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Vector Databases, to enable it set AllowDeleteAPI to 1 in the database.');
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -34828,18 +34702,6 @@ export class VectorIndexEntity extends BaseEntity<VectorIndexEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Vector Indexes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof VectorIndexEntity
-    * @throws {Error} - Delete is not allowed for Vector Indexes, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Vector Indexes, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
@@ -35163,18 +35025,6 @@ export class WorkflowEngineEntity extends BaseEntity<WorkflowEngineEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Workflow Engines - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-    * @public
-    * @method
-    * @override
-    * @memberof WorkflowEngineEntity
-    * @throws {Error} - Delete is not allowed for Workflow Engines, to enable it set AllowDeleteAPI to 1 in the database.
-    */
-    public async Delete(): Promise<boolean> {
-        throw new Error('Delete is not allowed for Workflow Engines, to enable it set AllowDeleteAPI to 1 in the database.');
     }
 
     /**
