@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Sun, 26 Jan 2025 20:07:04 GMT and should not be manually modified.
+This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.21.0
+
+Thu, 06 Feb 2025 05:11:44 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+
+## 2.20.3
+
+Thu, 06 Feb 2025 04:34:26 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
 
 ## 2.20.0
 

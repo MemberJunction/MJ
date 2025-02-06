@@ -1,8 +1,53 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
-This log was last generated on Mon, 03 Feb 2025 01:16:07 GMT and should not be manually modified.
+This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 2.21.0
+
+Thu, 06 Feb 2025 05:11:44 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+- Bump @memberjunction/global to v2.21.0
+- Bump @memberjunction/core to v2.21.0
+- Bump @memberjunction/core-entities to v2.21.0
+- Bump @memberjunction/entity-communications-client to v2.21.0
+- Bump @memberjunction/communication-types to v2.21.0
+- Bump @memberjunction/templates-base-types to v2.21.0
+- Bump @memberjunction/actions-base to v2.21.0
+- Bump @memberjunction/ng-shared to v2.21.0
+- Bump @memberjunction/ng-entity-form-dialog to v2.21.0
+- Bump @memberjunction/ng-compare-records to v2.21.0
+- Bump @memberjunction/ng-container-directives to v2.21.0
+- Bump @memberjunction/ng-entity-communications to v2.21.0
+- Bump @memberjunction/ng-base-types to v2.21.0
+
+## 2.20.3
+
+Thu, 06 Feb 2025 04:34:26 GMT
+
+### Minor changes
+
+- Bump minor version (craig@memberjunction.com)
+
+### Patches
+
+- Bump @memberjunction/global to v2.20.3
+- Bump @memberjunction/core to v2.20.3
+- Bump @memberjunction/core-entities to v2.20.3
+- Bump @memberjunction/entity-communications-client to v2.20.3
+- Bump @memberjunction/communication-types to v2.20.3
+- Bump @memberjunction/templates-base-types to v2.20.3
+- Bump @memberjunction/actions-base to v2.20.3
+- Bump @memberjunction/ng-shared to v2.20.3
+- Bump @memberjunction/ng-entity-form-dialog to v2.20.3
+- Bump @memberjunction/ng-compare-records to v2.20.3
+- Bump @memberjunction/ng-container-directives to v2.20.3
+- Bump @memberjunction/ng-entity-communications to v2.20.3
+- Bump @memberjunction/ng-base-types to v2.20.3
 
 ## 2.20.2
 

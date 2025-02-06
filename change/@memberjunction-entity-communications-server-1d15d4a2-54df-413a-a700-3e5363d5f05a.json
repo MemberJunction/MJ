@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Bump minor version",
-  "packageName": "@memberjunction/entity-communications-server",
-  "email": "craig@memberjunction.com",
-  "dependentChangeType": "patch"
-}
