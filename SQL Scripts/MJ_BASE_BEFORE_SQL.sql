@@ -1218,8 +1218,8 @@ BEGIN
         ef.AutoIncrement = fr.AutoIncrement,
         ef.IsVirtual = fr.IsVirtual,
         ef.Sequence = fr.Sequence,
-        ef.RelatedEntityID = fr.RelatedEntityID,
-        ef.RelatedEntityFieldName = fr.RelatedEntityFieldName,
+        ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityID, ef.RelatedEntityID), -- if AutoUpdate is not on, respect the current value
+        ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName), -- if AutoUpdate is not on, respect the current value
         ef.IsPrimaryKey = fr.IsPrimaryKey,
         ef.IsUnique = fr.IsUnique,
         ef.__mj_UpdatedAt = GETUTCDATE()

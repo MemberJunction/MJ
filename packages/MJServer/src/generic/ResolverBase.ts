@@ -269,16 +269,25 @@ export class ResolverBase {
   protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null) {
     const md = new Metadata();
     const entityInfo = md.Entities.find((e) => e.Name === entityName);
-    if (!userPayload) throw new Error(`userPayload is null`);
-
+    if (!userPayload) {
+      throw new Error(`userPayload is null`);
+    }
+    
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
-      if (!userInfo) throw new Error(`User ${userPayload.email} not found in metadata`);
+      if (!userInfo) {
+        throw new Error(`User ${userPayload.email} not found in metadata`);
+      }
 
       const userPermissions = entityInfo.GetUserPermisions(userInfo);
-      if (!userPermissions.CanRead) throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
-    } else throw new Error(`Entity not found in metadata`);
+      if (!userPermissions.CanRead) {
+        throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
+      }
+    } 
+    else {
+      throw new Error(`Entity not found in metadata`);
+    }
   }
 
   protected async RunViewGenericInternal(
