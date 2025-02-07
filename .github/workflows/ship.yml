@@ -27,7 +27,7 @@ jobs:
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
           NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
-          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only main next -- migrations/)
+          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only origin/main next -- migrations/)
           if [ -n "$NEW_MIGRATION_FILES" ]; then
             echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
           else
