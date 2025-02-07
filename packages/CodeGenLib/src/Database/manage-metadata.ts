@@ -1450,8 +1450,16 @@ export class ManageMetadataBase {
          return this.simpleNewEntityName(newEntity.TableName);
       }
    }
+   
    protected simpleNewEntityName(tableName: string): string {
-      return convertCamelCaseToHaveSpaces(generatePluralName(tableName));
+      const convertedName = convertCamelCaseToHaveSpaces(generatePluralName(tableName));
+      // check to see if the entity name is all lower case, in which case we want to make just the first letter upper case
+      if (convertedName === convertedName.toLowerCase()) {
+         return convertedName.charAt(0).toUpperCase() + convertedName.slice(1);
+      }
+      else {
+         return convertedName;
+      }
    }
 
    protected createNewUUID(): string {
