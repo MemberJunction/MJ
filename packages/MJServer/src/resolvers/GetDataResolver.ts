@@ -19,17 +19,17 @@ export class GetDataOutputType {
     @Field(() => Boolean)
     Success: boolean;
 
-    @Field(() => String)
-    ErrorMessage: string;
+    @Field(() => [String])
+    Queries: string[];
 
-    @Field(() => String)
-    SQL: string;
+    @Field(() => [String], { nullable: 'itemsAndList' }) // Allow nulls inside array & entire field nullable
+    ErrorMessages: (string | null)[];
 
     /**
      * Each query's results will be converted to JSON and returned as a string
      */
-    @Field(() => [String])
-    Results: string[];
+    @Field(() => [String], { nullable: 'itemsAndList' }) // Allow nulls inside array & entire field nullable
+    Results: (string | null)[];
 }
  
 @ObjectType()
@@ -37,8 +37,8 @@ export class SimpleEntityResultType {
     @Field(() => Boolean)
     Success: boolean;
 
-    @Field(() => String)
-    ErrorMessage: string;
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
 
     @Field(() => [SimpleEntityOutputType])
     Results: SimpleEntityOutputType[];
@@ -52,8 +52,8 @@ export class SimpleEntityOutputType {
     @Field(() => String)
     Name: string;
 
-    @Field(() => String)
-    Description: string;
+    @Field(() => String, { nullable: true })
+    Description?: string;
 
     @Field(() => String)
     SchemaName: string;
@@ -64,11 +64,11 @@ export class SimpleEntityOutputType {
     @Field(() => String)
     BaseTable: string;
 
-    @Field(() => String)
-    CodeName: string;
+    @Field(() => String, { nullable: true })
+    CodeName?: string;
 
-    @Field(() => String)
-    ClassName: string;
+    @Field(() => String, { nullable: true })
+    ClassName?: string;
 
     @Field(() => [SimpleEntityFieldOutputType])
     Fields: SimpleEntityFieldOutputType[];
@@ -82,8 +82,8 @@ export class SimpleEntityFieldOutputType {
     @Field(() => String)
     Name: string;
 
-    @Field(() => String)
-    Description: string;
+    @Field(() => String, { nullable: true })
+    Description?: string;
 
     @Field(() => String)
     Type: string;
@@ -107,7 +107,7 @@ export class GetDataResolver {
     async GetData(
     @Arg('input', () => GetDataInputType) input: GetDataInputType,
     @Ctx() context: AppContext
-    ) {
+    ): Promise<GetDataOutputType> {
         try { 
             LogStatus(`GetDataResolver.GetData() ---- IMPORTANT - temporarily using the same connection as rest of the server, we need to separately create a READ ONLY CONNECTION and pass that in 
                        the AppContext so we can use that special connection here to ensure we are using a lower privileged connection for this operation to prevent mutation from being possible.`);
@@ -118,21 +118,37 @@ export class GetDataResolver {
                 throw new Error(`Token ${input.Token} is not valid or has expired`);
             }
 
-            // iterate through the items 
-            let success: boolean = true;
-            const promises = input.Queries.map((q) => {
-                return context.dataSource.query(q);
-            });
-            const results = await Promise.all(promises); // run all the queries in parallel
+            // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
+            // and also so that we can capture the error message for each query and return it
+            const results = await Promise.allSettled(
+                input.Queries.map(async (query) => {
+                    try {
+                        const result = await context.dataSource.query(query);
+                        return { result, error: null };
+                    } catch (err) {
+                        return { result: null, error: err };
+                    }
+                })
+            );
+            
+            // Extract results and errors from the promises
+            const processedResults = results.map((res) => res.status === "fulfilled" ? res.value.result : null);
+            const errorMessages = results.map((res) => res.status === "fulfilled" ? res.value.error : res.reason);
 
             // record the use of the token
-            recordTokenUse(input.Token, {request: input, results: results});
+            const returnVal = { Success: errorMessages.filter((e) => e !== null).length === 0, 
+                                Results: processedResults.map((r) => JSON.stringify(r)), 
+                                Queries: input.Queries, 
+                                ErrorMessages: errorMessages }
 
-            return { Success: success, Results: results.map((r) => JSON.stringify(r)) };
+            recordTokenUse(input.Token, {request: input, results: returnVal});
+
+            // Success below is derived from having no errorMessages, check that array
+            return returnVal;
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessage: typeof err === 'string' ? err : (err as any).message, Results: [] };
+            return { Success: false, ErrorMessages: [typeof err === 'string' ? err : (err as any).message], Results: [], Queries: input.Queries };
         }
     }
 
@@ -140,7 +156,7 @@ export class GetDataResolver {
     @Query(() => SimpleEntityResultType)
     async GetAllEntities(
     @Ctx() context: AppContext
-    ) {
+    ): Promise<SimpleEntityResultType> {
         try { 
             const md = new Metadata();
             const result = md.Entities.map((e) => {
