@@ -32,10 +32,8 @@
     "deps:fix": "syncpack fix-mismatches",
     "deps:update": "syncpack update",
     "docs": "typedoc",
-    "change": "beachball change",
-    "checkchange": "beachball check --verbose",
-    "beachball": "beachball",
-    "release": "beachball publish --access public",
+    "change": "changeset",
+    "release": "changeset version && npm run build && changeset publish",
     "mergemain": "node ci/merge_main.mjs",
     "commitpush": "node ci/commit_push.mjs"
   },
@@ -48,7 +46,7 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
-    "beachball": "~2.43.0",
+    "@changesets/cli": "^2.27.12",
     "eslint": "8.56.0",
     "eslint-config-prettier": "9.1.0",
     "eslint-import-resolver-typescript": "~3.5.2",

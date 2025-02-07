@@ -25,7 +25,7 @@ if (version) {
 
 console.log('\nPushing to origin/main...');
 
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:main'], {
+const pushResult = await gitAsync(['push', '--no-verify', '--verbose', 'origin', 'HEAD:main'], {
   cwd,
   verbose: true,
 });
@@ -35,7 +35,7 @@ if (!pushResult.success) {
 }
 
 if (version) {
-  const pushTagsResult = await gitAsync(['push', '--tags', '--verbose', 'origin', 'HEAD:main'], {
+  const pushTagsResult = await gitAsync(['push', '--verbose', 'origin', `refs/tags/${version}`], {
     cwd,
     verbose: true,
   });

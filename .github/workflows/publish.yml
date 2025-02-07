@@ -86,7 +86,8 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: |
           EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
-          npx beachball bump --no-commit --branch origin/main
+          npm run change version
+          git reset --soft HEAD~
           NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
           if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
@@ -105,12 +106,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate change set
-        run: npm run checkchange -- --branch origin/main
-
-      - name: Build packages
-        run: npm run build
-
       - name: Set up git credentials
         run: |
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -119,16 +114,14 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
-      - name: Publish changes to npm main packages
-        if: ${{ env.BRANCH == 'main' }}
-        run: npm run release -- --branch origin/main --token "$NPM_TOKEN"
+      - name: Publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # This expects you to have a script called release which does a build for your packages and calls changeset publish
+          publish: npm run release
         env:
-          NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
-
-      - name: Publish changes to npm next packages
-        if: ${{ env.BRANCH == 'next' }}
-        run: npm run release -- --no-push --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
-        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
 
       - name: Get version string
