@@ -795,10 +795,22 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             for (let i = 0; i < filteredFields.length; i++) {
                 const f = filteredFields[i];
                 let val = f.Value;
-                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Date)
-                    val = val.getTime();
-                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && typeof val !== 'boolean')
-                    val = parseInt(val) === 0 ? false : true; // convert to boolean
+                if (val) {
+                    switch(f.EntityFieldInfo.TSType) {
+                        case EntityFieldTSType.Date:
+                            val = val.getTime();
+                            break;
+                        case EntityFieldTSType.Boolean:
+                            val = parseInt(val) === 0 ? false : true; // convert to boolean
+                            break;
+                        case EntityFieldTSType.Number:
+                            const numValue = Number(val);
+                            if (!isNaN(numValue)) {
+                              val = numValue;
+                            }      
+                            break;
+                    }
+                }
 
                 if (val === null && f.EntityFieldInfo.AllowsNull === false) {
                     if (f.EntityFieldInfo.DefaultValue !== null) {
