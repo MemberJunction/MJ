@@ -229,6 +229,73 @@ export function stripWhitespace(s: string): string {
 
 
 
+
+
+
+const __irregularPlurals: Record<string, string> = {
+    child: 'children',
+    person: 'people',
+    mouse: 'mice',
+    foot: 'feet',
+    tooth: 'teeth',
+    goose: 'geese',
+    man: 'men',
+    woman: 'women',
+    ox: 'oxen',
+    cactus: 'cacti',
+    focus: 'foci',
+    fungus: 'fungi',
+    nucleus: 'nuclei',
+    syllabus: 'syllabi',
+    analysis: 'analyses',
+    diagnosis: 'diagnoses',
+    thesis: 'theses',
+    crisis: 'crises',
+    phenomenon: 'phenomena',
+    criterion: 'criteria',
+    datum: 'data',
+    appendix: 'appendices',
+    index: 'indices',
+    matrix: 'matrices',
+    vertex: 'vertices',
+    vortex: 'vortices',
+    radius: 'radii',
+    corpus: 'corpora',
+    genus: 'genera',
+    locus: 'loci',
+    alga: 'algae',
+    antenna: 'antennae',
+    formula: 'formulae',
+    nebula: 'nebulae',
+    vertebra: 'vertebrae',
+    memorandum: 'memoranda',
+    medium: 'media',
+    bacterium: 'bacteria',
+    curriculum: 'curricula',
+    referendum: 'referenda',
+    stimulus: 'stimuli',
+    automaton: 'automata',
+    beau: 'beaux',
+    bureau: 'bureaux',
+    tableau: 'tableaux',
+    cherub: 'cherubim',
+    seraph: 'seraphim',
+    elf: 'elves',
+    calf: 'calves',
+    half: 'halves',
+    knife: 'knives',
+    leaf: 'leaves',
+    life: 'lives',
+    loaf: 'loaves',
+    scarf: 'scarves',
+    self: 'selves',
+    sheaf: 'sheaves',
+    shelf: 'shelves',
+    thief: 'thieves',
+    wife: 'wives',
+    wolf: 'wolves',
+};
+
 /**
  * Retrieves the plural form of a word if it is an irregular plural.
  * 
@@ -242,32 +309,40 @@ export function stripWhitespace(s: string): string {
  * ```
  */
 export function getIrregularPlural(singularName: string): string | null {
-    const irregularPlurals: Record<string, string> = {
-        child: 'children',
-        person: 'people',
-        mouse: 'mice',
-        foot: 'feet',
-        tooth: 'teeth',
-        goose: 'geese',
-        man: 'men',
-        woman: 'women',
-        ox: 'oxen',
-        cactus: 'cacti',
-        focus: 'foci',
-        fungus: 'fungi',
-        nucleus: 'nuclei',
-        syllabus: 'syllabi',
-        analysis: 'analyses',
-        diagnosis: 'diagnoses',
-        thesis: 'theses',
-        crisis: 'crises',
-        phenomenon: 'phenomena',
-        criterion: 'criteria',
-        datum: 'data',
-    };
+    return __irregularPlurals[singularName.toLowerCase()] || null;
+}
 
-    const lowerSingular = singularName.toLowerCase();
-    return irregularPlurals[lowerSingular] || null;
+/**
+ * Checks if a word is already plural by reversing common pluralization rules.
+ * 
+ * @param word - The word to check.
+ * @returns The singular form if detected, otherwise null.
+ */
+function detectSingularForm(word: string): string | null {
+    const lowerWord = word.toLowerCase();
+
+    // Reverse lookup from __irregularPlurals values to keys
+    const singularFromIrregular = Object.entries(__irregularPlurals).find(
+        ([singular, plural]) => plural === lowerWord
+    );
+    if (singularFromIrregular) {
+        return singularFromIrregular[0]; // Return the singular form
+    }
+
+    // Detect regular plural forms
+    if (lowerWord.endsWith('ies')) {
+        return lowerWord.slice(0, -3) + 'y'; // "parties" -> "party"
+    }
+
+    if (/(s|ch|sh|x|z)es$/.test(lowerWord)) { // checks to see if the word ends with 'es'
+        return lowerWord.slice(0, -2); // "boxes" -> "box"
+    }
+
+    if (lowerWord.endsWith('s') && !lowerWord.endsWith('ss')) {
+        return lowerWord.slice(0, -1); // "dogs" -> "dog"
+    }
+
+    return null;
 }
 
 
@@ -287,6 +362,12 @@ export function getIrregularPlural(singularName: string): string | null {
  * ```
  */
 export function generatePluralName(singularName: string): string {
+    // Check if it's already plural
+    const detectedSingular = detectSingularForm(singularName);
+    if (!detectedSingular) {
+        return singularName; // If no singular form is detected, assume it's already plural
+    }
+
     // Check for irregular plurals
     const irregularPlural = getIrregularPlural(singularName);
     if (irregularPlural) {
