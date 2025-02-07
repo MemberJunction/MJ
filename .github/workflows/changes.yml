@@ -68,9 +68,9 @@ jobs:
         run: |
           MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
-            MINOR_CHANGE=$(find change -name '*.json' -exec jq 'select(.type == "minor")' {} + 2>/dev/null | grep . || true)
+            MINOR_CHANGE=$(grep 'minor' .changeset/*.md || true)
             if [ -z "$MINOR_CHANGE" ]; then
-              echo "::error::Migration files were added, but no minor version change file was found in the change directory"
+              echo "::error::Migration files were added, but no minor version changeset was found"
               exit 1
             fi
           fi
