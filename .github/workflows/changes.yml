@@ -1,4 +1,4 @@
-name: Ensure change files and migrations are valid
+name: Ensure migrations are valid
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   changes_and_migrations:
-    name: Check change files and migrations
+    name: Check migrations
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -25,9 +25,6 @@ jobs:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
-
-      - name: Run check script
-        run: npx beachball check --verbose --branch ${{ github.event.pull_request.base.ref }}
 
       - name: Get current version
         id: get_version
@@ -71,9 +68,9 @@ jobs:
         run: |
           MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
-            MINOR_CHANGE=$(find change -name '*.json' -exec jq 'select(.type == "minor")' {} + 2>/dev/null | grep . || true)
+            MINOR_CHANGE=$(grep 'minor' .changeset/*.md || true)
             if [ -z "$MINOR_CHANGE" ]; then
-              echo "::error::Migration files were added, but no minor version change file was found in the change directory"
+              echo "::error::Migration files were added, but no minor version changeset was found"
               exit 1
             fi
           fi
