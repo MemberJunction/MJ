@@ -33,7 +33,7 @@
     "deps:update": "syncpack update",
     "docs": "typedoc",
     "change": "changeset",
-    "release": "changeset version && npm run build && changeset publish",
+    "release": "changeset publish",
     "mergemain": "node ci/merge_main.mjs",
     "commitpush": "node ci/commit_push.mjs"
   },

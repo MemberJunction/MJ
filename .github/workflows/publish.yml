@@ -66,6 +66,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up git credentials
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/MemberJunction/MJ"
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+
       - name: Determine next expected version
         if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion }}
         id: version_check
@@ -103,16 +114,8 @@ jobs:
           fi
           git reset --hard HEAD
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Set up git credentials
-        run: |
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions"
-          git remote set-url origin "https://$REPO_PAT@github.com/MemberJunction/MJ"
-        env:
-          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+      - name: Build packages
+        run: npm run build
 
       - name: Publish to npm
         id: changesets
