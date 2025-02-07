@@ -93,12 +93,11 @@ jobs:
             echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
           fi
 
-      - name: Preview version to be published
+      - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
         run: |
           EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npm run change version
-          git reset --soft HEAD~
           NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
           if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
@@ -112,17 +111,12 @@ jobs:
             grep --exclude-dir node_modules  --include package.json -RL '"version": "'$NEXT_VERSION'"' | xargs grep '"name": "@memberjunction/'
             exit 1
           fi
-          git reset --hard HEAD
 
       - name: Build packages
         run: npm run build
 
       - name: Publish to npm
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          # This expects you to have a script called release which does a build for your packages and calls changeset publish
-          publish: npm run release
+        run: npm run change publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
@@ -133,7 +127,7 @@ jobs:
         run: |
           git pull
           git log -n1
-          VERSION="v"$(jq -r .version packages/MJGlobal/package.json)
+          VERSION="v"$(jq -r .version packages/MJCore/package.json)
           echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
