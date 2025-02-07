@@ -1,5 +1,11 @@
 import { CompositeKey } from "@memberjunction/core";
 
+
+
+export class SyncRolesAndUsersResult {
+    Success: boolean;
+}
+  
 export class RoleInput {
     ID: string;
 
@@ -35,7 +41,12 @@ export class RolesAndUsersInput {
 
 
 
-export enum SyncDataActionType {
+/**
+ * This type defines the possible list of actions that can be taken in syncing data: Create, Update, CreateOrUpdate, Delete, or DeleteWithFilter
+ * DeleteWithFilter is where you specify a valid SQL expression that can be used in a where clause to get a list of records in a given entity to delete
+ * this can be used to ensure cleaning out data from a subset of a given table.
+ */
+export enum SyncDataAction {
     Create = "Create",
     Update = "Update",
     CreateOrUpdate = "CreateOrUpdate",
@@ -59,7 +70,7 @@ export class ActionItemInput {
     /**
      * The type of action requested. The possible values are Create, Update, CreateOrUpdate, Delete, DeleteWithFilter
      */
-    Type!: SyncDataActionType;
+    Type!: SyncDataAction;
     /**
      * This field is a JSON representation of the field values of the entity to be created or updated. It is used for all ActionTypes except for 
      */
@@ -79,7 +90,20 @@ export class SyncDataResult {
 }
 
 export class ActionItemOutput {
-    input: ActionItemInput;
-    success: boolean;
-    errorMessage: string;
+    Success: boolean;
+    ErrorMessage: string;
+    EntityName!: string;
+    PrimaryKey?: CompositeKey;
+    AlternateKey?: CompositeKey;
+    Type!: SyncDataAction;
+
+    /**
+     * This field is a JSON representation of the field values of the entity to be created or updated. It is used for all ActionTypes except for 
+     */
+    RecordJSON?: string;
+
+    /**
+     * This field is only provided when the Action Type is DeleteWithFilter. It is a valid SQL expression that can be used in a where clause to get a list of records in a given entity to delete
+     */
+    DeleteFilter?: string;
 }
