@@ -802,13 +802,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = val.getTime();
                             break;
                         case EntityFieldTSType.Boolean:
-                            val = parseInt(val) === 0 ? false : true; // convert to boolean
+                            if (typeof val !== 'boolean') {
+                                val = parseInt(val) === 0 ? false : true; // convert to boolean
+                            }
                             break;
                         case EntityFieldTSType.Number:
-                            const numValue = Number(val);
-                            if (!isNaN(numValue)) {
-                              val = numValue;
-                            }      
+                            if (typeof val !== 'number') {
+                                const numValue = Number(val);
+                                if (!isNaN(numValue)) {
+                                  val = numValue;
+                                }      
+                            }
                             break;
                     }
                 }
