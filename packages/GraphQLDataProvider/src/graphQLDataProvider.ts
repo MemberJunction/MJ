@@ -796,6 +796,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const f = filteredFields[i];
                 let val = f.Value;
                 if (val) {
+                    // type conversions as needed for GraphQL
                     switch(f.EntityFieldInfo.TSType) {
                         case EntityFieldTSType.Date:
                             val = val.getTime();
@@ -813,6 +814,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 if (val === null && f.EntityFieldInfo.AllowsNull === false) {
+                    // no value, field doesn't allow nulls, so set to default value, if available and then fall back to either 0 or empty string depending on type
                     if (f.EntityFieldInfo.DefaultValue !== null) {
                         // no value, but there is a default value, so use that, since field does NOT allow NULL
                         val = f.EntityFieldInfo.DefaultValue;
