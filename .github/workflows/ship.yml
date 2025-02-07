@@ -16,11 +16,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Determine next expected version
         id: version_check
         run: |
-          git fetch origin main
+          git fetch --all
           CURRENT_VERSION=$(jq -r .version packages/MJCore/package.json)
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
