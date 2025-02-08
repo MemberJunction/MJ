@@ -46,7 +46,7 @@
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "9.0.6",
     "@types/node": "20.14.2",
-    "@types/ws": "^8.5.5",
+    "@types/ws": "8.5.5",
     "axios": "^1.6.7",
     "body-parser": "^1.20.2",
     "class-validator": "^0.14.0",
