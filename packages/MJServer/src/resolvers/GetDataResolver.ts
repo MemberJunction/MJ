@@ -118,12 +118,18 @@ export class GetDataResolver {
                 throw new Error(`Token ${input.Token} is not valid or has expired`);
             }
 
+            // Use the read-only connection for executing queries
+            const readOnlyDataSource = context.dataSources.find(ds => ds.type === 'Read-Only')?.dataSource;
+            if (!readOnlyDataSource) {
+                throw new Error('Read-only data source not found');
+            }
+
             // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
             // and also so that we can capture the error message for each query and return it
             const results = await Promise.allSettled(
                 input.Queries.map(async (query) => {
                     try {
-                        const result = await context.dataSource.query(query);
+                        const result = await readOnlyDataSource.query(query);
                         return { result, error: null };
                     } catch (err) {
                         return { result: null, error: err };

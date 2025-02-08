@@ -77,7 +77,7 @@ const codegenConfig = {
         excludeSchemas: ['__mj'],
       },
     ],
-  },
+  ],
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
@@ -258,6 +258,8 @@ const config = {
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
+  dbReadOnlyUsername: process.env.DB_READ_ONLY_USERNAME,
+  dbReadOnlyPassword: process.env.DB_READ_ONLY_PASSWORD,
 
   // Used only for CodeGenLib
   outputCode: process.env.OUTPUT_CODE,

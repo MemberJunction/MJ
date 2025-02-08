@@ -15,6 +15,17 @@ export type AppContext = {
   dataSource: DataSource;
   userPayload: UserPayload;
   queryRunner?: QueryRunner;
+  dataSources: DataSourceInfo[];
+};
+
+export type DataSourceInfo = {
+  dataSource: DataSource;
+  host: string;
+  port: number;
+  instance?: string;
+  database: string;
+  userName: string;
+  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
 };
 
 export type DirectiveBuilder = {

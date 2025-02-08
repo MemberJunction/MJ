@@ -18,7 +18,7 @@ import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
-import { RunViewGenericParams, UserPayload } from '../types.js';
+import { RunViewGenericParams, UserPayload, DataSourceInfo } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
@@ -818,4 +818,25 @@ export class ResolverBase {
     return true;
   }
   protected async AfterUpdate(dataSource: DataSource, input: any) {}
+
+  protected GetReadOnlyDataSource(dataSources: DataSourceInfo[], allowFallbackToReadWrite: boolean): DataSource {
+    const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
+    if (readOnlyDataSource) {
+      return readOnlyDataSource.dataSource;
+    } else if (allowFallbackToReadWrite) {
+      const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
+      if (readWriteDataSource) {
+        return readWriteDataSource.dataSource;
+      }
+    }
+    throw new Error('No suitable data source found');
+  }
+
+  protected GetReadWriteDataSource(dataSources: DataSourceInfo[]): DataSource {
+    const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
+    if (readWriteDataSource) {
+      return readWriteDataSource.dataSource;
+    }
+    throw new Error('No suitable read-write data source found');
+  }
 }

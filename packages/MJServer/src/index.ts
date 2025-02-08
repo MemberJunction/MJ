@@ -103,6 +103,20 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+  // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
+  let readOnlyDataSource: DataSource | null = null;
+  if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
+    const readOnlyConfig = {
+      ...orm(paths),
+      username: configInfo.dbReadOnlyUsername,
+      password: configInfo.dbReadOnlyPassword,
+    };
+    readOnlyDataSource = new DataSource(readOnlyConfig);
+    await readOnlyDataSource.initialize();
+    console.log('Read-only Data Source has been initialized.');
+  }
+
   setupComplete$.next(true);
 
   /******TEST HARNESS FOR CHANGE DETECTION */
@@ -171,7 +185,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
     expressMiddleware(apolloServer, {
-      context: contextFunction({ setupComplete$, dataSource }),
+      context: contextFunction({ setupComplete$, dataSource, readOnlyDataSource }),
     })
   );
 
