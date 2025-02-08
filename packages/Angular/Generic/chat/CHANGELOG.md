@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-chat
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.22.1
+- @memberjunction/core@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes

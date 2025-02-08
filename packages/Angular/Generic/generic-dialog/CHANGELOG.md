@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 2.22.1
+
 ## 2.22.0
 
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.

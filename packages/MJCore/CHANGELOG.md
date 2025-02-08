@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/core
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/global@2.22.1
+
 ## 2.22.0
 
 ### Minor Changes

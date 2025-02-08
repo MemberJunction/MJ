@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.22.1
+- @memberjunction/ng-auth-services@2.22.1
+- @memberjunction/ng-base-forms@2.22.1
+- @memberjunction/ng-compare-records@2.22.1
+- @memberjunction/ng-entity-form-dialog@2.22.1
+- @memberjunction/ng-explorer-settings@2.22.1
+- @memberjunction/ng-record-changes@2.22.1
+- @memberjunction/ng-shared@2.22.1
+- @memberjunction/ng-user-view-grid@2.22.1
+- @memberjunction/ng-user-view-properties@2.22.1
+- @memberjunction/ng-container-directives@2.22.1
+- @memberjunction/ng-file-storage@2.22.1
+- @memberjunction/ng-query-grid@2.22.1
+- @memberjunction/ng-record-selector@2.22.1
+- @memberjunction/ng-resource-permissions@2.22.1
+- @memberjunction/ng-skip-chat@2.22.1
+- @memberjunction/ng-tabstrip@2.22.1
+- @memberjunction/communication-types@2.22.1
+- @memberjunction/entity-communications-client@2.22.1
+- @memberjunction/core@2.22.1
+- @memberjunction/core-entities@2.22.1
+- @memberjunction/global@2.22.1
+- @memberjunction/templates-base-types@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes
