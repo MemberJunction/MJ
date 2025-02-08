@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [9660275]
+  - @memberjunction/global@2.22.0
+  - @memberjunction/ai@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:45 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -699,7 +707,7 @@ Wed, 24 Apr 2024 20:57:42 GMT
 
 ### Patches
 
-- * bug fix in explorer-core to show new tab faster when a tab is being removed * Added functionality in base-forms to enhance the toolbar and also enable showing changes since last saved when in Edit Mode in the base form * BaseEntity bug - when a field had a default value other than null (e.g. any default value) and the value of the field was actually null in an existing record, that record would always be seen as dirty and would get wiped out. Fixed the logic (97354817+AN-BC@users.noreply.github.com)
+- - bug fix in explorer-core to show new tab faster when a tab is being removed _ Added functionality in base-forms to enhance the toolbar and also enable showing changes since last saved when in Edit Mode in the base form _ BaseEntity bug - when a field had a default value other than null (e.g. any default value) and the value of the field was actually null in an existing record, that record would always be seen as dirty and would get wiped out. Fixed the logic (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/ai to v1.0.11
 - Bump @memberjunction/global to v1.0.11
 

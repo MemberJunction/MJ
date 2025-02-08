@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.22.0
+
+### Minor Changes
+
+- 12d2186: Update to GraphQLDataProvider to fix up a bug - using a minor bump to force 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/core-entities@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -807,7 +821,7 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - minor tweak to build.order.json - this doesn't affect the "real" build of the system going forward which uses turbo, but I wanted to maintain this script for backup use if needed for some reason. (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/core to v1.0.11
 - Bump @memberjunction/core-entities to v1.0.11

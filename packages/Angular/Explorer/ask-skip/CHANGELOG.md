@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [12d2186]
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/graphql-dataprovider@2.22.0
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/ng-shared@2.22.0
+  - @memberjunction/ng-skip-chat@2.22.0
+  - @memberjunction/ng-user-view-grid@2.22.0
+  - @memberjunction/ng-chat@2.22.0
+  - @memberjunction/ng-container-directives@2.22.0
+  - @memberjunction/ng-data-context@2.22.0
+  - @memberjunction/core-entities@2.22.0
+  - @memberjunction/ng-tabstrip@2.22.0
+  - @memberjunction/skip-types@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -1346,8 +1366,8 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example) (97354817+AN-BC@users.noreply.github.com)
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example) (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/global to v1.0.11
 - Bump @memberjunction/core to v1.0.11
 - Bump @memberjunction/skip-types to v1.0.11

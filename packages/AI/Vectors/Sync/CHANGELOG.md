@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/aiengine@2.22.0
+  - @memberjunction/ai-vectors-pinecone@2.22.0
+  - @memberjunction/ai-vectors@2.22.0
+  - @memberjunction/ai-vectordb@2.22.0
+  - @memberjunction/templates-base-types@2.22.0
+  - @memberjunction/templates@2.22.0
+  - @memberjunction/ai@2.22.0
+  - @memberjunction/ai-mistral@2.22.0
+  - @memberjunction/ai-openai@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -1270,8 +1288,8 @@ Wed, 24 Apr 2024 20:57:42 GMT
 
 ### Patches
 
-- fix VectorSync's  package.json (155523863+JS-BC@users.noreply.github.com)
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- fix VectorSync's package.json (155523863+JS-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/ai to v1.0.11
 - Bump @memberjunction/ai-vectordb to v1.0.11
 - Bump @memberjunction/ai-vectors to v1.0.11

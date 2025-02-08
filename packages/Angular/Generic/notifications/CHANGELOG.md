@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-notifications
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [12d2186]
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/graphql-dataprovider@2.22.0
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/core-entities@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->

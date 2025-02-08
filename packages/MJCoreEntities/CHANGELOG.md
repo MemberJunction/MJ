@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -800,8 +809,8 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
-- * Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). _ Updated CodeGenLib to emit this new style of Angular Code _ Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/core to v1.0.11
 - Bump @memberjunction/global to v1.0.11
 

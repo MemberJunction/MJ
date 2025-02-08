@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/ng-shared@2.22.0
+  - @memberjunction/ng-link-directives@2.22.0
+  - @memberjunction/ng-record-changes@2.22.0
+  - @memberjunction/ng-base-types@2.22.0
+  - @memberjunction/ng-code-editor@2.22.0
+  - @memberjunction/ng-container-directives@2.22.0
+  - @memberjunction/ng-tabstrip@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -1197,10 +1213,10 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal (97354817+AN-BC@users.noreply.github.com)
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
-- * Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
-- * Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example) (97354817+AN-BC@users.noreply.github.com)
+- - Added support for BaseFieldComponent to show or not show its label \* Added more JSDoc documentation to classes within MJCore and MJGlobal (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). _ Updated CodeGenLib to emit this new style of Angular Code _ Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
+- - Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example) (97354817+AN-BC@users.noreply.github.com)
 - Added documentation (JSDoc) for the new BaseFieldComponent (mj-form-field selector) (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/global to v1.0.11
 - Bump @memberjunction/core to v1.0.11

@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [a598f1a]
+  - @memberjunction/core@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -621,7 +628,7 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/core to v1.0.11
 
 ## 1.0.9

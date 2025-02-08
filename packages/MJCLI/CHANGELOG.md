@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/cli
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [9660275]
+  - @memberjunction/codegen-lib@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->

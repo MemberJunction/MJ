@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.22.0
+
+### Patch Changes
+
+- 9660275: Improve pluralization in CodeGenLib
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -167,7 +173,7 @@ Wed, 24 Apr 2024 20:57:41 GMT
 
 ### Patches
 
-- * Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal (97354817+AN-BC@users.noreply.github.com)
+- - Added support for BaseFieldComponent to show or not show its label \* Added more JSDoc documentation to classes within MJCore and MJGlobal (97354817+AN-BC@users.noreply.github.com)
 
 ## 1.0.8
 

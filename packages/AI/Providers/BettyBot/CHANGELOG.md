@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [9660275]
+  - @memberjunction/global@2.22.0
+  - @memberjunction/ai@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:45 GMT and should not be manually modified.
 
 <!-- Start content -->

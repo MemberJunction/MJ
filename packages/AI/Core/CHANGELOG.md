@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai
 
+## 2.22.0
+
+### Patch Changes
+
+- Updated dependencies [9660275]
+  - @memberjunction/global@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:45 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -624,7 +631,7 @@ Wed, 24 Apr 2024 20:57:42 GMT
 
 ### Patches
 
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/global to v1.0.11
 
 ## 1.0.9

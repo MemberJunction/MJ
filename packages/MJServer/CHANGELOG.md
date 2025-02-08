@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/server
 
+## 2.22.0
+
+### Patch Changes
+
+- e9a6c78: Lock types/ws package to specific patch version
+- Updated dependencies [12d2186]
+- Updated dependencies [a598f1a]
+- Updated dependencies [9660275]
+  - @memberjunction/graphql-dataprovider@2.22.0
+  - @memberjunction/core@2.22.0
+  - @memberjunction/global@2.22.0
+  - @memberjunction/aiengine@2.22.0
+  - @memberjunction/ai-vectors-pinecone@2.22.0
+  - @memberjunction/core-actions@2.22.0
+  - @memberjunction/actions@2.22.0
+  - @memberjunction/entity-communications-server@2.22.0
+  - @memberjunction/doc-utils@2.22.0
+  - @memberjunction/external-change-detection@2.22.0
+  - @memberjunction/core-entities@2.22.0
+  - @memberjunction/data-context@2.22.0
+  - @memberjunction/queue@2.22.0
+  - @memberjunction/storage@2.22.0
+  - @memberjunction/sqlserver-dataprovider@2.22.0
+  - @memberjunction/templates@2.22.0
+  - @memberjunction/ai@2.22.0
+  - @memberjunction/ai-mistral@2.22.0
+  - @memberjunction/ai-openai@2.22.0
+  - @memberjunction/data-context-server@2.22.0
+  - @memberjunction/skip-types@2.22.0
+
 This log was last generated on Thu, 06 Feb 2025 05:11:44 GMT and should not be manually modified.
 
 <!-- Start content -->
@@ -2140,8 +2170,8 @@ Wed, 24 Apr 2024 20:57:42 GMT
 
 ### Patches
 
-- * Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
-- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- - Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). _ Updated CodeGenLib to emit this new style of Angular Code _ Ran Code Gen (97354817+AN-BC@users.noreply.github.com)
+- - bug fixes in Skip UI \* added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
 - Bump @memberjunction/ai to v1.0.11
 - Bump @memberjunction/ai-openai to v1.0.11
 - Bump @memberjunction/aiengine to v1.0.11
