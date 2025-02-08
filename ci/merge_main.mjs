@@ -1,26 +1,9 @@
-import { gitFetch } from 'beachball/lib/git/fetch.js';
-import { gitAsync } from 'beachball/lib/git/gitAsync.js';
-import { findProjectRoot } from 'workspace-tools';
+import { simpleGit } from 'simple-git';
 
-const cwd = findProjectRoot(process.cwd());
+const git = simpleGit();
 
-const fetchResult = gitFetch({ remote: 'origin', branch: 'main', cwd, verbose: true });
-if (!fetchResult.success) {
-  throw new Error(`Fetching from origin/main has failed!`);
-}
-
-const mergeResult = await gitAsync(['merge', '-X', 'theirs', 'main'], { cwd, verbose: true });
-if (!mergeResult.success) {
-  throw new Error(`Merging with latest origin/main has failed!`);
-}
+await git.fetch('origin', 'main');
+await git.merge(['-X', 'theirs', 'origin/main']);
 
 console.log(`\nPushing to origin/next...`);
-
-const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--verbose', 'origin', 'HEAD:next'], {
-  cwd,
-  verbose: true,
-});
-if (!pushResult.success) {
-  console.error(JSON.stringify(pushResult));
-  throw new Error('Pushing to origin/next has failed!');
-}
+await git.push('origin', 'HEAD:next');

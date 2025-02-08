@@ -1,46 +1,14 @@
-import { gitAsync } from 'beachball/lib/git/gitAsync.js';
-import { findProjectRoot } from 'workspace-tools';
+import { simpleGit } from 'simple-git';
 
+const git = simpleGit();
 const version = process.env.VERSION;
 
-const message = 'Update distribution zip [skip ci]';
-const cwd = findProjectRoot(process.cwd());
-
-const commitResult = await gitAsync(['commit', '--all', '-m', message], {
-  cwd,
-  verbose: true,
-});
-if (!commitResult.success) {
-  console.error(JSON.stringify(commitResult));
-  throw new Error(`Committing has failed!`);
-}
-
-if (version) {
-  const tagResult = await gitAsync(['tag', version], { cwd, verbose: true });
-  if (!tagResult.success) {
-    console.error(JSON.stringify(tagResult));
-    throw new Error(`Tagging with ${version} has failed!`);
-  }
-}
+await git.add('./*').commit('Update distribution zip [skip ci]');
 
 console.log('\nPushing to origin/main...');
-
-const pushResult = await gitAsync(['push', '--no-verify', '--verbose', 'origin', 'HEAD:main'], {
-  cwd,
-  verbose: true,
-});
-if (!pushResult.success) {
-  console.error(JSON.stringify(pushResult));
-  throw new Error('Pushing to origin/main has failed!');
-}
+await git.push('origin', 'HEAD:main');
 
 if (version) {
-  const pushTagsResult = await gitAsync(['push', '--verbose', 'origin', `refs/tags/${version}`], {
-    cwd,
-    verbose: true,
-  });
-  if (!pushTagsResult.success) {
-    console.error(JSON.stringify(tagResult));
-    throw new Error(`Pushing tag ${version} has failed!`);
-  }
+  await git.addTag(version);
+  await git.push('origin', `refs/tags/${version}`);
 }
