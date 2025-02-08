@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.22.2
+
+### Patch Changes
+
+- 94ebf81: Add override for node typings
+  - @memberjunction/global@2.22.2
+
 ## 2.22.1
 
 ### Patch Changes
