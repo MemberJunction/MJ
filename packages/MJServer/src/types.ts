@@ -22,9 +22,9 @@ export type AppContext = {
   userPayload: UserPayload;
   queryRunner?: QueryRunner;
   /**
-   * An optional array of data sources that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
+   * Array of data sources that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
    */
-  dataSources?: DataSourceInfo[];
+  dataSources: DataSourceInfo[];
 };
 
 export class DataSourceInfo  {

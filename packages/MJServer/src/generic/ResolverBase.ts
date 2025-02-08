@@ -18,7 +18,7 @@ import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 
-import { RunViewGenericParams, UserPayload, DataSourceInfo } from '../types.js';
+import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';

@@ -3,7 +3,6 @@ import { AppContext } from '../types.js';
 import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
-import { GetReadWriteDataSource } from '../util.js';
 
 @ObjectType()
 export class SyncRolesAndUsersResultType {

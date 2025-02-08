@@ -23,23 +23,23 @@ export class UserViewResolver extends UserViewResolverBase {
   }
 
   @Query(() => [UserView_])
-  async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() { dataSource, userPayload }: AppContext) {
-    return await this.findBy(dataSource, 'User Views', {
-      UserID: await this.getCurrentUserID(dataSource, userPayload),
+  async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
+    return await this.findBy(context.dataSource, 'User Views', {
+      UserID: await this.getCurrentUserID(context),
       EntityID,
       IsDefault: true,
     });
   }
 
-  protected async getCurrentUserID(dataSource: DataSource, userPayload: UserPayload): Promise<number> {
+  protected async getCurrentUserID(context: AppContext): Promise<number> {
     const userResolver = new UserResolver();
-    const user = await userResolver.UserByEmail(userPayload.email, { dataSource, userPayload });
+    const user = await userResolver.UserByEmail(context.userPayload.email, context);
     return user.ID;
   }
 
   @Query(() => [UserView_])
-  async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() { dataSource, userPayload }: AppContext) {
-    return this.findBy(dataSource, 'User Views', { UserID: await this.getCurrentUserID(dataSource, userPayload), EntityID });
+  async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
+    return this.findBy(context.dataSource, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID });
   }
 
   @Query(() => [UserView_])

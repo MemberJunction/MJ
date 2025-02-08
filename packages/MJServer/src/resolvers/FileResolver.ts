@@ -47,20 +47,20 @@ export class FileResolver extends FileResolverBase {
   @Mutation(() => CreateFilePayload)
   async CreateFile(
     @Arg('input', () => CreateFileInput) input: CreateFileInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     const md = new Metadata();
-    const user = this.GetUserFromPayload(userPayload);
+    const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
     const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Check to see if there's already an object with that name
-    const [sameName] = await this.findBy(dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID });
+    const [sameName] = await this.findBy(context.dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID });
     const NameExists = Boolean(sameName);
 
-    const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, { dataSource, userPayload }, pubSub)) as File_;
+    const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, context, pubSub)) as File_;
 
     // If there's a problem creating the file record, the base resolver will return null
     if (!fileRecord) {
@@ -98,12 +98,12 @@ export class FileResolver extends FileResolverBase {
   @Mutation(() => File_)
   async UpdateFile(
     @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     // if the name is changing, rename the target object as well
     const md = new Metadata();
-    const user = this.GetUserFromPayload(userPayload);
+    const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
 
@@ -119,7 +119,7 @@ export class FileResolver extends FileResolverBase {
       }
     }
 
-    const updatedFile = await super.UpdateFile(input, { dataSource, userPayload }, pubSub);
+    const updatedFile = await super.UpdateFile(input, context, pubSub);
     return updatedFile;
   }
 
