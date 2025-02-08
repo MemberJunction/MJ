@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.22.1
+- @memberjunction/actions@2.22.1
+- @memberjunction/core@2.22.1
+- @memberjunction/core-entities@2.22.1
+- @memberjunction/global@2.22.1
+- @memberjunction/sqlserver-dataprovider@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.22.1
+- @memberjunction/aiengine@2.22.1
+- @memberjunction/ai-vectors-pinecone@2.22.1
+- @memberjunction/ai-vectors@2.22.1
+- @memberjunction/ai-vectordb@2.22.1
+- @memberjunction/ai-vector-sync@2.22.1
+- @memberjunction/core@2.22.1
+- @memberjunction/core-entities@2.22.1
+- @memberjunction/global@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes

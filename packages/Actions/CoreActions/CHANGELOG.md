@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.22.1
+
+### Patch Changes
+
+- @memberjunction/ai-vector-sync@2.22.1
+- @memberjunction/actions@2.22.1
+- @memberjunction/communication-engine@2.22.1
+- @memberjunction/content-autotagging@2.22.1
+- @memberjunction/external-change-detection@2.22.1
+- @memberjunction/core@2.22.1
+- @memberjunction/core-entities@2.22.1
+- @memberjunction/global@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes

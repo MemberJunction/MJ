@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.22.1
+
+### Patch Changes
+
+- e8b3632: Updates to lockfile and publishing
+  - @memberjunction/ai@2.22.1
+  - @memberjunction/aiengine@2.22.1
+  - @memberjunction/ai-mistral@2.22.1
+  - @memberjunction/ai-openai@2.22.1
+  - @memberjunction/ai-vectors-pinecone@2.22.1
+  - @memberjunction/core-actions@2.22.1
+  - @memberjunction/actions@2.22.1
+  - @memberjunction/entity-communications-server@2.22.1
+  - @memberjunction/doc-utils@2.22.1
+  - @memberjunction/external-change-detection@2.22.1
+  - @memberjunction/graphql-dataprovider@2.22.1
+  - @memberjunction/core@2.22.1
+  - @memberjunction/core-entities@2.22.1
+  - @memberjunction/data-context@2.22.1
+  - @memberjunction/data-context-server@2.22.1
+  - @memberjunction/global@2.22.1
+  - @memberjunction/queue@2.22.1
+  - @memberjunction/storage@2.22.1
+  - @memberjunction/sqlserver-dataprovider@2.22.1
+  - @memberjunction/skip-types@2.22.1
+  - @memberjunction/templates@2.22.1
+
 ## 2.22.0
 
 ### Patch Changes
