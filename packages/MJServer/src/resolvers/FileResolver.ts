@@ -127,11 +127,11 @@ export class FileResolver extends FileResolverBase {
   async DeleteFile(
     @Arg('ID', () => String) ID: string,
     @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
-    @Ctx() { dataSource, userPayload }: AppContext,
+    @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
     const md = new Metadata();
-    const userInfo = this.GetUserFromPayload(userPayload);
+    const userInfo = this.GetUserFromPayload(context.userPayload);
 
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);
     await fileEntity.Load(ID);
@@ -147,6 +147,6 @@ export class FileResolver extends FileResolverBase {
       await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.Name);
     }
 
-    return super.DeleteFile(ID, options, { dataSource, userPayload }, pubSub);
+    return super.DeleteFile(ID, options, context, pubSub);
   }
 }

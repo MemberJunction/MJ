@@ -8,8 +8,9 @@ import { DataSource } from 'typeorm';
 import { getSigningKeys, getSystemUser, validationOptions, verifyUserRecord } from './auth/index.js';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey } from './config.js';
-import { UserPayload } from './types.js';
+import { DataSourceInfo, UserPayload } from './types.js';
 import { TokenExpiredError } from './auth/index.js';
+import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 
 const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -29,15 +30,18 @@ const verifyAsync = async (issuer: string, options: jwt.VerifyOptions, token: st
 export const getUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
-  dataSource: DataSource,
+  dataSources: DataSourceInfo[],
   requestDomain?: string,
   requestApiKey?: string
 ): Promise<UserPayload> => {
   try {
+    const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+    const readWriteDataSource = GetReadWriteDataSource(dataSources);
+
     if (requestApiKey && requestApiKey != String(undefined)) {
       // use requestApiKey for auth
       if (requestApiKey === apiKey) {
-        const systemUser = await getSystemUser(dataSource);
+        const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
           email: systemUser.Email,
@@ -81,7 +85,7 @@ export const getUserPayload = async (
     const fullName = payload?.name;
     const firstName = payload?.given_name || fullName?.split(' ')[0];
     const lastName = payload?.family_name || fullName?.split(' ')[1] || fullName?.split(' ')[0];
-    const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, dataSource);
+    const userRecord = await verifyUserRecord(email, firstName, lastName, requestDomain, readWriteDataSource);
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -101,7 +105,7 @@ export const getUserPayload = async (
 };
 
 export const contextFunction =
-  ({ setupComplete$, dataSource }: { setupComplete$: Subject<unknown>; dataSource: DataSource }) =>
+  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: DataSource, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
@@ -115,7 +119,7 @@ export const contextFunction =
     const userPayload = await getUserPayload(
       bearerToken,
       sessionId,
-      dataSource,
+      dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
       apiKey
     );
@@ -126,5 +130,5 @@ export const contextFunction =
       console.log({ operationName });
     }
 
-    return { dataSource, userPayload };
+    return { dataSource, dataSources, userPayload };
   };

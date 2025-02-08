@@ -11,14 +11,23 @@ export type UserPayload = {
   apiKey?: string;
 };
 
+/**
+ * AppContext is the context object that is passed to all resolvers.
+ */
 export type AppContext = {
+  /**
+   * The default and backwards compatible data source.
+   */
   dataSource: DataSource;
   userPayload: UserPayload;
   queryRunner?: QueryRunner;
-  dataSources: DataSourceInfo[];
+  /**
+   * An optional array of data sources that have additional information about their intended use e.g. Admin, Read-Write, Read-Only.
+   */
+  dataSources?: DataSourceInfo[];
 };
 
-export type DataSourceInfo = {
+export class DataSourceInfo  {
   dataSource: DataSource;
   host: string;
   port: number;
@@ -26,6 +35,15 @@ export type DataSourceInfo = {
   database: string;
   userName: string;
   type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+
+  constructor(init: {dataSource: DataSource, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
+    this.dataSource = init.dataSource;
+    this.host = init.host;
+    this.port = init.port;
+    this.database = init.database;
+    this.userName = init.userName;
+    this.type = init.type;
+  }
 };
 
 export type DirectiveBuilder = {

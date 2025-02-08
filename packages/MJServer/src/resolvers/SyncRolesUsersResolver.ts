@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { GetReadWriteDataSource } from '../util.js';
 
 @ObjectType()
 export class SyncRolesAndUsersResultType {
@@ -225,7 +226,7 @@ export class SyncRolesAndUsersResolver {
             const result = await rv.RunView<UserEntity>({
                 EntityName: "Users",
                 ResultType: 'entity_object'
-            }, this.GetReadWriteDataSource(context.dataSources), context.userPayload.userRecord);
+            }, context.userPayload.userRecord);
             if (result && result.Success) {
                 // go through current users and remove those that are not in the input
                 const currentUsers = result.Results;
