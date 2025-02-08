@@ -77,7 +77,7 @@ const codegenConfig = {
         excludeSchemas: ['__mj'],
       },
     ],
-  ],
+  },
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
