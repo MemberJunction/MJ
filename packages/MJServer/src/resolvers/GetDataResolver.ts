@@ -98,7 +98,7 @@ export class SimpleEntityFieldOutputType {
 
 export class GetDataResolver {
     /**
-     * This mutation will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.
+     * This query will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.
      * @param items - an array of ActionItemInputType objects that specify the action to be taken on the specified entity with the specified primary key and the JSON representation of the field values. 
      * @param token - the short-lived access token that is required to perform this operation.
      */
