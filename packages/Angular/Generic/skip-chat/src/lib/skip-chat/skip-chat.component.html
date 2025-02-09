@@ -53,9 +53,6 @@
         <div class="right-panel">
             <div class="conversation-wrapper" mjFillContainer>
                 <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
-                    <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
-                        <!-- MOVED THIS TO INSIDE MESSAGE - REMOVE THIS ENTIRE DIV ---- <kendo-loader></kendo-loader> -->
-                    </div>
                     <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
                         <div class='welcome-message'>
                             <img [src]="SkipLogoURL" />
@@ -84,6 +81,11 @@
                             </div>
                         </div>    
                     </div>
+                    @if (!_conversationLoadComplete) {
+                        <div class="loading-convo-messages-wrapper">
+                            <kendo-loader></kendo-loader>
+                        </div>
+                    }   
                     <div mjContainer mjSkipResize="true"><!--mjSkipResize results in everything below this level NOT being resized, performance optimization-->
                         <!-- Dynamic messages will be injected here -->
                     </div>

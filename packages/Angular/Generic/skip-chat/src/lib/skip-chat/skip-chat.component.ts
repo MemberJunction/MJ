@@ -15,7 +15,7 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, UserInfo, CompositeKey } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -419,6 +419,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   
       // now fire up the observer on the top level div
       this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
+      this.cdRef.detectChanges();
     }
   }
 
@@ -668,8 +669,13 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     this.sendSkipMessage();
   }
 
+  /**
+   * Sets the currently displayed conversation to the one provided
+   * @param conversation 
+   * @returns 
+   */
   public async SelectConversation(conversation: ConversationEntity) {
-    if (this. IsSkipProcessing(conversation)) {
+    if (this.IsSkipProcessing(conversation)) {
       return; // already processing this conversation so don't go back and forth
     }
     
@@ -689,8 +695,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.DataContext = convoAny._DataContext;
       } else {
         this.DataContext = new DataContext();
+        const start = new Date().getTime();
         await this.DataContext.LoadMetadata(this.DataContextID, this.ProviderToUse.CurrentUser, this.ProviderToUse);
-
+        LogStatus('Skip Chat: Time to load data context: ' + (new Date().getTime() - start) + 'ms');
         // cache it for later
         convoAny._DataContext = this.DataContext;
       }
@@ -699,14 +706,17 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       if (convoAny._Messages && !convoShouldReload) {
         // we have cached messages, so just use them, but don't point directly to the array, create new array with the same objects
         this.Messages = [...convoAny._Messages];
-      } else {
-        this._conversationsToReload[conversation.ID] = true;
+      } 
+      else {
+        this._conversationsToReload[conversation.ID] = false; // reset this flag since we're reloading from the DB right now
 
+        const start = new Date().getTime();
         const result = await this.RunViewToUse.RunView<ConversationDetailEntity>({
           EntityName: 'Conversation Details',
           ExtraFilter: `ConversationID='${conversation.ID}'`,
           OrderBy: '__mj_CreatedAt ASC' // show messages in order of creation,
         });
+        LogStatus('Skip Chat: Time to load messages from database: ' + (new Date().getTime() - start) + 'ms');
 
         if (result && result.Success) {
           // copy the results into NEW objects into the array, we don't want to modify the original objects
@@ -718,7 +728,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
 
       if (this.Messages && this.Messages.length > 0) {
-        //this.Messages = <ConversationDetailEntity[]>result.Results;
         this.cdRef.detach(); // temporarily stop change detection to improve performance
         for (const m of this.Messages) {
           this.AddMessageToPanel(m, false);
@@ -740,6 +749,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         // finally update the browser URL since we've changed the conversation ID
         this.location.go('/askskip/' + conversation.ID);
       }
+
+      this.cdRef.detectChanges(); // first this off since conversation changed
       this.ConversationSelected.emit(conversation.ID);
     }
   }
@@ -864,6 +875,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
             this.setProcessingStatus(skipResult.ConversationId, true);
             this.Conversations.push(convo);
             this.SelectedConversation = convo;
+            this.cdRef.detectChanges(); // first this off since conversation changed
             this.SetSelectedConversationUser();
           } 
           else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
@@ -1346,20 +1358,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
       // now submit the transaction group
       if (await tg.Submit()) {
-        // now clean up the arrays within this.Messages and also the current conversation's Messages array
-        // remove all messages inluding and after the idx
-        // this.Messages = this.Messages.slice(0, idx);
-        // const convoAny = <any>this.SelectedConversation;
-        // if (convoAny) {
-        //   convoAny._Messages = this.Messages;
-        // }
-
-        // for (const m of currentAndSubsequentMessages) {
-        //   // now remove the message from the UI
-        //   this.RemoveMessageFromCurrentConversation(m);
-        // }
-
-        // this.UpdateAllPanelMessages(); // update remaining messages in the panel so they have the correct messages array and processing status
         this.setProcessingStatus(this.SelectedConversation.ID, false); // done
         const convo = this.SelectedConversation;
         this.SelectedConversation = undefined; // wipe out so the below does something
