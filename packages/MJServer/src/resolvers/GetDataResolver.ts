@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
+import { GetReadOnlyDataSource } from '../util.js';
  
 @InputType() 
 export class GetDataInputType {
@@ -119,7 +120,7 @@ export class GetDataResolver {
             }
 
             // Use the read-only connection for executing queries
-            const readOnlyDataSource = context.dataSources.find(ds => ds.type === 'Read-Only')?.dataSource;
+            const readOnlyDataSource = GetReadOnlyDataSource(context.dataSources, {allowFallbackToReadWrite: false})
             if (!readOnlyDataSource) {
                 throw new Error('Read-only data source not found');
             }
