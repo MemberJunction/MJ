@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.23.0
+
+### Minor Changes
+
+- 09d3fa9: Defaulting cache refresh interval to disabled to allow database pausing unless refresh is explicitly set.
+
+### Patch Changes
+
+- Updated dependencies [38b7507]
+  - @memberjunction/global@2.23.0
+  - @memberjunction/ai@2.23.0
+  - @memberjunction/aiengine@2.23.0
+  - @memberjunction/ai-vector-dupe@2.23.0
+  - @memberjunction/actions@2.23.0
+  - @memberjunction/core@2.23.0
+  - @memberjunction/core-entities@2.23.0
+  - @memberjunction/queue@2.23.0
+
 ## 2.22.2
 
 ### Patch Changes

@@ -52,6 +52,8 @@ const configInfoSchema = z.object({
   dbPort: z.number({ coerce: true }).default(1433),
   dbUsername: z.string(),
   dbPassword: z.string(),
+  dbReadOnlyUsername: z.string().optional(),
+  dbReadOnlyPassword: z.string().optional(),
   dbTrustServerCertificate: z.coerce
     .boolean()
     .default(false)

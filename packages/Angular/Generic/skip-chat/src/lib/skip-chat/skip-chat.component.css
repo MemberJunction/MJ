@@ -442,6 +442,16 @@ background-color: #f8f9fa; /* Background of the scrollbar track */
     cursor: pointer;
 }
 
+.loading-convo-messages-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    position: absolute;
+    z-index: 1000;
+}
+
 @media (min-width: 600px) {
     .welcome-suggested-questions {
         display: flex;

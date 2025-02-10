@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.23.0
+
+### Patch Changes
+
+- 38b7507: Fixed logic bugs in pluralization functionality in MJ Global and used new flags in CodeGenLib
+
 ## 2.22.2
 
 ## 2.22.1

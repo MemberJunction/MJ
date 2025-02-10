@@ -20,7 +20,7 @@ import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-grap
 import { DataSource } from 'typeorm';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import orm from './orm.js';
@@ -64,9 +64,12 @@ export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 
+export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+
 export * from './generated/generated.js';
 
 import { resolve } from 'node:path';
+import { DataSourceInfo } from './types.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -104,6 +107,8 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
+  const dataSources = [new DataSourceInfo({dataSource, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
+  
   // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
   let readOnlyDataSource: DataSource | null = null;
   if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
@@ -114,8 +119,12 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     };
     readOnlyDataSource = new DataSource(readOnlyConfig);
     await readOnlyDataSource.initialize();
+
+    // since we created a read-only data source, add it to the list of data sources
+    dataSources.push(new DataSourceInfo({dataSource: readOnlyDataSource, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Data Source has been initialized.');
   }
+
 
   setupComplete$.next(true);
 
@@ -170,7 +179,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     {
       schema,
       context: async ({ connectionParams }) => {
-        const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSource);
+        const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSources);
         return { userPayload };
       },
     },
@@ -185,7 +194,11 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
     expressMiddleware(apolloServer, {
-      context: contextFunction({ setupComplete$, dataSource, readOnlyDataSource }),
+      context: contextFunction({ 
+                                 setupComplete$, 
+                                 dataSource, // default read-write data source
+                                 dataSources // all data source
+                               }),
     })
   );
 

@@ -4,8 +4,8 @@ import { User_, UserResolverBase } from '../generated/generated.js';
 @Resolver(User_)
 export class UserResolver extends UserResolverBase {
   @Query(() => User_)
-  async CurrentUser(@Ctx() { dataSource, userPayload }: AppContext) {
-    const result = await this.UserByEmail(userPayload.email, { dataSource, userPayload });
+  async CurrentUser(@Ctx() context: AppContext) {
+    const result = await this.UserByEmail(context.userPayload.email, context);
     console.log('CurrentUser', result);
     return result;
   }

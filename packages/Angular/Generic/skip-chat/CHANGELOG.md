@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.23.0
+
+### Patch Changes
+
+- Updated dependencies [38b7507]
+  - @memberjunction/global@2.23.0
+  - @memberjunction/ng-base-types@2.23.0
+  - @memberjunction/ng-container-directives@2.23.0
+  - @memberjunction/ng-data-context@2.23.0
+  - @memberjunction/ng-notifications@2.23.0
+  - @memberjunction/graphql-dataprovider@2.23.0
+  - @memberjunction/core@2.23.0
+  - @memberjunction/core-entities@2.23.0
+  - @memberjunction/data-context@2.23.0
+  - @memberjunction/skip-types@2.23.0
+
 ## 2.22.2
 
 ### Patch Changes

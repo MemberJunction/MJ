@@ -225,7 +225,7 @@ export class SyncRolesAndUsersResolver {
             const result = await rv.RunView<UserEntity>({
                 EntityName: "Users",
                 ResultType: 'entity_object'
-            }, this.GetReadWriteDataSource(context.dataSources), context.userPayload.userRecord);
+            }, context.userPayload.userRecord);
             if (result && result.Success) {
                 // go through current users and remove those that are not in the input
                 const currentUsers = result.Results;
