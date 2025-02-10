@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.23.1
+
+### Patch Changes
+
+- 3d67b82: Auto detect changes to data via SyncData/SyncUsersAndRoles and auto refresh the respective cache
+  - @memberjunction/ai@2.23.1
+  - @memberjunction/aiengine@2.23.1
+  - @memberjunction/ai-mistral@2.23.1
+  - @memberjunction/ai-openai@2.23.1
+  - @memberjunction/ai-vectors-pinecone@2.23.1
+  - @memberjunction/core-actions@2.23.1
+  - @memberjunction/actions@2.23.1
+  - @memberjunction/entity-communications-server@2.23.1
+  - @memberjunction/doc-utils@2.23.1
+  - @memberjunction/external-change-detection@2.23.1
+  - @memberjunction/graphql-dataprovider@2.23.1
+  - @memberjunction/core@2.23.1
+  - @memberjunction/core-entities@2.23.1
+  - @memberjunction/data-context@2.23.1
+  - @memberjunction/data-context-server@2.23.1
+  - @memberjunction/global@2.23.1
+  - @memberjunction/queue@2.23.1
+  - @memberjunction/storage@2.23.1
+  - @memberjunction/sqlserver-dataprovider@2.23.1
+  - @memberjunction/skip-types@2.23.1
+  - @memberjunction/templates@2.23.1
+
 ## 2.23.0
 
 ### Patch Changes
