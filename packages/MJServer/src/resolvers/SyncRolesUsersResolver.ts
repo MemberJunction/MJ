@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
 @ObjectType()
 export class SyncRolesAndUsersResultType {
@@ -88,8 +89,16 @@ export class SyncRolesAndUsersResolver {
         try {
             // first we sync the roles, then the users 
             const roleResult = await this.SyncRoles(data.Roles, context);
-            if (roleResult.Success) {
-                return await this.SyncUsers(data.Users, context);
+            if (roleResult?.Success) {
+                const usersResult = await this.SyncUsers(data.Users, context);
+                if (usersResult?.Success) {
+                    // refresh the user cache, don't set an auto-refresh
+                    // interval here becuase that is alreayd done at startup
+                    // and will keep going on its own as per the config. This is a
+                    // special one-time refresh since we made changes here.
+                    await UserCache.Instance.Refresh(context.dataSource);
+                }
+                return usersResult;
             }
             else {
                 return roleResult;
