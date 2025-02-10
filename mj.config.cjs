@@ -212,7 +212,9 @@ const mjServerConfig = {
   databaseSettings: {
     connectionTimeout: 45000,
     requestTimeout: 30000,
-    metadataCacheRefreshInterval: Number(process.env.METADATA_CACHE_REFRESH_INTERVAL) ?? 180000,
+    metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
+      ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
+      : 180000,
   },
   viewingSystem: {
     enableSmartFilters: true,
