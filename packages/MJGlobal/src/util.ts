@@ -313,12 +313,12 @@ export function getIrregularPlural(singularName: string): string | null {
 }
 
 /**
- * Checks if a word is already plural by reversing common pluralization rules.
+ * Attempts to return a singular form of a given word, assuming it is already plural by reversing common pluralization rules.
  * 
  * @param word - The word to check.
- * @returns The singular form if detected, otherwise null.
+ * @returns The singular form if detected, otherwise the original word since it would be assumed the original word is in fact singular
  */
-function detectSingularForm(word: string): string | null {
+function getSingularForm(word: string): string | null {
     const lowerWord = word.toLowerCase();
 
     // Reverse lookup from __irregularPlurals values to keys
@@ -342,7 +342,10 @@ function detectSingularForm(word: string): string | null {
         return lowerWord.slice(0, -1); // "dogs" -> "dog"
     }
 
-    return null;
+    // if we get here, we return the word itself, because none of the reversals we
+    // did above yielded anything, so it means that to best of this simplistic
+    // algo's ability, we believe word is ALREADY plural
+    return word;
 }
 
 
@@ -361,17 +364,25 @@ function detectSingularForm(word: string): string | null {
  * generatePluralName('dog'); // returns 'dogs'
  * ```
  */
-export function generatePluralName(singularName: string): string {
+export function generatePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
-    const detectedSingular = detectSingularForm(singularName);
+    const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {
-        return singularName; // If no singular form is detected, assume it's already plural
+        // if we did NOT find a singular, assume it is already plural
+        return adjustCasing(singularName, options); 
+    }
+    else if (detectedSingular.trim().toLowerCase() !== singularName.trim().toLowerCase()) {
+        // here we did detect a singular form. Check to see if it is DIFFERENT from
+        // the provided value. Because we're supposed to be provided a singular to this
+        // function if we are given a plural - like Customers - we want to just throw it back
+        // but if we were passed a true singular, then we keep on going
+        return adjustCasing(singularName, options);
     }
 
     // Check for irregular plurals
     const irregularPlural = getIrregularPlural(singularName);
     if (irregularPlural) {
-        return irregularPlural;
+        return adjustCasing(irregularPlural, options);
     }
 
     // Handle common pluralization rules
@@ -379,22 +390,48 @@ export function generatePluralName(singularName: string): string {
         const secondLastChar = singularName[singularName.length - 2].toLowerCase();
         if ('aeiou'.includes(secondLastChar)) {
             // Ends with a vowel + y, just add 's'
-            return singularName + 's';
+            return adjustCasing(singularName + 's', options);
         } else {
             // Ends with a consonant + y, replace 'y' with 'ies'
-            return singularName.slice(0, -1) + 'ies';
+            return adjustCasing(singularName.slice(0, -1) + 'ies', options);
         }
     }
 
     if (/(s|ch|sh|x|z)$/.test(singularName)) {
         // Ends with 's', 'ch', 'sh', 'x', or 'z', add 'es'
-        return singularName + 'es';
+        return adjustCasing(singularName + 'es', options);
     }
 
     // Default case: Add 's' to the singular name
-    return singularName + 's';
+    return adjustCasing(singularName + 's', options);
 }
 
+/**
+ * Utility method that will adjust the casing of a word based on the options provided. The options object can have two properties:
+ * * capitalizeFirstLetterOnly: If true, only the first letter of the word will be capitalized, and the rest will be lower case.
+ * * capitalizeEntireWord: If true, the entire word will be capitalized.
+ * @param word 
+ * @param options 
+ * @returns 
+ */
+export function adjustCasing(word: string, options?: {capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean}): string {
+    if (word && word.length > 0 && options) {
+        if (options.capitalizeEntireWord) {
+            return word.toUpperCase();
+        }
+        else if (options.capitalizeFirstLetterOnly) {   
+            // make the first character upper case and rest lower case
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }
+        else {
+            // no changes requested, do nothing
+            return word;
+        }
+    }
+    else {
+        return word; //return whatever it is, blank string, null, or undefined, but no changes
+    }
+}
 
 
 
