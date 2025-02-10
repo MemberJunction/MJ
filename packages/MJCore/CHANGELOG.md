@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.23.0
+
+### Patch Changes
+
+- Updated dependencies [38b7507]
+  - @memberjunction/global@2.23.0
+
 ## 2.22.2
 
 ### Patch Changes

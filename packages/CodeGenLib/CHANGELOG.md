@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.23.0
+
+### Patch Changes
+
+- 38b7507: Fixed logic bugs in pluralization functionality in MJ Global and used new flags in CodeGenLib
+- Updated dependencies [09d3fa9]
+- Updated dependencies [38b7507]
+  - @memberjunction/sqlserver-dataprovider@2.23.0
+  - @memberjunction/global@2.23.0
+  - @memberjunction/ai@2.23.0
+  - @memberjunction/actions@2.23.0
+  - @memberjunction/core@2.23.0
+  - @memberjunction/core-entities@2.23.0
+
 ## 2.22.2
 
 ### Patch Changes
