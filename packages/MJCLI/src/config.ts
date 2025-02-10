@@ -51,8 +51,9 @@ export const getFlywayConfig = async (mjConfig: MJConfig, tag?: string): Promise
     // when tag is set, we want to fetch migrations from the github repo using the tag specified
     // we save those to a tmp dir and set that tmp dir as the migration location
     const tmp = mkdtempSync(tmpdir());
+    const branch = /v?\d+\.\d+\.\d+/.test(tag) ? (tag.startsWith('v') ? tag : `v${tag}`) : tag;
     const git: SimpleGit = simpleGit(tmp);
-    await git.clone(mjConfig.mjRepoUrl, tmp, ['--sparse', '--depth=1', '--branch', tag]);
+    await git.clone(mjConfig.mjRepoUrl, tmp, ['--sparse', '--depth=1', '--branch', branch]);
     await git.raw(['sparse-checkout', 'set', 'migrations']);
 
     location = `filesystem:${tmp}`;
