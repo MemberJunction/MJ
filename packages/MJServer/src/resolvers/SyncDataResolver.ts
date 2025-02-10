@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { BaseEntity, CompositeKey, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
+import { DatasetItemEntity } from '@memberjunction/core-entities';
 
 
 
@@ -95,6 +96,9 @@ export class SyncDataResultType {
   Results: ActionItemOutputType[] = [];
 }
 
+
+const __metadata_DatasetItems: string[] = [];
+
 export class SyncDataResolver {
     /**
      * This mutation will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.
@@ -114,6 +118,10 @@ export class SyncDataResolver {
                 results.push(await this.SyncSingleItem(item, context, md)); 
             }
 
+            if (await this.DoSyncItemsAffectMetadata(items)) {
+                await md.Refresh(); // force refesh the metadata which will cause a reload from the DB
+            }
+
             const overallSuccess = !results.some((r) => !r.Success); // if any element in the array of results has a Success value of false, then the overall success is false
             return { Success: overallSuccess, Results: results };
         } 
@@ -121,6 +129,35 @@ export class SyncDataResolver {
             LogError(err);
             throw new Error('SyncDataResolver::SyncData --- Error Syncing Data\n\n' + err);
         }
+    }
+
+    protected async GetLowercaseMetadatEntitiesList(forceRefresh: boolean = false): Promise<string[]> {
+        if (forceRefresh || __metadata_DatasetItems.length === 0) {
+            const rv = new RunView(); // cache this, veyr simple - should use an engine for this stuff later
+            const result = await rv.RunView<DatasetItemEntity>({
+                EntityName: "Dataset Items",
+                ExtraFilter: "Dataset = 'MJ_Metadata'",
+            })
+            if (result && result.Success) {
+                __metadata_DatasetItems.length = 0;
+                __metadata_DatasetItems.push(...result.Results.map((r) => {
+                    return r.Entity.trim().toLowerCase();
+                }));
+            }    
+        }
+        // now return the list of entities
+        return __metadata_DatasetItems;
+    }
+
+    protected async DoSyncItemsAffectMetadata(items: ActionItemInputType[]): Promise<boolean> {
+        // check to see if any of the items affect any of these entities:
+        const entitiesToCheck = await this.GetLowercaseMetadatEntitiesList(false);
+        for (const item of items) {
+            if (entitiesToCheck.find(e => e === item.EntityName.trim().toLowerCase()) ) {
+                return true;
+            }
+        }
+        return false; // didn't find any
     }
 
     protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: Metadata): Promise<ActionItemOutputType> {
