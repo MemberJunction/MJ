@@ -1452,14 +1452,8 @@ export class ManageMetadataBase {
    }
    
    protected simpleNewEntityName(tableName: string): string {
-      const convertedName = convertCamelCaseToHaveSpaces(generatePluralName(tableName));
-      // check to see if the entity name is all lower case, in which case we want to make just the first letter upper case
-      if (convertedName === convertedName.toLowerCase()) {
-         return convertedName.charAt(0).toUpperCase() + convertedName.slice(1);
-      }
-      else {
-         return convertedName;
-      }
+      const convertedTableName = convertCamelCaseToHaveSpaces(tableName);
+      return generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
    }
 
    protected createNewUUID(): string {
@@ -1614,7 +1608,7 @@ export class ManageMetadataBase {
          ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
          ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
          '${newEntity.TableName}',
-         'vw${generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
+         'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
          1,
          ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0}

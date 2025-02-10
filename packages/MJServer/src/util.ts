@@ -4,6 +4,8 @@ import { gzip as gzipCallback, createGunzip } from 'zlib';
 import { promisify } from 'util';
 import { URL } from 'url';
 import { z } from 'zod';
+import { DataSourceInfo } from './types';
+import { DataSource } from 'typeorm';
 
 const gzip = promisify(gzipCallback);
 
@@ -110,3 +112,39 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   }
   );
 }
+
+
+  /**
+   * Returns the read-only data source if it exists, otherwise returns the read-write data source if options is not provided or if options.allowFallbackToReadWrite is true.
+   * @param dataSources 
+   * @param options 
+   * @returns 
+   */
+  export function GetReadOnlyDataSource(dataSources: DataSourceInfo[], options?: {allowFallbackToReadWrite: boolean}): DataSource {
+    const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
+    if (readOnlyDataSource) {
+      return readOnlyDataSource.dataSource;
+    } 
+    else if (!options || options.allowFallbackToReadWrite) {
+      // default behavior for backward compatibility prior to MJ 2.22.3 where we introduced this functionality was to have a single
+      // connection, so for back-compatability, if we don't have a read-only data source, we'll fall back to the read-write data source
+      const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
+      if (readWriteDataSource) {
+        return readWriteDataSource.dataSource;
+      }
+    }
+    throw new Error('No suitable data source found');
+  }
+
+  /**
+   * Returns the read-write data source if it exists, otherwise throws an error.
+   * @param dataSources 
+   * @returns 
+   */
+  export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): DataSource {
+    const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
+    if (readWriteDataSource) {
+      return readWriteDataSource.dataSource;
+    }
+    throw new Error('No suitable read-write data source found');
+  }
