@@ -20,6 +20,8 @@ const databaseSettingsInfoSchema = z.object({
   connectionTimeout: z.number(),
   requestTimeout: z.number(),
   metadataCacheRefreshInterval: z.number(),
+  dbReadOnlyUsername: z.string().optional(),
+  dbReadOnlyPassword: z.string().optional(),
 });
 
 const viewingSystemInfoSchema = z.object({
@@ -50,6 +52,8 @@ const configInfoSchema = z.object({
   dbPort: z.number({ coerce: true }).default(1433),
   dbUsername: z.string(),
   dbPassword: z.string(),
+  dbReadOnlyUsername: z.string().optional(),
+  dbReadOnlyPassword: z.string().optional(),
   dbTrustServerCertificate: z.coerce
     .boolean()
     .default(false)
@@ -110,6 +114,8 @@ export const {
   apiKey,
   baseUrl,
   mjCoreSchema: mj_core_schema,
+  dbReadOnlyUsername,
+  dbReadOnlyPassword,
 } = configInfo;
 
 export function loadConfig() {

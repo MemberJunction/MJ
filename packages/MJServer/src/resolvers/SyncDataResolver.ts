@@ -266,6 +266,15 @@ export class SyncDataResolver {
                 result.ErrorMessage = 'Failed to load the item, it is possible the record with the specified primary key does not exist';
             }
             else {
+                // pass back the full record as it was JUST BEFORE the delete, often quite useful on the other end
+                result.RecordJSON = await altKeyResult.GetDataObjectJSON({
+                    includeRelatedEntityData: false,
+                    excludeFields: [],
+                    omitEmptyStrings: false,
+                    relatedEntityList: [],
+                    omitNullValues: false,
+                    oldValues: false
+                });
                 if (await altKeyResult.Delete()) {
                     result.Success = true;
                 }
@@ -275,6 +284,15 @@ export class SyncDataResolver {
             }
         }
         else if (await entityObject.InnerLoad(pk)) {
+            // pass back the full record as it was JUST BEFORE the delete, often quite useful on the other end
+            result.RecordJSON = await entityObject.GetDataObjectJSON({
+                includeRelatedEntityData: false,
+                excludeFields: [],
+                omitEmptyStrings: false,
+                relatedEntityList: [],
+                omitNullValues: false,
+                oldValues: false
+            });
             if (await entityObject.Delete()) {
                 result.Success = true;
             }
@@ -297,6 +315,15 @@ export class SyncDataResolver {
         if (await entityObject.Save()) {
             result.Success = true;
             result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
+            // pass back the full record AFTER the sync, that's often quite useful on the other end
+            result.RecordJSON = await entityObject.GetDataObjectJSON({
+                includeRelatedEntityData: false,
+                excludeFields: [],
+                omitEmptyStrings: false,
+                relatedEntityList: [],
+                omitNullValues: false,
+                oldValues: false
+            });
         }
         else {
             result.ErrorMessage = 'Failed to create the item :' + entityObject.LatestResult.Message;
@@ -328,6 +355,18 @@ export class SyncDataResolver {
         entityObject.SetMany(fieldValues);
         if (await entityObject.Save()) {
             result.Success = true;
+            if (!result.PrimaryKey || result.PrimaryKey.KeyValuePairs.length === 0) {
+                result.PrimaryKey = new CompositeKey(entityObject.PrimaryKeys.map((pk) => ({FieldName: pk.Name, Value: pk.Value})));
+            }
+            // pass back the full record AFTER the sync, that's often quite useful on the other end
+            result.RecordJSON = await entityObject.GetDataObjectJSON({
+                includeRelatedEntityData: false,
+                excludeFields: [],
+                omitEmptyStrings: false,
+                relatedEntityList: [],
+                omitNullValues: false,
+                oldValues: false
+            });
         }
         else {
             result.ErrorMessage = 'Failed to update the item :' + entityObject.LatestResult.Message;

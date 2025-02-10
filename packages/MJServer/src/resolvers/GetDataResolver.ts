@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
+import { GetReadOnlyDataSource } from '../util.js';
  
 @InputType() 
 export class GetDataInputType {
@@ -98,7 +99,7 @@ export class SimpleEntityFieldOutputType {
 
 export class GetDataResolver {
     /**
-     * This mutation will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.
+     * This query will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.
      * @param items - an array of ActionItemInputType objects that specify the action to be taken on the specified entity with the specified primary key and the JSON representation of the field values. 
      * @param token - the short-lived access token that is required to perform this operation.
      */
@@ -118,12 +119,18 @@ export class GetDataResolver {
                 throw new Error(`Token ${input.Token} is not valid or has expired`);
             }
 
+            // Use the read-only connection for executing queries
+            const readOnlyDataSource = GetReadOnlyDataSource(context.dataSources, {allowFallbackToReadWrite: false})
+            if (!readOnlyDataSource) {
+                throw new Error('Read-only data source not found');
+            }
+
             // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
             // and also so that we can capture the error message for each query and return it
             const results = await Promise.allSettled(
                 input.Queries.map(async (query) => {
                     try {
-                        const result = await context.dataSource.query(query);
+                        const result = await readOnlyDataSource.query(query);
                         return { result, error: null };
                     } catch (err) {
                         return { result: null, error: err };
