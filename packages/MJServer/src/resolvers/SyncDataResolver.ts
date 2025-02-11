@@ -118,7 +118,7 @@ export class SyncDataResolver {
                 results.push(await this.SyncSingleItem(item, context, md)); 
             }
 
-            if (await this.DoSyncItemsAffectMetadata(items)) {
+            if (await this.DoSyncItemsAffectMetadata(context.userPayload.userRecord, items)) {
                 await md.Refresh(); // force refesh the metadata which will cause a reload from the DB
             }
 
@@ -131,13 +131,13 @@ export class SyncDataResolver {
         }
     }
 
-    protected async GetLowercaseMetadatEntitiesList(forceRefresh: boolean = false): Promise<string[]> {
+    protected async GetLowercaseMetadataEntitiesList(user: UserInfo, forceRefresh: boolean = false): Promise<string[]> {
         if (forceRefresh || __metadata_DatasetItems.length === 0) {
             const rv = new RunView(); // cache this, veyr simple - should use an engine for this stuff later
             const result = await rv.RunView<DatasetItemEntity>({
                 EntityName: "Dataset Items",
                 ExtraFilter: "Dataset = 'MJ_Metadata'",
-            })
+            }, user)
             if (result && result.Success) {
                 __metadata_DatasetItems.length = 0;
                 __metadata_DatasetItems.push(...result.Results.map((r) => {
@@ -149,9 +149,9 @@ export class SyncDataResolver {
         return __metadata_DatasetItems;
     }
 
-    protected async DoSyncItemsAffectMetadata(items: ActionItemInputType[]): Promise<boolean> {
+    protected async DoSyncItemsAffectMetadata(user: UserInfo, items: ActionItemInputType[]): Promise<boolean> {
         // check to see if any of the items affect any of these entities:
-        const entitiesToCheck = await this.GetLowercaseMetadatEntitiesList(false);
+        const entitiesToCheck = await this.GetLowercaseMetadataEntitiesList(user, false);
         for (const item of items) {
             if (entitiesToCheck.find(e => e === item.EntityName.trim().toLowerCase()) ) {
                 return true;
