@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.23.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.23.2
+- @memberjunction/ng-user-view-grid@2.23.2
+- @memberjunction/ng-chat@2.23.2
+- @memberjunction/ng-container-directives@2.23.2
+- @memberjunction/ng-data-context@2.23.2
+- @memberjunction/ng-skip-chat@2.23.2
+- @memberjunction/ng-tabstrip@2.23.2
+- @memberjunction/graphql-dataprovider@2.23.2
+- @memberjunction/core@2.23.2
+- @memberjunction/core-entities@2.23.2
+- @memberjunction/global@2.23.2
+- @memberjunction/skip-types@2.23.2
+
 ## 2.23.1
 
 ### Patch Changes
