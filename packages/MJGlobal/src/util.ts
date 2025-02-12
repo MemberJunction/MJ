@@ -414,14 +414,23 @@ export function generatePluralName(singularName: string, options? : { capitalize
  * @param options 
  * @returns 
  */
-export function adjustCasing(word: string, options?: {capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean}): string {
+export function adjustCasing(word: string, options?: { 
+    capitalizeFirstLetterOnly?: boolean, 
+    capitalizeEntireWord?: boolean
+    forceRestOfWordLowerCase?: boolean }): string {
     if (word && word.length > 0 && options) {
         if (options.capitalizeEntireWord) {
             return word.toUpperCase();
         }
         else if (options.capitalizeFirstLetterOnly) {   
-            // make the first character upper case and rest lower case
-            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            if (options.forceRestOfWordLowerCase) {
+                // make the first character upper case and rest lower case
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }
+            else {
+                // make the first character upper case and leave the rest as is
+                return word.charAt(0).toUpperCase() + word.slice(1);
+            }
         }
         else {
             // no changes requested, do nothing
