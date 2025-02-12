@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/actions
 
+## 2.23.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.23.2
+- @memberjunction/aiengine@2.23.2
+- @memberjunction/actions-base@2.23.2
+- @memberjunction/doc-utils@2.23.2
+- @memberjunction/core@2.23.2
+- @memberjunction/core-entities@2.23.2
+- @memberjunction/global@2.23.2
+
 ## 2.23.1
 
 ### Patch Changes

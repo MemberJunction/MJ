@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.23.2
+
+### Patch Changes
+
+- d69811b: Fix bug in RunView
+  - @memberjunction/ai@2.23.2
+  - @memberjunction/aiengine@2.23.2
+  - @memberjunction/ai-mistral@2.23.2
+  - @memberjunction/ai-openai@2.23.2
+  - @memberjunction/ai-vectors-pinecone@2.23.2
+  - @memberjunction/core-actions@2.23.2
+  - @memberjunction/actions@2.23.2
+  - @memberjunction/entity-communications-server@2.23.2
+  - @memberjunction/doc-utils@2.23.2
+  - @memberjunction/external-change-detection@2.23.2
+  - @memberjunction/graphql-dataprovider@2.23.2
+  - @memberjunction/core@2.23.2
+  - @memberjunction/core-entities@2.23.2
+  - @memberjunction/data-context@2.23.2
+  - @memberjunction/data-context-server@2.23.2
+  - @memberjunction/global@2.23.2
+  - @memberjunction/queue@2.23.2
+  - @memberjunction/storage@2.23.2
+  - @memberjunction/sqlserver-dataprovider@2.23.2
+  - @memberjunction/skip-types@2.23.2
+  - @memberjunction/templates@2.23.2
+
 ## 2.23.1
 
 ### Patch Changes
