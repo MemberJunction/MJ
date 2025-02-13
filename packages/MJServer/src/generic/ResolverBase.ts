@@ -29,7 +29,7 @@ import { Subscription } from 'rxjs';
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
-  private static _eventSubscription: Subscription | null = null;
+  private static _eventSubscriptions = new Map<string, Subscription>;
 
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -548,9 +548,14 @@ export class ResolverBase {
   }
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    if (!ResolverBase._eventSubscription) {
+    // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
+    // entity/record in the system. This is important because we don't want to have multiple listeners for the same entity/record as it could
+    // cause issues with multiple messages for the same event.
+    const uniqueKey = `${entityObject.EntityInfo.Name}_${entityObject.PrimaryKey.ToURLSegment()}`;
+
+    if (!ResolverBase._eventSubscriptions.has(entityObject.EntityInfo.Name)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      ResolverBase._eventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
+      const listener = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
         if (event) {
           await this.EmitCloudEvent(event);
 
@@ -569,6 +574,7 @@ export class ResolverBase {
           }
         }
       });
+      ResolverBase._eventSubscriptions.set(uniqueKey, listener);
     }
   }
 
