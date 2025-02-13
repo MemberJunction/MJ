@@ -9,7 +9,7 @@ import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, MAX_IND
 import { ManageMetadataBase } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { combineFiles } from '../Misc/util';
+import { combineFiles, logIf } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
@@ -305,6 +305,7 @@ export class SQLCodeGenBase {
             // per above only do this if (a) logSql is true and (b) the entity is in the newEntityList OR modifiedEntityList
             SQLLogging.appendToSQLLogFile(sql, description);
         }
+        logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
     public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, skipExecution: boolean = false, writeFiles: boolean = true, enableSQLLoggingForNewEntities: boolean = false): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
