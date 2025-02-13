@@ -637,6 +637,7 @@ export class DataContext {
 
                 itemEntry.dciEntity = dciEntity; // saved for later 
 
+                dciEntity.Description = item.AdditionalDescription;
                 dciEntity.DataContextID = this.ID;
                 dciEntity.Type = item.Type;
                 switch (item.Type) {

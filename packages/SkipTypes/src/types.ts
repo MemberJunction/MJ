@@ -672,6 +672,12 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * The script text that was used to generated the report and can be saved to be run again later
      */
     scriptText?: string | null;
+    /**
+     * When provided, this array of data requests indicate to the caller of the Skip API that Skip was able to retrieve, on his own, additional data
+     * BEYOND what was provided in the SkipAPIRequest object. The caller of the Skip API should update its internal representation of its data context
+     * to include these new data items so that they will be run and provided to Skip for future iterations/requests and for re-running reports as well.
+     */
+    newDataItems?: SkipDataRequest[];
 }
 
 /**

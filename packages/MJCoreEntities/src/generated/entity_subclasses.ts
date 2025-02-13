@@ -3340,6 +3340,10 @@ export const DataContextItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -7093,7 +7097,8 @@ export const RecommendationItemSchema = z.object({
         * * Field Name: DestinationEntityID
         * * Display Name: Destination Entity ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: dest entity!`),
     DestinationEntityRecordID: z.string().describe(`
         * * Field Name: DestinationEntityRecordID
         * * Display Name: Destination Entity Record ID
@@ -7161,7 +7166,8 @@ export const RecommendationRunSchema = z.object({
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
+        * * Default Value: newsequentialid()
+    * * Description: Da Key :`),
     RecommendationProviderID: z.string().describe(`
         * * Field Name: RecommendationProviderID
         * * Display Name: Recommendation Provider ID
@@ -18597,6 +18603,18 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     }
 
     /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
     * * Field Name: DataContext
     * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
@@ -28438,6 +28456,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * Display Name: Destination Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    * * Description: dest entity!
     */
     get DestinationEntityID(): string {
         return this.Get('DestinationEntityID');
@@ -28636,6 +28655,7 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
+    * * Description: Da Key :
     */
     get ID(): string {
         return this.Get('ID');

@@ -18862,6 +18862,9 @@ export class DataContextItem_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    Description?: string;
+        
     @Field() 
     @MaxLength(510)
     DataContext: string;
@@ -18911,6 +18914,9 @@ export class CreateDataContextItemInput {
 
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
+
+    @Field({ nullable: true })
+    Description?: string;
 }
     
 
@@ -18948,6 +18954,9 @@ export class UpdateDataContextItemInput {
 
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
+
+    @Field({ nullable: true })
+    Description?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27315,7 +27324,7 @@ export class RecommendationProviderResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: `Recommendation runs log each time a provider is requested to provide recommendations` })
 export class RecommendationRun_ {
-    @Field({description: ``}) 
+    @Field({description: `Da Key :`}) 
     @MaxLength(16)
     ID: string;
         
