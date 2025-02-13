@@ -549,7 +549,7 @@ export class ResolverBase {
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
-    // entity/record in the system. This is important because we don't want to have multiple listeners for the same entity/record as it could
+    // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
     // cause issues with multiple messages for the same event.
     const uniqueKey = entityObject.EntityInfo.Name;
 
