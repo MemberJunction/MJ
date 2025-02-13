@@ -27,9 +27,9 @@ import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
 
 export class ResolverBase {
-  private _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
-  private _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
-  private _eventSubscription: Subscription | null = null;
+  private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
+  private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
+  private static _eventSubscription: Subscription | null = null;
 
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -245,7 +245,7 @@ export class ResolverBase {
   }
 
   protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
-    if (this._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
+    if (ResolverBase._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
       const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
       const type = `MemberJunction.${event}${extendedType}`;
       const source = `${process.env.CLOUDEVENTS_SOURCE ?? 'MemberJunction'}`;
@@ -255,7 +255,7 @@ export class ResolverBase {
       const cloudEvent = new CloudEvent({ type, source, subject, data });
 
       try {
-        const cloudeventTransportResponse = await this._emit(cloudEvent, { headers: this._cloudeventsHeaders });
+        const cloudeventTransportResponse = await ResolverBase._emit(cloudEvent, { headers: ResolverBase._cloudeventsHeaders });
         const cloudeventResponse = JSON.stringify(cloudeventTransportResponse);
         if (/error/i.test(cloudeventResponse)) {
           console.error('CloudEvent ERROR', cloudeventResponse);
@@ -548,9 +548,9 @@ export class ResolverBase {
   }
 
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    if (!this._eventSubscription) {
+    if (!ResolverBase._eventSubscription) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      this._eventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
+      ResolverBase._eventSubscription = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
         if (event) {
           await this.EmitCloudEvent(event);
 
