@@ -555,29 +555,27 @@ export class ResolverBase {
 
     if (!ResolverBase._eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      const listener = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
+      const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
         if (event) {
           await this.EmitCloudEvent(event);
 
-          if (event.args) {
+          if (event.args && event.args instanceof BaseEntityEvent) {
             const baseEntityEvent = event.args as BaseEntityEvent;
-            if (baseEntityEvent.baseEntity) {
-              // message from our entity object, relay it to the client
-              pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                message: JSON.stringify({
-                  status: 'OK',
-                  type: 'EntityObjectStatusMessage',
-                  entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-                  primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-                  message: event.args.message,
-                }),
-                sessionId: userPayload.sessionId,
-              });
-            }
+            // message from our entity object, relay it to the client
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+              message: JSON.stringify({
+                status: 'OK',
+                type: 'EntityObjectStatusMessage',
+                entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+                primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+                message: event.args.payload,
+              }),
+              sessionId: userPayload.sessionId,
+            });
           }
         }
       });
-      ResolverBase._eventSubscriptions.set(uniqueKey, listener);
+      ResolverBase._eventSubscriptions.set(uniqueKey, theSub);
     }
   }
 
