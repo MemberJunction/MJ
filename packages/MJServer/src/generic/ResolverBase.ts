@@ -551,26 +551,29 @@ export class ResolverBase {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity/record in the system. This is important because we don't want to have multiple listeners for the same entity/record as it could
     // cause issues with multiple messages for the same event.
-    const uniqueKey = `${entityObject.EntityInfo.Name}_${entityObject.PrimaryKey.ToURLSegment()}`;
+    const uniqueKey = entityObject.EntityInfo.Name;
 
-    if (!ResolverBase._eventSubscriptions.has(entityObject.EntityInfo.Name)) {
+    if (!ResolverBase._eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      const listener = MJGlobal.Instance.GetEventListener(false).subscribe(async (event) => {
+      const listener = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
         if (event) {
           await this.EmitCloudEvent(event);
 
-          if (event.component === entityObject && event.args && event.args.message) {
-            // message from our entity object, relay it to the client
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                status: 'OK',
-                type: 'EntityObjectStatusMessage',
-                entityName: entityObject.EntityInfo.Name,
-                primaryKey: entityObject.PrimaryKey,
-                message: event.args.message,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+          if (event.args) {
+            const baseEntityEvent = event.args as BaseEntityEvent;
+            if (baseEntityEvent.baseEntity) {
+              // message from our entity object, relay it to the client
+              pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                message: JSON.stringify({
+                  status: 'OK',
+                  type: 'EntityObjectStatusMessage',
+                  entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+                  primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+                  message: event.args.message,
+                }),
+                sessionId: userPayload.sessionId,
+              });
+            }
           }
         }
       });
