@@ -121,7 +121,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
    return entityLevelTree;
  }
 
-public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
+public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
    const md: Metadata = new Metadata();
 
@@ -137,19 +137,16 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
         !e.VirtualEntity && 
         !ManageMetadataBase.newEntityList.includes(e.Name));
 
-      //const levelFiles: string[] = [];
       let sqlCommand: string = '';
       for (const entity of l) {
-        // OCT 24 2024 - changed to use sp_refreshview instead of executing the view files
-        // will remove old code shortly after testing
-        //levelFiles.push(...this.getBaseViewFiles(entity));
-        sqlCommand += `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';\n`;
+        // if an excludeEntities variable was provided, skip this entity if it's in the list
+        if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
+          sqlCommand += `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';\n`;
+        }
       }
 
       // all files for this level are now in levelFiles, let's combine them and execute them
-      //const combinedSQL = this.combineMultipleSQLFiles(levelFiles);
       bSuccess = await this.executeSQLScript(ds, sqlCommand, false) && bSuccess;
-      //bSuccess = await this.executeBatchSQLScript(combinedSQL) && bSuccess;
     }
 
    if (!bSuccess) {
@@ -298,6 +295,8 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do
+
+      logIf(configInfo.verboseOutput, `Executing SQL Script: ${scriptText?.length > 100 ? scriptText.substring(0, 100) + '...' : scriptText}`);
 
       return this.executeBatchSQLScript(scriptText);
     }
