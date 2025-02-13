@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { DataSource } from "typeorm";
-import { outputDir } from "../Config/config";
+import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { RegisterClass } from "@memberjunction/global";
 import { MSSQLConnection, sqlConfig } from "../Config/db-connection";
@@ -12,7 +12,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs-extra";
-import { attemptDeleteFile } from "../Misc/util";
+import { attemptDeleteFile, logIf } from "../Misc/util";
 
 const execAsync = promisify(exec);
 
@@ -242,6 +242,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -i "${absoluteFilePath}"`;
 
     // Execute the command
+    logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
     const { stdout, stderr } = await execAsync(command);
 
     if (stderr && stderr.trim().length > 0) {
@@ -276,6 +277,7 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
     const scriptFilePath = path.join(tempDir, uniqueFileName);
     fs.writeFileSync(scriptFilePath, scriptText);
 
+    logIf(configInfo.verboseOutput, `Executing batch SQL script: ${scriptFilePath}`);
     await this.executeSQLFile(scriptFilePath);
 
     // Remove the temporary file

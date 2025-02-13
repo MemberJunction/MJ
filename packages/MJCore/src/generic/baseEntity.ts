@@ -7,7 +7,7 @@ import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
-import { Subject, Subscription } from 'rxjs';
+import { finalize, firstValueFrom, from, Observable, of, shareReplay, Subject, Subscription, switchMap } from 'rxjs';
 import { z } from 'zod';
 
 /**
@@ -823,12 +823,47 @@ export abstract class BaseEntity<T = unknown> {
         return true;
     }
 
+
+
+    // Holds the current pending save observable (if any)
+    private _pendingSave$: Observable<boolean> | null = null;
+
     /**
-     * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record. If the record is new, it will be created, if it already exists, it will be updated.
+     * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
+     * If the record is new, it will be created, if it already exists, it will be updated.
+     * 
+     * Debounces multiple calls so that if Save() is called again while a save is in progress,
+     * the second call will simply receive the same result as the first.
+     * 
+     * @param options
+     * @returns Promise<boolean>
+     */
+    public async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // If a save is already in progress, return its promise.
+        if (this._pendingSave$) {
+            return firstValueFrom(this._pendingSave$);
+        }
+
+        // Create a new observable that debounces duplicative calls, and executes the save.
+        this._pendingSave$ = of(options).pipe(
+            // Execute the actual save logic.
+            switchMap(opts => from(this._InnerSave(opts))),
+            // When the save completes (whether successfully or not), clear the pending save observable.
+            finalize(() => { this._pendingSave$ = null; }),
+            // Ensure that all subscribers get the same result.
+            shareReplay(1)
+        );
+
+        return firstValueFrom(this._pendingSave$);
+    }    
+    
+    /**
+     * Private, internal method to handle saving the current state of the object to the database. This method is called by the public facing Save() method
+     * and is debounced to prevent multiple calls from being executed simultaneously.
      * @param options
      * @returns
      */
-    public async Save(options?: EntitySaveOptions) : Promise<boolean> {
+    private async _InnerSave(options?: EntitySaveOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();

@@ -86,4 +86,12 @@ export function combineFiles(directory: string, combinedFileName: string, patter
 }
 
 
- 
+/**
+ * Logs the provided params to the console if the shouldLog parameter is true
+ * @param shouldLog 
+ */
+export function logIf(shouldLog: boolean, ...args: any[]) {
+    if (shouldLog) {
+        console.log(...args);
+    }
+}
