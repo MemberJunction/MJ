@@ -32,6 +32,7 @@
     "@memberjunction/ng-notifications": "2.23.2",
     "@memberjunction/ng-generic-dialog": "2.23.2",
     "@memberjunction/ng-base-types": "2.23.2",
+    "@memberjunction/ng-compare-records": "2.23.2",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
