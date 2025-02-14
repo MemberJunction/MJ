@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 2.24.0
+
+### Patch Changes
+
+- Updated dependencies [9cb85cc]
+- Updated dependencies [7c6ff41]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/core-entities@2.24.0
+  - @memberjunction/core-actions@2.24.0
+  - @memberjunction/actions@2.24.0
+  - @memberjunction/core@2.24.0
+  - @memberjunction/sqlserver-dataprovider@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes

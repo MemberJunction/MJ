@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-record-changes
 
+## 2.24.0
+
+### Patch Changes
+
+- Updated dependencies [9cb85cc]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/ng-container-directives@2.24.0
+  - @memberjunction/core@2.24.0
+  - @memberjunction/ng-compare-records@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes

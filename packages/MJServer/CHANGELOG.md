@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/server
 
+## 2.24.0
+
+### Minor Changes
+
+- 7c6ff41: Updates to support a new Description field in the DataContextItem entity and flow from the Skip API response where Skip can add new items separately from the DATA_REQUESTED response phase via the new GetData GQL query that MJ Server now supports.
+- 32331a6: Run codegen to genreate new resolvers for MJ Server with read + read/write datasources
+
+### Patch Changes
+
+- 85e4bbe: Change instance to static variables for MJServer Cloud Events functionality to prevent multiple subs as instances of Resolver Base are created/destroyed
+- 3fa9e9a: Event raising for MJServer
+- Updated dependencies [9cb85cc]
+- Updated dependencies [7c6ff41]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/core-entities@2.24.0
+  - @memberjunction/data-context@2.24.0
+  - @memberjunction/ai@2.24.0
+  - @memberjunction/aiengine@2.24.0
+  - @memberjunction/ai-mistral@2.24.0
+  - @memberjunction/ai-openai@2.24.0
+  - @memberjunction/ai-vectors-pinecone@2.24.0
+  - @memberjunction/core-actions@2.24.0
+  - @memberjunction/actions@2.24.0
+  - @memberjunction/entity-communications-server@2.24.0
+  - @memberjunction/doc-utils@2.24.0
+  - @memberjunction/external-change-detection@2.24.0
+  - @memberjunction/graphql-dataprovider@2.24.0
+  - @memberjunction/core@2.24.0
+  - @memberjunction/data-context-server@2.24.0
+  - @memberjunction/queue@2.24.0
+  - @memberjunction/storage@2.24.0
+  - @memberjunction/sqlserver-dataprovider@2.24.0
+  - @memberjunction/templates@2.24.0
+  - @memberjunction/skip-types@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes

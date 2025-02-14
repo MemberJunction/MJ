@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.24.0
+
+### Minor Changes
+
+- 871fa69: Tweaks to CodeGenLib + Migration to fix 2.21.x-2.23.x issues
+
+### Patch Changes
+
+- b5d480c: filter out base views that won't exist immediately after the new entities are created to avoid errors in the initial entity create process
+- 93d3ee2: Verbose mode
+- Updated dependencies [9cb85cc]
+- Updated dependencies [7c6ff41]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/core-entities@2.24.0
+  - @memberjunction/ai@2.24.0
+  - @memberjunction/actions@2.24.0
+  - @memberjunction/core@2.24.0
+  - @memberjunction/sqlserver-dataprovider@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes

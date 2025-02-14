@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 2.24.0
+
+### Patch Changes
+
+- Updated dependencies [9cb85cc]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/ai@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes
