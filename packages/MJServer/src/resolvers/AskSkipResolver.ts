@@ -603,8 +603,14 @@ export class AskSkipResolver {
       // get the list of entities
       const entities = md.Entities.filter((e) => {
         if (e.SchemaName !== mj_core_schema || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
-          const scopes = e.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
-          return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai') || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase());
+          const sd = e.ScopeDefault?.trim();
+          if (sd && sd.length > 0) {
+            const scopes = sd.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
+            return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai') || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase());
+          }
+          else {
+            return true; // no scope, so include it
+          }
         }
         return false;
       });
