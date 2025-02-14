@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-vectordb
 
+## 2.24.1
+
+### Patch Changes
+
+- @memberjunction/core@2.24.1
+- @memberjunction/global@2.24.1
+
 ## 2.24.0
 
 ### Patch Changes

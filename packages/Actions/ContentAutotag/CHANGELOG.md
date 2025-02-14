@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 2.24.1
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.24.1
+- @memberjunction/actions@2.24.1
+- @memberjunction/content-autotagging@2.24.1
+- @memberjunction/core@2.24.1
+- @memberjunction/core-entities@2.24.1
+- @memberjunction/global@2.24.1
+
 ## 2.24.0
 
 ### Patch Changes

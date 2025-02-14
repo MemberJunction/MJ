@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 2.24.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.24.1
+- @memberjunction/ng-container-directives@2.24.1
+- @memberjunction/graphql-dataprovider@2.24.1
+- @memberjunction/core@2.24.1
+- @memberjunction/core-entities@2.24.1
+- @memberjunction/global@2.24.1
+
 ## 2.24.0
 
 ### Patch Changes
