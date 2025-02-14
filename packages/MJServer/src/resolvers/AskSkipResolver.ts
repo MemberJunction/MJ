@@ -1456,6 +1456,17 @@ export class AskSkipResolver {
       LogError(`Error saving user notification entity for AI message: ${sResult}`, undefined, userNotification.LatestResult);
     }
 
+    // check to see if Skip retrieved additional data on his own outside of the DATA_REQUEST phase/process. It is possible for Skip to call back
+    // to the MJAPI in the instance using the GetData() query in the MJAPI. If Skip did this, we need to save the data context items here.
+    if (apiResponse.newDataItems) {
+      apiResponse.newDataItems.forEach((skipItem) => {
+        const newItem = dataContext.AddDataContextItem();
+        newItem.Type = 'sql';
+        newItem.SQL = skipItem.text;
+        newItem.AdditionalDescription = skipItem.description;
+      });
+    }
+
     // Save the data context items...
     // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it
     // we need a better strategy to persist because the cost of storage and retrieval/parsing is higher than just running the query again in many/most cases

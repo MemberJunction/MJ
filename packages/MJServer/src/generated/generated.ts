@@ -9,7 +9,8 @@
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
-            AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp } from '@memberjunction/server';
+            AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
+            GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -227,31 +228,36 @@ export class RunScheduledActionViewResult {
 @Resolver(ScheduledAction_)
 export class ScheduledActionResolver extends ResolverBase {
     @Query(() => RunScheduledActionViewResult)
-    async RunScheduledActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunScheduledActionViewResult)
-    async RunScheduledActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunScheduledActionViewResult)
-    async RunScheduledActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Scheduled Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ScheduledAction_, { nullable: true })
-    async ScheduledAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledAction_ | null> {
+    async ScheduledAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledAction_ | null> {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ScheduledActionParam_])
-    async ScheduledActionParams_ScheduledActionIDArray(@Root() scheduledaction_: ScheduledAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ScheduledActionParams_ScheduledActionIDArray(@Root() scheduledaction_: ScheduledAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ScheduledActionID]='${scheduledaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL));
         return result;
@@ -260,23 +266,26 @@ export class ScheduledActionResolver extends ResolverBase {
     @Mutation(() => ScheduledAction_)
     async CreateScheduledAction(
         @Arg('input', () => CreateScheduledActionInput) input: CreateScheduledActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ScheduledAction_)
     async UpdateScheduledAction(
         @Arg('input', () => UpdateScheduledActionInput) input: UpdateScheduledActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Scheduled Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ScheduledAction_)
-    async DeleteScheduledAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteScheduledAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Scheduled Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -407,23 +416,27 @@ export class RunScheduledActionParamViewResult {
 @Resolver(ScheduledActionParam_)
 export class ScheduledActionParamResolver extends ResolverBase {
     @Query(() => RunScheduledActionParamViewResult)
-    async RunScheduledActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunScheduledActionParamViewResult)
-    async RunScheduledActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunScheduledActionParamViewResult)
-    async RunScheduledActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunScheduledActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Scheduled Action Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ScheduledActionParam_, { nullable: true })
-    async ScheduledActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledActionParam_ | null> {
+    async ScheduledActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledActionParam_ | null> {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -432,23 +445,26 @@ export class ScheduledActionParamResolver extends ResolverBase {
     @Mutation(() => ScheduledActionParam_)
     async CreateScheduledActionParam(
         @Arg('input', () => CreateScheduledActionParamInput) input: CreateScheduledActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Scheduled Action Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ScheduledActionParam_)
     async UpdateScheduledActionParam(
         @Arg('input', () => UpdateScheduledActionParamInput) input: UpdateScheduledActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Scheduled Action Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ScheduledActionParam_)
-    async DeleteScheduledActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteScheduledActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Scheduled Action Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -607,23 +623,27 @@ export class RunExplorerNavigationItemViewResult {
 @Resolver(ExplorerNavigationItem_)
 export class ExplorerNavigationItemResolver extends ResolverBase {
     @Query(() => RunExplorerNavigationItemViewResult)
-    async RunExplorerNavigationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunExplorerNavigationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunExplorerNavigationItemViewResult)
-    async RunExplorerNavigationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunExplorerNavigationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunExplorerNavigationItemViewResult)
-    async RunExplorerNavigationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunExplorerNavigationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Explorer Navigation Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ExplorerNavigationItem_, { nullable: true })
-    async ExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ExplorerNavigationItem_ | null> {
+    async ExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ExplorerNavigationItem_ | null> {
         this.CheckUserReadPermissions('Explorer Navigation Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwExplorerNavigationItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Explorer Navigation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Explorer Navigation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -632,23 +652,26 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
     @Mutation(() => ExplorerNavigationItem_)
     async CreateExplorerNavigationItem(
         @Arg('input', () => CreateExplorerNavigationItemInput) input: CreateExplorerNavigationItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Explorer Navigation Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ExplorerNavigationItem_)
     async UpdateExplorerNavigationItem(
         @Arg('input', () => UpdateExplorerNavigationItemInput) input: UpdateExplorerNavigationItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Explorer Navigation Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ExplorerNavigationItem_)
-    async DeleteExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteExplorerNavigationItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Explorer Navigation Items', key, options, dataSource, userPayload, pubSub);
     }
@@ -769,23 +792,27 @@ export class RunAIAgentModelViewResult {
 @Resolver(AIAgentModel_)
 export class AIAgentModelResolver extends ResolverBase {
     @Query(() => RunAIAgentModelViewResult)
-    async RunAIAgentModelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentModelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentModelViewResult)
-    async RunAIAgentModelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentModelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentModelViewResult)
-    async RunAIAgentModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Models';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentModel_, { nullable: true })
-    async AIAgentModel(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentModel_ | null> {
+    async AIAgentModel(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentModel_ | null> {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -794,23 +821,26 @@ export class AIAgentModelResolver extends ResolverBase {
     @Mutation(() => AIAgentModel_)
     async CreateAIAgentModel(
         @Arg('input', () => CreateAIAgentModelInput) input: CreateAIAgentModelInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Models', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentModel_)
     async UpdateAIAgentModel(
         @Arg('input', () => UpdateAIAgentModelInput) input: UpdateAIAgentModelInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Models', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentModel_)
-    async DeleteAIAgentModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Models', key, options, dataSource, userPayload, pubSub);
     }
@@ -907,31 +937,36 @@ export class RunAIAgentNoteTypeViewResult {
 @Resolver(AIAgentNoteType_)
 export class AIAgentNoteTypeResolver extends ResolverBase {
     @Query(() => RunAIAgentNoteTypeViewResult)
-    async RunAIAgentNoteTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentNoteTypeViewResult)
-    async RunAIAgentNoteTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentNoteTypeViewResult)
-    async RunAIAgentNoteTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Note Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentNoteType_, { nullable: true })
-    async AIAgentNoteType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNoteType_ | null> {
+    async AIAgentNoteType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNoteType_ | null> {
         this.CheckUserReadPermissions('AI Agent Note Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNoteTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Note Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Note Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIAgentNote_])
-    async AIAgentNotes_AgentNoteTypeIDArray(@Root() aiagentnotetype_: AIAgentNoteType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentNotes_AgentNoteTypeIDArray(@Root() aiagentnotetype_: AIAgentNoteType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentNoteTypeID]='${aiagentnotetype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
         return result;
@@ -940,23 +975,26 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
     @Mutation(() => AIAgentNoteType_)
     async CreateAIAgentNoteType(
         @Arg('input', () => CreateAIAgentNoteTypeInput) input: CreateAIAgentNoteTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Note Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentNoteType_)
     async UpdateAIAgentNoteType(
         @Arg('input', () => UpdateAIAgentNoteTypeInput) input: UpdateAIAgentNoteTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Note Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentNoteType_)
-    async DeleteAIAgentNoteType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentNoteType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Note Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -1075,63 +1113,72 @@ export class RunAIAgentViewResult {
 @Resolver(AIAgent_)
 export class AIAgentResolver extends ResolverBase {
     @Query(() => RunAIAgentViewResult)
-    async RunAIAgentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentViewResult)
-    async RunAIAgentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentViewResult)
-    async RunAIAgentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agents';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgent_, { nullable: true })
-    async AIAgent(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgent_ | null> {
+    async AIAgent(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgent_ | null> {
         this.CheckUserReadPermissions('AI Agents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIAgentRequest_])
-    async AIAgentRequests_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentRequests_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentLearningCycle_])
-    async AIAgentLearningCycles_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentLearningCycles_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Learning Cycles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentModel_])
-    async AIAgentModels_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentModels_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentAction_])
-    async AIAgentActions_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentActions_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentNote_])
-    async AIAgentNotes_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentNotes_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
         return result;
@@ -1140,23 +1187,26 @@ export class AIAgentResolver extends ResolverBase {
     @Mutation(() => AIAgent_)
     async CreateAIAgent(
         @Arg('input', () => CreateAIAgentInput) input: CreateAIAgentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgent_)
     async UpdateAIAgent(
         @Arg('input', () => UpdateAIAgentInput) input: UpdateAIAgentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agents', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgent_)
-    async DeleteAIAgent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agents', key, options, dataSource, userPayload, pubSub);
     }
@@ -1292,23 +1342,27 @@ export class RunAIAgentNoteViewResult {
 @Resolver(AIAgentNote_)
 export class AIAgentNoteResolver extends ResolverBase {
     @Query(() => RunAIAgentNoteViewResult)
-    async RunAIAgentNoteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentNoteViewResult)
-    async RunAIAgentNoteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentNoteViewResult)
-    async RunAIAgentNoteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentNoteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Notes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentNote_, { nullable: true })
-    async AIAgentNote(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNote_ | null> {
+    async AIAgentNote(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentNote_ | null> {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -1317,23 +1371,26 @@ export class AIAgentNoteResolver extends ResolverBase {
     @Mutation(() => AIAgentNote_)
     async CreateAIAgentNote(
         @Arg('input', () => CreateAIAgentNoteInput) input: CreateAIAgentNoteInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Notes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentNote_)
     async UpdateAIAgentNote(
         @Arg('input', () => UpdateAIAgentNoteInput) input: UpdateAIAgentNoteInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Notes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentNote_)
-    async DeleteAIAgentNote(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentNote(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Notes', key, options, dataSource, userPayload, pubSub);
     }
@@ -1446,23 +1503,27 @@ export class RunAIAgentActionViewResult {
 @Resolver(AIAgentAction_)
 export class AIAgentActionResolver extends ResolverBase {
     @Query(() => RunAIAgentActionViewResult)
-    async RunAIAgentActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentActionViewResult)
-    async RunAIAgentActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentActionViewResult)
-    async RunAIAgentActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentAction_, { nullable: true })
-    async AIAgentAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentAction_ | null> {
+    async AIAgentAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentAction_ | null> {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -1471,23 +1532,26 @@ export class AIAgentActionResolver extends ResolverBase {
     @Mutation(() => AIAgentAction_)
     async CreateAIAgentAction(
         @Arg('input', () => CreateAIAgentActionInput) input: CreateAIAgentActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentAction_)
     async UpdateAIAgentAction(
         @Arg('input', () => UpdateAIAgentActionInput) input: UpdateAIAgentActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentAction_)
-    async DeleteAIAgentAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -1673,31 +1737,36 @@ export class RunAIPromptViewResult {
 @Resolver(AIPrompt_)
 export class AIPromptResolver extends ResolverBase {
     @Query(() => RunAIPromptViewResult)
-    async RunAIPromptViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptViewResult)
-    async RunAIPromptViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptViewResult)
-    async RunAIPromptDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Prompts';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIPrompt_, { nullable: true })
-    async AIPrompt(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPrompt_ | null> {
+    async AIPrompt(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPrompt_ | null> {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIResultCache_])
-    async AIResultCache_AIPromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIResultCache_AIPromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIPromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
         return result;
@@ -1706,23 +1775,26 @@ export class AIPromptResolver extends ResolverBase {
     @Mutation(() => AIPrompt_)
     async CreateAIPrompt(
         @Arg('input', () => CreateAIPromptInput) input: CreateAIPromptInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Prompts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIPrompt_)
     async UpdateAIPrompt(
         @Arg('input', () => UpdateAIPromptInput) input: UpdateAIPromptInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Prompts', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIPrompt_)
-    async DeleteAIPrompt(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIPrompt(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Prompts', key, options, dataSource, userPayload, pubSub);
     }
@@ -1873,23 +1945,27 @@ export class RunAIResultCacheViewResult {
 @Resolver(AIResultCache_)
 export class AIResultCacheResolver extends ResolverBase {
     @Query(() => RunAIResultCacheViewResult)
-    async RunAIResultCacheViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIResultCacheViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIResultCacheViewResult)
-    async RunAIResultCacheViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIResultCacheViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIResultCacheViewResult)
-    async RunAIResultCacheDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIResultCacheDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Result Cache';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIResultCache_, { nullable: true })
-    async AIResultCache(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIResultCache_ | null> {
+    async AIResultCache(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIResultCache_ | null> {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -1898,23 +1974,26 @@ export class AIResultCacheResolver extends ResolverBase {
     @Mutation(() => AIResultCache_)
     async CreateAIResultCache(
         @Arg('input', () => CreateAIResultCacheInput) input: CreateAIResultCacheInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Result Cache', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIResultCache_)
     async UpdateAIResultCache(
         @Arg('input', () => UpdateAIResultCacheInput) input: UpdateAIResultCacheInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Result Cache', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIResultCache_)
-    async DeleteAIResultCache(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIResultCache(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Result Cache', key, options, dataSource, userPayload, pubSub);
     }
@@ -2028,39 +2107,45 @@ export class RunAIPromptCategoryViewResult {
 @Resolver(AIPromptCategory_)
 export class AIPromptCategoryResolver extends ResolverBase {
     @Query(() => RunAIPromptCategoryViewResult)
-    async RunAIPromptCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptCategoryViewResult)
-    async RunAIPromptCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptCategoryViewResult)
-    async RunAIPromptCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Prompt Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIPromptCategory_, { nullable: true })
-    async AIPromptCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptCategory_ | null> {
+    async AIPromptCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptCategory_ | null> {
         this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_CategoryIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIPrompts_CategoryIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [CategoryID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIPromptCategory_])
-    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIPromptCategories_ParentIDArray(@Root() aipromptcategory_: AIPromptCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompt Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptCategories] WHERE [ParentID]='${aipromptcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompt Categories', await dataSource.query(sSQL));
         return result;
@@ -2069,23 +2154,26 @@ export class AIPromptCategoryResolver extends ResolverBase {
     @Mutation(() => AIPromptCategory_)
     async CreateAIPromptCategory(
         @Arg('input', () => CreateAIPromptCategoryInput) input: CreateAIPromptCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Prompt Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIPromptCategory_)
     async UpdateAIPromptCategory(
         @Arg('input', () => UpdateAIPromptCategoryInput) input: UpdateAIPromptCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Prompt Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIPromptCategory_)
-    async DeleteAIPromptCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIPromptCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Prompt Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -2182,31 +2270,36 @@ export class RunAIPromptTypeViewResult {
 @Resolver(AIPromptType_)
 export class AIPromptTypeResolver extends ResolverBase {
     @Query(() => RunAIPromptTypeViewResult)
-    async RunAIPromptTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptTypeViewResult)
-    async RunAIPromptTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIPromptTypeViewResult)
-    async RunAIPromptTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIPromptTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Prompt Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIPromptType_, { nullable: true })
-    async AIPromptType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptType_ | null> {
+    async AIPromptType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIPromptType_ | null> {
         this.CheckUserReadPermissions('AI Prompt Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompt Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Prompt Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_TypeIDArray(@Root() aiprompttype_: AIPromptType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIPrompts_TypeIDArray(@Root() aiprompttype_: AIPromptType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TypeID]='${aiprompttype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
         return result;
@@ -2215,23 +2308,26 @@ export class AIPromptTypeResolver extends ResolverBase {
     @Mutation(() => AIPromptType_)
     async CreateAIPromptType(
         @Arg('input', () => CreateAIPromptTypeInput) input: CreateAIPromptTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Prompt Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIPromptType_)
     async UpdateAIPromptType(
         @Arg('input', () => UpdateAIPromptTypeInput) input: UpdateAIPromptTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Prompt Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIPromptType_)
-    async DeleteAIPromptType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIPromptType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Prompt Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -2365,55 +2461,63 @@ export class RunCompanyViewResult {
 @Resolver(Company_)
 export class CompanyResolver extends ResolverBase {
     @Query(() => RunCompanyViewResult)
-    async RunCompanyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyViewResult)
-    async RunCompanyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyViewResult)
-    async RunCompanyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Companies';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Company_, { nullable: true })
-    async Company(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
+    async Company(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
         this.CheckUserReadPermissions('Companies', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanies] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Company_])
-    async AllCompanies(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllCompanies(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Companies', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanies]` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [Workflow_])
-    async Workflows_CompanyNameArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Workflows_CompanyNameArray(@Root() company_: Company_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegration_])
-    async CompanyIntegrations_CompanyNameArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrations_CompanyNameArray(@Root() company_: Company_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [CompanyName]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Employee_])
-    async Employees_CompanyIDArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Employees_CompanyIDArray(@Root() company_: Company_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [CompanyID]='${company_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
@@ -2422,23 +2526,26 @@ export class CompanyResolver extends ResolverBase {
     @Mutation(() => Company_)
     async CreateCompany(
         @Arg('input', () => CreateCompanyInput) input: CreateCompanyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Companies', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Company_)
     async UpdateCompany(
         @Arg('input', () => UpdateCompanyInput) input: UpdateCompanyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Companies', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Company_)
-    async DeleteCompany(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompany(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Companies', key, options, dataSource, userPayload, pubSub);
     }
@@ -2631,71 +2738,81 @@ export class RunEmployeeViewResult {
 @Resolver(Employee_)
 export class EmployeeResolver extends ResolverBase {
     @Query(() => RunEmployeeViewResult)
-    async RunEmployeeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeViewResult)
-    async RunEmployeeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeViewResult)
-    async RunEmployeeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Employees';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Employee_, { nullable: true })
-    async Employee(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
+    async Employee(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
         this.CheckUserReadPermissions('Employees', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Employee_])
-    async AllEmployees(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEmployees(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees]` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [User_])
-    async Users_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Users_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EmployeeSkill_])
-    async EmployeeSkills_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeSkills_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EmployeeCompanyIntegration_])
-    async EmployeeCompanyIntegrations_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeCompanyIntegrations_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Employee_])
-    async Employees_SupervisorIDArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Employees_SupervisorIDArray(@Root() employee_: Employee_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployees] WHERE [SupervisorID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EmployeeRole_])
-    async EmployeeRoles_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeRoles_EmployeeIDArray(@Root() employee_: Employee_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [EmployeeID]='${employee_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
@@ -2704,23 +2821,26 @@ export class EmployeeResolver extends ResolverBase {
     @Mutation(() => Employee_)
     async CreateEmployee(
         @Arg('input', () => CreateEmployeeInput) input: CreateEmployeeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Employees', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Employee_)
     async UpdateEmployee(
         @Arg('input', () => UpdateEmployeeInput) input: UpdateEmployeeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Employees', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Employee_)
-    async DeleteEmployee(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployee(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Employees', key, options, dataSource, userPayload, pubSub);
     }
@@ -2837,23 +2957,27 @@ export class RunUserFavoriteViewResult {
 @Resolver(UserFavorite_)
 export class UserFavoriteResolverBase extends ResolverBase {
     @Query(() => RunUserFavoriteViewResult)
-    async RunUserFavoriteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserFavoriteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserFavoriteViewResult)
-    async RunUserFavoriteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserFavoriteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserFavoriteViewResult)
-    async RunUserFavoriteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserFavoriteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Favorites';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserFavorite_, { nullable: true })
-    async UserFavorite(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
+    async UserFavorite(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
         this.CheckUserReadPermissions('User Favorites', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -2862,23 +2986,26 @@ export class UserFavoriteResolverBase extends ResolverBase {
     @Mutation(() => UserFavorite_)
     async CreateUserFavorite(
         @Arg('input', () => CreateUserFavoriteInput) input: CreateUserFavoriteInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Favorites', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserFavorite_)
     async UpdateUserFavorite(
         @Arg('input', () => UpdateUserFavoriteInput) input: UpdateUserFavoriteInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Favorites', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserFavorite_)
-    async DeleteUserFavorite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserFavorite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Favorites', key, options, dataSource, userPayload, pubSub);
     }
@@ -2973,23 +3100,27 @@ export class RunEmployeeCompanyIntegrationViewResult {
 @Resolver(EmployeeCompanyIntegration_)
 export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     @Query(() => RunEmployeeCompanyIntegrationViewResult)
-    async RunEmployeeCompanyIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeCompanyIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeCompanyIntegrationViewResult)
-    async RunEmployeeCompanyIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeCompanyIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeCompanyIntegrationViewResult)
-    async RunEmployeeCompanyIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeCompanyIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Employee Company Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeCompanyIntegration_, { nullable: true })
-    async EmployeeCompanyIntegration(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
+    async EmployeeCompanyIntegration(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -2998,9 +3129,10 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     @Mutation(() => EmployeeCompanyIntegration_)
     async UpdateEmployeeCompanyIntegration(
         @Arg('input', () => UpdateEmployeeCompanyIntegrationInput) input: UpdateEmployeeCompanyIntegrationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Employee Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
@@ -3085,23 +3217,27 @@ export class RunEmployeeRoleViewResult {
 @Resolver(EmployeeRole_)
 export class EmployeeRoleResolver extends ResolverBase {
     @Query(() => RunEmployeeRoleViewResult)
-    async RunEmployeeRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeRoleViewResult)
-    async RunEmployeeRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeRoleViewResult)
-    async RunEmployeeRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Employee Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeRole_, { nullable: true })
-    async EmployeeRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
+    async EmployeeRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -3110,14 +3246,16 @@ export class EmployeeRoleResolver extends ResolverBase {
     @Mutation(() => EmployeeRole_)
     async UpdateEmployeeRole(
         @Arg('input', () => UpdateEmployeeRoleInput) input: UpdateEmployeeRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Employee Roles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EmployeeRole_)
-    async DeleteEmployeeRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployeeRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Employee Roles', key, options, dataSource, userPayload, pubSub);
     }
@@ -3203,23 +3341,27 @@ export class RunEmployeeSkillViewResult {
 @Resolver(EmployeeSkill_)
 export class EmployeeSkillResolver extends ResolverBase {
     @Query(() => RunEmployeeSkillViewResult)
-    async RunEmployeeSkillViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeSkillViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeSkillViewResult)
-    async RunEmployeeSkillViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeSkillViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEmployeeSkillViewResult)
-    async RunEmployeeSkillDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEmployeeSkillDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Employee Skills';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeSkill_, { nullable: true })
-    async EmployeeSkill(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
+    async EmployeeSkill(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -3228,14 +3370,16 @@ export class EmployeeSkillResolver extends ResolverBase {
     @Mutation(() => EmployeeSkill_)
     async UpdateEmployeeSkill(
         @Arg('input', () => UpdateEmployeeSkillInput) input: UpdateEmployeeSkillInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Employee Skills', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EmployeeSkill_)
-    async DeleteEmployeeSkill(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployeeSkill(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Employee Skills', key, options, dataSource, userPayload, pubSub);
     }
@@ -3367,79 +3511,90 @@ export class RunRoleViewResult {
 @Resolver(Role_)
 export class RoleResolver extends ResolverBase {
     @Query(() => RunRoleViewResult)
-    async RunRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRoleViewResult)
-    async RunRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRoleViewResult)
-    async RunRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Role_, { nullable: true })
-    async Role(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
+    async Role(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
         this.CheckUserReadPermissions('Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Role_])
-    async AllRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllRoles(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRoles]` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [UserRole_])
-    async UserRoles_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserRoles_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AuthorizationRole_])
-    async AuthorizationRoles_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuthorizationRoles_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityPermission_])
-    async EntityPermissions_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityPermissions_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryPermission_])
-    async QueryPermissions_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryPermissions_RoleNameArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [RoleName]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EmployeeRole_])
-    async EmployeeRoles_RoleIDArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeRoles_RoleIDArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeRoles] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourcePermission_])
-    async ResourcePermissions_RoleIDArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourcePermissions_RoleIDArray(@Root() role_: Role_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [RoleID]='${role_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
@@ -3448,23 +3603,26 @@ export class RoleResolver extends ResolverBase {
     @Mutation(() => Role_)
     async CreateRole(
         @Arg('input', () => CreateRoleInput) input: CreateRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Role_)
     async UpdateRole(
         @Arg('input', () => UpdateRoleInput) input: UpdateRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Roles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Role_)
-    async DeleteRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Roles', key, options, dataSource, userPayload, pubSub);
     }
@@ -3537,47 +3695,54 @@ export class RunSkillViewResult {
 @Resolver(Skill_)
 export class SkillResolver extends ResolverBase {
     @Query(() => RunSkillViewResult)
-    async RunSkillViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSkillViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunSkillViewResult)
-    async RunSkillViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSkillViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunSkillViewResult)
-    async RunSkillDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSkillDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Skills';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Skill_, { nullable: true })
-    async Skill(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
+    async Skill(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
         this.CheckUserReadPermissions('Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Skill_])
-    async AllSkills(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllSkills(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills]` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [EmployeeSkill_])
-    async EmployeeSkills_SkillIDArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeSkills_SkillIDArray(@Root() skill_: Skill_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeSkills] WHERE [SkillID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Skill_])
-    async Skills_ParentIDArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Skills_ParentIDArray(@Root() skill_: Skill_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSkills] WHERE [ParentID]='${skill_.ID}' ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
@@ -3685,31 +3850,36 @@ export class RunIntegrationURLFormatViewResult {
 @Resolver(IntegrationURLFormat_)
 export class IntegrationURLFormatResolver extends ResolverBase {
     @Query(() => RunIntegrationURLFormatViewResult)
-    async RunIntegrationURLFormatViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationURLFormatViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunIntegrationURLFormatViewResult)
-    async RunIntegrationURLFormatViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationURLFormatViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunIntegrationURLFormatViewResult)
-    async RunIntegrationURLFormatDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationURLFormatDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Integration URL Formats';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => IntegrationURLFormat_, { nullable: true })
-    async IntegrationURLFormat(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
+    async IntegrationURLFormat(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [IntegrationURLFormat_])
-    async AllIntegrationURLFormats(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllIntegrationURLFormats(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats]` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
@@ -3718,14 +3888,16 @@ export class IntegrationURLFormatResolver extends ResolverBase {
     @Mutation(() => IntegrationURLFormat_)
     async UpdateIntegrationURLFormat(
         @Arg('input', () => UpdateIntegrationURLFormatInput) input: UpdateIntegrationURLFormatInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Integration URL Formats', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => IntegrationURLFormat_)
-    async DeleteIntegrationURLFormat(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteIntegrationURLFormat(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Integration URL Formats', key, options, dataSource, userPayload, pubSub);
     }
@@ -3849,55 +4021,63 @@ export class RunIntegrationViewResult {
 @Resolver(Integration_)
 export class IntegrationResolver extends ResolverBase {
     @Query(() => RunIntegrationViewResult)
-    async RunIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunIntegrationViewResult)
-    async RunIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunIntegrationViewResult)
-    async RunIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Integration_, { nullable: true })
-    async Integration(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
+    async Integration(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
         this.CheckUserReadPermissions('Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Integration_])
-    async AllIntegrations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllIntegrations(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrations]` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [IntegrationURLFormat_])
-    async IntegrationURLFormats_IntegrationIDArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async IntegrationURLFormats_IntegrationIDArray(@Root() integration_: Integration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegration_])
-    async CompanyIntegrations_IntegrationNameArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrations_IntegrationNameArray(@Root() integration_: Integration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [IntegrationName]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordChange_])
-    async RecordChanges_IntegrationIDArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordChanges_IntegrationIDArray(@Root() integration_: Integration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [IntegrationID]='${integration_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
@@ -3906,14 +4086,16 @@ export class IntegrationResolver extends ResolverBase {
     @Mutation(() => Integration_)
     async UpdateIntegration(
         @Arg('input', () => UpdateIntegrationInput) input: UpdateIntegrationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Integrations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Integration_)
-    async DeleteIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Integrations', key, options, dataSource, userPayload, pubSub);
     }
@@ -4103,55 +4285,63 @@ export class RunCompanyIntegrationViewResult {
 @Resolver(CompanyIntegration_)
 export class CompanyIntegrationResolver extends ResolverBase {
     @Query(() => RunCompanyIntegrationViewResult)
-    async RunCompanyIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationViewResult)
-    async RunCompanyIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationViewResult)
-    async RunCompanyIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Company Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegration_, { nullable: true })
-    async CompanyIntegration(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
+    async CompanyIntegration(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
-    async CompanyIntegrationRecordMaps_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRecordMaps_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [List_])
-    async Lists_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Lists_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRun_])
-    async CompanyIntegrationRuns_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRuns_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EmployeeCompanyIntegration_])
-    async EmployeeCompanyIntegrations_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EmployeeCompanyIntegrations_CompanyIntegrationIDArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEmployeeCompanyIntegrations] WHERE [CompanyIntegrationID]='${companyintegration_.ID}' ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
@@ -4160,14 +4350,16 @@ export class CompanyIntegrationResolver extends ResolverBase {
     @Mutation(() => CompanyIntegration_)
     async UpdateCompanyIntegration(
         @Arg('input', () => UpdateCompanyIntegrationInput) input: UpdateCompanyIntegrationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => CompanyIntegration_)
-    async DeleteCompanyIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompanyIntegration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Company Integrations', key, options, dataSource, userPayload, pubSub);
     }
@@ -4601,39 +4793,45 @@ export class RunEntityFieldViewResult {
 @Resolver(EntityField_)
 export class EntityFieldResolver extends ResolverBase {
     @Query(() => RunEntityFieldViewResult)
-    async RunEntityFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityFieldViewResult)
-    async RunEntityFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityFieldViewResult)
-    async RunEntityFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Fields';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityField_, { nullable: true })
-    async EntityField(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
+    async EntityField(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [EntityField_])
-    async AllEntityFields(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityFields(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields]` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [EntityFieldValue_])
-    async EntityFieldValues_EntityFieldIDArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityFieldValues_EntityFieldIDArray(@Root() entityfield_: EntityField_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [EntityFieldID]='${entityfield_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
@@ -4642,23 +4840,26 @@ export class EntityFieldResolver extends ResolverBase {
     @Mutation(() => EntityField_)
     async CreateEntityField(
         @Arg('input', () => CreateEntityFieldInput) input: CreateEntityFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityField_)
     async UpdateEntityField(
         @Arg('input', () => UpdateEntityFieldInput) input: UpdateEntityFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Fields', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
@@ -5313,319 +5514,360 @@ export class RunEntityViewResult {
 @Resolver(Entity_)
 export class EntityResolverBase extends ResolverBase {
     @Query(() => RunEntityViewResult)
-    async RunEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityViewResult)
-    async RunEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityViewResult)
-    async RunEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Entity_, { nullable: true })
-    async Entity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
+    async Entity(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
         this.CheckUserReadPermissions('Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Entity_])
-    async AllEntities(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntities(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities]` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AuditLog_])
-    async AuditLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TemplateParam_])
-    async TemplateParams_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateParams_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DatasetItem_])
-    async DatasetItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DatasetItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [User_])
-    async Users_LinkedEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Users_LinkedEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
-    async CompanyIntegrationRecordMaps_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRecordMaps_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Entity_])
-    async Entities_ParentIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Entities_ParentIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntities] WHERE [ParentID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserViewCategory_])
-    async UserViewCategories_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewCategories_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityAIActions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityAction_])
-    async EntityActions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Conversation_])
-    async Conversations_LinkedEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Conversations_LinkedEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DuplicateRun_])
-    async DuplicateRuns_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRuns_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TaggedItem_])
-    async TaggedItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TaggedItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordMergeLog_])
-    async RecordMergeLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordMergeLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserApplicationEntity_])
-    async UserApplicationEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserApplicationEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryField_])
-    async QueryFields_SourceEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryFields_SourceEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserView_])
-    async UserViews_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViews_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecommendationItem_])
-    async RecommendationItems_DestinationEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecommendationItems_DestinationEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [DestinationEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityPermission_])
-    async EntityPermissions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityPermissions_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [List_])
-    async Lists_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Lists_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserRecordLog_])
-    async UserRecordLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserRecordLogs_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityDocument_])
-    async EntityDocuments_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocuments_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Recommendation_])
-    async Recommendations_SourceEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Recommendations_SourceEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [SourceEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [FileEntityRecordLink_])
-    async FileEntityRecordLinks_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async FileEntityRecordLinks_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntitySetting_])
-    async EntitySettings_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntitySettings_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityRelationship_])
-    async EntityRelationships_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRelationships_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
-    async CompanyIntegrationRunDetails_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRunDetails_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DataContextItem_])
-    async DataContextItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DataContextItems_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [IntegrationURLFormat_])
-    async IntegrationURLFormats_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async IntegrationURLFormats_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwIntegrationURLFormats] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityField_])
-    async EntityFields_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityFields_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFields] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserFavorite_])
-    async UserFavorites_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserFavorites_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityCommunicationMessageType_])
-    async EntityCommunicationMessageTypes_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityCommunicationMessageTypes_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityRecordDocument_])
-    async EntityRecordDocuments_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRecordDocuments_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordChange_])
-    async RecordChanges_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordChanges_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ApplicationEntity_])
-    async ApplicationEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ApplicationEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourceType_])
-    async ResourceTypes_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourceTypes_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryEntity_])
-    async QueryEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryEntities_EntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL));
         return result;
@@ -5634,23 +5876,26 @@ export class EntityResolverBase extends ResolverBase {
     @Mutation(() => Entity_)
     async CreateEntity(
         @Arg('input', () => CreateEntityInput) input: CreateEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Entity_)
     async UpdateEntity(
         @Arg('input', () => UpdateEntityInput) input: UpdateEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Entity_)
-    async DeleteEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entities', key, options, dataSource, userPayload, pubSub);
     }
@@ -5969,327 +6214,369 @@ export class RunUserViewResult {
 @Resolver(User_)
 export class UserResolverBase extends ResolverBase {
     @Query(() => RunUserViewResult)
-    async RunUserViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewResult)
-    async RunUserViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewResult)
-    async RunUserDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Users';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => User_, { nullable: true })
-    async User(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
+    async User(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
         this.CheckUserReadPermissions('Users', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [User_])
-    async AllUsers(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUsers(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUsers]` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [RecommendationRun_])
-    async RecommendationRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecommendationRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserApplication_])
-    async UserApplications_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserApplications_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Dashboard_])
-    async Dashboards_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Dashboards_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordChange_])
-    async RecordChanges_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordChanges_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Report_])
-    async Reports_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DashboardCategory_])
-    async DashboardCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DashboardCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Action_])
-    async Actions_CodeApprovedByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Actions_CodeApprovedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryCategory_])
-    async QueryCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserViewCategory_])
-    async UserViewCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DataContext_])
-    async DataContexts_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DataContexts_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordMergeLog_])
-    async RecordMergeLogs_InitiatedByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordMergeLogs_InitiatedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [InitiatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRun_])
-    async CompanyIntegrationRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ReportCategory_])
-    async ReportCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ReportCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [RecordChangeReplayRun_])
-    async RecordChangeReplayRuns_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordChangeReplayRuns_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserRole_])
-    async UserRoles_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserRoles_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserViewRun_])
-    async UserViewRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewRuns_RunByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [RunByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Workspace_])
-    async Workspaces_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Workspaces_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Conversation_])
-    async Conversations_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Conversations_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [List_])
-    async Lists_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Lists_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CommunicationRun_])
-    async CommunicationRuns_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationRuns_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionExecutionLog_])
-    async ActionExecutionLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionExecutionLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AuditLog_])
-    async AuditLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ReportSnapshot_])
-    async ReportSnapshots_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ReportSnapshots_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserView_])
-    async UserViews_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViews_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TemplateCategory_])
-    async TemplateCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DuplicateRun_])
-    async DuplicateRuns_StartedByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRuns_StartedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserRecordLog_])
-    async UserRecordLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserRecordLogs_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserNotification_])
-    async UserNotifications_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserNotifications_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Template_])
-    async Templates_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Templates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Templates', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserFavorite_])
-    async UserFavorites_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserFavorites_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserFavorites] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ListCategory_])
-    async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ScheduledAction_])
-    async ScheduledActions_CreatedByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ScheduledActions_CreatedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentRequest_])
-    async AIAgentRequests_ResponseByUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentRequests_ResponseByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ResponseByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentNote_])
-    async AIAgentNotes_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentNotes_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Notes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourcePermission_])
-    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentRequest_])
-    async AIAgentRequests_RequestForUserIDArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentRequests_RequestForUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [RequestForUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL));
         return result;
@@ -6298,23 +6585,26 @@ export class UserResolverBase extends ResolverBase {
     @Mutation(() => User_)
     async CreateUser(
         @Arg('input', () => CreateUserInput) input: CreateUserInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Users', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => User_)
     async UpdateUser(
         @Arg('input', () => UpdateUserInput) input: UpdateUserInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Users', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => User_)
-    async DeleteUser(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUser(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
@@ -6614,31 +6904,36 @@ export class RunEntityRelationshipViewResult {
 @Resolver(EntityRelationship_)
 export class EntityRelationshipResolver extends ResolverBase {
     @Query(() => RunEntityRelationshipViewResult)
-    async RunEntityRelationshipViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRelationshipViewResult)
-    async RunEntityRelationshipViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRelationshipViewResult)
-    async RunEntityRelationshipDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Relationships';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityRelationship_, { nullable: true })
-    async EntityRelationship(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
+    async EntityRelationship(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [EntityRelationship_])
-    async AllEntityRelationships(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityRelationships(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships]` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
@@ -6647,23 +6942,26 @@ export class EntityRelationshipResolver extends ResolverBase {
     @Mutation(() => EntityRelationship_)
     async CreateEntityRelationship(
         @Arg('input', () => CreateEntityRelationshipInput) input: CreateEntityRelationshipInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Relationships', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRelationship_)
     async UpdateEntityRelationship(
         @Arg('input', () => UpdateEntityRelationshipInput) input: UpdateEntityRelationshipInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Relationships', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityRelationship_)
-    async DeleteEntityRelationship(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityRelationship(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Relationships', key, options, dataSource, userPayload, pubSub);
     }
@@ -6796,23 +7094,27 @@ export class RunUserRecordLogViewResult {
 @Resolver(UserRecordLog_)
 export class UserRecordLogResolver extends ResolverBase {
     @Query(() => RunUserRecordLogViewResult)
-    async RunUserRecordLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRecordLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserRecordLogViewResult)
-    async RunUserRecordLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRecordLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserRecordLogViewResult)
-    async RunUserRecordLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRecordLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Record Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserRecordLog_, { nullable: true })
-    async UserRecordLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
+    async UserRecordLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRecordLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -6821,9 +7123,10 @@ export class UserRecordLogResolver extends ResolverBase {
     @Mutation(() => UserRecordLog_)
     async UpdateUserRecordLog(
         @Arg('input', () => UpdateUserRecordLogInput) input: UpdateUserRecordLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Record Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -7087,55 +7390,63 @@ export class RunUserViewViewResult {
 @Resolver(UserView_)
 export class UserViewResolverBase extends ResolverBase {
     @Query(() => RunUserViewViewResult)
-    async RunUserViewViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewViewResult)
-    async RunUserViewViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewViewResult)
-    async RunUserViewDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Views';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserView_, { nullable: true })
-    async UserView(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
+    async UserView(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
         this.CheckUserReadPermissions('User Views', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [UserView_])
-    async AllUserViews(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUserViews(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews]` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [DataContextItem_])
-    async DataContextItems_ViewIDArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DataContextItems_ViewIDArray(@Root() userview_: UserView_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [ViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserViewRun_])
-    async UserViewRuns_UserViewIDArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewRuns_UserViewIDArray(@Root() userview_: UserView_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [UserViewID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityRelationship_])
-    async EntityRelationships_DisplayUserViewGUIDArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRelationships_DisplayUserViewGUIDArray(@Root() userview_: UserView_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayUserViewGUID]='${userview_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
@@ -7144,23 +7455,26 @@ export class UserViewResolverBase extends ResolverBase {
     @Mutation(() => UserView_)
     async CreateUserView(
         @Arg('input', () => CreateUserViewInput) input: CreateUserViewInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Views', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserView_)
     async UpdateUserView(
         @Arg('input', () => UpdateUserViewInput) input: UpdateUserViewInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Views', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserView_)
-    async DeleteUserView(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserView(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Views', key, options, dataSource, userPayload, pubSub);
     }
@@ -7342,47 +7656,54 @@ export class RunCompanyIntegrationRunViewResult {
 @Resolver(CompanyIntegrationRun_)
 export class CompanyIntegrationRunResolver extends ResolverBase {
     @Query(() => RunCompanyIntegrationRunViewResult)
-    async RunCompanyIntegrationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunViewResult)
-    async RunCompanyIntegrationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunViewResult)
-    async RunCompanyIntegrationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Company Integration Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRun_, { nullable: true })
-    async CompanyIntegrationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
+    async CompanyIntegrationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ErrorLog_])
-    async ErrorLogs_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ErrorLogs_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
-    async CompanyIntegrationRunDetails_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRunDetails_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CompanyIntegrationRunAPILog_])
-    async CompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CompanyIntegrationRunAPILogs_CompanyIntegrationRunIDArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunAPILogs] WHERE [CompanyIntegrationRunID]='${companyintegrationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL));
         return result;
@@ -7391,18 +7712,20 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
     @Mutation(() => CompanyIntegrationRun_)
     async CreateCompanyIntegrationRun(
         @Arg('input', () => CreateCompanyIntegrationRunInput) input: CreateCompanyIntegrationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Company Integration Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRun_)
     async UpdateCompanyIntegrationRun(
         @Arg('input', () => UpdateCompanyIntegrationRunInput) input: UpdateCompanyIntegrationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integration Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -7550,31 +7873,36 @@ export class RunCompanyIntegrationRunDetailViewResult {
 @Resolver(CompanyIntegrationRunDetail_)
 export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     @Query(() => RunCompanyIntegrationRunDetailViewResult)
-    async RunCompanyIntegrationRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunDetailViewResult)
-    async RunCompanyIntegrationRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunDetailViewResult)
-    async RunCompanyIntegrationRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Company Integration Run Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRunDetail_, { nullable: true })
-    async CompanyIntegrationRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
+    async CompanyIntegrationRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ErrorLog_])
-    async ErrorLogs_CompanyIntegrationRunDetailIDArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ErrorLogs_CompanyIntegrationRunDetailIDArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [CompanyIntegrationRunDetailID]='${companyintegrationrundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
@@ -7583,18 +7911,20 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     @Mutation(() => CompanyIntegrationRunDetail_)
     async CreateCompanyIntegrationRunDetail(
         @Arg('input', () => CreateCompanyIntegrationRunDetailInput) input: CreateCompanyIntegrationRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Company Integration Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRunDetail_)
     async UpdateCompanyIntegrationRunDetail(
         @Arg('input', () => UpdateCompanyIntegrationRunDetailInput) input: UpdateCompanyIntegrationRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integration Run Details', input, dataSource, userPayload, pubSub);
     }
     
@@ -7746,23 +8076,27 @@ export class RunErrorLogViewResult {
 @Resolver(ErrorLog_)
 export class ErrorLogResolver extends ResolverBase {
     @Query(() => RunErrorLogViewResult)
-    async RunErrorLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunErrorLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunErrorLogViewResult)
-    async RunErrorLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunErrorLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunErrorLogViewResult)
-    async RunErrorLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunErrorLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Error Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ErrorLog_, { nullable: true })
-    async ErrorLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
+    async ErrorLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
         this.CheckUserReadPermissions('Error Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwErrorLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -7771,18 +8105,20 @@ export class ErrorLogResolver extends ResolverBase {
     @Mutation(() => ErrorLog_)
     async CreateErrorLog(
         @Arg('input', () => CreateErrorLogInput) input: CreateErrorLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Error Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ErrorLog_)
     async UpdateErrorLog(
         @Arg('input', () => UpdateErrorLogInput) input: UpdateErrorLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Error Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -7903,55 +8239,63 @@ export class RunApplicationViewResult {
 @Resolver(Application_)
 export class ApplicationResolver extends ResolverBase {
     @Query(() => RunApplicationViewResult)
-    async RunApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationViewResult)
-    async RunApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationViewResult)
-    async RunApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Applications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Application_, { nullable: true })
-    async Application(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
+    async Application(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
         this.CheckUserReadPermissions('Applications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Application_])
-    async AllApplications(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllApplications(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Applications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplications]` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [ApplicationSetting_])
-    async ApplicationSettings_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ApplicationSettings_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserApplication_])
-    async UserApplications_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserApplications_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ApplicationEntity_])
-    async ApplicationEntities_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ApplicationEntities_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
@@ -7960,23 +8304,26 @@ export class ApplicationResolver extends ResolverBase {
     @Mutation(() => Application_)
     async CreateApplication(
         @Arg('input', () => CreateApplicationInput) input: CreateApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Application_)
     async UpdateApplication(
         @Arg('input', () => UpdateApplicationInput) input: UpdateApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Application_)
-    async DeleteApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Applications', key, options, dataSource, userPayload, pubSub);
     }
@@ -8110,23 +8457,27 @@ export class RunApplicationEntityViewResult {
 @Resolver(ApplicationEntity_)
 export class ApplicationEntityResolver extends ResolverBase {
     @Query(() => RunApplicationEntityViewResult)
-    async RunApplicationEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationEntityViewResult)
-    async RunApplicationEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationEntityViewResult)
-    async RunApplicationEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Application Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ApplicationEntity_, { nullable: true })
-    async ApplicationEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
+    async ApplicationEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
         this.CheckUserReadPermissions('Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -8135,23 +8486,26 @@ export class ApplicationEntityResolver extends ResolverBase {
     @Mutation(() => ApplicationEntity_)
     async CreateApplicationEntity(
         @Arg('input', () => CreateApplicationEntityInput) input: CreateApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationEntity_)
     async UpdateApplicationEntity(
         @Arg('input', () => UpdateApplicationEntityInput) input: UpdateApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationEntity_)
-    async DeleteApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Application Entities', key, options, dataSource, userPayload, pubSub);
     }
@@ -8350,31 +8704,36 @@ export class RunEntityPermissionViewResult {
 @Resolver(EntityPermission_)
 export class EntityPermissionResolver extends ResolverBase {
     @Query(() => RunEntityPermissionViewResult)
-    async RunEntityPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityPermissionViewResult)
-    async RunEntityPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityPermissionViewResult)
-    async RunEntityPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Permissions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityPermission_, { nullable: true })
-    async EntityPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
+    async EntityPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [EntityPermission_])
-    async AllEntityPermissions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityPermissions(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions]` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
@@ -8383,23 +8742,26 @@ export class EntityPermissionResolver extends ResolverBase {
     @Mutation(() => EntityPermission_)
     async CreateEntityPermission(
         @Arg('input', () => CreateEntityPermissionInput) input: CreateEntityPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityPermission_)
     async UpdateEntityPermission(
         @Arg('input', () => UpdateEntityPermissionInput) input: UpdateEntityPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Permissions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityPermission_)
-    async DeleteEntityPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Permissions', key, options, dataSource, userPayload, pubSub);
     }
@@ -8515,23 +8877,27 @@ export class RunUserApplicationEntityViewResult {
 @Resolver(UserApplicationEntity_)
 export class UserApplicationEntityResolver extends ResolverBase {
     @Query(() => RunUserApplicationEntityViewResult)
-    async RunUserApplicationEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserApplicationEntityViewResult)
-    async RunUserApplicationEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserApplicationEntityViewResult)
-    async RunUserApplicationEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Application Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserApplicationEntity_, { nullable: true })
-    async UserApplicationEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
+    async UserApplicationEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -8540,23 +8906,26 @@ export class UserApplicationEntityResolver extends ResolverBase {
     @Mutation(() => UserApplicationEntity_)
     async CreateUserApplicationEntity(
         @Arg('input', () => CreateUserApplicationEntityInput) input: CreateUserApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplicationEntity_)
     async UpdateUserApplicationEntity(
         @Arg('input', () => UpdateUserApplicationEntityInput) input: UpdateUserApplicationEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplicationEntity_)
-    async DeleteUserApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplicationEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Application Entities', key, options, dataSource, userPayload, pubSub);
     }
@@ -8680,31 +9049,36 @@ export class RunUserApplicationViewResult {
 @Resolver(UserApplication_)
 export class UserApplicationResolver extends ResolverBase {
     @Query(() => RunUserApplicationViewResult)
-    async RunUserApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserApplicationViewResult)
-    async RunUserApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserApplicationViewResult)
-    async RunUserApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserApplicationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Applications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserApplication_, { nullable: true })
-    async UserApplication(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
+    async UserApplication(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
         this.CheckUserReadPermissions('User Applications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [UserApplicationEntity_])
-    async UserApplicationEntities_UserApplicationIDArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserApplicationEntities_UserApplicationIDArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplicationEntities] WHERE [UserApplicationID]='${userapplication_.ID}' ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
@@ -8713,23 +9087,26 @@ export class UserApplicationResolver extends ResolverBase {
     @Mutation(() => UserApplication_)
     async CreateUserApplication(
         @Arg('input', () => CreateUserApplicationInput) input: CreateUserApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplication_)
     async UpdateUserApplication(
         @Arg('input', () => UpdateUserApplicationInput) input: UpdateUserApplicationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplication_)
-    async DeleteUserApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplication(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Applications', key, options, dataSource, userPayload, pubSub);
     }
@@ -8861,23 +9238,27 @@ export class RunCompanyIntegrationRunAPILogViewResult {
 @Resolver(CompanyIntegrationRunAPILog_)
 export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
     @Query(() => RunCompanyIntegrationRunAPILogViewResult)
-    async RunCompanyIntegrationRunAPILogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunAPILogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunAPILogViewResult)
-    async RunCompanyIntegrationRunAPILogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunAPILogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRunAPILogViewResult)
-    async RunCompanyIntegrationRunAPILogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRunAPILogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Company Integration Run API Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRunAPILog_, { nullable: true })
-    async CompanyIntegrationRunAPILog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
+    async CompanyIntegrationRunAPILog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRunAPILogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -8886,18 +9267,20 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
     @Mutation(() => CompanyIntegrationRunAPILog_)
     async CreateCompanyIntegrationRunAPILog(
         @Arg('input', () => CreateCompanyIntegrationRunAPILogInput) input: CreateCompanyIntegrationRunAPILogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Company Integration Run API Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRunAPILog_)
     async UpdateCompanyIntegrationRunAPILog(
         @Arg('input', () => UpdateCompanyIntegrationRunAPILogInput) input: UpdateCompanyIntegrationRunAPILogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integration Run API Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -9058,39 +9441,45 @@ export class RunListViewResult {
 @Resolver(List_)
 export class ListResolver extends ResolverBase {
     @Query(() => RunListViewResult)
-    async RunListViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListViewResult)
-    async RunListViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListViewResult)
-    async RunListDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Lists';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => List_, { nullable: true })
-    async List(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
+    async List(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
         this.CheckUserReadPermissions('Lists', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ListDetail_])
-    async ListDetails_ListIDArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ListDetails_ListIDArray(@Root() list_: List_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DuplicateRun_])
-    async DuplicateRuns_SourceListIDArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRuns_SourceListIDArray(@Root() list_: List_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [SourceListID]='${list_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
@@ -9099,23 +9488,26 @@ export class ListResolver extends ResolverBase {
     @Mutation(() => List_)
     async CreateList(
         @Arg('input', () => CreateListInput) input: CreateListInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Lists', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => List_)
     async UpdateList(
         @Arg('input', () => UpdateListInput) input: UpdateListInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Lists', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => List_)
-    async DeleteList(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteList(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Lists', key, options, dataSource, userPayload, pubSub);
     }
@@ -9242,23 +9634,27 @@ export class RunListDetailViewResult {
 @Resolver(ListDetail_)
 export class ListDetailResolver extends ResolverBase {
     @Query(() => RunListDetailViewResult)
-    async RunListDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListDetailViewResult)
-    async RunListDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListDetailViewResult)
-    async RunListDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'List Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ListDetail_, { nullable: true })
-    async ListDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
+    async ListDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
         this.CheckUserReadPermissions('List Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -9267,23 +9663,26 @@ export class ListDetailResolver extends ResolverBase {
     @Mutation(() => ListDetail_)
     async CreateListDetail(
         @Arg('input', () => CreateListDetailInput) input: CreateListDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('List Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ListDetail_)
     async UpdateListDetail(
         @Arg('input', () => UpdateListDetailInput) input: UpdateListDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('List Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ListDetail_)
-    async DeleteListDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('List Details', key, options, dataSource, userPayload, pubSub);
     }
@@ -9399,31 +9798,36 @@ export class RunUserViewRunViewResult {
 @Resolver(UserViewRun_)
 export class UserViewRunResolver extends ResolverBase {
     @Query(() => RunUserViewRunViewResult)
-    async RunUserViewRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewRunViewResult)
-    async RunUserViewRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewRunViewResult)
-    async RunUserViewRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User View Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewRun_, { nullable: true })
-    async UserViewRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
+    async UserViewRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
         this.CheckUserReadPermissions('User View Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [UserViewRunDetail_])
-    async UserViewRunDetails_UserViewRunIDArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewRunDetails_UserViewRunIDArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRunDetails] WHERE [UserViewRunID]='${userviewrun_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL));
         return result;
@@ -9432,18 +9836,20 @@ export class UserViewRunResolver extends ResolverBase {
     @Mutation(() => UserViewRun_)
     async CreateUserViewRun(
         @Arg('input', () => CreateUserViewRunInput) input: CreateUserViewRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User View Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRun_)
     async UpdateUserViewRun(
         @Arg('input', () => UpdateUserViewRunInput) input: UpdateUserViewRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User View Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -9545,23 +9951,27 @@ export class RunUserViewRunDetailViewResult {
 @Resolver(UserViewRunDetail_)
 export class UserViewRunDetailResolver extends ResolverBase {
     @Query(() => RunUserViewRunDetailViewResult)
-    async RunUserViewRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewRunDetailViewResult)
-    async RunUserViewRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewRunDetailViewResult)
-    async RunUserViewRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User View Run Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewRunDetail_, { nullable: true })
-    async UserViewRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
+    async UserViewRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -9570,18 +9980,20 @@ export class UserViewRunDetailResolver extends ResolverBase {
     @Mutation(() => UserViewRunDetail_)
     async CreateUserViewRunDetail(
         @Arg('input', () => CreateUserViewRunDetailInput) input: CreateUserViewRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User View Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRunDetail_)
     async UpdateUserViewRunDetail(
         @Arg('input', () => UpdateUserViewRunDetailInput) input: UpdateUserViewRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User View Run Details', input, dataSource, userPayload, pubSub);
     }
     
@@ -9697,23 +10109,27 @@ export class RunWorkflowRunViewResult {
 @Resolver(WorkflowRun_)
 export class WorkflowRunResolver extends ResolverBase {
     @Query(() => RunWorkflowRunViewResult)
-    async RunWorkflowRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowRunViewResult)
-    async RunWorkflowRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowRunViewResult)
-    async RunWorkflowRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Workflow Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkflowRun_, { nullable: true })
-    async WorkflowRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
+    async WorkflowRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -9722,9 +10138,10 @@ export class WorkflowRunResolver extends ResolverBase {
     @Mutation(() => WorkflowRun_)
     async UpdateWorkflowRun(
         @Arg('input', () => UpdateWorkflowRunInput) input: UpdateWorkflowRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workflow Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -9853,39 +10270,45 @@ export class RunWorkflowViewResult {
 @Resolver(Workflow_)
 export class WorkflowResolver extends ResolverBase {
     @Query(() => RunWorkflowViewResult)
-    async RunWorkflowViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowViewResult)
-    async RunWorkflowViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowViewResult)
-    async RunWorkflowDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Workflows';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Workflow_, { nullable: true })
-    async Workflow(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
+    async Workflow(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
         this.CheckUserReadPermissions('Workflows', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_OutputWorkflowIDArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_OutputWorkflowIDArray(@Root() workflow_: Workflow_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputWorkflowID]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [WorkflowRun_])
-    async WorkflowRuns_WorkflowNameArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async WorkflowRuns_WorkflowNameArray(@Root() workflow_: Workflow_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowRuns] WHERE [WorkflowName]='${workflow_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL));
         return result;
@@ -9894,9 +10317,10 @@ export class WorkflowResolver extends ResolverBase {
     @Mutation(() => Workflow_)
     async UpdateWorkflow(
         @Arg('input', () => UpdateWorkflowInput) input: UpdateWorkflowInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workflows', input, dataSource, userPayload, pubSub);
     }
     
@@ -9993,31 +10417,36 @@ export class RunWorkflowEngineViewResult {
 @Resolver(WorkflowEngine_)
 export class WorkflowEngineResolver extends ResolverBase {
     @Query(() => RunWorkflowEngineViewResult)
-    async RunWorkflowEngineViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowEngineViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowEngineViewResult)
-    async RunWorkflowEngineViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowEngineViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkflowEngineViewResult)
-    async RunWorkflowEngineDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkflowEngineDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Workflow Engines';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkflowEngine_, { nullable: true })
-    async WorkflowEngine(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
+    async WorkflowEngine(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
         this.CheckUserReadPermissions('Workflow Engines', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflowEngines] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflow Engines', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Workflow_])
-    async Workflows_WorkflowEngineNameArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Workflows_WorkflowEngineNameArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkflows] WHERE [WorkflowEngineName]='${workflowengine_.ID}' ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
@@ -10026,14 +10455,16 @@ export class WorkflowEngineResolver extends ResolverBase {
     @Mutation(() => WorkflowEngine_)
     async UpdateWorkflowEngine(
         @Arg('input', () => UpdateWorkflowEngineInput) input: UpdateWorkflowEngineInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workflow Engines', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => WorkflowEngine_)
-    async DeleteWorkflowEngine(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkflowEngine(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Workflow Engines', key, options, dataSource, userPayload, pubSub);
     }
@@ -10255,23 +10686,27 @@ export class RunRecordChangeViewResult {
 @Resolver(RecordChange_)
 export class RecordChangeResolver extends ResolverBase {
     @Query(() => RunRecordChangeViewResult)
-    async RunRecordChangeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordChangeViewResult)
-    async RunRecordChangeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordChangeViewResult)
-    async RunRecordChangeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Record Changes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordChange_, { nullable: true })
-    async RecordChange(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
+    async RecordChange(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
         this.CheckUserReadPermissions('Record Changes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -10280,18 +10715,20 @@ export class RecordChangeResolver extends ResolverBase {
     @Mutation(() => RecordChange_)
     async CreateRecordChange(
         @Arg('input', () => CreateRecordChangeInput) input: CreateRecordChangeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordChange_)
     async UpdateRecordChange(
         @Arg('input', () => UpdateRecordChangeInput) input: UpdateRecordChangeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Record Changes', input, dataSource, userPayload, pubSub);
     }
     
@@ -10374,31 +10811,36 @@ export class RunUserRoleViewResult {
 @Resolver(UserRole_)
 export class UserRoleResolver extends ResolverBase {
     @Query(() => RunUserRoleViewResult)
-    async RunUserRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserRoleViewResult)
-    async RunUserRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserRoleViewResult)
-    async RunUserRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserRole_, { nullable: true })
-    async UserRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
+    async UserRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
         this.CheckUserReadPermissions('User Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [UserRole_])
-    async AllUserRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUserRoles(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserRoles]` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
@@ -10407,14 +10849,16 @@ export class UserRoleResolver extends ResolverBase {
     @Mutation(() => UserRole_)
     async CreateUserRole(
         @Arg('input', () => CreateUserRoleInput) input: CreateUserRoleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserRole_)
-    async DeleteUserRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserRole(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Roles', key, options, dataSource, userPayload, pubSub);
     }
@@ -10482,39 +10926,45 @@ export class RunRowLevelSecurityFilterViewResult {
 @Resolver(RowLevelSecurityFilter_)
 export class RowLevelSecurityFilterResolver extends ResolverBase {
     @Query(() => RunRowLevelSecurityFilterViewResult)
-    async RunRowLevelSecurityFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRowLevelSecurityFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRowLevelSecurityFilterViewResult)
-    async RunRowLevelSecurityFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRowLevelSecurityFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRowLevelSecurityFilterViewResult)
-    async RunRowLevelSecurityFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRowLevelSecurityFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Row Level Security Filters';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RowLevelSecurityFilter_, { nullable: true })
-    async RowLevelSecurityFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
+    async RowLevelSecurityFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRowLevelSecurityFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [RowLevelSecurityFilter_])
-    async AllRowLevelSecurityFilters(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllRowLevelSecurityFilters(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRowLevelSecurityFilters]` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [EntityPermission_])
-    async EntityPermissions_ReadRLSFilterIDArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityPermissions_ReadRLSFilterIDArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityPermissions] WHERE [ReadRLSFilterID]='${rowlevelsecurityfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
@@ -10684,23 +11134,27 @@ export class RunAuditLogViewResult {
 @Resolver(AuditLog_)
 export class AuditLogResolver extends ResolverBase {
     @Query(() => RunAuditLogViewResult)
-    async RunAuditLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuditLogViewResult)
-    async RunAuditLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuditLogViewResult)
-    async RunAuditLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Audit Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuditLog_, { nullable: true })
-    async AuditLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
+    async AuditLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -10709,18 +11163,20 @@ export class AuditLogResolver extends ResolverBase {
     @Mutation(() => AuditLog_)
     async CreateAuditLog(
         @Arg('input', () => CreateAuditLogInput) input: CreateAuditLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Audit Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AuditLog_)
     async UpdateAuditLog(
         @Arg('input', () => UpdateAuditLogInput) input: UpdateAuditLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Audit Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -10810,71 +11266,81 @@ export class RunAuthorizationViewResult {
 @Resolver(Authorization_)
 export class AuthorizationResolver extends ResolverBase {
     @Query(() => RunAuthorizationViewResult)
-    async RunAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuthorizationViewResult)
-    async RunAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuthorizationViewResult)
-    async RunAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Authorizations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Authorization_, { nullable: true })
-    async Authorization(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
+    async Authorization(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
         this.CheckUserReadPermissions('Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [Authorization_])
-    async AllAuthorizations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuthorizations(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations]` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AuthorizationRole_])
-    async AuthorizationRoles_AuthorizationIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuthorizationRoles_AuthorizationIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionAuthorization_])
-    async ActionAuthorizations_AuthorizationIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionAuthorizations_AuthorizationIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [AuthorizationID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Authorization_])
-    async Authorizations_ParentIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Authorizations_ParentIDArray(@Root() authorization_: Authorization_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizations] WHERE [ParentID]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AuditLog_])
-    async AuditLogs_AuthorizationNameArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogs_AuthorizationNameArray(@Root() authorization_: Authorization_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AuditLogType_])
-    async AuditLogTypes_AuthorizationNameArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogTypes_AuthorizationNameArray(@Root() authorization_: Authorization_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [AuthorizationName]='${authorization_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
@@ -10950,31 +11416,36 @@ export class RunAuthorizationRoleViewResult {
 @Resolver(AuthorizationRole_)
 export class AuthorizationRoleResolver extends ResolverBase {
     @Query(() => RunAuthorizationRoleViewResult)
-    async RunAuthorizationRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationRoleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuthorizationRoleViewResult)
-    async RunAuthorizationRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationRoleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuthorizationRoleViewResult)
-    async RunAuthorizationRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuthorizationRoleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Authorization Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuthorizationRole_, { nullable: true })
-    async AuthorizationRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
+    async AuthorizationRole(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AuthorizationRole_])
-    async AllAuthorizationRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuthorizationRoles(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuthorizationRoles]` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
@@ -11059,47 +11530,54 @@ export class RunAuditLogTypeViewResult {
 @Resolver(AuditLogType_)
 export class AuditLogTypeResolver extends ResolverBase {
     @Query(() => RunAuditLogTypeViewResult)
-    async RunAuditLogTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuditLogTypeViewResult)
-    async RunAuditLogTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAuditLogTypeViewResult)
-    async RunAuditLogTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAuditLogTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Audit Log Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuditLogType_, { nullable: true })
-    async AuditLogType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
+    async AuditLogType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AuditLogType_])
-    async AllAuditLogTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuditLogTypes(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes]` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AuditLogType_])
-    async AuditLogTypes_ParentIDArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogTypes_ParentIDArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogTypes] WHERE [ParentID]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AuditLog_])
-    async AuditLogs_AuditLogTypeNameArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AuditLogs_AuditLogTypeNameArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuditLogTypeName]='${auditlogtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
@@ -11213,31 +11691,36 @@ export class RunEntityFieldValueViewResult {
 @Resolver(EntityFieldValue_)
 export class EntityFieldValueResolver extends ResolverBase {
     @Query(() => RunEntityFieldValueViewResult)
-    async RunEntityFieldValueViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldValueViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityFieldValueViewResult)
-    async RunEntityFieldValueViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldValueViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityFieldValueViewResult)
-    async RunEntityFieldValueDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityFieldValueDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Field Values';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityFieldValue_, { nullable: true })
-    async EntityFieldValue(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
+    async EntityFieldValue(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [EntityFieldValue_])
-    async AllEntityFieldValues(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityFieldValues(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityFieldValues]` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
@@ -11246,9 +11729,10 @@ export class EntityFieldValueResolver extends ResolverBase {
     @Mutation(() => EntityFieldValue_)
     async UpdateEntityFieldValue(
         @Arg('input', () => UpdateEntityFieldValueInput) input: UpdateEntityFieldValueInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Field Values', input, dataSource, userPayload, pubSub);
     }
     
@@ -11483,95 +11967,108 @@ export class RunAIModelViewResult {
 @Resolver(AIModel_)
 export class AIModelResolver extends ResolverBase {
     @Query(() => RunAIModelViewResult)
-    async RunAIModelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelViewResult)
-    async RunAIModelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelViewResult)
-    async RunAIModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Models';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModel_, { nullable: true })
-    async AIModel(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
+    async AIModel(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
         this.CheckUserReadPermissions('AI Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AIModel_])
-    async AllAIModels(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModels(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels]` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AIAction_])
-    async AIActions_DefaultModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIActions_DefaultModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions] WHERE [DefaultModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityDocument_])
-    async EntityDocuments_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocuments_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIModelAction_])
-    async AIModelActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIModelActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [VectorIndex_])
-    async VectorIndexes_EmbeddingModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async VectorIndexes_EmbeddingModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentType_])
-    async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Types', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIResultCache_])
-    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIResultCaches] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Result Cache', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Result Cache', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityAIActions_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentModel_])
-    async AIAgentModels_ModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentModels_ModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [ModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', await dataSource.query(sSQL));
         return result;
@@ -11580,23 +12077,26 @@ export class AIModelResolver extends ResolverBase {
     @Mutation(() => AIModel_)
     async CreateAIModel(
         @Arg('input', () => CreateAIModelInput) input: CreateAIModelInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Models', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIModel_)
     async UpdateAIModel(
         @Arg('input', () => UpdateAIModelInput) input: UpdateAIModelInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIModel_)
-    async DeleteAIModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIModel(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Models', key, options, dataSource, userPayload, pubSub);
     }
@@ -11728,47 +12228,54 @@ export class RunAIActionViewResult {
 @Resolver(AIAction_)
 export class AIActionResolver extends ResolverBase {
     @Query(() => RunAIActionViewResult)
-    async RunAIActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIActionViewResult)
-    async RunAIActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIActionViewResult)
-    async RunAIActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAction_, { nullable: true })
-    async AIAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
+    async AIAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
         this.CheckUserReadPermissions('AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AIAction_])
-    async AllAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIActions(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIActions]` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AIModelAction_])
-    async AIModelActions_AIActionIDArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIModelActions_AIActionIDArray(@Root() aiaction_: AIAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityAIAction_])
-    async EntityAIActions_AIActionIDArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityAIActions_AIActionIDArray(@Root() aiaction_: AIAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIActionID]='${aiaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
@@ -11777,23 +12284,26 @@ export class AIActionResolver extends ResolverBase {
     @Mutation(() => AIAction_)
     async CreateAIAction(
         @Arg('input', () => CreateAIActionInput) input: CreateAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAction_)
     async UpdateAIAction(
         @Arg('input', () => UpdateAIActionInput) input: UpdateAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAction_)
-    async DeleteAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -11905,31 +12415,36 @@ export class RunAIModelActionViewResult {
 @Resolver(AIModelAction_)
 export class AIModelActionResolver extends ResolverBase {
     @Query(() => RunAIModelActionViewResult)
-    async RunAIModelActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelActionViewResult)
-    async RunAIModelActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelActionViewResult)
-    async RunAIModelActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Model Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModelAction_, { nullable: true })
-    async AIModelAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
+    async AIModelAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AIModelAction_])
-    async AllAIModelActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModelActions(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelActions]` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
@@ -11938,23 +12453,26 @@ export class AIModelActionResolver extends ResolverBase {
     @Mutation(() => AIModelAction_)
     async CreateAIModelAction(
         @Arg('input', () => CreateAIModelActionInput) input: CreateAIModelActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Model Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIModelAction_)
     async UpdateAIModelAction(
         @Arg('input', () => UpdateAIModelActionInput) input: UpdateAIModelActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Model Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIModelAction_)
-    async DeleteAIModelAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIModelAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Model Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -12161,31 +12679,36 @@ export class RunEntityAIActionViewResult {
 @Resolver(EntityAIAction_)
 export class EntityAIActionResolver extends ResolverBase {
     @Query(() => RunEntityAIActionViewResult)
-    async RunEntityAIActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityAIActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityAIActionViewResult)
-    async RunEntityAIActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityAIActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityAIActionViewResult)
-    async RunEntityAIActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityAIActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity AI Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityAIAction_, { nullable: true })
-    async EntityAIAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
+    async EntityAIAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [EntityAIAction_])
-    async AllEntityAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityAIActions(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions]` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
@@ -12194,23 +12717,26 @@ export class EntityAIActionResolver extends ResolverBase {
     @Mutation(() => EntityAIAction_)
     async CreateEntityAIAction(
         @Arg('input', () => CreateEntityAIActionInput) input: CreateEntityAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityAIAction_)
     async UpdateEntityAIAction(
         @Arg('input', () => UpdateEntityAIActionInput) input: UpdateEntityAIActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityAIAction_)
-    async DeleteEntityAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityAIAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity AI Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -12307,39 +12833,45 @@ export class RunAIModelTypeViewResult {
 @Resolver(AIModelType_)
 export class AIModelTypeResolver extends ResolverBase {
     @Query(() => RunAIModelTypeViewResult)
-    async RunAIModelTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelTypeViewResult)
-    async RunAIModelTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIModelTypeViewResult)
-    async RunAIModelTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIModelTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Model Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModelType_, { nullable: true })
-    async AIModelType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
+    async AIModelType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @Query(() => [AIModelType_])
-    async AllAIModelTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModelTypes(@Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelTypes]` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, ' WHERE');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL));
         return result;
     }
     
     @FieldResolver(() => [AIModel_])
-    async AIModels_AIModelTypeIDArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIModels_AIModelTypeIDArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModels] WHERE [AIModelTypeID]='${aimodeltype_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
@@ -12348,23 +12880,26 @@ export class AIModelTypeResolver extends ResolverBase {
     @Mutation(() => AIModelType_)
     async CreateAIModelType(
         @Arg('input', () => CreateAIModelTypeInput) input: CreateAIModelTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Model Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIModelType_)
     async UpdateAIModelType(
         @Arg('input', () => UpdateAIModelTypeInput) input: UpdateAIModelTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIModelType_)
-    async DeleteAIModelType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIModelType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Model Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -12440,31 +12975,36 @@ export class RunQueueTypeViewResult {
 @Resolver(QueueType_)
 export class QueueTypeResolver extends ResolverBase {
     @Query(() => RunQueueTypeViewResult)
-    async RunQueueTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueTypeViewResult)
-    async RunQueueTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueTypeViewResult)
-    async RunQueueTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Queue Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueueType_, { nullable: true })
-    async QueueType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
+    async QueueType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
         this.CheckUserReadPermissions('Queue Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queue Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Queue_])
-    async Queues_QueueTypeIDArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Queues_QueueTypeIDArray(@Root() queuetype_: QueueType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueues] WHERE [QueueTypeID]='${queuetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL));
         return result;
@@ -12704,31 +13244,36 @@ export class RunQueueViewResult {
 @Resolver(Queue_)
 export class QueueResolver extends ResolverBase {
     @Query(() => RunQueueViewResult)
-    async RunQueueViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueViewResult)
-    async RunQueueViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueViewResult)
-    async RunQueueDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Queues';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Queue_, { nullable: true })
-    async Queue(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
+    async Queue(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
         this.CheckUserReadPermissions('Queues', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueues] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [QueueTask_])
-    async QueueTasks_QueueIDArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueueTasks_QueueIDArray(@Root() queue_: Queue_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTasks] WHERE [QueueID]='${queue_.ID}' ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL));
         return result;
@@ -12737,18 +13282,20 @@ export class QueueResolver extends ResolverBase {
     @Mutation(() => Queue_)
     async CreateQueue(
         @Arg('input', () => CreateQueueInput) input: CreateQueueInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Queues', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Queue_)
     async UpdateQueue(
         @Arg('input', () => UpdateQueueInput) input: UpdateQueueInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Queues', input, dataSource, userPayload, pubSub);
     }
     
@@ -12911,23 +13458,27 @@ export class RunQueueTaskViewResult {
 @Resolver(QueueTask_)
 export class QueueTaskResolver extends ResolverBase {
     @Query(() => RunQueueTaskViewResult)
-    async RunQueueTaskViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTaskViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueTaskViewResult)
-    async RunQueueTaskViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTaskViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueueTaskViewResult)
-    async RunQueueTaskDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueueTaskDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Queue Tasks';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueueTask_, { nullable: true })
-    async QueueTask(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
+    async QueueTask(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueueTasks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -12936,18 +13487,20 @@ export class QueueTaskResolver extends ResolverBase {
     @Mutation(() => QueueTask_)
     async CreateQueueTask(
         @Arg('input', () => CreateQueueTaskInput) input: CreateQueueTaskInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Queue Tasks', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueueTask_)
     async UpdateQueueTask(
         @Arg('input', () => UpdateQueueTaskInput) input: UpdateQueueTaskInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Queue Tasks', input, dataSource, userPayload, pubSub);
     }
     
@@ -13077,23 +13630,27 @@ export class RunDashboardViewResult {
 @Resolver(Dashboard_)
 export class DashboardResolver extends ResolverBase {
     @Query(() => RunDashboardViewResult)
-    async RunDashboardViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDashboardViewResult)
-    async RunDashboardViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDashboardViewResult)
-    async RunDashboardDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Dashboards';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Dashboard_, { nullable: true })
-    async Dashboard(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
+    async Dashboard(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
         this.CheckUserReadPermissions('Dashboards', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -13102,23 +13659,26 @@ export class DashboardResolver extends ResolverBase {
     @Mutation(() => Dashboard_)
     async CreateDashboard(
         @Arg('input', () => CreateDashboardInput) input: CreateDashboardInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Dashboards', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Dashboard_)
     async UpdateDashboard(
         @Arg('input', () => UpdateDashboardInput) input: UpdateDashboardInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Dashboards', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Dashboard_)
-    async DeleteDashboard(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboard(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Dashboards', key, options, dataSource, userPayload, pubSub);
     }
@@ -13183,31 +13743,36 @@ export class RunOutputTriggerTypeViewResult {
 @Resolver(OutputTriggerType_)
 export class OutputTriggerTypeResolver extends ResolverBase {
     @Query(() => RunOutputTriggerTypeViewResult)
-    async RunOutputTriggerTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputTriggerTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputTriggerTypeViewResult)
-    async RunOutputTriggerTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputTriggerTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputTriggerTypeViewResult)
-    async RunOutputTriggerTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputTriggerTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Output Trigger Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputTriggerType_, { nullable: true })
-    async OutputTriggerType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
+    async OutputTriggerType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputTriggerTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Output Trigger Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_OutputTriggerTypeIDArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_OutputTriggerTypeIDArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputTriggerTypeID]='${outputtriggertype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -13276,31 +13841,36 @@ export class RunOutputFormatTypeViewResult {
 @Resolver(OutputFormatType_)
 export class OutputFormatTypeResolver extends ResolverBase {
     @Query(() => RunOutputFormatTypeViewResult)
-    async RunOutputFormatTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputFormatTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputFormatTypeViewResult)
-    async RunOutputFormatTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputFormatTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputFormatTypeViewResult)
-    async RunOutputFormatTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputFormatTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Output Format Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputFormatType_, { nullable: true })
-    async OutputFormatType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
+    async OutputFormatType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputFormatTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Output Format Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_OutputFormatTypeIDArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_OutputFormatTypeIDArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputFormatTypeID]='${outputformattype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -13366,31 +13936,36 @@ export class RunOutputDeliveryTypeViewResult {
 @Resolver(OutputDeliveryType_)
 export class OutputDeliveryTypeResolver extends ResolverBase {
     @Query(() => RunOutputDeliveryTypeViewResult)
-    async RunOutputDeliveryTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputDeliveryTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputDeliveryTypeViewResult)
-    async RunOutputDeliveryTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputDeliveryTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunOutputDeliveryTypeViewResult)
-    async RunOutputDeliveryTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunOutputDeliveryTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Output Delivery Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputDeliveryType_, { nullable: true })
-    async OutputDeliveryType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
+    async OutputDeliveryType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwOutputDeliveryTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Output Delivery Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_OutputDeliveryTypeIDArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_OutputDeliveryTypeIDArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [OutputDeliveryTypeID]='${outputdeliverytype_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -13649,31 +14224,36 @@ export class RunReportViewResult {
 @Resolver(Report_)
 export class ReportResolver extends ResolverBase {
     @Query(() => RunReportViewResult)
-    async RunReportViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportViewResult)
-    async RunReportViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportViewResult)
-    async RunReportDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Reports';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Report_, { nullable: true })
-    async Report(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
+    async Report(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ReportSnapshot_])
-    async ReportSnapshots_ReportIDArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ReportSnapshots_ReportIDArray(@Root() report_: Report_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [ReportID]='${report_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
@@ -13682,23 +14262,26 @@ export class ReportResolver extends ResolverBase {
     @Mutation(() => Report_)
     async CreateReport(
         @Arg('input', () => CreateReportInput) input: CreateReportInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Reports', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Report_)
     async UpdateReport(
         @Arg('input', () => UpdateReportInput) input: UpdateReportInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Reports', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Report_)
-    async DeleteReport(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReport(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Reports', key, options, dataSource, userPayload, pubSub);
     }
@@ -13810,23 +14393,27 @@ export class RunReportSnapshotViewResult {
 @Resolver(ReportSnapshot_)
 export class ReportSnapshotResolver extends ResolverBase {
     @Query(() => RunReportSnapshotViewResult)
-    async RunReportSnapshotViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportSnapshotViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportSnapshotViewResult)
-    async RunReportSnapshotViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportSnapshotViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportSnapshotViewResult)
-    async RunReportSnapshotDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportSnapshotDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Report Snapshots';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ReportSnapshot_, { nullable: true })
-    async ReportSnapshot(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
+    async ReportSnapshot(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportSnapshots] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -13835,23 +14422,26 @@ export class ReportSnapshotResolver extends ResolverBase {
     @Mutation(() => ReportSnapshot_)
     async CreateReportSnapshot(
         @Arg('input', () => CreateReportSnapshotInput) input: CreateReportSnapshotInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Report Snapshots', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportSnapshot_)
     async UpdateReportSnapshot(
         @Arg('input', () => UpdateReportSnapshotInput) input: UpdateReportSnapshotInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Report Snapshots', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportSnapshot_)
-    async DeleteReportSnapshot(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportSnapshot(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Report Snapshots', key, options, dataSource, userPayload, pubSub);
     }
@@ -13949,55 +14539,63 @@ export class RunResourceTypeViewResult {
 @Resolver(ResourceType_)
 export class ResourceTypeResolver extends ResolverBase {
     @Query(() => RunResourceTypeViewResult)
-    async RunResourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourceTypeViewResult)
-    async RunResourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourceTypeViewResult)
-    async RunResourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Resource Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ResourceType_, { nullable: true })
-    async ResourceType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
+    async ResourceType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
         this.CheckUserReadPermissions('Resource Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [WorkspaceItem_])
-    async WorkspaceItems_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async WorkspaceItems_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserNotification_])
-    async UserNotifications_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserNotifications_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourceLinks_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ResourcePermission_])
-    async ResourcePermissions_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ResourcePermissions_ResourceTypeIDArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ResourceTypeID]='${resourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
@@ -14078,39 +14676,45 @@ export class RunTagViewResult {
 @Resolver(Tag_)
 export class TagResolver extends ResolverBase {
     @Query(() => RunTagViewResult)
-    async RunTagViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTagViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTagViewResult)
-    async RunTagViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTagViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTagViewResult)
-    async RunTagDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTagDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Tags';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Tag_, { nullable: true })
-    async Tag(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
+    async Tag(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
         this.CheckUserReadPermissions('Tags', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Tag_])
-    async Tags_ParentIDArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Tags_ParentIDArray(@Root() tag_: Tag_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTags] WHERE [ParentID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TaggedItem_])
-    async TaggedItems_TagIDArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TaggedItems_TagIDArray(@Root() tag_: Tag_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [TagID]='${tag_.ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
@@ -14186,23 +14790,27 @@ export class RunTaggedItemViewResult {
 @Resolver(TaggedItem_)
 export class TaggedItemResolver extends ResolverBase {
     @Query(() => RunTaggedItemViewResult)
-    async RunTaggedItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTaggedItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTaggedItemViewResult)
-    async RunTaggedItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTaggedItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTaggedItemViewResult)
-    async RunTaggedItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTaggedItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Tagged Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TaggedItem_, { nullable: true })
-    async TaggedItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
+    async TaggedItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTaggedItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -14314,31 +14922,36 @@ export class RunWorkspaceViewResult {
 @Resolver(Workspace_)
 export class WorkspaceResolver extends ResolverBase {
     @Query(() => RunWorkspaceViewResult)
-    async RunWorkspaceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkspaceViewResult)
-    async RunWorkspaceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkspaceViewResult)
-    async RunWorkspaceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Workspaces';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Workspace_, { nullable: true })
-    async Workspace(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
+    async Workspace(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
         this.CheckUserReadPermissions('Workspaces', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaces] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [WorkspaceItem_])
-    async WorkspaceItems_WorkSpaceIDArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async WorkspaceItems_WorkSpaceIDArray(@Root() workspace_: Workspace_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [WorkSpaceID]='${workspace_.ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
@@ -14347,23 +14960,26 @@ export class WorkspaceResolver extends ResolverBase {
     @Mutation(() => Workspace_)
     async CreateWorkspace(
         @Arg('input', () => CreateWorkspaceInput) input: CreateWorkspaceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Workspaces', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Workspace_)
     async UpdateWorkspace(
         @Arg('input', () => UpdateWorkspaceInput) input: UpdateWorkspaceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workspaces', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Workspace_)
-    async DeleteWorkspace(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspace(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Workspaces', key, options, dataSource, userPayload, pubSub);
     }
@@ -14513,23 +15129,27 @@ export class RunWorkspaceItemViewResult {
 @Resolver(WorkspaceItem_)
 export class WorkspaceItemResolver extends ResolverBase {
     @Query(() => RunWorkspaceItemViewResult)
-    async RunWorkspaceItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkspaceItemViewResult)
-    async RunWorkspaceItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunWorkspaceItemViewResult)
-    async RunWorkspaceItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunWorkspaceItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Workspace Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkspaceItem_, { nullable: true })
-    async WorkspaceItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
+    async WorkspaceItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwWorkspaceItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -14538,23 +15158,26 @@ export class WorkspaceItemResolver extends ResolverBase {
     @Mutation(() => WorkspaceItem_)
     async CreateWorkspaceItem(
         @Arg('input', () => CreateWorkspaceItemInput) input: CreateWorkspaceItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Workspace Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => WorkspaceItem_)
     async UpdateWorkspaceItem(
         @Arg('input', () => UpdateWorkspaceItemInput) input: UpdateWorkspaceItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Workspace Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => WorkspaceItem_)
-    async DeleteWorkspaceItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspaceItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Workspace Items', key, options, dataSource, userPayload, pubSub);
     }
@@ -14619,31 +15242,36 @@ export class RunDatasetViewResult {
 @Resolver(Dataset_)
 export class DatasetResolver extends ResolverBase {
     @Query(() => RunDatasetViewResult)
-    async RunDatasetViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDatasetViewResult)
-    async RunDatasetViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDatasetViewResult)
-    async RunDatasetDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Datasets';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Dataset_, { nullable: true })
-    async Dataset(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
+    async Dataset(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
         this.CheckUserReadPermissions('Datasets', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasets] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Datasets', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [DatasetItem_])
-    async DatasetItems_DatasetNameArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DatasetItems_DatasetNameArray(@Root() dataset_: Dataset_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [DatasetName]='${dataset_.ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
@@ -14735,23 +15363,27 @@ export class RunDatasetItemViewResult {
 @Resolver(DatasetItem_)
 export class DatasetItemResolver extends ResolverBase {
     @Query(() => RunDatasetItemViewResult)
-    async RunDatasetItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDatasetItemViewResult)
-    async RunDatasetItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDatasetItemViewResult)
-    async RunDatasetItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDatasetItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Dataset Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DatasetItem_, { nullable: true })
-    async DatasetItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
+    async DatasetItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDatasetItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -14927,31 +15559,36 @@ export class RunConversationDetailViewResult {
 @Resolver(ConversationDetail_)
 export class ConversationDetailResolver extends ResolverBase {
     @Query(() => RunConversationDetailViewResult)
-    async RunConversationDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunConversationDetailViewResult)
-    async RunConversationDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunConversationDetailViewResult)
-    async RunConversationDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Conversation Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ConversationDetail_, { nullable: true })
-    async ConversationDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
+    async ConversationDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_ConversationDetailIDArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_ConversationDetailIDArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationDetailID]='${conversationdetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -14960,23 +15597,26 @@ export class ConversationDetailResolver extends ResolverBase {
     @Mutation(() => ConversationDetail_)
     async CreateConversationDetail(
         @Arg('input', () => CreateConversationDetailInput) input: CreateConversationDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Conversation Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ConversationDetail_)
     async UpdateConversationDetail(
         @Arg('input', () => UpdateConversationDetailInput) input: UpdateConversationDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Conversation Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ConversationDetail_)
-    async DeleteConversationDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversationDetail(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Conversation Details', key, options, dataSource, userPayload, pubSub);
     }
@@ -15157,39 +15797,45 @@ export class RunConversationViewResult {
 @Resolver(Conversation_)
 export class ConversationResolver extends ResolverBase {
     @Query(() => RunConversationViewResult)
-    async RunConversationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunConversationViewResult)
-    async RunConversationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunConversationViewResult)
-    async RunConversationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunConversationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Conversations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Conversation_, { nullable: true })
-    async Conversation(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
+    async Conversation(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
         this.CheckUserReadPermissions('Conversations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ConversationDetail_])
-    async ConversationDetails_ConversationIDArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ConversationDetails_ConversationIDArray(@Root() conversation_: Conversation_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Report_])
-    async Reports_ConversationIDArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_ConversationIDArray(@Root() conversation_: Conversation_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -15198,23 +15844,26 @@ export class ConversationResolver extends ResolverBase {
     @Mutation(() => Conversation_)
     async CreateConversation(
         @Arg('input', () => CreateConversationInput) input: CreateConversationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Conversations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Conversation_)
     async UpdateConversation(
         @Arg('input', () => UpdateConversationInput) input: UpdateConversationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Conversations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Conversation_)
-    async DeleteConversation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Conversations', key, options, dataSource, userPayload, pubSub);
     }
@@ -15374,23 +16023,27 @@ export class RunUserNotificationViewResult {
 @Resolver(UserNotification_)
 export class UserNotificationResolver extends ResolverBase {
     @Query(() => RunUserNotificationViewResult)
-    async RunUserNotificationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserNotificationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserNotificationViewResult)
-    async RunUserNotificationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserNotificationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserNotificationViewResult)
-    async RunUserNotificationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserNotificationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User Notifications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserNotification_, { nullable: true })
-    async UserNotification(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
+    async UserNotification(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
         this.CheckUserReadPermissions('User Notifications', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserNotifications] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -15399,23 +16052,26 @@ export class UserNotificationResolver extends ResolverBase {
     @Mutation(() => UserNotification_)
     async CreateUserNotification(
         @Arg('input', () => CreateUserNotificationInput) input: CreateUserNotificationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User Notifications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserNotification_)
     async UpdateUserNotification(
         @Arg('input', () => UpdateUserNotificationInput) input: UpdateUserNotificationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User Notifications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserNotification_)
-    async DeleteUserNotification(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserNotification(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User Notifications', key, options, dataSource, userPayload, pubSub);
     }
@@ -15527,23 +16183,27 @@ export class RunSchemaInfoViewResult {
 @Resolver(SchemaInfo_)
 export class SchemaInfoResolver extends ResolverBase {
     @Query(() => RunSchemaInfoViewResult)
-    async RunSchemaInfoViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSchemaInfoViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunSchemaInfoViewResult)
-    async RunSchemaInfoViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSchemaInfoViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunSchemaInfoViewResult)
-    async RunSchemaInfoDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunSchemaInfoDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Schema Info';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => SchemaInfo_, { nullable: true })
-    async SchemaInfo(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
+    async SchemaInfo(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
         this.CheckUserReadPermissions('Schema Info', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwSchemaInfos] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Schema Info', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -15552,18 +16212,20 @@ export class SchemaInfoResolver extends ResolverBase {
     @Mutation(() => SchemaInfo_)
     async CreateSchemaInfo(
         @Arg('input', () => CreateSchemaInfoInput) input: CreateSchemaInfoInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Schema Info', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => SchemaInfo_)
     async UpdateSchemaInfo(
         @Arg('input', () => UpdateSchemaInfoInput) input: UpdateSchemaInfoInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Schema Info', input, dataSource, userPayload, pubSub);
     }
     
@@ -15681,23 +16343,27 @@ export class RunCompanyIntegrationRecordMapViewResult {
 @Resolver(CompanyIntegrationRecordMap_)
 export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     @Query(() => RunCompanyIntegrationRecordMapViewResult)
-    async RunCompanyIntegrationRecordMapViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRecordMapViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRecordMapViewResult)
-    async RunCompanyIntegrationRecordMapViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRecordMapViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCompanyIntegrationRecordMapViewResult)
-    async RunCompanyIntegrationRecordMapDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCompanyIntegrationRecordMapDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Company Integration Record Maps';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRecordMap_, { nullable: true })
-    async CompanyIntegrationRecordMap(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
+    async CompanyIntegrationRecordMap(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCompanyIntegrationRecordMaps] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -15706,18 +16372,20 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     @Mutation(() => CompanyIntegrationRecordMap_)
     async CreateCompanyIntegrationRecordMap(
         @Arg('input', () => CreateCompanyIntegrationRecordMapInput) input: CreateCompanyIntegrationRecordMapInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRecordMap_)
     async UpdateCompanyIntegrationRecordMap(
         @Arg('input', () => UpdateCompanyIntegrationRecordMapInput) input: UpdateCompanyIntegrationRecordMapInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub);
     }
     
@@ -15907,39 +16575,45 @@ export class RunRecordMergeLogViewResult {
 @Resolver(RecordMergeLog_)
 export class RecordMergeLogResolver extends ResolverBase {
     @Query(() => RunRecordMergeLogViewResult)
-    async RunRecordMergeLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordMergeLogViewResult)
-    async RunRecordMergeLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordMergeLogViewResult)
-    async RunRecordMergeLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Record Merge Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordMergeLog_, { nullable: true })
-    async RecordMergeLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
+    async RecordMergeLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [RecordMergeDeletionLog_])
-    async RecordMergeDeletionLogs_RecordMergeLogIDArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordMergeDeletionLogs_RecordMergeLogIDArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DuplicateRunDetailMatch_])
-    async DuplicateRunDetailMatches_RecordMergeLogIDArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRunDetailMatches_RecordMergeLogIDArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [RecordMergeLogID]='${recordmergelog_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
         return result;
@@ -15948,18 +16622,20 @@ export class RecordMergeLogResolver extends ResolverBase {
     @Mutation(() => RecordMergeLog_)
     async CreateRecordMergeLog(
         @Arg('input', () => CreateRecordMergeLogInput) input: CreateRecordMergeLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeLog_)
     async UpdateRecordMergeLog(
         @Arg('input', () => UpdateRecordMergeLogInput) input: UpdateRecordMergeLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -16072,23 +16748,27 @@ export class RunRecordMergeDeletionLogViewResult {
 @Resolver(RecordMergeDeletionLog_)
 export class RecordMergeDeletionLogResolver extends ResolverBase {
     @Query(() => RunRecordMergeDeletionLogViewResult)
-    async RunRecordMergeDeletionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeDeletionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordMergeDeletionLogViewResult)
-    async RunRecordMergeDeletionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeDeletionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordMergeDeletionLogViewResult)
-    async RunRecordMergeDeletionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordMergeDeletionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Record Merge Deletion Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordMergeDeletionLog_, { nullable: true })
-    async RecordMergeDeletionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
+    async RecordMergeDeletionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -16097,18 +16777,20 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     @Mutation(() => RecordMergeDeletionLog_)
     async CreateRecordMergeDeletionLog(
         @Arg('input', () => CreateRecordMergeDeletionLogInput) input: CreateRecordMergeDeletionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeDeletionLog_)
     async UpdateRecordMergeDeletionLog(
         @Arg('input', () => UpdateRecordMergeDeletionLogInput) input: UpdateRecordMergeDeletionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -16304,23 +16986,27 @@ export class RunQueryFieldViewResult {
 @Resolver(QueryField_)
 export class QueryFieldResolver extends ResolverBase {
     @Query(() => RunQueryFieldViewResult)
-    async RunQueryFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryFieldViewResult)
-    async RunQueryFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryFieldViewResult)
-    async RunQueryFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Query Fields';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryField_, { nullable: true })
-    async QueryField(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryField_ | null> {
+    async QueryField(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryField_ | null> {
         this.CheckUserReadPermissions('Query Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -16329,23 +17015,26 @@ export class QueryFieldResolver extends ResolverBase {
     @Mutation(() => QueryField_)
     async CreateQueryField(
         @Arg('input', () => CreateQueryFieldInput) input: CreateQueryFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Query Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryField_)
     async UpdateQueryField(
         @Arg('input', () => UpdateQueryFieldInput) input: UpdateQueryFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Query Fields', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryField_)
-    async DeleteQueryField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Fields', key, options, dataSource, userPayload, pubSub);
     }
@@ -16473,39 +17162,45 @@ export class RunQueryCategoryViewResult {
 @Resolver(QueryCategory_)
 export class QueryCategoryResolver extends ResolverBase {
     @Query(() => RunQueryCategoryViewResult)
-    async RunQueryCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryCategoryViewResult)
-    async RunQueryCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryCategoryViewResult)
-    async RunQueryCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Query Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryCategory_, { nullable: true })
-    async QueryCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryCategory_ | null> {
+    async QueryCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryCategory_ | null> {
         this.CheckUserReadPermissions('Query Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [QueryCategory_])
-    async QueryCategories_ParentIDArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryCategories_ParentIDArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [ParentID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Query_])
-    async Queries_CategoryIDArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Queries_CategoryIDArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [CategoryID]='${querycategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL));
         return result;
@@ -16514,23 +17209,26 @@ export class QueryCategoryResolver extends ResolverBase {
     @Mutation(() => QueryCategory_)
     async CreateQueryCategory(
         @Arg('input', () => CreateQueryCategoryInput) input: CreateQueryCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Query Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryCategory_)
     async UpdateQueryCategory(
         @Arg('input', () => UpdateQueryCategoryInput) input: UpdateQueryCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Query Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryCategory_)
-    async DeleteQueryCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -16723,55 +17421,63 @@ export class RunQueryViewResult {
 @Resolver(Query_)
 export class QueryResolver extends ResolverBase {
     @Query(() => RunQueryViewResult)
-    async RunQueryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryViewResult)
-    async RunQueryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryViewResult)
-    async RunQueryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Queries';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Query_, { nullable: true })
-    async Query(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Query_ | null> {
+    async Query(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Query_ | null> {
         this.CheckUserReadPermissions('Queries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [QueryField_])
-    async QueryFields_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryFields_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryFields] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DataContextItem_])
-    async DataContextItems_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DataContextItems_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryPermission_])
-    async QueryPermissions_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryPermissions_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [QueryEntity_])
-    async QueryEntities_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async QueryEntities_QueryIDArray(@Root() query_: Query_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [QueryID]='${query_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL));
         return result;
@@ -16780,23 +17486,26 @@ export class QueryResolver extends ResolverBase {
     @Mutation(() => Query_)
     async CreateQuery(
         @Arg('input', () => CreateQueryInput) input: CreateQueryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Queries', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Query_)
     async UpdateQuery(
         @Arg('input', () => UpdateQueryInput) input: UpdateQueryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Queries', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Query_)
-    async DeleteQuery(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQuery(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Queries', key, options, dataSource, userPayload, pubSub);
     }
@@ -16899,23 +17608,27 @@ export class RunQueryPermissionViewResult {
 @Resolver(QueryPermission_)
 export class QueryPermissionResolver extends ResolverBase {
     @Query(() => RunQueryPermissionViewResult)
-    async RunQueryPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryPermissionViewResult)
-    async RunQueryPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryPermissionViewResult)
-    async RunQueryPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Query Permissions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryPermission_, { nullable: true })
-    async QueryPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryPermission_ | null> {
+    async QueryPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryPermission_ | null> {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -16924,23 +17637,26 @@ export class QueryPermissionResolver extends ResolverBase {
     @Mutation(() => QueryPermission_)
     async CreateQueryPermission(
         @Arg('input', () => CreateQueryPermissionInput) input: CreateQueryPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Query Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryPermission_)
     async UpdateQueryPermission(
         @Arg('input', () => UpdateQueryPermissionInput) input: UpdateQueryPermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Query Permissions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryPermission_)
-    async DeleteQueryPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Permissions', key, options, dataSource, userPayload, pubSub);
     }
@@ -17065,31 +17781,36 @@ export class RunVectorIndexViewResult {
 @Resolver(VectorIndex_)
 export class VectorIndexResolver extends ResolverBase {
     @Query(() => RunVectorIndexViewResult)
-    async RunVectorIndexViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorIndexViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVectorIndexViewResult)
-    async RunVectorIndexViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorIndexViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVectorIndexViewResult)
-    async RunVectorIndexDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorIndexDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Vector Indexes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => VectorIndex_, { nullable: true })
-    async VectorIndex(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorIndex_ | null> {
+    async VectorIndex(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorIndex_ | null> {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityRecordDocument_])
-    async EntityRecordDocuments_VectorIndexIDArray(@Root() vectorindex_: VectorIndex_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRecordDocuments_VectorIndexIDArray(@Root() vectorindex_: VectorIndex_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [VectorIndexID]='${vectorindex_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
@@ -17098,23 +17819,26 @@ export class VectorIndexResolver extends ResolverBase {
     @Mutation(() => VectorIndex_)
     async CreateVectorIndex(
         @Arg('input', () => CreateVectorIndexInput) input: CreateVectorIndexInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Vector Indexes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorIndex_)
     async UpdateVectorIndex(
         @Arg('input', () => UpdateVectorIndexInput) input: UpdateVectorIndexInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Vector Indexes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => VectorIndex_)
-    async DeleteVectorIndex(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteVectorIndex(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Vector Indexes', key, options, dataSource, userPayload, pubSub);
     }
@@ -17211,31 +17935,36 @@ export class RunEntityDocumentTypeViewResult {
 @Resolver(EntityDocumentType_)
 export class EntityDocumentTypeResolver extends ResolverBase {
     @Query(() => RunEntityDocumentTypeViewResult)
-    async RunEntityDocumentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentTypeViewResult)
-    async RunEntityDocumentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentTypeViewResult)
-    async RunEntityDocumentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Document Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocumentType_, { nullable: true })
-    async EntityDocumentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentType_ | null> {
+    async EntityDocumentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentType_ | null> {
         this.CheckUserReadPermissions('Entity Document Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Document Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityDocument_])
-    async EntityDocuments_TypeIDArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocuments_TypeIDArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TypeID]='${entitydocumenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
@@ -17244,23 +17973,26 @@ export class EntityDocumentTypeResolver extends ResolverBase {
     @Mutation(() => EntityDocumentType_)
     async CreateEntityDocumentType(
         @Arg('input', () => CreateEntityDocumentTypeInput) input: CreateEntityDocumentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Document Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentType_)
     async UpdateEntityDocumentType(
         @Arg('input', () => UpdateEntityDocumentTypeInput) input: UpdateEntityDocumentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Document Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityDocumentType_)
-    async DeleteEntityDocumentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityDocumentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Document Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -17379,23 +18111,27 @@ export class RunEntityDocumentRunViewResult {
 @Resolver(EntityDocumentRun_)
 export class EntityDocumentRunResolver extends ResolverBase {
     @Query(() => RunEntityDocumentRunViewResult)
-    async RunEntityDocumentRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentRunViewResult)
-    async RunEntityDocumentRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentRunViewResult)
-    async RunEntityDocumentRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Document Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocumentRun_, { nullable: true })
-    async EntityDocumentRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentRun_ | null> {
+    async EntityDocumentRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentRun_ | null> {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -17404,18 +18140,20 @@ export class EntityDocumentRunResolver extends ResolverBase {
     @Mutation(() => EntityDocumentRun_)
     async CreateEntityDocumentRun(
         @Arg('input', () => CreateEntityDocumentRunInput) input: CreateEntityDocumentRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentRun_)
     async UpdateEntityDocumentRun(
         @Arg('input', () => UpdateEntityDocumentRunInput) input: UpdateEntityDocumentRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -17534,39 +18272,45 @@ export class RunVectorDatabaseViewResult {
 @Resolver(VectorDatabase_)
 export class VectorDatabaseResolver extends ResolverBase {
     @Query(() => RunVectorDatabaseViewResult)
-    async RunVectorDatabaseViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorDatabaseViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVectorDatabaseViewResult)
-    async RunVectorDatabaseViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorDatabaseViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVectorDatabaseViewResult)
-    async RunVectorDatabaseDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVectorDatabaseDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Vector Databases';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => VectorDatabase_, { nullable: true })
-    async VectorDatabase(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorDatabase_ | null> {
+    async VectorDatabase(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorDatabase_ | null> {
         this.CheckUserReadPermissions('Vector Databases', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorDatabases] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Vector Databases', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Vector Databases', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityDocument_])
-    async EntityDocuments_IDArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocuments_IDArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [ID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [VectorIndex_])
-    async VectorIndexes_VectorDatabaseIDArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async VectorIndexes_VectorDatabaseIDArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [VectorDatabaseID]='${vectordatabase_.ID}' ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
@@ -17575,23 +18319,26 @@ export class VectorDatabaseResolver extends ResolverBase {
     @Mutation(() => VectorDatabase_)
     async CreateVectorDatabase(
         @Arg('input', () => CreateVectorDatabaseInput) input: CreateVectorDatabaseInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Vector Databases', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorDatabase_)
     async UpdateVectorDatabase(
         @Arg('input', () => UpdateVectorDatabaseInput) input: UpdateVectorDatabaseInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Vector Databases', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => VectorDatabase_)
-    async DeleteVectorDatabase(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteVectorDatabase(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Vector Databases', key, options, dataSource, userPayload, pubSub);
     }
@@ -17756,23 +18503,27 @@ export class RunEntityRecordDocumentViewResult {
 @Resolver(EntityRecordDocument_)
 export class EntityRecordDocumentResolver extends ResolverBase {
     @Query(() => RunEntityRecordDocumentViewResult)
-    async RunEntityRecordDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRecordDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRecordDocumentViewResult)
-    async RunEntityRecordDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRecordDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRecordDocumentViewResult)
-    async RunEntityRecordDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRecordDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Record Documents';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityRecordDocument_, { nullable: true })
-    async EntityRecordDocument(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRecordDocument_ | null> {
+    async EntityRecordDocument(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRecordDocument_ | null> {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -17781,18 +18532,20 @@ export class EntityRecordDocumentResolver extends ResolverBase {
     @Mutation(() => EntityRecordDocument_)
     async CreateEntityRecordDocument(
         @Arg('input', () => CreateEntityRecordDocumentInput) input: CreateEntityRecordDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRecordDocument_)
     async UpdateEntityRecordDocument(
         @Arg('input', () => UpdateEntityRecordDocumentInput) input: UpdateEntityRecordDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub);
     }
     
@@ -17983,47 +18736,54 @@ export class RunEntityDocumentViewResult {
 @Resolver(EntityDocument_)
 export class EntityDocumentResolver extends ResolverBase {
     @Query(() => RunEntityDocumentViewResult)
-    async RunEntityDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentViewResult)
-    async RunEntityDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentViewResult)
-    async RunEntityDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Documents';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocument_, { nullable: true })
-    async EntityDocument(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocument_ | null> {
+    async EntityDocument(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocument_ | null> {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityDocumentSetting_])
-    async EntityDocumentSettings_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocumentSettings_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityDocumentRun_])
-    async EntityDocumentRuns_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocumentRuns_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityRecordDocument_])
-    async EntityRecordDocuments_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRecordDocuments_EntityDocumentIDArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRecordDocuments] WHERE [EntityDocumentID]='${entitydocument_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
@@ -18032,18 +18792,20 @@ export class EntityDocumentResolver extends ResolverBase {
     @Mutation(() => EntityDocument_)
     async CreateEntityDocument(
         @Arg('input', () => CreateEntityDocumentInput) input: CreateEntityDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocument_)
     async UpdateEntityDocument(
         @Arg('input', () => UpdateEntityDocumentInput) input: UpdateEntityDocumentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Documents', input, dataSource, userPayload, pubSub);
     }
     
@@ -18100,6 +18862,9 @@ export class DataContextItem_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    Description?: string;
+        
     @Field() 
     @MaxLength(510)
     DataContext: string;
@@ -18149,6 +18914,9 @@ export class CreateDataContextItemInput {
 
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
+
+    @Field({ nullable: true })
+    Description?: string;
 }
     
 
@@ -18187,6 +18955,9 @@ export class UpdateDataContextItemInput {
     @Field({ nullable: true })
     LastRefreshedAt?: Date;
 
+    @Field({ nullable: true })
+    Description?: string;
+
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
 }
@@ -18221,23 +18992,27 @@ export class RunDataContextItemViewResult {
 @Resolver(DataContextItem_)
 export class DataContextItemResolver extends ResolverBase {
     @Query(() => RunDataContextItemViewResult)
-    async RunDataContextItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDataContextItemViewResult)
-    async RunDataContextItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDataContextItemViewResult)
-    async RunDataContextItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Data Context Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DataContextItem_, { nullable: true })
-    async DataContextItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContextItem_ | null> {
+    async DataContextItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContextItem_ | null> {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -18246,23 +19021,26 @@ export class DataContextItemResolver extends ResolverBase {
     @Mutation(() => DataContextItem_)
     async CreateDataContextItem(
         @Arg('input', () => CreateDataContextItemInput) input: CreateDataContextItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Data Context Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContextItem_)
     async UpdateDataContextItem(
         @Arg('input', () => UpdateDataContextItemInput) input: UpdateDataContextItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Data Context Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContextItem_)
-    async DeleteDataContextItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContextItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Data Context Items', key, options, dataSource, userPayload, pubSub);
     }
@@ -18389,47 +19167,54 @@ export class RunDataContextViewResult {
 @Resolver(DataContext_)
 export class DataContextResolver extends ResolverBase {
     @Query(() => RunDataContextViewResult)
-    async RunDataContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDataContextViewResult)
-    async RunDataContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDataContextViewResult)
-    async RunDataContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDataContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Data Contexts';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DataContext_, { nullable: true })
-    async DataContext(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContext_ | null> {
+    async DataContext(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContext_ | null> {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Report_])
-    async Reports_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [DataContextItem_])
-    async DataContextItems_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DataContextItems_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContextItems] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Conversation_])
-    async Conversations_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Conversations_DataContextIDArray(@Root() datacontext_: DataContext_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversations] WHERE [DataContextID]='${datacontext_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
@@ -18438,23 +19223,26 @@ export class DataContextResolver extends ResolverBase {
     @Mutation(() => DataContext_)
     async CreateDataContext(
         @Arg('input', () => CreateDataContextInput) input: CreateDataContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Data Contexts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContext_)
     async UpdateDataContext(
         @Arg('input', () => UpdateDataContextInput) input: UpdateDataContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Data Contexts', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContext_)
-    async DeleteDataContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Data Contexts', key, options, dataSource, userPayload, pubSub);
     }
@@ -18596,39 +19384,45 @@ export class RunUserViewCategoryViewResult {
 @Resolver(UserViewCategory_)
 export class UserViewCategoryResolver extends ResolverBase {
     @Query(() => RunUserViewCategoryViewResult)
-    async RunUserViewCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewCategoryViewResult)
-    async RunUserViewCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunUserViewCategoryViewResult)
-    async RunUserViewCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunUserViewCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'User View Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewCategory_, { nullable: true })
-    async UserViewCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewCategory_ | null> {
+    async UserViewCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewCategory_ | null> {
         this.CheckUserReadPermissions('User View Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [UserViewCategory_])
-    async UserViewCategories_ParentIDArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViewCategories_ParentIDArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [ParentID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [UserView_])
-    async UserViews_CategoryIDArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async UserViews_CategoryIDArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViews] WHERE [CategoryID]='${userviewcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
@@ -18637,23 +19431,26 @@ export class UserViewCategoryResolver extends ResolverBase {
     @Mutation(() => UserViewCategory_)
     async CreateUserViewCategory(
         @Arg('input', () => CreateUserViewCategoryInput) input: CreateUserViewCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('User View Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewCategory_)
     async UpdateUserViewCategory(
         @Arg('input', () => UpdateUserViewCategoryInput) input: UpdateUserViewCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('User View Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserViewCategory_)
-    async DeleteUserViewCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserViewCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('User View Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -18781,39 +19578,45 @@ export class RunDashboardCategoryViewResult {
 @Resolver(DashboardCategory_)
 export class DashboardCategoryResolver extends ResolverBase {
     @Query(() => RunDashboardCategoryViewResult)
-    async RunDashboardCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDashboardCategoryViewResult)
-    async RunDashboardCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDashboardCategoryViewResult)
-    async RunDashboardCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDashboardCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Dashboard Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DashboardCategory_, { nullable: true })
-    async DashboardCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardCategory_ | null> {
+    async DashboardCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardCategory_ | null> {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [DashboardCategory_])
-    async DashboardCategories_ParentIDArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DashboardCategories_ParentIDArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [ParentID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Dashboard_])
-    async Dashboards_CategoryIDArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Dashboards_CategoryIDArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [CategoryID]='${dashboardcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
@@ -18822,23 +19625,26 @@ export class DashboardCategoryResolver extends ResolverBase {
     @Mutation(() => DashboardCategory_)
     async CreateDashboardCategory(
         @Arg('input', () => CreateDashboardCategoryInput) input: CreateDashboardCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DashboardCategory_)
     async UpdateDashboardCategory(
         @Arg('input', () => UpdateDashboardCategoryInput) input: UpdateDashboardCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DashboardCategory_)
-    async DeleteDashboardCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboardCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Dashboard Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -18966,39 +19772,45 @@ export class RunReportCategoryViewResult {
 @Resolver(ReportCategory_)
 export class ReportCategoryResolver extends ResolverBase {
     @Query(() => RunReportCategoryViewResult)
-    async RunReportCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportCategoryViewResult)
-    async RunReportCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunReportCategoryViewResult)
-    async RunReportCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunReportCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Report Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ReportCategory_, { nullable: true })
-    async ReportCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportCategory_ | null> {
+    async ReportCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportCategory_ | null> {
         this.CheckUserReadPermissions('Report Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ReportCategory_])
-    async ReportCategories_ParentIDArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ReportCategories_ParentIDArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [ParentID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Report_])
-    async Reports_CategoryIDArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Reports_CategoryIDArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [CategoryID]='${reportcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
@@ -19007,23 +19819,26 @@ export class ReportCategoryResolver extends ResolverBase {
     @Mutation(() => ReportCategory_)
     async CreateReportCategory(
         @Arg('input', () => CreateReportCategoryInput) input: CreateReportCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Report Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportCategory_)
     async UpdateReportCategory(
         @Arg('input', () => UpdateReportCategoryInput) input: UpdateReportCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Report Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportCategory_)
-    async DeleteReportCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Report Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -19158,31 +19973,36 @@ export class RunFileStorageProviderViewResult {
 @Resolver(FileStorageProvider_)
 export class FileStorageProviderResolver extends ResolverBase {
     @Query(() => RunFileStorageProviderViewResult)
-    async RunFileStorageProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileStorageProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileStorageProviderViewResult)
-    async RunFileStorageProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileStorageProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileStorageProviderViewResult)
-    async RunFileStorageProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileStorageProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'File Storage Providers';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => FileStorageProvider_, { nullable: true })
-    async FileStorageProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileStorageProvider_ | null> {
+    async FileStorageProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileStorageProvider_ | null> {
         this.CheckUserReadPermissions('File Storage Providers', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileStorageProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Storage Providers', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('File Storage Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [File_])
-    async Files_ProviderIDArray(@Root() filestorageprovider_: FileStorageProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Files_ProviderIDArray(@Root() filestorageprovider_: FileStorageProvider_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [ProviderID]='${filestorageprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
@@ -19191,23 +20011,26 @@ export class FileStorageProviderResolver extends ResolverBase {
     @Mutation(() => FileStorageProvider_)
     async CreateFileStorageProvider(
         @Arg('input', () => CreateFileStorageProviderInput) input: CreateFileStorageProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('File Storage Providers', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileStorageProvider_)
     async UpdateFileStorageProvider(
         @Arg('input', () => UpdateFileStorageProviderInput) input: UpdateFileStorageProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('File Storage Providers', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => FileStorageProvider_)
-    async DeleteFileStorageProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFileStorageProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('File Storage Providers', key, options, dataSource, userPayload, pubSub);
     }
@@ -19362,31 +20185,36 @@ export class RunFileViewResult {
 @Resolver(File_)
 export class FileResolver extends ResolverBase {
     @Query(() => RunFileViewResult)
-    async RunFileViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileViewResult)
-    async RunFileViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileViewResult)
-    async RunFileDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Files';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => File_, { nullable: true })
-    async File(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<File_ | null> {
+    async File(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<File_ | null> {
         this.CheckUserReadPermissions('Files', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Files', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [FileEntityRecordLink_])
-    async FileEntityRecordLinks_FileIDArray(@Root() file_: File_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async FileEntityRecordLinks_FileIDArray(@Root() file_: File_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [FileID]='${file_.ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
@@ -19395,23 +20223,26 @@ export class FileResolver extends ResolverBase {
     @Mutation(() => File_)
     async CreateFile(
         @Arg('input', () => CreateFileInput) input: CreateFileInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Files', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => File_)
     async UpdateFile(
         @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Files', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => File_)
-    async DeleteFile(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFile(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Files', key, options, dataSource, userPayload, pubSub);
     }
@@ -19525,39 +20356,45 @@ export class RunFileCategoryViewResult {
 @Resolver(FileCategory_)
 export class FileCategoryResolver extends ResolverBase {
     @Query(() => RunFileCategoryViewResult)
-    async RunFileCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileCategoryViewResult)
-    async RunFileCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileCategoryViewResult)
-    async RunFileCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'File Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => FileCategory_, { nullable: true })
-    async FileCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileCategory_ | null> {
+    async FileCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileCategory_ | null> {
         this.CheckUserReadPermissions('File Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [File_])
-    async Files_CategoryIDArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Files_CategoryIDArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFiles] WHERE [CategoryID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [FileCategory_])
-    async FileCategories_ParentIDArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async FileCategories_ParentIDArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileCategories] WHERE [ParentID]='${filecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL));
         return result;
@@ -19566,23 +20403,26 @@ export class FileCategoryResolver extends ResolverBase {
     @Mutation(() => FileCategory_)
     async CreateFileCategory(
         @Arg('input', () => CreateFileCategoryInput) input: CreateFileCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('File Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileCategory_)
     async UpdateFileCategory(
         @Arg('input', () => UpdateFileCategoryInput) input: UpdateFileCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('File Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => FileCategory_)
-    async DeleteFileCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFileCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('File Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -19695,23 +20535,27 @@ export class RunFileEntityRecordLinkViewResult {
 @Resolver(FileEntityRecordLink_)
 export class FileEntityRecordLinkResolver extends ResolverBase {
     @Query(() => RunFileEntityRecordLinkViewResult)
-    async RunFileEntityRecordLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileEntityRecordLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileEntityRecordLinkViewResult)
-    async RunFileEntityRecordLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileEntityRecordLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunFileEntityRecordLinkViewResult)
-    async RunFileEntityRecordLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunFileEntityRecordLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'File Entity Record Links';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => FileEntityRecordLink_, { nullable: true })
-    async FileEntityRecordLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileEntityRecordLink_ | null> {
+    async FileEntityRecordLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileEntityRecordLink_ | null> {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFileEntityRecordLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -19720,23 +20564,26 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
     @Mutation(() => FileEntityRecordLink_)
     async CreateFileEntityRecordLink(
         @Arg('input', () => CreateFileEntityRecordLinkInput) input: CreateFileEntityRecordLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileEntityRecordLink_)
     async UpdateFileEntityRecordLink(
         @Arg('input', () => UpdateFileEntityRecordLinkInput) input: UpdateFileEntityRecordLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => FileEntityRecordLink_)
-    async DeleteFileEntityRecordLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFileEntityRecordLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('File Entity Record Links', key, options, dataSource, userPayload, pubSub);
     }
@@ -19890,23 +20737,27 @@ export class RunVersionInstallationViewResult {
 @Resolver(VersionInstallation_)
 export class VersionInstallationResolver extends ResolverBase {
     @Query(() => RunVersionInstallationViewResult)
-    async RunVersionInstallationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVersionInstallationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVersionInstallationViewResult)
-    async RunVersionInstallationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVersionInstallationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunVersionInstallationViewResult)
-    async RunVersionInstallationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunVersionInstallationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Version Installations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => VersionInstallation_, { nullable: true })
-    async VersionInstallation(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VersionInstallation_ | null> {
+    async VersionInstallation(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VersionInstallation_ | null> {
         this.CheckUserReadPermissions('Version Installations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVersionInstallations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Version Installations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Version Installations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -19915,18 +20766,20 @@ export class VersionInstallationResolver extends ResolverBase {
     @Mutation(() => VersionInstallation_)
     async CreateVersionInstallation(
         @Arg('input', () => CreateVersionInstallationInput) input: CreateVersionInstallationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Version Installations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VersionInstallation_)
     async UpdateVersionInstallation(
         @Arg('input', () => UpdateVersionInstallationInput) input: UpdateVersionInstallationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Version Installations', input, dataSource, userPayload, pubSub);
     }
     
@@ -20099,23 +20952,27 @@ export class RunDuplicateRunDetailMatchViewResult {
 @Resolver(DuplicateRunDetailMatch_)
 export class DuplicateRunDetailMatchResolver extends ResolverBase {
     @Query(() => RunDuplicateRunDetailMatchViewResult)
-    async RunDuplicateRunDetailMatchViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailMatchViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunDetailMatchViewResult)
-    async RunDuplicateRunDetailMatchViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailMatchViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunDetailMatchViewResult)
-    async RunDuplicateRunDetailMatchDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailMatchDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Duplicate Run Detail Matches';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DuplicateRunDetailMatch_, { nullable: true })
-    async DuplicateRunDetailMatch(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetailMatch_ | null> {
+    async DuplicateRunDetailMatch(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetailMatch_ | null> {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -20124,18 +20981,20 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
     @Mutation(() => DuplicateRunDetailMatch_)
     async CreateDuplicateRunDetailMatch(
         @Arg('input', () => CreateDuplicateRunDetailMatchInput) input: CreateDuplicateRunDetailMatchInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetailMatch_)
     async UpdateDuplicateRunDetailMatch(
         @Arg('input', () => UpdateDuplicateRunDetailMatchInput) input: UpdateDuplicateRunDetailMatchInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub);
     }
     
@@ -20251,23 +21110,27 @@ export class RunEntityDocumentSettingViewResult {
 @Resolver(EntityDocumentSetting_)
 export class EntityDocumentSettingResolver extends ResolverBase {
     @Query(() => RunEntityDocumentSettingViewResult)
-    async RunEntityDocumentSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentSettingViewResult)
-    async RunEntityDocumentSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityDocumentSettingViewResult)
-    async RunEntityDocumentSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityDocumentSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Document Settings';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocumentSetting_, { nullable: true })
-    async EntityDocumentSetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentSetting_ | null> {
+    async EntityDocumentSetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentSetting_ | null> {
         this.CheckUserReadPermissions('Entity Document Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -20276,23 +21139,26 @@ export class EntityDocumentSettingResolver extends ResolverBase {
     @Mutation(() => EntityDocumentSetting_)
     async CreateEntityDocumentSetting(
         @Arg('input', () => CreateEntityDocumentSettingInput) input: CreateEntityDocumentSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentSetting_)
     async UpdateEntityDocumentSetting(
         @Arg('input', () => UpdateEntityDocumentSettingInput) input: UpdateEntityDocumentSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityDocumentSetting_)
-    async DeleteEntityDocumentSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityDocumentSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Document Settings', key, options, dataSource, userPayload, pubSub);
     }
@@ -20409,23 +21275,27 @@ export class RunEntitySettingViewResult {
 @Resolver(EntitySetting_)
 export class EntitySettingResolver extends ResolverBase {
     @Query(() => RunEntitySettingViewResult)
-    async RunEntitySettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntitySettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntitySettingViewResult)
-    async RunEntitySettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntitySettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntitySettingViewResult)
-    async RunEntitySettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntitySettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Settings';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntitySetting_, { nullable: true })
-    async EntitySetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntitySetting_ | null> {
+    async EntitySetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntitySetting_ | null> {
         this.CheckUserReadPermissions('Entity Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -20434,23 +21304,26 @@ export class EntitySettingResolver extends ResolverBase {
     @Mutation(() => EntitySetting_)
     async CreateEntitySetting(
         @Arg('input', () => CreateEntitySettingInput) input: CreateEntitySettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntitySetting_)
     async UpdateEntitySetting(
         @Arg('input', () => UpdateEntitySettingInput) input: UpdateEntitySettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Settings', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntitySetting_)
-    async DeleteEntitySetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntitySetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Settings', key, options, dataSource, userPayload, pubSub);
     }
@@ -20642,31 +21515,36 @@ export class RunDuplicateRunViewResult {
 @Resolver(DuplicateRun_)
 export class DuplicateRunResolver extends ResolverBase {
     @Query(() => RunDuplicateRunViewResult)
-    async RunDuplicateRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunViewResult)
-    async RunDuplicateRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunViewResult)
-    async RunDuplicateRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Duplicate Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DuplicateRun_, { nullable: true })
-    async DuplicateRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRun_ | null> {
+    async DuplicateRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRun_ | null> {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [DuplicateRunDetail_])
-    async DuplicateRunDetails_DuplicateRunIDArray(@Root() duplicaterun_: DuplicateRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRunDetails_DuplicateRunIDArray(@Root() duplicaterun_: DuplicateRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [DuplicateRunID]='${duplicaterun_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL));
         return result;
@@ -20675,18 +21553,20 @@ export class DuplicateRunResolver extends ResolverBase {
     @Mutation(() => DuplicateRun_)
     async CreateDuplicateRun(
         @Arg('input', () => CreateDuplicateRunInput) input: CreateDuplicateRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRun_)
     async UpdateDuplicateRun(
         @Arg('input', () => UpdateDuplicateRunInput) input: UpdateDuplicateRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -20830,31 +21710,36 @@ export class RunDuplicateRunDetailViewResult {
 @Resolver(DuplicateRunDetail_)
 export class DuplicateRunDetailResolver extends ResolverBase {
     @Query(() => RunDuplicateRunDetailViewResult)
-    async RunDuplicateRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunDetailViewResult)
-    async RunDuplicateRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunDuplicateRunDetailViewResult)
-    async RunDuplicateRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunDuplicateRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Duplicate Run Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DuplicateRunDetail_, { nullable: true })
-    async DuplicateRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetail_ | null> {
+    async DuplicateRunDetail(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetail_ | null> {
         this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [DuplicateRunDetailMatch_])
-    async DuplicateRunDetailMatches_DuplicateRunDetailIDArray(@Root() duplicaterundetail_: DuplicateRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DuplicateRunDetailMatches_DuplicateRunDetailIDArray(@Root() duplicaterundetail_: DuplicateRunDetail_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [DuplicateRunDetailID]='${duplicaterundetail_.ID}' ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
         return result;
@@ -20863,18 +21748,20 @@ export class DuplicateRunDetailResolver extends ResolverBase {
     @Mutation(() => DuplicateRunDetail_)
     async CreateDuplicateRunDetail(
         @Arg('input', () => CreateDuplicateRunDetailInput) input: CreateDuplicateRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetail_)
     async UpdateDuplicateRunDetail(
         @Arg('input', () => UpdateDuplicateRunDetailInput) input: UpdateDuplicateRunDetailInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub);
     }
     
@@ -20990,23 +21877,27 @@ export class RunApplicationSettingViewResult {
 @Resolver(ApplicationSetting_)
 export class ApplicationSettingResolver extends ResolverBase {
     @Query(() => RunApplicationSettingViewResult)
-    async RunApplicationSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationSettingViewResult)
-    async RunApplicationSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunApplicationSettingViewResult)
-    async RunApplicationSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunApplicationSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Application Settings';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ApplicationSetting_, { nullable: true })
-    async ApplicationSetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationSetting_ | null> {
+    async ApplicationSetting(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationSetting_ | null> {
         this.CheckUserReadPermissions('Application Settings', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -21015,23 +21906,26 @@ export class ApplicationSettingResolver extends ResolverBase {
     @Mutation(() => ApplicationSetting_)
     async CreateApplicationSetting(
         @Arg('input', () => CreateApplicationSettingInput) input: CreateApplicationSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Application Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationSetting_)
     async UpdateApplicationSetting(
         @Arg('input', () => UpdateApplicationSettingInput) input: UpdateApplicationSettingInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Application Settings', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationSetting_)
-    async DeleteApplicationSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationSetting(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Application Settings', key, options, dataSource, userPayload, pubSub);
     }
@@ -21155,39 +22049,45 @@ export class RunActionCategoryViewResult {
 @Resolver(ActionCategory_)
 export class ActionCategoryResolver extends ResolverBase {
     @Query(() => RunActionCategoryViewResult)
-    async RunActionCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionCategoryViewResult)
-    async RunActionCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionCategoryViewResult)
-    async RunActionCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionCategory_, { nullable: true })
-    async ActionCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
+    async ActionCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
         this.CheckUserReadPermissions('Action Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ActionCategory_])
-    async ActionCategories_ParentIDArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionCategories_ParentIDArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [Action_])
-    async Actions_CategoryIDArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Actions_CategoryIDArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]='${actioncategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
@@ -21196,23 +22096,26 @@ export class ActionCategoryResolver extends ResolverBase {
     @Mutation(() => ActionCategory_)
     async CreateActionCategory(
         @Arg('input', () => CreateActionCategoryInput) input: CreateActionCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionCategory_)
     async UpdateActionCategory(
         @Arg('input', () => UpdateActionCategoryInput) input: UpdateActionCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionCategory_)
-    async DeleteActionCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -21334,47 +22237,54 @@ export class RunEntityActionViewResult {
 @Resolver(EntityAction_)
 export class EntityActionResolver extends ResolverBase {
     @Query(() => RunEntityActionViewResult)
-    async RunEntityActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionViewResult)
-    async RunEntityActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionViewResult)
-    async RunEntityActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityAction_, { nullable: true })
-    async EntityAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
+    async EntityAction(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityActionInvocation_])
-    async EntityActionInvocations_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionInvocations_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityActionFilter_])
-    async EntityActionFilters_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionFilters_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityActionParam_])
-    async EntityActionParams_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionParams_EntityActionIDArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [EntityActionID]='${entityaction_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
@@ -21383,23 +22293,26 @@ export class EntityActionResolver extends ResolverBase {
     @Mutation(() => EntityAction_)
     async CreateEntityAction(
         @Arg('input', () => CreateEntityActionInput) input: CreateEntityActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityAction_)
     async UpdateEntityAction(
         @Arg('input', () => UpdateEntityActionInput) input: UpdateEntityActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityAction_)
-    async DeleteEntityAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -21508,23 +22421,27 @@ export class RunEntityActionInvocationViewResult {
 @Resolver(EntityActionInvocation_)
 export class EntityActionInvocationResolver extends ResolverBase {
     @Query(() => RunEntityActionInvocationViewResult)
-    async RunEntityActionInvocationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionInvocationViewResult)
-    async RunEntityActionInvocationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionInvocationViewResult)
-    async RunEntityActionInvocationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Action Invocations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityActionInvocation_, { nullable: true })
-    async EntityActionInvocation(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocation_ | null> {
+    async EntityActionInvocation(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocation_ | null> {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -21533,23 +22450,26 @@ export class EntityActionInvocationResolver extends ResolverBase {
     @Mutation(() => EntityActionInvocation_)
     async CreateEntityActionInvocation(
         @Arg('input', () => CreateEntityActionInvocationInput) input: CreateEntityActionInvocationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionInvocation_)
     async UpdateEntityActionInvocation(
         @Arg('input', () => UpdateEntityActionInvocationInput) input: UpdateEntityActionInvocationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityActionInvocation_)
-    async DeleteEntityActionInvocation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityActionInvocation(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Invocations', key, options, dataSource, userPayload, pubSub);
     }
@@ -21661,23 +22581,27 @@ export class RunActionAuthorizationViewResult {
 @Resolver(ActionAuthorization_)
 export class ActionAuthorizationResolver extends ResolverBase {
     @Query(() => RunActionAuthorizationViewResult)
-    async RunActionAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionAuthorizationViewResult)
-    async RunActionAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionAuthorizationViewResult)
-    async RunActionAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Authorizations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionAuthorization_, { nullable: true })
-    async ActionAuthorization(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
+    async ActionAuthorization(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -21686,23 +22610,26 @@ export class ActionAuthorizationResolver extends ResolverBase {
     @Mutation(() => ActionAuthorization_)
     async CreateActionAuthorization(
         @Arg('input', () => CreateActionAuthorizationInput) input: CreateActionAuthorizationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Authorizations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionAuthorization_)
     async UpdateActionAuthorization(
         @Arg('input', () => UpdateActionAuthorizationInput) input: UpdateActionAuthorizationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Authorizations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionAuthorization_)
-    async DeleteActionAuthorization(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionAuthorization(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Authorizations', key, options, dataSource, userPayload, pubSub);
     }
@@ -21808,31 +22735,36 @@ export class RunEntityActionInvocationTypeViewResult {
 @Resolver(EntityActionInvocationType_)
 export class EntityActionInvocationTypeResolver extends ResolverBase {
     @Query(() => RunEntityActionInvocationTypeViewResult)
-    async RunEntityActionInvocationTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionInvocationTypeViewResult)
-    async RunEntityActionInvocationTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionInvocationTypeViewResult)
-    async RunEntityActionInvocationTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionInvocationTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Action Invocation Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityActionInvocationType_, { nullable: true })
-    async EntityActionInvocationType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocationType_ | null> {
+    async EntityActionInvocationType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocationType_ | null> {
         this.CheckUserReadPermissions('Entity Action Invocation Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocationTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocation Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Action Invocation Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityActionInvocation_])
-    async EntityActionInvocations_InvocationTypeIDArray(@Root() entityactioninvocationtype_: EntityActionInvocationType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionInvocations_InvocationTypeIDArray(@Root() entityactioninvocationtype_: EntityActionInvocationType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [InvocationTypeID]='${entityactioninvocationtype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
         return result;
@@ -21841,23 +22773,26 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
     @Mutation(() => EntityActionInvocationType_)
     async CreateEntityActionInvocationType(
         @Arg('input', () => CreateEntityActionInvocationTypeInput) input: CreateEntityActionInvocationTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionInvocationType_)
     async UpdateEntityActionInvocationType(
         @Arg('input', () => UpdateEntityActionInvocationTypeInput) input: UpdateEntityActionInvocationTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityActionInvocationType_)
-    async DeleteEntityActionInvocationType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityActionInvocationType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Invocation Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -22118,95 +23053,108 @@ export class RunActionViewResult {
 @Resolver(Action_)
 export class ActionResolver extends ResolverBase {
     @Query(() => RunActionViewResult)
-    async RunActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionViewResult)
-    async RunActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionViewResult)
-    async RunActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Action_, { nullable: true })
-    async Action(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
+    async Action(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
         this.CheckUserReadPermissions('Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ActionParam_])
-    async ActionParams_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionParams_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionLibrary_])
-    async ActionLibraries_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionLibraries_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ScheduledAction_])
-    async ScheduledActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ScheduledActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionResultCode_])
-    async ActionResultCodes_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionResultCodes_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIAgentAction_])
-    async AIAgentActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIAgentActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionContext_])
-    async ActionContexts_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionContexts_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityAction_])
-    async EntityActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActions_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionExecutionLog_])
-    async ActionExecutionLogs_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionExecutionLogs_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ActionAuthorization_])
-    async ActionAuthorizations_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionAuthorizations_ActionIDArray(@Root() action_: Action_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]='${action_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
@@ -22215,23 +23163,26 @@ export class ActionResolver extends ResolverBase {
     @Mutation(() => Action_)
     async CreateAction(
         @Arg('input', () => CreateActionInput) input: CreateActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Action_)
     async UpdateAction(
         @Arg('input', () => UpdateActionInput) input: UpdateActionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Actions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Action_)
-    async DeleteAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAction(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Actions', key, options, dataSource, userPayload, pubSub);
     }
@@ -22345,23 +23296,27 @@ export class RunEntityActionFilterViewResult {
 @Resolver(EntityActionFilter_)
 export class EntityActionFilterResolver extends ResolverBase {
     @Query(() => RunEntityActionFilterViewResult)
-    async RunEntityActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionFilterViewResult)
-    async RunEntityActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionFilterViewResult)
-    async RunEntityActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Action Filters';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityActionFilter_, { nullable: true })
-    async EntityActionFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionFilter_ | null> {
+    async EntityActionFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionFilter_ | null> {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -22370,23 +23325,26 @@ export class EntityActionFilterResolver extends ResolverBase {
     @Mutation(() => EntityActionFilter_)
     async CreateEntityActionFilter(
         @Arg('input', () => CreateEntityActionFilterInput) input: CreateEntityActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionFilter_)
     async UpdateEntityActionFilter(
         @Arg('input', () => UpdateEntityActionFilterInput) input: UpdateEntityActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityActionFilter_)
-    async DeleteEntityActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Filters', key, options, dataSource, userPayload, pubSub);
     }
@@ -22500,31 +23458,36 @@ export class RunActionFilterViewResult {
 @Resolver(ActionFilter_)
 export class ActionFilterResolver extends ResolverBase {
     @Query(() => RunActionFilterViewResult)
-    async RunActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionFilterViewResult)
-    async RunActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionFilterViewResult)
-    async RunActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Filters';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionFilter_, { nullable: true })
-    async ActionFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
+    async ActionFilter(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
         this.CheckUserReadPermissions('Action Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityActionFilter_])
-    async EntityActionFilters_ActionFilterIDArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionFilters_ActionFilterIDArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]='${actionfilter_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
         return result;
@@ -22533,23 +23496,26 @@ export class ActionFilterResolver extends ResolverBase {
     @Mutation(() => ActionFilter_)
     async CreateActionFilter(
         @Arg('input', () => CreateActionFilterInput) input: CreateActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Filters', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionFilter_)
     async UpdateActionFilter(
         @Arg('input', () => UpdateActionFilterInput) input: UpdateActionFilterInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Filters', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionFilter_)
-    async DeleteActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionFilter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Filters', key, options, dataSource, userPayload, pubSub);
     }
@@ -22646,31 +23612,36 @@ export class RunActionContextTypeViewResult {
 @Resolver(ActionContextType_)
 export class ActionContextTypeResolver extends ResolverBase {
     @Query(() => RunActionContextTypeViewResult)
-    async RunActionContextTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionContextTypeViewResult)
-    async RunActionContextTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionContextTypeViewResult)
-    async RunActionContextTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Context Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionContextType_, { nullable: true })
-    async ActionContextType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
+    async ActionContextType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
         this.CheckUserReadPermissions('Action Context Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Context Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ActionContext_])
-    async ActionContexts_ContextTypeIDArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionContexts_ContextTypeIDArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]='${actioncontexttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
         return result;
@@ -22679,23 +23650,26 @@ export class ActionContextTypeResolver extends ResolverBase {
     @Mutation(() => ActionContextType_)
     async CreateActionContextType(
         @Arg('input', () => CreateActionContextTypeInput) input: CreateActionContextTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Context Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionContextType_)
     async UpdateActionContextType(
         @Arg('input', () => UpdateActionContextTypeInput) input: UpdateActionContextTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Context Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionContextType_)
-    async DeleteActionContextType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionContextType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Context Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -22812,23 +23786,27 @@ export class RunActionResultCodeViewResult {
 @Resolver(ActionResultCode_)
 export class ActionResultCodeResolver extends ResolverBase {
     @Query(() => RunActionResultCodeViewResult)
-    async RunActionResultCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionResultCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionResultCodeViewResult)
-    async RunActionResultCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionResultCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionResultCodeViewResult)
-    async RunActionResultCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionResultCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Result Codes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionResultCode_, { nullable: true })
-    async ActionResultCode(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
+    async ActionResultCode(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -22837,23 +23815,26 @@ export class ActionResultCodeResolver extends ResolverBase {
     @Mutation(() => ActionResultCode_)
     async CreateActionResultCode(
         @Arg('input', () => CreateActionResultCodeInput) input: CreateActionResultCodeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Result Codes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionResultCode_)
     async UpdateActionResultCode(
         @Arg('input', () => UpdateActionResultCodeInput) input: UpdateActionResultCodeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Result Codes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionResultCode_)
-    async DeleteActionResultCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionResultCode(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Result Codes', key, options, dataSource, userPayload, pubSub);
     }
@@ -22966,23 +23947,27 @@ export class RunActionContextViewResult {
 @Resolver(ActionContext_)
 export class ActionContextResolver extends ResolverBase {
     @Query(() => RunActionContextViewResult)
-    async RunActionContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionContextViewResult)
-    async RunActionContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionContextViewResult)
-    async RunActionContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Contexts';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionContext_, { nullable: true })
-    async ActionContext(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
+    async ActionContext(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
         this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -22991,23 +23976,26 @@ export class ActionContextResolver extends ResolverBase {
     @Mutation(() => ActionContext_)
     async CreateActionContext(
         @Arg('input', () => CreateActionContextInput) input: CreateActionContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Contexts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionContext_)
     async UpdateActionContext(
         @Arg('input', () => UpdateActionContextInput) input: UpdateActionContextInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Contexts', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionContext_)
-    async DeleteActionContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionContext(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Contexts', key, options, dataSource, userPayload, pubSub);
     }
@@ -23158,23 +24146,27 @@ export class RunActionExecutionLogViewResult {
 @Resolver(ActionExecutionLog_)
 export class ActionExecutionLogResolver extends ResolverBase {
     @Query(() => RunActionExecutionLogViewResult)
-    async RunActionExecutionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionExecutionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionExecutionLogViewResult)
-    async RunActionExecutionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionExecutionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionExecutionLogViewResult)
-    async RunActionExecutionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionExecutionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Execution Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionExecutionLog_, { nullable: true })
-    async ActionExecutionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
+    async ActionExecutionLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -23183,23 +24175,26 @@ export class ActionExecutionLogResolver extends ResolverBase {
     @Mutation(() => ActionExecutionLog_)
     async CreateActionExecutionLog(
         @Arg('input', () => CreateActionExecutionLogInput) input: CreateActionExecutionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionExecutionLog_)
     async UpdateActionExecutionLog(
         @Arg('input', () => UpdateActionExecutionLogInput) input: UpdateActionExecutionLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionExecutionLog_)
-    async DeleteActionExecutionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionExecutionLog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Execution Logs', key, options, dataSource, userPayload, pubSub);
     }
@@ -23360,39 +24355,45 @@ export class RunActionParamViewResult {
 @Resolver(ActionParam_)
 export class ActionParamResolver extends ResolverBase {
     @Query(() => RunActionParamViewResult)
-    async RunActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionParamViewResult)
-    async RunActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionParamViewResult)
-    async RunActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionParam_, { nullable: true })
-    async ActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
+    async ActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
         this.CheckUserReadPermissions('Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityActionParam_])
-    async EntityActionParams_ActionParamIDArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityActionParams_ActionParamIDArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ScheduledActionParam_])
-    async ScheduledActionParams_ActionParamIDArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ScheduledActionParams_ActionParamIDArray(@Root() actionparam_: ActionParam_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Scheduled Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActionParams] WHERE [ActionParamID]='${actionparam_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Action Params', await dataSource.query(sSQL));
         return result;
@@ -23401,23 +24402,26 @@ export class ActionParamResolver extends ResolverBase {
     @Mutation(() => ActionParam_)
     async CreateActionParam(
         @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionParam_)
     async UpdateActionParam(
         @Arg('input', () => UpdateActionParamInput) input: UpdateActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionParam_)
-    async DeleteActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -23529,23 +24533,27 @@ export class RunActionLibraryViewResult {
 @Resolver(ActionLibrary_)
 export class ActionLibraryResolver extends ResolverBase {
     @Query(() => RunActionLibraryViewResult)
-    async RunActionLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionLibraryViewResult)
-    async RunActionLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunActionLibraryViewResult)
-    async RunActionLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunActionLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Action Libraries';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ActionLibrary_, { nullable: true })
-    async ActionLibrary(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
+    async ActionLibrary(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -23554,23 +24562,26 @@ export class ActionLibraryResolver extends ResolverBase {
     @Mutation(() => ActionLibrary_)
     async CreateActionLibrary(
         @Arg('input', () => CreateActionLibraryInput) input: CreateActionLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Action Libraries', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionLibrary_)
     async UpdateActionLibrary(
         @Arg('input', () => UpdateActionLibraryInput) input: UpdateActionLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Action Libraries', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ActionLibrary_)
-    async DeleteActionLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteActionLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Action Libraries', key, options, dataSource, userPayload, pubSub);
     }
@@ -23698,39 +24709,45 @@ export class RunLibraryViewResult {
 @Resolver(Library_)
 export class LibraryResolver extends ResolverBase {
     @Query(() => RunLibraryViewResult)
-    async RunLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunLibraryViewResult)
-    async RunLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunLibraryViewResult)
-    async RunLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Libraries';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Library_, { nullable: true })
-    async Library(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Library_ | null> {
+    async Library(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Library_ | null> {
         this.CheckUserReadPermissions('Libraries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraries] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ActionLibrary_])
-    async ActionLibraries_LibraryIDArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ActionLibraries_LibraryIDArray(@Root() library_: Library_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [LibraryItem_])
-    async LibraryItems_LibraryIDArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async LibraryItems_LibraryIDArray(@Root() library_: Library_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Library Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [LibraryID]='${library_.ID}' ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL));
         return result;
@@ -23739,23 +24756,26 @@ export class LibraryResolver extends ResolverBase {
     @Mutation(() => Library_)
     async CreateLibrary(
         @Arg('input', () => CreateLibraryInput) input: CreateLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Libraries', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Library_)
     async UpdateLibrary(
         @Arg('input', () => UpdateLibraryInput) input: UpdateLibraryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Libraries', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Library_)
-    async DeleteLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteLibrary(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Libraries', key, options, dataSource, userPayload, pubSub);
     }
@@ -23883,39 +24903,45 @@ export class RunListCategoryViewResult {
 @Resolver(ListCategory_)
 export class ListCategoryResolver extends ResolverBase {
     @Query(() => RunListCategoryViewResult)
-    async RunListCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListCategoryViewResult)
-    async RunListCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunListCategoryViewResult)
-    async RunListCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunListCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'List Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ListCategory_, { nullable: true })
-    async ListCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListCategory_ | null> {
+    async ListCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListCategory_ | null> {
         this.CheckUserReadPermissions('List Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ListCategory_])
-    async ListCategories_ParentIDArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ListCategories_ParentIDArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListCategories] WHERE [ParentID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('List Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Categories', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [List_])
-    async Lists_CategoryIDArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Lists_CategoryIDArray(@Root() listcategory_: ListCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLists] WHERE [CategoryID]='${listcategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
@@ -23924,23 +24950,26 @@ export class ListCategoryResolver extends ResolverBase {
     @Mutation(() => ListCategory_)
     async CreateListCategory(
         @Arg('input', () => CreateListCategoryInput) input: CreateListCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('List Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ListCategory_)
     async UpdateListCategory(
         @Arg('input', () => UpdateListCategoryInput) input: UpdateListCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('List Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ListCategory_)
-    async DeleteListCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('List Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -24077,39 +25106,45 @@ export class RunCommunicationProviderViewResult {
 @Resolver(CommunicationProvider_)
 export class CommunicationProviderResolver extends ResolverBase {
     @Query(() => RunCommunicationProviderViewResult)
-    async RunCommunicationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationProviderViewResult)
-    async RunCommunicationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationProviderViewResult)
-    async RunCommunicationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Communication Providers';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CommunicationProvider_, { nullable: true })
-    async CommunicationProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProvider_ | null> {
+    async CommunicationProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProvider_ | null> {
         this.CheckUserReadPermissions('Communication Providers', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Providers', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Communication Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [CommunicationLog_])
-    async CommunicationLogs_CommunicationProviderIDArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationLogs_CommunicationProviderIDArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [CommunicationProviderMessageType_])
-    async CommunicationProviderMessageTypes_CommunicationProviderIDArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationProviderMessageTypes_CommunicationProviderIDArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationProviderID]='${communicationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
         return result;
@@ -24118,23 +25153,26 @@ export class CommunicationProviderResolver extends ResolverBase {
     @Mutation(() => CommunicationProvider_)
     async CreateCommunicationProvider(
         @Arg('input', () => CreateCommunicationProviderInput) input: CreateCommunicationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Communication Providers', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CommunicationProvider_)
     async UpdateCommunicationProvider(
         @Arg('input', () => UpdateCommunicationProviderInput) input: UpdateCommunicationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Providers', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => CommunicationProvider_)
-    async DeleteCommunicationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCommunicationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Communication Providers', key, options, dataSource, userPayload, pubSub);
     }
@@ -24284,31 +25322,36 @@ export class RunCommunicationRunViewResult {
 @Resolver(CommunicationRun_)
 export class CommunicationRunResolver extends ResolverBase {
     @Query(() => RunCommunicationRunViewResult)
-    async RunCommunicationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationRunViewResult)
-    async RunCommunicationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationRunViewResult)
-    async RunCommunicationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Communication Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CommunicationRun_, { nullable: true })
-    async CommunicationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationRun_ | null> {
+    async CommunicationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationRun_ | null> {
         this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [CommunicationLog_])
-    async CommunicationLogs_CommunicationRunIDArray(@Root() communicationrun_: CommunicationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationLogs_CommunicationRunIDArray(@Root() communicationrun_: CommunicationRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationRunID]='${communicationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
@@ -24317,18 +25360,20 @@ export class CommunicationRunResolver extends ResolverBase {
     @Mutation(() => CommunicationRun_)
     async CreateCommunicationRun(
         @Arg('input', () => CreateCommunicationRunInput) input: CreateCommunicationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Communication Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CommunicationRun_)
     async UpdateCommunicationRun(
         @Arg('input', () => UpdateCommunicationRunInput) input: UpdateCommunicationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -24462,31 +25507,36 @@ export class RunCommunicationProviderMessageTypeViewResult {
 @Resolver(CommunicationProviderMessageType_)
 export class CommunicationProviderMessageTypeResolver extends ResolverBase {
     @Query(() => RunCommunicationProviderMessageTypeViewResult)
-    async RunCommunicationProviderMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationProviderMessageTypeViewResult)
-    async RunCommunicationProviderMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationProviderMessageTypeViewResult)
-    async RunCommunicationProviderMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationProviderMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Communication Provider Message Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CommunicationProviderMessageType_, { nullable: true })
-    async CommunicationProviderMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProviderMessageType_ | null> {
+    async CommunicationProviderMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProviderMessageType_ | null> {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [CommunicationLog_])
-    async CommunicationLogs_CommunicationProviderMessageTypeIDArray(@Root() communicationprovidermessagetype_: CommunicationProviderMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationLogs_CommunicationProviderMessageTypeIDArray(@Root() communicationprovidermessagetype_: CommunicationProviderMessageType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderMessageTypeID]='${communicationprovidermessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
         return result;
@@ -24495,23 +25545,26 @@ export class CommunicationProviderMessageTypeResolver extends ResolverBase {
     @Mutation(() => CommunicationProviderMessageType_)
     async CreateCommunicationProviderMessageType(
         @Arg('input', () => CreateCommunicationProviderMessageTypeInput) input: CreateCommunicationProviderMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CommunicationProviderMessageType_)
     async UpdateCommunicationProviderMessageType(
         @Arg('input', () => UpdateCommunicationProviderMessageTypeInput) input: UpdateCommunicationProviderMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => CommunicationProviderMessageType_)
-    async DeleteCommunicationProviderMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCommunicationProviderMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Communication Provider Message Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -24672,23 +25725,27 @@ export class RunCommunicationLogViewResult {
 @Resolver(CommunicationLog_)
 export class CommunicationLogResolver extends ResolverBase {
     @Query(() => RunCommunicationLogViewResult)
-    async RunCommunicationLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationLogViewResult)
-    async RunCommunicationLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationLogViewResult)
-    async RunCommunicationLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Communication Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CommunicationLog_, { nullable: true })
-    async CommunicationLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationLog_ | null> {
+    async CommunicationLog(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationLog_ | null> {
         this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -24697,18 +25754,20 @@ export class CommunicationLogResolver extends ResolverBase {
     @Mutation(() => CommunicationLog_)
     async CreateCommunicationLog(
         @Arg('input', () => CreateCommunicationLogInput) input: CreateCommunicationLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Communication Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CommunicationLog_)
     async UpdateCommunicationLog(
         @Arg('input', () => UpdateCommunicationLogInput) input: UpdateCommunicationLogInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Logs', input, dataSource, userPayload, pubSub);
     }
     
@@ -24834,39 +25893,45 @@ export class RunCommunicationBaseMessageTypeViewResult {
 @Resolver(CommunicationBaseMessageType_)
 export class CommunicationBaseMessageTypeResolver extends ResolverBase {
     @Query(() => RunCommunicationBaseMessageTypeViewResult)
-    async RunCommunicationBaseMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationBaseMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationBaseMessageTypeViewResult)
-    async RunCommunicationBaseMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationBaseMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunCommunicationBaseMessageTypeViewResult)
-    async RunCommunicationBaseMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunCommunicationBaseMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Communication Base Message Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CommunicationBaseMessageType_, { nullable: true })
-    async CommunicationBaseMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationBaseMessageType_ | null> {
+    async CommunicationBaseMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationBaseMessageType_ | null> {
         this.CheckUserReadPermissions('Communication Base Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationBaseMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Communication Base Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Communication Base Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [CommunicationProviderMessageType_])
-    async CommunicationProviderMessageTypes_CommunicationBaseMessageTypeIDArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async CommunicationProviderMessageTypes_CommunicationBaseMessageTypeIDArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityCommunicationMessageType_])
-    async EntityCommunicationMessageTypes_BaseMessageTypeIDArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityCommunicationMessageTypes_BaseMessageTypeIDArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [BaseMessageTypeID]='${communicationbasemessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL));
         return result;
@@ -24875,23 +25940,26 @@ export class CommunicationBaseMessageTypeResolver extends ResolverBase {
     @Mutation(() => CommunicationBaseMessageType_)
     async CreateCommunicationBaseMessageType(
         @Arg('input', () => CreateCommunicationBaseMessageTypeInput) input: CreateCommunicationBaseMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CommunicationBaseMessageType_)
     async UpdateCommunicationBaseMessageType(
         @Arg('input', () => UpdateCommunicationBaseMessageTypeInput) input: UpdateCommunicationBaseMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => CommunicationBaseMessageType_)
-    async DeleteCommunicationBaseMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCommunicationBaseMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Communication Base Message Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -25063,55 +26131,63 @@ export class RunTemplateViewResult {
 @Resolver(Template_)
 export class TemplateResolver extends ResolverBase {
     @Query(() => RunTemplateViewResult)
-    async RunTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateViewResult)
-    async RunTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateViewResult)
-    async RunTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Templates';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Template_, { nullable: true })
-    async Template(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Template_ | null> {
+    async Template(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Template_ | null> {
         this.CheckUserReadPermissions('Templates', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [TemplateContent_])
-    async TemplateContents_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateContents_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Contents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TemplateParam_])
-    async TemplateParams_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateParams_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [AIPrompt_])
-    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AIPrompts_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Prompts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPrompts] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Prompts', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [EntityDocument_])
-    async EntityDocuments_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityDocuments_TemplateIDArray(@Root() template_: Template_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [TemplateID]='${template_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
@@ -25120,23 +26196,26 @@ export class TemplateResolver extends ResolverBase {
     @Mutation(() => Template_)
     async CreateTemplate(
         @Arg('input', () => CreateTemplateInput) input: CreateTemplateInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Templates', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Template_)
     async UpdateTemplate(
         @Arg('input', () => UpdateTemplateInput) input: UpdateTemplateInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Templates', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Template_)
-    async DeleteTemplate(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteTemplate(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Templates', key, options, dataSource, userPayload, pubSub);
     }
@@ -25264,39 +26343,45 @@ export class RunTemplateCategoryViewResult {
 @Resolver(TemplateCategory_)
 export class TemplateCategoryResolver extends ResolverBase {
     @Query(() => RunTemplateCategoryViewResult)
-    async RunTemplateCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateCategoryViewResult)
-    async RunTemplateCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateCategoryViewResult)
-    async RunTemplateCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Template Categories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TemplateCategory_, { nullable: true })
-    async TemplateCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateCategory_ | null> {
+    async TemplateCategory(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateCategory_ | null> {
         this.CheckUserReadPermissions('Template Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Template_])
-    async Templates_CategoryIDArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Templates_CategoryIDArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Templates', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplates] WHERE [CategoryID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Templates', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Templates', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [TemplateCategory_])
-    async TemplateCategories_ParentIDArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateCategories_ParentIDArray(@Root() templatecategory_: TemplateCategory_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Categories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateCategories] WHERE [ParentID]='${templatecategory_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Categories', await dataSource.query(sSQL));
         return result;
@@ -25305,23 +26390,26 @@ export class TemplateCategoryResolver extends ResolverBase {
     @Mutation(() => TemplateCategory_)
     async CreateTemplateCategory(
         @Arg('input', () => CreateTemplateCategoryInput) input: CreateTemplateCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Template Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => TemplateCategory_)
     async UpdateTemplateCategory(
         @Arg('input', () => UpdateTemplateCategoryInput) input: UpdateTemplateCategoryInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Template Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => TemplateCategory_)
-    async DeleteTemplateCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteTemplateCategory(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Template Categories', key, options, dataSource, userPayload, pubSub);
     }
@@ -25451,23 +26539,27 @@ export class RunTemplateContentViewResult {
 @Resolver(TemplateContent_)
 export class TemplateContentResolver extends ResolverBase {
     @Query(() => RunTemplateContentViewResult)
-    async RunTemplateContentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateContentViewResult)
-    async RunTemplateContentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateContentViewResult)
-    async RunTemplateContentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Template Contents';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TemplateContent_, { nullable: true })
-    async TemplateContent(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContent_ | null> {
+    async TemplateContent(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContent_ | null> {
         this.CheckUserReadPermissions('Template Contents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -25476,23 +26568,26 @@ export class TemplateContentResolver extends ResolverBase {
     @Mutation(() => TemplateContent_)
     async CreateTemplateContent(
         @Arg('input', () => CreateTemplateContentInput) input: CreateTemplateContentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Template Contents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => TemplateContent_)
     async UpdateTemplateContent(
         @Arg('input', () => UpdateTemplateContentInput) input: UpdateTemplateContentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Template Contents', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => TemplateContent_)
-    async DeleteTemplateContent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteTemplateContent(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Template Contents', key, options, dataSource, userPayload, pubSub);
     }
@@ -25690,23 +26785,27 @@ export class RunTemplateParamViewResult {
 @Resolver(TemplateParam_)
 export class TemplateParamResolver extends ResolverBase {
     @Query(() => RunTemplateParamViewResult)
-    async RunTemplateParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateParamViewResult)
-    async RunTemplateParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateParamViewResult)
-    async RunTemplateParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Template Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TemplateParam_, { nullable: true })
-    async TemplateParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateParam_ | null> {
+    async TemplateParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateParam_ | null> {
         this.CheckUserReadPermissions('Template Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Template Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -25715,23 +26814,26 @@ export class TemplateParamResolver extends ResolverBase {
     @Mutation(() => TemplateParam_)
     async CreateTemplateParam(
         @Arg('input', () => CreateTemplateParamInput) input: CreateTemplateParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Template Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => TemplateParam_)
     async UpdateTemplateParam(
         @Arg('input', () => UpdateTemplateParamInput) input: UpdateTemplateParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Template Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => TemplateParam_)
-    async DeleteTemplateParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteTemplateParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Template Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -25838,31 +26940,36 @@ export class RunTemplateContentTypeViewResult {
 @Resolver(TemplateContentType_)
 export class TemplateContentTypeResolver extends ResolverBase {
     @Query(() => RunTemplateContentTypeViewResult)
-    async RunTemplateContentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateContentTypeViewResult)
-    async RunTemplateContentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunTemplateContentTypeViewResult)
-    async RunTemplateContentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunTemplateContentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Template Content Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TemplateContentType_, { nullable: true })
-    async TemplateContentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContentType_ | null> {
+    async TemplateContentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TemplateContentType_ | null> {
         this.CheckUserReadPermissions('Template Content Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Template Content Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Template Content Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [TemplateContent_])
-    async TemplateContents_TypeIDArray(@Root() templatecontenttype_: TemplateContentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async TemplateContents_TypeIDArray(@Root() templatecontenttype_: TemplateContentType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Template Contents', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTemplateContents] WHERE [TypeID]='${templatecontenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Template Contents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Template Contents', await dataSource.query(sSQL));
         return result;
@@ -25871,23 +26978,26 @@ export class TemplateContentTypeResolver extends ResolverBase {
     @Mutation(() => TemplateContentType_)
     async CreateTemplateContentType(
         @Arg('input', () => CreateTemplateContentTypeInput) input: CreateTemplateContentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Template Content Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => TemplateContentType_)
     async UpdateTemplateContentType(
         @Arg('input', () => UpdateTemplateContentTypeInput) input: UpdateTemplateContentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Template Content Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => TemplateContentType_)
-    async DeleteTemplateContentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteTemplateContentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Template Content Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -25998,31 +27108,36 @@ export class RunRecommendationViewResult {
 @Resolver(Recommendation_)
 export class RecommendationResolver extends ResolverBase {
     @Query(() => RunRecommendationViewResult)
-    async RunRecommendationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationViewResult)
-    async RunRecommendationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationViewResult)
-    async RunRecommendationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Recommendations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Recommendation_, { nullable: true })
-    async Recommendation(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Recommendation_ | null> {
+    async Recommendation(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Recommendation_ | null> {
         this.CheckUserReadPermissions('Recommendations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [RecommendationItem_])
-    async RecommendationItems_RecommendationIDArray(@Root() recommendation_: Recommendation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecommendationItems_RecommendationIDArray(@Root() recommendation_: Recommendation_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [RecommendationID]='${recommendation_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL));
         return result;
@@ -26031,18 +27146,20 @@ export class RecommendationResolver extends ResolverBase {
     @Mutation(() => Recommendation_)
     async CreateRecommendation(
         @Arg('input', () => CreateRecommendationInput) input: CreateRecommendationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Recommendations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Recommendation_)
     async UpdateRecommendation(
         @Arg('input', () => UpdateRecommendationInput) input: UpdateRecommendationInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Recommendations', input, dataSource, userPayload, pubSub);
     }
     
@@ -26138,31 +27255,36 @@ export class RunRecommendationProviderViewResult {
 @Resolver(RecommendationProvider_)
 export class RecommendationProviderResolver extends ResolverBase {
     @Query(() => RunRecommendationProviderViewResult)
-    async RunRecommendationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationProviderViewResult)
-    async RunRecommendationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationProviderViewResult)
-    async RunRecommendationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Recommendation Providers';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecommendationProvider_, { nullable: true })
-    async RecommendationProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationProvider_ | null> {
+    async RecommendationProvider(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationProvider_ | null> {
         this.CheckUserReadPermissions('Recommendation Providers', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationProviders] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Providers', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Recommendation Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [RecommendationRun_])
-    async RecommendationRuns_RecommendationProviderIDArray(@Root() recommendationprovider_: RecommendationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecommendationRuns_RecommendationProviderIDArray(@Root() recommendationprovider_: RecommendationProvider_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [RecommendationProviderID]='${recommendationprovider_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL));
         return result;
@@ -26171,23 +27293,26 @@ export class RecommendationProviderResolver extends ResolverBase {
     @Mutation(() => RecommendationProvider_)
     async CreateRecommendationProvider(
         @Arg('input', () => CreateRecommendationProviderInput) input: CreateRecommendationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecommendationProvider_)
     async UpdateRecommendationProvider(
         @Arg('input', () => UpdateRecommendationProviderInput) input: UpdateRecommendationProviderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Recommendation Providers', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => RecommendationProvider_)
-    async DeleteRecommendationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteRecommendationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Recommendation Providers', key, options, dataSource, userPayload, pubSub);
     }
@@ -26199,7 +27324,7 @@ export class RecommendationProviderResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: `Recommendation runs log each time a provider is requested to provide recommendations` })
 export class RecommendationRun_ {
-    @Field() 
+    @Field({description: `Da Key :`}) 
     @MaxLength(16)
     ID: string;
         
@@ -26332,31 +27457,36 @@ export class RunRecommendationRunViewResult {
 @Resolver(RecommendationRun_)
 export class RecommendationRunResolver extends ResolverBase {
     @Query(() => RunRecommendationRunViewResult)
-    async RunRecommendationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationRunViewResult)
-    async RunRecommendationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationRunViewResult)
-    async RunRecommendationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Recommendation Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecommendationRun_, { nullable: true })
-    async RecommendationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationRun_ | null> {
+    async RecommendationRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationRun_ | null> {
         this.CheckUserReadPermissions('Recommendation Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Recommendation Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [Recommendation_])
-    async Recommendations_RecommendationRunIDArray(@Root() recommendationrun_: RecommendationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Recommendations_RecommendationRunIDArray(@Root() recommendationrun_: RecommendationRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Recommendations', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendations] WHERE [RecommendationRunID]='${recommendationrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Recommendations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Recommendations', await dataSource.query(sSQL));
         return result;
@@ -26365,18 +27495,20 @@ export class RecommendationRunResolver extends ResolverBase {
     @Mutation(() => RecommendationRun_)
     async CreateRecommendationRun(
         @Arg('input', () => CreateRecommendationRunInput) input: CreateRecommendationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecommendationRun_)
     async UpdateRecommendationRun(
         @Arg('input', () => UpdateRecommendationRunInput) input: UpdateRecommendationRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Recommendation Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -26395,7 +27527,7 @@ export class RecommendationItem_ {
     @MaxLength(16)
     RecommendationID: string;
         
-    @Field() 
+    @Field({description: `dest entity!`}) 
     @MaxLength(16)
     DestinationEntityID: string;
         
@@ -26493,23 +27625,27 @@ export class RunRecommendationItemViewResult {
 @Resolver(RecommendationItem_)
 export class RecommendationItemResolver extends ResolverBase {
     @Query(() => RunRecommendationItemViewResult)
-    async RunRecommendationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationItemViewResult)
-    async RunRecommendationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecommendationItemViewResult)
-    async RunRecommendationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecommendationItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Recommendation Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecommendationItem_, { nullable: true })
-    async RecommendationItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationItem_ | null> {
+    async RecommendationItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecommendationItem_ | null> {
         this.CheckUserReadPermissions('Recommendation Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecommendationItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Recommendation Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Recommendation Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -26518,18 +27654,20 @@ export class RecommendationItemResolver extends ResolverBase {
     @Mutation(() => RecommendationItem_)
     async CreateRecommendationItem(
         @Arg('input', () => CreateRecommendationItemInput) input: CreateRecommendationItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Recommendation Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecommendationItem_)
     async UpdateRecommendationItem(
         @Arg('input', () => UpdateRecommendationItemInput) input: UpdateRecommendationItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Recommendation Items', input, dataSource, userPayload, pubSub);
     }
     
@@ -26643,31 +27781,36 @@ export class RunEntityCommunicationMessageTypeViewResult {
 @Resolver(EntityCommunicationMessageType_)
 export class EntityCommunicationMessageTypeResolver extends ResolverBase {
     @Query(() => RunEntityCommunicationMessageTypeViewResult)
-    async RunEntityCommunicationMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityCommunicationMessageTypeViewResult)
-    async RunEntityCommunicationMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityCommunicationMessageTypeViewResult)
-    async RunEntityCommunicationMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Communication Message Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityCommunicationMessageType_, { nullable: true })
-    async EntityCommunicationMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationMessageType_ | null> {
+    async EntityCommunicationMessageType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationMessageType_ | null> {
         this.CheckUserReadPermissions('Entity Communication Message Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationMessageTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Message Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Communication Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityCommunicationField_])
-    async EntityCommunicationFields_EntityCommunicationMessageTypeIDArray(@Root() entitycommunicationmessagetype_: EntityCommunicationMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityCommunicationFields_EntityCommunicationMessageTypeIDArray(@Root() entitycommunicationmessagetype_: EntityCommunicationMessageType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [EntityCommunicationMessageTypeID]='${entitycommunicationmessagetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL));
         return result;
@@ -26676,23 +27819,26 @@ export class EntityCommunicationMessageTypeResolver extends ResolverBase {
     @Mutation(() => EntityCommunicationMessageType_)
     async CreateEntityCommunicationMessageType(
         @Arg('input', () => CreateEntityCommunicationMessageTypeInput) input: CreateEntityCommunicationMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityCommunicationMessageType_)
     async UpdateEntityCommunicationMessageType(
         @Arg('input', () => UpdateEntityCommunicationMessageTypeInput) input: UpdateEntityCommunicationMessageTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Communication Message Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityCommunicationMessageType_)
-    async DeleteEntityCommunicationMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityCommunicationMessageType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Communication Message Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -26796,23 +27942,27 @@ export class RunEntityCommunicationFieldViewResult {
 @Resolver(EntityCommunicationField_)
 export class EntityCommunicationFieldResolver extends ResolverBase {
     @Query(() => RunEntityCommunicationFieldViewResult)
-    async RunEntityCommunicationFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityCommunicationFieldViewResult)
-    async RunEntityCommunicationFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityCommunicationFieldViewResult)
-    async RunEntityCommunicationFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityCommunicationFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Communication Fields';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityCommunicationField_, { nullable: true })
-    async EntityCommunicationField(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationField_ | null> {
+    async EntityCommunicationField(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityCommunicationField_ | null> {
         this.CheckUserReadPermissions('Entity Communication Fields', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityCommunicationFields] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Communication Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Communication Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -26821,23 +27971,26 @@ export class EntityCommunicationFieldResolver extends ResolverBase {
     @Mutation(() => EntityCommunicationField_)
     async CreateEntityCommunicationField(
         @Arg('input', () => CreateEntityCommunicationFieldInput) input: CreateEntityCommunicationFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityCommunicationField_)
     async UpdateEntityCommunicationField(
         @Arg('input', () => UpdateEntityCommunicationFieldInput) input: UpdateEntityCommunicationFieldInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Communication Fields', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityCommunicationField_)
-    async DeleteEntityCommunicationField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityCommunicationField(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Communication Fields', key, options, dataSource, userPayload, pubSub);
     }
@@ -26959,31 +28112,36 @@ export class RunRecordChangeReplayRunViewResult {
 @Resolver(RecordChangeReplayRun_)
 export class RecordChangeReplayRunResolver extends ResolverBase {
     @Query(() => RunRecordChangeReplayRunViewResult)
-    async RunRecordChangeReplayRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeReplayRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordChangeReplayRunViewResult)
-    async RunRecordChangeReplayRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeReplayRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunRecordChangeReplayRunViewResult)
-    async RunRecordChangeReplayRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunRecordChangeReplayRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Record Change Replay Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordChangeReplayRun_, { nullable: true })
-    async RecordChangeReplayRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChangeReplayRun_ | null> {
+    async RecordChangeReplayRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChangeReplayRun_ | null> {
         this.CheckUserReadPermissions('Record Change Replay Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChangeReplayRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Record Change Replay Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Change Replay Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [RecordChange_])
-    async RecordChanges_ReplayRunIDArray(@Root() recordchangereplayrun_: RecordChangeReplayRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RecordChanges_ReplayRunIDArray(@Root() recordchangereplayrun_: RecordChangeReplayRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordChanges] WHERE [ReplayRunID]='${recordchangereplayrun_.ID}' ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
@@ -26992,18 +28150,20 @@ export class RecordChangeReplayRunResolver extends ResolverBase {
     @Mutation(() => RecordChangeReplayRun_)
     async CreateRecordChangeReplayRun(
         @Arg('input', () => CreateRecordChangeReplayRunInput) input: CreateRecordChangeReplayRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordChangeReplayRun_)
     async UpdateRecordChangeReplayRun(
         @Arg('input', () => UpdateRecordChangeReplayRunInput) input: UpdateRecordChangeReplayRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Record Change Replay Runs', input, dataSource, userPayload, pubSub);
     }
     
@@ -27111,23 +28271,27 @@ export class RunLibraryItemViewResult {
 @Resolver(LibraryItem_)
 export class LibraryItemResolver extends ResolverBase {
     @Query(() => RunLibraryItemViewResult)
-    async RunLibraryItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunLibraryItemViewResult)
-    async RunLibraryItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunLibraryItemViewResult)
-    async RunLibraryItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunLibraryItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Library Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => LibraryItem_, { nullable: true })
-    async LibraryItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<LibraryItem_ | null> {
+    async LibraryItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<LibraryItem_ | null> {
         this.CheckUserReadPermissions('Library Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraryItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Library Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Library Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -27136,23 +28300,26 @@ export class LibraryItemResolver extends ResolverBase {
     @Mutation(() => LibraryItem_)
     async CreateLibraryItem(
         @Arg('input', () => CreateLibraryItemInput) input: CreateLibraryItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Library Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => LibraryItem_)
     async UpdateLibraryItem(
         @Arg('input', () => UpdateLibraryItemInput) input: UpdateLibraryItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Library Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => LibraryItem_)
-    async DeleteLibraryItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteLibraryItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Library Items', key, options, dataSource, userPayload, pubSub);
     }
@@ -27259,31 +28426,36 @@ export class RunEntityRelationshipDisplayComponentViewResult {
 @Resolver(EntityRelationshipDisplayComponent_)
 export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
     @Query(() => RunEntityRelationshipDisplayComponentViewResult)
-    async RunEntityRelationshipDisplayComponentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipDisplayComponentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRelationshipDisplayComponentViewResult)
-    async RunEntityRelationshipDisplayComponentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipDisplayComponentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityRelationshipDisplayComponentViewResult)
-    async RunEntityRelationshipDisplayComponentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityRelationshipDisplayComponentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Relationship Display Components';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityRelationshipDisplayComponent_, { nullable: true })
-    async EntityRelationshipDisplayComponent(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationshipDisplayComponent_ | null> {
+    async EntityRelationshipDisplayComponent(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationshipDisplayComponent_ | null> {
         this.CheckUserReadPermissions('Entity Relationship Display Components', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationshipDisplayComponents] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationship Display Components', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Relationship Display Components', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [EntityRelationship_])
-    async EntityRelationships_DisplayComponentIDArray(@Root() entityrelationshipdisplaycomponent_: EntityRelationshipDisplayComponent_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async EntityRelationships_DisplayComponentIDArray(@Root() entityrelationshipdisplaycomponent_: EntityRelationshipDisplayComponent_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityRelationships] WHERE [DisplayComponentID]='${entityrelationshipdisplaycomponent_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
@@ -27292,18 +28464,20 @@ export class EntityRelationshipDisplayComponentResolver extends ResolverBase {
     @Mutation(() => EntityRelationshipDisplayComponent_)
     async CreateEntityRelationshipDisplayComponent(
         @Arg('input', () => CreateEntityRelationshipDisplayComponentInput) input: CreateEntityRelationshipDisplayComponentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRelationshipDisplayComponent_)
     async UpdateEntityRelationshipDisplayComponent(
         @Arg('input', () => UpdateEntityRelationshipDisplayComponentInput) input: UpdateEntityRelationshipDisplayComponentInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Relationship Display Components', input, dataSource, userPayload, pubSub);
     }
     
@@ -27429,23 +28603,27 @@ export class RunEntityActionParamViewResult {
 @Resolver(EntityActionParam_)
 export class EntityActionParamResolver extends ResolverBase {
     @Query(() => RunEntityActionParamViewResult)
-    async RunEntityActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionParamViewResult)
-    async RunEntityActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunEntityActionParamViewResult)
-    async RunEntityActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunEntityActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Entity Action Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityActionParam_, { nullable: true })
-    async EntityActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionParam_ | null> {
+    async EntityActionParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionParam_ | null> {
         this.CheckUserReadPermissions('Entity Action Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Entity Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -27454,23 +28632,26 @@ export class EntityActionParamResolver extends ResolverBase {
     @Mutation(() => EntityActionParam_)
     async CreateEntityActionParam(
         @Arg('input', () => CreateEntityActionParamInput) input: CreateEntityActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Entity Action Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionParam_)
     async UpdateEntityActionParam(
         @Arg('input', () => UpdateEntityActionParamInput) input: UpdateEntityActionParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Entity Action Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityActionParam_)
-    async DeleteEntityActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityActionParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Entity Action Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -27647,23 +28828,27 @@ export class RunResourcePermissionViewResult {
 @Resolver(ResourcePermission_)
 export class ResourcePermissionResolver extends ResolverBase {
     @Query(() => RunResourcePermissionViewResult)
-    async RunResourcePermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourcePermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourcePermissionViewResult)
-    async RunResourcePermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourcePermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourcePermissionViewResult)
-    async RunResourcePermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourcePermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Resource Permissions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ResourcePermission_, { nullable: true })
-    async ResourcePermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourcePermission_ | null> {
+    async ResourcePermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourcePermission_ | null> {
         this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -27672,23 +28857,26 @@ export class ResourcePermissionResolver extends ResolverBase {
     @Mutation(() => ResourcePermission_)
     async CreateResourcePermission(
         @Arg('input', () => CreateResourcePermissionInput) input: CreateResourcePermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Resource Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ResourcePermission_)
     async UpdateResourcePermission(
         @Arg('input', () => UpdateResourcePermissionInput) input: UpdateResourcePermissionInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Resource Permissions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ResourcePermission_)
-    async DeleteResourcePermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteResourcePermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Resource Permissions', key, options, dataSource, userPayload, pubSub);
     }
@@ -27811,23 +28999,27 @@ export class RunResourceLinkViewResult {
 @Resolver(ResourceLink_)
 export class ResourceLinkResolver extends ResolverBase {
     @Query(() => RunResourceLinkViewResult)
-    async RunResourceLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourceLinkViewResult)
-    async RunResourceLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunResourceLinkViewResult)
-    async RunResourceLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunResourceLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Resource Links';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ResourceLink_, { nullable: true })
-    async ResourceLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceLink_ | null> {
+    async ResourceLink(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceLink_ | null> {
         this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -27836,23 +29028,26 @@ export class ResourceLinkResolver extends ResolverBase {
     @Mutation(() => ResourceLink_)
     async CreateResourceLink(
         @Arg('input', () => CreateResourceLinkInput) input: CreateResourceLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Resource Links', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ResourceLink_)
     async UpdateResourceLink(
         @Arg('input', () => UpdateResourceLinkInput) input: UpdateResourceLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Resource Links', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ResourceLink_)
-    async DeleteResourceLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteResourceLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Resource Links', key, options, dataSource, userPayload, pubSub);
     }
@@ -28026,23 +29221,27 @@ export class RunAIAgentRequestViewResult {
 @Resolver(AIAgentRequest_)
 export class AIAgentRequestResolver extends ResolverBase {
     @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentRequestViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentRequestViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentRequestViewResult)
-    async RunAIAgentRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentRequestDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Requests';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentRequest_, { nullable: true })
-    async AIAgentRequest(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRequest_ | null> {
+    async AIAgentRequest(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentRequest_ | null> {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRequests] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Requests', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -28051,23 +29250,26 @@ export class AIAgentRequestResolver extends ResolverBase {
     @Mutation(() => AIAgentRequest_)
     async CreateAIAgentRequest(
         @Arg('input', () => CreateAIAgentRequestInput) input: CreateAIAgentRequestInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentRequest_)
     async UpdateAIAgentRequest(
         @Arg('input', () => UpdateAIAgentRequestInput) input: UpdateAIAgentRequestInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Requests', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentRequest_)
-    async DeleteAIAgentRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentRequest(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Requests', key, options, dataSource, userPayload, pubSub);
     }
@@ -28170,23 +29372,27 @@ export class RunQueryEntityViewResult {
 @Resolver(QueryEntity_)
 export class QueryEntityResolver extends ResolverBase {
     @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunQueryEntityViewResult)
-    async RunQueryEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunQueryEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Query Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryEntity_, { nullable: true })
-    async QueryEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryEntity_ | null> {
+    async QueryEntity(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryEntity_ | null> {
         this.CheckUserReadPermissions('Query Entities', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -28195,23 +29401,26 @@ export class QueryEntityResolver extends ResolverBase {
     @Mutation(() => QueryEntity_)
     async CreateQueryEntity(
         @Arg('input', () => CreateQueryEntityInput) input: CreateQueryEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Query Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryEntity_)
     async UpdateQueryEntity(
         @Arg('input', () => UpdateQueryEntityInput) input: UpdateQueryEntityInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Query Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryEntity_)
-    async DeleteQueryEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Entities', key, options, dataSource, userPayload, pubSub);
     }
@@ -28375,23 +29584,27 @@ export class Runflyway_schema_historyViewResult {
 @Resolver(flyway_schema_history_)
 export class flyway_schema_historyResolver extends ResolverBase {
     @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'flyway _schema _histories';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => flyway_schema_history_, { nullable: true })
-    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
+    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
         this.CheckUserReadPermissions('flyway _schema _histories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwflyway_schema_histories] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause('flyway _schema _histories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('flyway _schema _histories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -28400,23 +29613,26 @@ export class flyway_schema_historyResolver extends ResolverBase {
     @Mutation(() => flyway_schema_history_)
     async Createflyway_schema_history(
         @Arg('input', () => Createflyway_schema_historyInput) input: Createflyway_schema_historyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => flyway_schema_history_)
     async Updateflyway_schema_history(
         @Arg('input', () => Updateflyway_schema_historyInput) input: Updateflyway_schema_historyInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => flyway_schema_history_)
-    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
         return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
     }
@@ -28544,23 +29760,27 @@ export class RunContentProcessRunViewResult {
 @Resolver(ContentProcessRun_)
 export class ContentProcessRunResolver extends ResolverBase {
     @Query(() => RunContentProcessRunViewResult)
-    async RunContentProcessRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentProcessRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentProcessRunViewResult)
-    async RunContentProcessRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentProcessRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentProcessRunViewResult)
-    async RunContentProcessRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentProcessRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Process Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentProcessRun_, { nullable: true })
-    async ContentProcessRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentProcessRun_ | null> {
+    async ContentProcessRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentProcessRun_ | null> {
         this.CheckUserReadPermissions('Content Process Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentProcessRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Process Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -28569,23 +29789,26 @@ export class ContentProcessRunResolver extends ResolverBase {
     @Mutation(() => ContentProcessRun_)
     async CreateContentProcessRun(
         @Arg('input', () => CreateContentProcessRunInput) input: CreateContentProcessRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Process Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentProcessRun_)
     async UpdateContentProcessRun(
         @Arg('input', () => UpdateContentProcessRunInput) input: UpdateContentProcessRunInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Process Runs', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentProcessRun_)
-    async DeleteContentProcessRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentProcessRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Process Runs', key, options, dataSource, userPayload, pubSub);
     }
@@ -28731,47 +29954,54 @@ export class RunContentSourceViewResult {
 @Resolver(ContentSource_)
 export class ContentSourceResolver extends ResolverBase {
     @Query(() => RunContentSourceViewResult)
-    async RunContentSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceViewResult)
-    async RunContentSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceViewResult)
-    async RunContentSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Sources';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentSource_, { nullable: true })
-    async ContentSource(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSource_ | null> {
+    async ContentSource(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSource_ | null> {
         this.CheckUserReadPermissions('Content Sources', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ContentProcessRun_])
-    async ContentProcessRuns_SourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentProcessRuns_SourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Process Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentProcessRuns] WHERE [SourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Process Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Process Runs', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentSourceParam_])
-    async ContentSourceParams_ContentSourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentSourceParams_ContentSourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Source Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceParams] WHERE [ContentSourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Source Params', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentItem_])
-    async ContentItems_ContentSourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItems_ContentSourceIDArray(@Root() contentsource_: ContentSource_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentSourceID]='${contentsource_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', await dataSource.query(sSQL));
         return result;
@@ -28780,23 +30010,26 @@ export class ContentSourceResolver extends ResolverBase {
     @Mutation(() => ContentSource_)
     async CreateContentSource(
         @Arg('input', () => CreateContentSourceInput) input: CreateContentSourceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Sources', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentSource_)
     async UpdateContentSource(
         @Arg('input', () => UpdateContentSourceInput) input: UpdateContentSourceInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Sources', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentSource_)
-    async DeleteContentSource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentSource(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Sources', key, options, dataSource, userPayload, pubSub);
     }
@@ -28904,23 +30137,27 @@ export class RunContentSourceParamViewResult {
 @Resolver(ContentSourceParam_)
 export class ContentSourceParamResolver extends ResolverBase {
     @Query(() => RunContentSourceParamViewResult)
-    async RunContentSourceParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceParamViewResult)
-    async RunContentSourceParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceParamViewResult)
-    async RunContentSourceParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Source Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentSourceParam_, { nullable: true })
-    async ContentSourceParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceParam_ | null> {
+    async ContentSourceParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceParam_ | null> {
         this.CheckUserReadPermissions('Content Source Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Source Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -28929,23 +30166,26 @@ export class ContentSourceParamResolver extends ResolverBase {
     @Mutation(() => ContentSourceParam_)
     async CreateContentSourceParam(
         @Arg('input', () => CreateContentSourceParamInput) input: CreateContentSourceParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Source Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentSourceParam_)
     async UpdateContentSourceParam(
         @Arg('input', () => UpdateContentSourceParamInput) input: UpdateContentSourceParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Source Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentSourceParam_)
-    async DeleteContentSourceParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentSourceParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Source Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -29046,39 +30286,45 @@ export class RunContentSourceTypeViewResult {
 @Resolver(ContentSourceType_)
 export class ContentSourceTypeResolver extends ResolverBase {
     @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceTypeViewResult)
-    async RunContentSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Source Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentSourceType_, { nullable: true })
-    async ContentSourceType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceType_ | null> {
+    async ContentSourceType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceType_ | null> {
         this.CheckUserReadPermissions('Content Source Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Source Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ContentSource_])
-    async ContentSources_ContentSourceTypeIDArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentSources_ContentSourceTypeIDArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Sources', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentSourceTypeID]='${contentsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentItem_])
-    async ContentItems_ContentSourceTypeIDArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItems_ContentSourceTypeIDArray(@Root() contentsourcetype_: ContentSourceType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentSourceTypeID]='${contentsourcetype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', await dataSource.query(sSQL));
         return result;
@@ -29087,23 +30333,26 @@ export class ContentSourceTypeResolver extends ResolverBase {
     @Mutation(() => ContentSourceType_)
     async CreateContentSourceType(
         @Arg('input', () => CreateContentSourceTypeInput) input: CreateContentSourceTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Source Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentSourceType_)
     async UpdateContentSourceType(
         @Arg('input', () => UpdateContentSourceTypeInput) input: UpdateContentSourceTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Source Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentSourceType_)
-    async DeleteContentSourceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentSourceType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Source Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -29225,23 +30474,27 @@ export class RunContentSourceTypeParamViewResult {
 @Resolver(ContentSourceTypeParam_)
 export class ContentSourceTypeParamResolver extends ResolverBase {
     @Query(() => RunContentSourceTypeParamViewResult)
-    async RunContentSourceTypeParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceTypeParamViewResult)
-    async RunContentSourceTypeParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentSourceTypeParamViewResult)
-    async RunContentSourceTypeParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentSourceTypeParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Source Type Params';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentSourceTypeParam_, { nullable: true })
-    async ContentSourceTypeParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceTypeParam_ | null> {
+    async ContentSourceTypeParam(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentSourceTypeParam_ | null> {
         this.CheckUserReadPermissions('Content Source Type Params', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSourceTypeParams] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Source Type Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Source Type Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -29250,23 +30503,26 @@ export class ContentSourceTypeParamResolver extends ResolverBase {
     @Mutation(() => ContentSourceTypeParam_)
     async CreateContentSourceTypeParam(
         @Arg('input', () => CreateContentSourceTypeParamInput) input: CreateContentSourceTypeParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Source Type Params', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentSourceTypeParam_)
     async UpdateContentSourceTypeParam(
         @Arg('input', () => UpdateContentSourceTypeParamInput) input: UpdateContentSourceTypeParamInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Source Type Params', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentSourceTypeParam_)
-    async DeleteContentSourceTypeParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentSourceTypeParam(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Source Type Params', key, options, dataSource, userPayload, pubSub);
     }
@@ -29398,39 +30654,45 @@ export class RunContentTypeViewResult {
 @Resolver(ContentType_)
 export class ContentTypeResolver extends ResolverBase {
     @Query(() => RunContentTypeViewResult)
-    async RunContentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentTypeViewResult)
-    async RunContentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentTypeViewResult)
-    async RunContentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentType_, { nullable: true })
-    async ContentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentType_ | null> {
+    async ContentType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentType_ | null> {
         this.CheckUserReadPermissions('Content Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ContentSource_])
-    async ContentSources_ContentTypeIDArray(@Root() contenttype_: ContentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentSources_ContentTypeIDArray(@Root() contenttype_: ContentType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Sources', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentTypeID]='${contenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentItem_])
-    async ContentItems_ContentTypeIDArray(@Root() contenttype_: ContentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItems_ContentTypeIDArray(@Root() contenttype_: ContentType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentTypeID]='${contenttype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', await dataSource.query(sSQL));
         return result;
@@ -29439,23 +30701,26 @@ export class ContentTypeResolver extends ResolverBase {
     @Mutation(() => ContentType_)
     async CreateContentType(
         @Arg('input', () => CreateContentTypeInput) input: CreateContentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentType_)
     async UpdateContentType(
         @Arg('input', () => UpdateContentTypeInput) input: UpdateContentTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentType_)
-    async DeleteContentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -29568,23 +30833,27 @@ export class RunContentTypeAttributeViewResult {
 @Resolver(ContentTypeAttribute_)
 export class ContentTypeAttributeResolver extends ResolverBase {
     @Query(() => RunContentTypeAttributeViewResult)
-    async RunContentTypeAttributeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeAttributeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentTypeAttributeViewResult)
-    async RunContentTypeAttributeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeAttributeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentTypeAttributeViewResult)
-    async RunContentTypeAttributeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentTypeAttributeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Type Attributes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentTypeAttribute_, { nullable: true })
-    async ContentTypeAttribute(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentTypeAttribute_ | null> {
+    async ContentTypeAttribute(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentTypeAttribute_ | null> {
         this.CheckUserReadPermissions('Content Type Attributes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypeAttributes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Type Attributes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Type Attributes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -29593,23 +30862,26 @@ export class ContentTypeAttributeResolver extends ResolverBase {
     @Mutation(() => ContentTypeAttribute_)
     async CreateContentTypeAttribute(
         @Arg('input', () => CreateContentTypeAttributeInput) input: CreateContentTypeAttributeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Type Attributes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentTypeAttribute_)
     async UpdateContentTypeAttribute(
         @Arg('input', () => UpdateContentTypeAttributeInput) input: UpdateContentTypeAttributeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Type Attributes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentTypeAttribute_)
-    async DeleteContentTypeAttribute(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentTypeAttribute(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Type Attributes', key, options, dataSource, userPayload, pubSub);
     }
@@ -29710,39 +30982,45 @@ export class RunContentFileTypeViewResult {
 @Resolver(ContentFileType_)
 export class ContentFileTypeResolver extends ResolverBase {
     @Query(() => RunContentFileTypeViewResult)
-    async RunContentFileTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentFileTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentFileTypeViewResult)
-    async RunContentFileTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentFileTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentFileTypeViewResult)
-    async RunContentFileTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentFileTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content File Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentFileType_, { nullable: true })
-    async ContentFileType(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentFileType_ | null> {
+    async ContentFileType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentFileType_ | null> {
         this.CheckUserReadPermissions('Content File Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentFileTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content File Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content File Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ContentSource_])
-    async ContentSources_ContentFileTypeIDArray(@Root() contentfiletype_: ContentFileType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentSources_ContentFileTypeIDArray(@Root() contentfiletype_: ContentFileType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Sources', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentSources] WHERE [ContentFileTypeID]='${contentfiletype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Sources', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Sources', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentItem_])
-    async ContentItems_ContentFileTypeIDArray(@Root() contentfiletype_: ContentFileType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItems_ContentFileTypeIDArray(@Root() contentfiletype_: ContentFileType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ContentFileTypeID]='${contentfiletype_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Items', await dataSource.query(sSQL));
         return result;
@@ -29751,23 +31029,26 @@ export class ContentFileTypeResolver extends ResolverBase {
     @Mutation(() => ContentFileType_)
     async CreateContentFileType(
         @Arg('input', () => CreateContentFileTypeInput) input: CreateContentFileTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content File Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentFileType_)
     async UpdateContentFileType(
         @Arg('input', () => UpdateContentFileTypeInput) input: UpdateContentFileTypeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content File Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentFileType_)
-    async DeleteContentFileType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentFileType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content File Types', key, options, dataSource, userPayload, pubSub);
     }
@@ -29952,39 +31233,45 @@ export class RunContentItemViewResult {
 @Resolver(ContentItem_)
 export class ContentItemResolver extends ResolverBase {
     @Query(() => RunContentItemViewResult)
-    async RunContentItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemViewResult)
-    async RunContentItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemViewResult)
-    async RunContentItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentItem_, { nullable: true })
-    async ContentItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItem_ | null> {
+    async ContentItem(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItem_ | null> {
         this.CheckUserReadPermissions('Content Items', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItems] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
     
     @FieldResolver(() => [ContentItemAttribute_])
-    async ContentItemAttributes_ContentItemIDArray(@Root() contentitem_: ContentItem_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItemAttributes_ContentItemIDArray(@Root() contentitem_: ContentItem_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Item Attributes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemAttributes] WHERE [ContentItemID]='${contentitem_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Attributes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Item Attributes', await dataSource.query(sSQL));
         return result;
     }
         
     @FieldResolver(() => [ContentItemTag_])
-    async ContentItemTags_ItemIDArray(@Root() contentitem_: ContentItem_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ContentItemTags_ItemIDArray(@Root() contentitem_: ContentItem_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Content Item Tags', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemTags] WHERE [ItemID]='${contentitem_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Content Item Tags', await dataSource.query(sSQL));
         return result;
@@ -29993,23 +31280,26 @@ export class ContentItemResolver extends ResolverBase {
     @Mutation(() => ContentItem_)
     async CreateContentItem(
         @Arg('input', () => CreateContentItemInput) input: CreateContentItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentItem_)
     async UpdateContentItem(
         @Arg('input', () => UpdateContentItemInput) input: UpdateContentItemInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentItem_)
-    async DeleteContentItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentItem(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Items', key, options, dataSource, userPayload, pubSub);
     }
@@ -30117,23 +31407,27 @@ export class RunContentItemAttributeViewResult {
 @Resolver(ContentItemAttribute_)
 export class ContentItemAttributeResolver extends ResolverBase {
     @Query(() => RunContentItemAttributeViewResult)
-    async RunContentItemAttributeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemAttributeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemAttributeViewResult)
-    async RunContentItemAttributeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemAttributeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemAttributeViewResult)
-    async RunContentItemAttributeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemAttributeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Item Attributes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentItemAttribute_, { nullable: true })
-    async ContentItemAttribute(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItemAttribute_ | null> {
+    async ContentItemAttribute(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItemAttribute_ | null> {
         this.CheckUserReadPermissions('Content Item Attributes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemAttributes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Attributes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Item Attributes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -30142,23 +31436,26 @@ export class ContentItemAttributeResolver extends ResolverBase {
     @Mutation(() => ContentItemAttribute_)
     async CreateContentItemAttribute(
         @Arg('input', () => CreateContentItemAttributeInput) input: CreateContentItemAttributeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Item Attributes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentItemAttribute_)
     async UpdateContentItemAttribute(
         @Arg('input', () => UpdateContentItemAttributeInput) input: UpdateContentItemAttributeInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Item Attributes', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentItemAttribute_)
-    async DeleteContentItemAttribute(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentItemAttribute(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Item Attributes', key, options, dataSource, userPayload, pubSub);
     }
@@ -30257,23 +31554,27 @@ export class RunContentItemTagViewResult {
 @Resolver(ContentItemTag_)
 export class ContentItemTagResolver extends ResolverBase {
     @Query(() => RunContentItemTagViewResult)
-    async RunContentItemTagViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemTagViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemTagViewResult)
-    async RunContentItemTagViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemTagViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunContentItemTagViewResult)
-    async RunContentItemTagDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunContentItemTagDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'Content Item Tags';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ContentItemTag_, { nullable: true })
-    async ContentItemTag(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItemTag_ | null> {
+    async ContentItemTag(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ContentItemTag_ | null> {
         this.CheckUserReadPermissions('Content Item Tags', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentItemTags] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('Content Item Tags', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Content Item Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -30282,23 +31583,26 @@ export class ContentItemTagResolver extends ResolverBase {
     @Mutation(() => ContentItemTag_)
     async CreateContentItemTag(
         @Arg('input', () => CreateContentItemTagInput) input: CreateContentItemTagInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('Content Item Tags', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ContentItemTag_)
     async UpdateContentItemTag(
         @Arg('input', () => UpdateContentItemTagInput) input: UpdateContentItemTagInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('Content Item Tags', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ContentItemTag_)
-    async DeleteContentItemTag(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteContentItemTag(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Content Item Tags', key, options, dataSource, userPayload, pubSub);
     }
@@ -30426,23 +31730,27 @@ export class RunAIAgentLearningCycleViewResult {
 @Resolver(AIAgentLearningCycle_)
 export class AIAgentLearningCycleResolver extends ResolverBase {
     @Query(() => RunAIAgentLearningCycleViewResult)
-    async RunAIAgentLearningCycleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentLearningCycleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentLearningCycleViewResult)
-    async RunAIAgentLearningCycleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentLearningCycleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
     }
 
     @Query(() => RunAIAgentLearningCycleViewResult)
-    async RunAIAgentLearningCycleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async RunAIAgentLearningCycleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         input.EntityName = 'AI Agent Learning Cycles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAgentLearningCycle_, { nullable: true })
-    async AIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentLearningCycle_ | null> {
+    async AIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAgentLearningCycle_ | null> {
         this.CheckUserReadPermissions('AI Agent Learning Cycles', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentLearningCycles] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Learning Cycles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Agent Learning Cycles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
@@ -30451,23 +31759,26 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
     @Mutation(() => AIAgentLearningCycle_)
     async CreateAIAgentLearningCycle(
         @Arg('input', () => CreateAIAgentLearningCycleInput) input: CreateAIAgentLearningCycleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.CreateRecord('AI Agent Learning Cycles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AIAgentLearningCycle_)
     async UpdateAIAgentLearningCycle(
         @Arg('input', () => UpdateAIAgentLearningCycleInput) input: UpdateAIAgentLearningCycleInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
+        @Ctx() { dataSources, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         return this.UpdateRecord('AI Agent Learning Cycles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => AIAgentLearningCycle_)
-    async DeleteAIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAIAgentLearningCycle(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('AI Agent Learning Cycles', key, options, dataSource, userPayload, pubSub);
     }

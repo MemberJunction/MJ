@@ -80,7 +80,7 @@ export class ManageMetadataBase {
       const schemasToExclude = getSettingValue('recompile_mj_views', true)
         ? excludeSchemas.filter((s) => s !== adminSchema)
         : excludeSchemas;
-      if (! await sqlUtility.recompileAllBaseViews(ds, schemasToExclude, true)) {
+      if (! await sqlUtility.recompileAllBaseViews(ds, schemasToExclude, true, ManageMetadataBase._newEntityList/*exclude the newly created entities from the above step the first time we run as those views don't exist yet*/)) {
          logMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a
          // failure for this entire function

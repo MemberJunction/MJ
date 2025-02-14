@@ -15,6 +15,7 @@ const codegenConfig = {
   //   Email: '',
   //   Roles: ['Developer', 'Integration', 'UI'],
   // },
+  verboseOutput: false,
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },

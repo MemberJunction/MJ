@@ -69,7 +69,7 @@ export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 export * from './generated/generated.js';
 
 import { resolve } from 'node:path';
-import { DataSourceInfo } from './types.js';
+import { DataSourceInfo, raiseEvent } from './types.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -125,8 +125,8 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     console.log('Read-only Data Source has been initialized.');
   }
 
-
   setupComplete$.next(true);
+  raiseEvent('setupComplete', dataSources, null,  this);
 
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */

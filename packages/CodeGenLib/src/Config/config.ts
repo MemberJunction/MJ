@@ -282,6 +282,8 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
+
+  verboseOutput: z.boolean().optional().default(false),
 });
 export let currentWorkingDirectory: string;
 

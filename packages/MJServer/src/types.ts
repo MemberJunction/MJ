@@ -1,7 +1,10 @@
+import { UserInfo } from '@memberjunction/core';
 import { UserViewEntity } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import { PubSubEngine } from 'type-graphql';
 import { DataSource, QueryRunner } from 'typeorm';
+import { getSystemUser } from './auth';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 export type UserPayload = {
   email: string;
@@ -69,3 +72,28 @@ export type RunViewGenericParams = {
   userPayload?: UserPayload;
   pubSub: PubSubEngine;
 };
+
+
+export class MJServerEvent {
+  type: 'setupComplete' | 'requestReceived' | 'requestCompleted' | 'requestFailed';
+  dataSources: DataSourceInfo[];
+  userPayload: UserPayload;
+  systemUser: UserInfo;
+}
+
+export const MJ_SERVER_EVENT_CODE = 'MJ_SERVER_EVENT';
+
+export async function raiseEvent(type: MJServerEvent['type'], dataSources: DataSourceInfo[], userPayload: UserPayload, component?: any) {
+  const event = new MJServerEvent();
+  event.type = type;
+  event.dataSources = dataSources;
+  event.userPayload = userPayload;
+  event.systemUser = await getSystemUser();
+
+  const mje = new MJEvent();
+  mje.args = event;
+  mje.component = component;
+  mje.event = MJEventType.ComponentEvent;
+  mje.eventCode = MJ_SERVER_EVENT_CODE;
+  MJGlobal.Instance.RaiseEvent(mje);
+}
