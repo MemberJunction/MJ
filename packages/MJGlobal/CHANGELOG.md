@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.24.0
+
+### Patch Changes
+
+- 9cb85cc: Minor tweak to casing logic
+
 ## 2.23.2
 
 ## 2.23.1

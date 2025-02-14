@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.24.0
+
+### Minor Changes
+
+- 7c6ff41: Updates to support a new Description field in the DataContextItem entity and flow from the Skip API response where Skip can add new items separately from the DATA_REQUESTED response phase via the new GetData GQL query that MJ Server now supports.
+
+### Patch Changes
+
+- Updated dependencies [9cb85cc]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/core@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes

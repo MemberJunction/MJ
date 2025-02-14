@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.24.0
+
+### Patch Changes
+
+- Updated dependencies [9cb85cc]
+- Updated dependencies [7c6ff41]
+  - @memberjunction/global@2.24.0
+  - @memberjunction/core-entities@2.24.0
+  - @memberjunction/ng-base-types@2.24.0
+  - @memberjunction/ng-container-directives@2.24.0
+  - @memberjunction/ng-notifications@2.24.0
+  - @memberjunction/core@2.24.0
+  - @memberjunction/ng-generic-dialog@2.24.0
+
 ## 2.23.2
 
 ### Patch Changes
