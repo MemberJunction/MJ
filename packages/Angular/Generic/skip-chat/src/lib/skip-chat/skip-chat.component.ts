@@ -197,9 +197,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
       (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
+        LogStatus('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
-          const statusObj = SafeJSONParse(status.message);
-          if (statusObj) {
+          const statusObj = SafeJSONParse<any>(status.message);
+          if (statusObj && statusObj.type === 'AskSkip') {
             this.HandlePushStatusUpdate(statusObj);  
           }
         }
@@ -211,7 +212,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   protected HandlePushStatusUpdate(statusObj: any) {
     try {
-      const obj: { type?: string; status?: string; conversationID?: string; message?: string } = statusObj;
+      const obj: { type?: string; 
+                   status?: string; 
+                   ResponsePhase: string, 
+                   conversationID?: string; 
+                   message?: string } = statusObj;
       if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
         if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
           if (obj.conversationID === this.SelectedConversation?.ID) {
@@ -219,8 +224,20 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
               this.SetSkipStatusMessage(obj.message, 0);
             }
+            else {
+              LogStatus(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
+            }
+          }
+          else {
+            LogStatus(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
           }
         }
+        else {
+          LogStatus(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
+        }
+      }
+      else {
+        LogStatus(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
       }
     }
     catch (e) {
