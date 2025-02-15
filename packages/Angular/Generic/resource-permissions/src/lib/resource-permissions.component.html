@@ -35,11 +35,13 @@
         @else {
           SelectedType: {{ SelectedType }}
         }
-        <kendo-dropdownlist 
-          [data]="PermissionLevels"
-          [(ngModel)]="SelectedPermissionLevel"
-          style="width: 100px;">
-        </kendo-dropdownlist>
+        @if (ShowPermissionLevels) {
+          <kendo-dropdownlist 
+            [data]="PermissionLevels"
+            [(ngModel)]="SelectedPermissionLevel"
+            style="width: 100px;">
+          </kendo-dropdownlist>
+        }
         <button kendoButton (click)="addPermission()" [disabled]="permissionAlreadyExists()" [title]="permissionAlreadyExists() ? 'This combination of Type/User/Role already exists below' : ''" >Add</button>
       </div>
     }
@@ -48,7 +50,9 @@
         <tr>
           <th>Type</th>
           <th>Name</th>
-          <th>Level</th>
+          @if (ShowPermissionLevels) {
+            <th>Level</th>
+          }
           @if(AllowDeletePermissions) {
             <th>Actions</th>
           }
@@ -59,18 +63,20 @@
           <tr>
             <td>{{ p.Type }}</td>
             <td>{{ p.Type === 'User' ? p.User : p.Role }}</td>
-            <td>
-              @if (AllowEditPermissions) {
-                <kendo-dropdownlist 
-                  [(ngModel)]="p.PermissionLevel"
-                  [data]="PermissionLevels"
-                  style="width: 100px;">
-                </kendo-dropdownlist>
-              }
-              @else {
-                {{ p.PermissionLevel }}
-              }
-            </td>
+            @if (ShowPermissionLevels) {
+              <td>
+                @if (AllowEditPermissions) {
+                  <kendo-dropdownlist 
+                    [(ngModel)]="p.PermissionLevel"
+                    [data]="PermissionLevels"
+                    style="width: 100px;">
+                  </kendo-dropdownlist>
+                }
+                @else {
+                  {{ p.PermissionLevel }}
+                }
+              </td>
+            }
             @if(AllowDeletePermissions) {
               <td>
                 <button kendoButton (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
