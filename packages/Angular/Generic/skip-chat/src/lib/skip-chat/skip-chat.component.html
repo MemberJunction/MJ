@@ -103,7 +103,7 @@
                                 type="text" 
                                 [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
                         </div>
-                        <div class="button-area">
+                        <div class="button-area" [style.marginLeft.px]="-35 * NumVisibleButtons">
                             @if (ShowDataContextButton) {
                                 <button kendoButton >
                                     <span class="fa-solid fa-gear" 
