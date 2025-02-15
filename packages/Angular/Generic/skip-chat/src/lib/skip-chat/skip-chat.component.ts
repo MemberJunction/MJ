@@ -63,6 +63,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * Set this property in order to set the user image. This can either be a URL or a Blob
    */
   @Input() public UserImage: string | Blob | undefined = undefined;
+
+  @Input() public VerboseLogging: boolean = false;
   
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -197,7 +199,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
       (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
-        LogStatus('Push status update received in Skip Chat: ' + JSON.stringify(status));
+        this.LogVerbose('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
           const statusObj = SafeJSONParse<any>(status.message);
           if (statusObj && statusObj.type === 'AskSkip') {
@@ -207,6 +209,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       });
     } catch (e) {
       LogError(e);
+    }
+  }
+
+  protected LogVerbose(message: string) {
+    if (this.VerboseLogging) {
+      LogStatus(message);
     }
   }
 
@@ -222,22 +230,23 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           if (obj.conversationID === this.SelectedConversation?.ID) {
             if (obj.message && obj.message.length > 0) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+              this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
               this.SetSkipStatusMessage(obj.message, 0);
             }
             else {
-              LogStatus(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
+              this.LogVerbose(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
             }
           }
           else {
-            LogStatus(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
+            this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
           }
         }
         else {
-          LogStatus(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
+          this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
         }
       }
       else {
-        LogStatus(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
+        this.LogVerbose(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
       }
     }
     catch (e) {
