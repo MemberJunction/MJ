@@ -888,19 +888,29 @@ export abstract class BaseEntity<T = unknown> {
                     }
                     if (valResult.Success) {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
-                        if (data) {
-                            this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-                            this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
-                            const result = this.LatestResult;
-                            if (result)
-                                result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
-
-                            this.RaiseEvent('save', null);
-
+                        if (!this.TransactionGroup) {
+                            // no transaction group, so we have our results here
+                            return this.finalizeSave(data);
+                        }
+                        else {
+                            // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
+                            this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
+                                if (success) {
+                                    const transItem = results.find(r => r.Transaction.BaseEntity === this); 
+                                    if (transItem) {
+                                        this.finalizeSave(transItem.Result); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    }
+                                    else {
+                                        // should never get here, but if we do, we need to throw an error
+                                        throw new Error('Transaction group did not return a result for the entity object');
+                                    }
+                                }
+                                else {
+                                    throw error; // push this to the catch block below and that will add to the result history
+                                }
+                            });
                             return true;
                         }
-                        else
-                            return false;
                     }
                     else {
                         throw valResult; // pass this along to the caller
@@ -923,6 +933,23 @@ export abstract class BaseEntity<T = unknown> {
                 this.ResultHistory.push(newResult);
             }
 
+            return false;
+        }
+    }
+
+    private finalizeSave(data: any): boolean {
+        if (data) {
+            this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
+            this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
+            const result = this.LatestResult;
+            if (result)
+                result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
+
+            this.RaiseEvent('save', null);
+
+            return true;
+        }
+        else {
             return false;
         }
     }
@@ -1131,11 +1158,37 @@ export abstract class BaseEntity<T = unknown> {
                     relatedEntityList: null
                 });
                 if (await this.ProviderToUse.Delete(this, options, this.ActiveUser)) {
-                    // record deleted correctly
-                    this.RaiseEvent('delete', {OldValues: oldVals});
+                    if (!this.TransactionGroup) {
+                        // NOT part of a transaction - raise event immediately
 
-                    // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                    this.NewRecord(); // will trigger a new record event here too
+                        // record deleted correctly
+                        this.RaiseEvent('delete', {OldValues: oldVals});
+
+                        // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
+                        this.NewRecord(); // will trigger a new record event here too
+                    }
+                    else {
+                        // part of a transaction, wait for the transaction to submit successfully and then 
+                        // raise the event
+                        this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
+                            if (success) {
+                                this.RaiseEvent('delete', {OldValues: oldVals});
+
+                                // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
+                                this.NewRecord(); // will trigger a new record event here too    
+                            }
+                            else {
+                                // transaction failed, so we need to add a new result to the history here
+                                newResult.Success = false;
+                                newResult.Type = 'delete'
+                                newResult.Message = error && error.message? error.message : error;
+                                newResult.Errors = error.Errors || [];
+                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                newResult.EndedAt = new Date();
+                                this.ResultHistory.push(newResult);
+                            }
+                        });
+                    }
                     return true;
                 }
                 else // record didn't save, return false, but also don't wipe out the entity like we do if the Delete() worked

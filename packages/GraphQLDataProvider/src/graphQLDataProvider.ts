@@ -856,40 +856,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
 
             if (entity.TransactionGroup) {
-                return new Promise((resolve, reject) => {
-                    const mutationInputTypes = [
-                        {
-                            varName: 'input',
-                            inputType: mutationName + 'Input!'
-                        }
-                    ];
+                const mutationInputTypes = [
+                    {
+                        varName: 'input',
+                        inputType: mutationName + 'Input!'
+                    }
+                ];
 
-                    entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
+                entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
 
-                    // we are part of a transaction group, so just add our query to the list
-                    // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName,
-                                                                                             mutationInputTypes: mutationInputTypes},
-                                                                                            (results: any, success: boolean) => {
-                        // we get here whenever the transaction group does gets around to committing
-                        // our query. We need to update our entity with the values that were returned
-                        // from the mutation if it was successful.
-                        result.EndedAt = new Date();
-                        if (success && results) {
-                            // got our data, send it back to the caller, which is the entity object
-                            // and that object needs to update itself from this data.
-                            result.Success = true;
-                            resolve (this.ConvertBackToMJFields(results));
-                        }
-                        else {
-                            // the transaction failed, nothing to update, but we need to call Reject so the
-                            // promise resolves with a rejection so our outer caller knows
-                            result.Success = false;
-                            result.Message = 'Transaction failed';
-                            reject();
-                        }
-                    }));
-                });
+                // we are part of a transaction group, so just add our query to the list
+                // and when the transaction is committed, we will send all the queries at once
+                entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName,
+                                                                                            mutationInputTypes: mutationInputTypes},
+                                                                                        (results: any, success: boolean) => {
+                    // we get here whenever the transaction group does gets around to committing
+                    // our query. We need to update our entity with the values that were returned
+                    // from the mutation if it was successful.
+                    result.EndedAt = new Date();
+                    if (success && results) {
+                        // got our data, send it back to the caller, which is the entity object
+                        // and that object needs to update itself from this data.
+                        result.Success = true;
+                        result.NewValues = this.ConvertBackToMJFields(results);
+                    }
+                    else {
+                        // the transaction failed, nothing to update, but we need to call Reject so the
+                        // promise resolves with a rejection so our outer caller knows
+                        result.Success = false;
+                        result.Message = 'Transaction failed';
+                    }
+                }));
+
+                return true; // part of a TG always return true after we setup the transaction group item above
             }
             else {
                 // not part of a transaction group, so just go for it and send across our GQL
@@ -897,8 +896,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[type + entity.EntityInfo.ClassName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    const ret = this.ConvertBackToMJFields(d[type + entity.EntityInfo.ClassName]);
-                    return ret;
+                    result.NewValues = this.ConvertBackToMJFields(d[type + entity.EntityInfo.ClassName]);
+                    return result.NewValues;
                 }
                 else
                     throw new Error(`Save failed for ${entity.EntityInfo.ClassName}`);
@@ -1059,45 +1058,41 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
                 entity.RaiseReadyForTransaction();
-                return new Promise((resolve, reject) => {
-                    // we are part of a transaction group, so just add our query to the list
-                    // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName,
-                                                                                             mutationInputTypes: mutationInputTypes},
-                                                                                            (results: any, success: boolean) => {
-                        // we get here whenever the transaction group does gets around to committing
-                        // our query.
-                        result.EndedAt = new Date(); // done processing
-                        if (success && results) {
-                            // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
-                            let success: boolean = true;
-                            for (const pk of entity.PrimaryKey.KeyValuePairs) {
-                                // check each primary key value to see if it matches the return value of the mutation
-                                if (pk.Value !== results[pk.FieldName]) {
-                                    success = false;
-                                }
+                // we are part of a transaction group, so just add our query to the list
+                // and when the transaction is committed, we will send all the queries at once
+                entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName,
+                                                                                            mutationInputTypes: mutationInputTypes},
+                                                                                        (results: any, success: boolean) => {
+                    // we get here whenever the transaction group does gets around to committing
+                    // our query.
+                    result.EndedAt = new Date(); // done processing
+                    if (success && results) {
+                        // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
+                        let success: boolean = true;
+                        for (const pk of entity.PrimaryKey.KeyValuePairs) {
+                            // check each primary key value to see if it matches the return value of the mutation
+                            if (pk.Value !== results[pk.FieldName]) {
+                                success = false;
                             }
-                            if (success) {
-                                result.Success = true;
-                                resolve (true)
-                            }
-                            else {
-                                // the transaction failed, nothing to update, but we need to call Reject so the
-                                // promise resolves with a rejection so our outer caller knows
-                                result.Success = false;
-                                result.Message = 'Transaction failed to commit'
-                                reject();
-                            }
+                        }
+                        if (success) {
+                            result.Success = true;
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the
                             // promise resolves with a rejection so our outer caller knows
                             result.Success = false;
                             result.Message = 'Transaction failed to commit'
-                            reject();
                         }
-                    }));
-                });
+                    }
+                    else {
+                        // the transaction failed, nothing to update, but we need to call Reject so the
+                        // promise resolves with a rejection so our outer caller knows
+                        result.Success = false;
+                        result.Message = 'Transaction failed to commit'
+                    }
+                }));
+                return true;
             }
             else {
                 // no transaction just go for it

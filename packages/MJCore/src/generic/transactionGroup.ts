@@ -1,3 +1,4 @@
+import { Subject } from "rxjs";
 import { BaseEntity } from "./baseEntity";
 import { LogError } from "./logging";
 
@@ -91,6 +92,24 @@ export abstract class TransactionGroupBase {
         return this._pendingTransactions;
     }
 
+    // RxJS Subject to notify about transaction status
+    private transactionNotifier = new Subject<{ success: boolean; results?: TransactionResult[]; error?: any }>();
+
+    // Expose transaction notifications as an observable
+    public get TransactionNotifications$() {
+        return this.transactionNotifier.asObservable();
+    }
+
+    /**
+     * Notifies observers about transaction success or failure
+     * @param success Whether the transaction was successful
+     * @param results The transaction results (if applicable)
+     * @param error Any error that occurred (if applicable)
+     */
+    private NotifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
+        this.transactionNotifier.next({ success, results, error });
+    }
+
     private _preprocessingItems: TransactionPreprocessingItem[] = [];
     /**
      * If an entity object needs to conduct any type of asynchronous preprocessing before a transaction is submitted, it must notify its transaction group
@@ -173,7 +192,10 @@ export abstract class TransactionGroupBase {
                 }
 
                 // now, see if there are any false values for results[x].Success, if so, we have to return false
-                return results.every((r) => r.Success);
+                const overallSuccess = results.every(r => r.Success);
+                this.NotifyTransactionStatus(overallSuccess, results);
+
+                return overallSuccess;
             }
             return true;
         }
@@ -183,6 +205,9 @@ export abstract class TransactionGroupBase {
             for (let i = 0; i < this._pendingTransactions.length; i++) {
                 await this._pendingTransactions[i].CallBack(err, false);
             }
+
+            this.NotifyTransactionStatus(false, undefined, err);
+            
             return false;
         }
     }
