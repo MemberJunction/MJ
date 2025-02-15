@@ -63,6 +63,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * Set this property in order to set the user image. This can either be a URL or a Blob
    */
   @Input() public UserImage: string | Blob | undefined = undefined;
+
+  @Input() public VerboseLogging: boolean = false;
   
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -197,9 +199,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
       (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
+        this.LogVerbose('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
-          const statusObj = SafeJSONParse(status.message);
-          if (statusObj) {
+          const statusObj = SafeJSONParse<any>(status.message);
+          if (statusObj && statusObj.type === 'AskSkip') {
             this.HandlePushStatusUpdate(statusObj);  
           }
         }
@@ -209,18 +212,41 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
+  protected LogVerbose(message: string) {
+    if (this.VerboseLogging) {
+      LogStatus(message);
+    }
+  }
+
   protected HandlePushStatusUpdate(statusObj: any) {
     try {
-      const obj: { type?: string; status?: string; conversationID?: string; message?: string } = statusObj;
+      const obj: { type?: string; 
+                   status?: string; 
+                   ResponsePhase: string, 
+                   conversationID?: string; 
+                   message?: string } = statusObj;
       if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
         if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
           if (obj.conversationID === this.SelectedConversation?.ID) {
             if (obj.message && obj.message.length > 0) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+              this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
               this.SetSkipStatusMessage(obj.message, 0);
             }
+            else {
+              this.LogVerbose(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
+            }
+          }
+          else {
+            this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
           }
         }
+        else {
+          this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
+        }
+      }
+      else {
+        this.LogVerbose(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
       }
     }
     catch (e) {
