@@ -67,7 +67,8 @@ export class MJNotificationService {
             }
             else {
               // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              if (statusObj.type?.trim().toLowerCase() !== 'askskip')  {
+              const type = statusObj.type?.trim().toLowerCase();
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') { 
                 this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }

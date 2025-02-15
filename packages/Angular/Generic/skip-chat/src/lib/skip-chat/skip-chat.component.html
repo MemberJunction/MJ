@@ -101,27 +101,60 @@
                             type="text" 
                             [placeholder]="_AskSkipTextboxPlaceholder"></textarea>
                     </div>
-                    @if (ShowDataContextButton) {
-                        <button kendoButton >
-                            <span class="fa-solid fa-gear" 
-                                    (click)="showDataContext()"></span>
-                        </button>    
-                    }
-                    <button kendoButton 
-                            [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
-                            (click)="sendSkipMessage()">
-                            <span class="fas fa-solid fa-arrow-up"></span>
-                    </button>
+                    <div class="button-area">
+                        @if (ShowDataContextButton) {
+                            <button kendoButton >
+                                <span class="fa-solid fa-gear" 
+                                        (click)="showDataContextDialog()"></span>
+                            </button>    
+                        }
+                        <button kendoButton 
+                                [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
+                                (click)="sendSkipMessage()">
+                                <span class="fas fa-solid fa-arrow-up"></span>
+                        </button>
+                        @if (ShowSharingButton) {
+                            <button kendoButton class="share-button">
+                                <span class="fa-solid fa-share"
+                                        (click)="showSharingDialog()"></span>
+                            </button>    
+                        }
+                    </div>
                 </div>
             </div>    
         </div>
     </div> 
 </div>     
 
-<div *ngIf="isDataContextDialogVisible">
+@if(isDataContextDialogVisible) {
     <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()" [Provider]="ProviderToUse"></mj-data-context-dialog>
-</div>
-
+}
+@if(isSharingDialogVisible && SelectedConversation && conversationResourceTypeID) {
+    <kendo-dialog
+        title="Share Conversation"
+        (close)="closeSharingDialog('no')"
+        [width]="650"
+        [height]="400"
+    >
+        <mj-resource-permissions 
+            [Provider]="Provider"
+            [ResourceTypeID]="conversationResourceTypeID"
+            [ResourceRecordID]="SelectedConversation.ID"
+            [ExcludedRoleNames]="SharingExcludeRoleNames"
+            [ExcludedUserEmails]="SharingExcludeEmails"
+            #resourcePermissions
+        >
+        </mj-resource-permissions>
+        <kendo-dialog-actions>
+            <button kendoButton (click)="closeSharingDialog('yes')" themeColor="primary">
+                Save
+            </button>
+        <button kendoButton (click)="closeSharingDialog('no')">
+            Cancel
+        </button>
+        </kendo-dialog-actions>
+    </kendo-dialog>    
+}
 
 <kendo-dialog
     title="Please confirm"

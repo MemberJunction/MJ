@@ -30,6 +30,7 @@ import { MarkdownModule } from 'ngx-markdown';
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { DataContextModule } from '@memberjunction/ng-data-context';
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 
 // LOCAL
 import { SkipChatComponent } from './skip-chat/skip-chat.component';
@@ -66,6 +67,7 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
+    ResourcePermissionsModule,
     MarkdownModule.forRoot(),
   ],
   exports: [

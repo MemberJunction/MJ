@@ -356,19 +356,26 @@ background-color: #f8f9fa; /* Background of the scrollbar track */
     margin-bottom: 15px;
 }
 
-.input-area > button {
+.input-area > .button-area {
     vertical-align: top;
+    margin-top: 3px;
+    margin-left: -65px;
+}
+/*all buttons in the button area within the input area*/
+.button-area > button {
     width: 30px;
     height: 30px;
-    margin-top: 3px;
     border-radius: 12px;
 }
-.input-area > button:first-of-type {
+/* .input-area > button:first-of-type {
     margin-left: -40px;
 }
 .input-area > button:last-child {
     margin-left: -65px;
 }
+.input-area > .share-button {
+    margin-left: 10px;
+} */
 
 .text-area-wrapper {
     padding: 3px;

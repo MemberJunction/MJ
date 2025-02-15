@@ -16,7 +16,7 @@ import {
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
 import { LogError, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 
@@ -34,6 +34,7 @@ import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } fro
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
   selector: 'skip-chat',
@@ -77,6 +78,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public ShowSkipLogoInConversationList: boolean = false;
 
   /**
+   * When set to true, the component will show a sharing button that allows the user to share the conversation with others. Default is true.
+   */
+  @Input() public ShowSharingButton: boolean = true;
+
+  /**
+   * This array of role names will be excluded from the list of possible roles to share the conversation with.
+   */
+  @Input() public SharingExcludeRoleNames: string[] = [];
+
+  /**
+   * This array of emails will be excluded from the list of possible roles to share the conversation with.
+   */
+  @Input() public SharingExcludeEmails: string[] = [];
+
+  /**
    * This property is used to set the placeholder text for the textbox where the user types their message to Skip. 
    */
   @Input() public DefaultTextboxPlaceholder: string = 'Type your message to Skip here...';
@@ -110,6 +126,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @ViewChild('AskSkipInput') askSkipInput: any;
   @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
   @ViewChild('topLevelDiv') topLevelDiv!: ElementRef;
+  @ViewChild('resourcePermissions') set resourcePermissionsRef(
+    component: ResourcePermissionsComponent | undefined
+  ) {
+    if (component) {
+      // Component is instantiated
+      this.resourcePermissions = component;
+    } else {
+      // Component is destroyed
+      this.resourcePermissions = null;
+    }
+  }
+  resourcePermissions: ResourcePermissionsComponent | null = null;
+
 
   /**
    * Internal state variable to track if the conversation list is visible or not. Defaults to true. Conversation List only is shown if this is true and ShowConversationList is true.
@@ -375,6 +404,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
+  public conversationResourceTypeID: string | undefined = undefined;
   public _initialLoadComplete: boolean = false;
   public _isLoading: boolean = false;
   public _numLoads: number = 0;
@@ -383,12 +413,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       await this.Load();
   }
 
+  protected get ResourcePermissionEngine(): ResourcePermissionEngine {
+    return <ResourcePermissionEngine>ResourcePermissionEngine.GetProviderInstance(this.ProviderToUse, ResourcePermissionEngine);
+  }
+
+
   /**
    * This property is used to determine if the component should automatically load the data when it is first shown. Default is true. Turn this off if you want to have more control over the loading sequence and manually call the Load() method when ready.
    */
   @Input() public AutoLoad: boolean = true;
   public async Load(forceRefresh: boolean = false) {
     if (!this._initialLoadComplete || forceRefresh) {
+      await this.ResourcePermissionEngine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+      this.conversationResourceTypeID = this.ResourcePermissionEngine.ResourceTypes.find((rt) => rt.Name === 'Conversations')?.ID;
       MJGlobal.Instance.ObjectCache.Remove('Conversations'); // clear the cache so we reload the conversations
       if (this.paramsSubscription) {
           this.paramsSubscription.unsubscribe();
@@ -1264,12 +1301,32 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   public isDataContextDialogVisible: boolean = false;
-  public showDataContext() {
+  public showDataContextDialog() {
     this.isDataContextDialogVisible = true;
   }
   public closeDataContextDialog() {
     this.isDataContextDialogVisible = false;
   }
+
+  public isSharingDialogVisible: boolean = false;
+  public showSharingDialog() {
+    this.isSharingDialogVisible = true;
+  }
+  public async closeSharingDialog(action: 'yes' | 'no') {
+    if (action === 'yes' && this.resourcePermissions) {
+      if (!await this.resourcePermissions.SavePermissions()) {
+        // let the user know that sharing failed
+        this.notificationService.CreateSimpleNotification('Failed to save permissions', 'error', 2500);
+      }
+      else {
+        // let the user know that sharing was successful
+        this.notificationService.CreateSimpleNotification('Conversation sharing settings updated', 'success', 1500);
+      }
+    }
+
+    this.isSharingDialogVisible = false;
+  }
+
 
   private CompositeKeyIsPopulated(): boolean {
     return this.LinkedEntityCompositeKey.KeyValuePairs && this.LinkedEntityCompositeKey.KeyValuePairs.length > 0;
