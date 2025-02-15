@@ -3,7 +3,7 @@ import { UserViewEntity } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import { PubSubEngine } from 'type-graphql';
 import { DataSource, QueryRunner } from 'typeorm';
-import { getSystemUser } from './auth';
+import { getSystemUser } from './auth/index.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 export type UserPayload = {
