@@ -1,6 +1,6 @@
 import { Field, ObjectType, Int, Query, Resolver, Ctx, Info as RequestInfo } from 'type-graphql';
 import { Public, RequireSystemUser } from '../directives/index.js';
-import packageJson from '../../package.json' assert { type: 'json' };
+import packageJson from '../../package.json' with { type: 'json' };
 import { AppContext } from '../types.js';
 import os from 'node:os';
 
