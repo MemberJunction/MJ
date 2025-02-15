@@ -93,7 +93,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public SharingExcludeEmails: string[] = [];
 
   /**
-   * This property is used to set the placeholder text for the textbox where the user types their message to Skip. 
+   * This property is used to set the placeholder text for the textbox where the user types their message to Skip.   
    */
   @Input() public DefaultTextboxPlaceholder: string = 'Type your message to Skip here...';
   /**
@@ -101,8 +101,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   @Input() public ProcessingTextBoxPlaceholder: string = 'Please wait...';
 
-
-
+ 
+ 
   /**
    * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
    */
@@ -1550,5 +1550,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.notificationService.CreateSimpleNotification('Error deleting messages', 'error', 3000);
       }
     }
+  }
+
+  public get NumVisibleButtons(): number {
+    let count = 1;
+    if (this.ShowDataContextButton) 
+      count++;
+    if (this.ShowSharingButton && this.SelectedConversationCurrentUserPermissionLevel === 'Owner') 
+      count++;
+    return count;
   }
 }

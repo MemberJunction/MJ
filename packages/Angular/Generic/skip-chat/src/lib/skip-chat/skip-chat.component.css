@@ -366,6 +366,7 @@ background-color: #f8f9fa; /* Background of the scrollbar track */
     width: 30px;
     height: 30px;
     border-radius: 12px;
+    margin-left: 3px;
 }
 /* .input-area > button:first-of-type {
     margin-left: -40px;
