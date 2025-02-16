@@ -22,6 +22,7 @@ import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
 import { FieldMapper } from './FieldMapper';
 import { v4 as uuidv4 } from 'uuid';
+import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -867,9 +868,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // we are part of a transaction group, so just add our query to the list
                 // and when the transaction is committed, we will send all the queries at once
-                entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName,
-                                                                                            mutationInputTypes: mutationInputTypes},
-                                                                                        (results: any, success: boolean) => {
+                entity.TransactionGroup.AddTransaction(new TransactionItem(        entity, 
+                                                                                   result.Type === 'create' ? 'Create' : 'Update', 
+                                                                                   inner, vars, 
+                                                                                   {
+                                                                                      mutationName,
+                                                                                      mutationInputTypes: mutationInputTypes
+                                                                                   },
+                                                                                   (results: any, success: boolean) => {
                     // we get here whenever the transaction group does gets around to committing
                     // our query. We need to update our entity with the values that were returned
                     // from the mutation if it was successful.
@@ -1060,7 +1066,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entity.RaiseReadyForTransaction();
                 // we are part of a transaction group, so just add our query to the list
                 // and when the transaction is committed, we will send all the queries at once
-                entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName,
+                entity.TransactionGroup.AddTransaction(new TransactionItem(entity, 'Delete', inner, vars, {mutationName: queryName,
                                                                                             mutationInputTypes: mutationInputTypes},
                                                                                         (results: any, success: boolean) => {
                     // we get here whenever the transaction group does gets around to committing
@@ -1612,56 +1618,5 @@ class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
         const tx = db.transaction(IDB_DB_ObjectStoreName, 'readwrite');
         await tx.objectStore(IDB_DB_ObjectStoreName).delete(key);
         await tx.done;
-    }
-}
-
-export class GraphQLTransactionGroup extends TransactionGroupBase {
-    private _provider: GraphQLDataProvider;
-    constructor(provider: GraphQLDataProvider) {
-        super();
-        this._provider = provider;
-    }
-
-    protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
-        // iterate through each instruction and build up the combined query string
-        // and the combined variables object
-        let combinedQuery = '';
-        let mutationParams = '';
-        const combinedVars: any = {};
-
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            let itemMutation = item.Instruction;
-            if (item.Vars) {
-                const keys = Object.keys(item.Vars);
-                // rename the variables to avoid collisions and aggregate the varisables
-                // from the item into our combined variables
-                for (let j = 0; j < keys.length; j++) {
-                    const key = keys[j];
-                    const newKey = `${key}_${i}`;
-                    combinedVars[newKey] = item.Vars[key];
-
-                    const keyRegEx = new RegExp('\\$' + key, 'g'); // Create the RegExp dynamically with the global flag.
-                    itemMutation = itemMutation.replace(keyRegEx, '$' + newKey);
-                    const mutationInputType = item.ExtraData.mutationInputTypes.find((t: any) => t.varName === key)?.inputType;
-                    //{varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}
-                    mutationParams += `$${newKey}: ${mutationInputType} \n`;
-                }
-            }
-            // add in the specific mutation and give it an alias so we can easily figure out the results
-            // from each of them and pass back properly
-            combinedQuery += `mutation_${i}: ` + itemMutation + '\n';
-        }
-
-        combinedQuery = `mutation TransactionGroup(${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
-        const execResults = await this._provider.ExecuteGQL(combinedQuery, combinedVars)
-        const returnResults: TransactionResult[] = [];
-        for (let i = 0; i < items.length; i++) {
-            /// NEED TO TEST TO SEE WHAT ORDER WE GET RESULTS BACK AS
-            const result = execResults[`mutation_${i}`];
-            const item = items[i];
-            returnResults.push(new TransactionResult(item, result, result !== null));
-        }
-        return returnResults;
     }
 }

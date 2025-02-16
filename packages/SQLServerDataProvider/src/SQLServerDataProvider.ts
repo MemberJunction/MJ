@@ -1370,10 +1370,12 @@ export class SQLServerDataProvider
       if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
         // existing record and not allowed to update
         throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
+      } 
+      else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
         // new record and not allowed to create
         throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else {
+      } 
+      else {
         // getting here means we are good to save, now check to see if we're dirty and need to save
         // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
         if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
@@ -1432,7 +1434,7 @@ export class SQLServerDataProvider
             // and when the transaction is committed, we will send all the queries at once
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
             entity.TransactionGroup.AddTransaction(
-              new TransactionItem(entity, sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
                 // we get here whenever the transaction group does gets around to committing
                 // our query.
                 this._bAllowRefresh = true; // allow refreshes again
@@ -1917,7 +1919,7 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();

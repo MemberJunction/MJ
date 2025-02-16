@@ -1,26 +1,47 @@
-import { TransactionGroupBase, TransactionItem, TransactionResult } from "@memberjunction/core";
+import { TransactionGroupBase, TransactionResult } from "@memberjunction/core";
 import { DataSource } from "typeorm";
 
+/**
+ * SQL Server implementation of the TransactionGroupBase
+ */
 export class SQLServerTransactionGroup extends TransactionGroupBase {
-    protected async HandleSubmit(items: TransactionItem[]): Promise<TransactionResult[]> {
+    protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
+        const items = this.PendingTransactions;
         if (items.length > 0) {
             const dataSource: DataSource = items[0].ExtraData.dataSource;
             // start a transaction, if anything fails TypeORM will handle the rollback
             await dataSource.transaction(async (transaction) => {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    // exeute the individual query
-                    let result, bSuccess: boolean = false;
-                    try {
-                        result = await transaction.query(item.Instruction, item.Vars);
-                        bSuccess = result !== null 
+                if (this.Variables.length > 0) {
+                    // need to execute in order since there are dependencies between the transaction items for the given variables
+                    for (const item of items) {
+                        // exeute the individual query
+                        let result, bSuccess: boolean = false;
+                        try {
+                            this.SetEntityValuesFromVariables(item.BaseEntity); // set the variables that this item needs
+                            result = await transaction.query(item.Instruction, item.Vars);
+                            this.SetVariableValuesFromEntity(item.BaseEntity, result); // set the variables that this item defines after the save is done
+                            bSuccess = result !== null 
+                        }
+                        catch (e) {
+                            result = e; // push the exception to the result
+                        }
+                        // save the results
+                        returnResults.push(new TransactionResult(item, result, bSuccess));
+                    }    
+                }
+                else {
+                    // can execute in parallel since there are no dependencies between the transaction items
+                    const promises = [];
+                    for (const item of items) {
+                        promises.push(transaction.query(item.Instruction, item.Vars)); // no await, run in parallel
                     }
-                    catch (e) {
-                        result = e; // push the exception to the result
+                    const results = await Promise.all(promises);
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        const result = results[i];
+                        returnResults.push(new TransactionResult(item, result, result !== null));
                     }
-                    // save the results
-                    returnResults.push(new TransactionResult(item, result, bSuccess));
                 }
             });
         }

@@ -269,13 +269,30 @@ export class DataObjectRelatedEntityParam {
     filter?: string
     maxRecords?: number
 }
+
 export class DataObjectParams {
-    oldValues: boolean = false
-    omitNullValues: boolean = true
-    omitEmptyStrings: boolean = true
-    excludeFields: string[] = null
-    includeRelatedEntityData: boolean = true
-    relatedEntityList: DataObjectRelatedEntityParam[] = null
+    oldValues: boolean;
+    omitNullValues: boolean;
+    omitEmptyStrings: boolean;
+    excludeFields: string[];
+    includeRelatedEntityData: boolean;
+    relatedEntityList: DataObjectRelatedEntityParam[];
+
+    constructor(
+        oldValues: boolean = false,
+        omitNullValues: boolean = false,
+        omitEmptyStrings: boolean = false,
+        excludeFields: string[] = [],
+        includeRelatedEntityData: boolean = false,
+        relatedEntityList: DataObjectRelatedEntityParam[] = []
+    ) {
+        this.oldValues = oldValues;
+        this.omitNullValues = omitNullValues;
+        this.omitEmptyStrings = omitEmptyStrings;
+        this.excludeFields = excludeFields;
+        this.includeRelatedEntityData = includeRelatedEntityData;
+        this.relatedEntityList = relatedEntityList;
+    }
 }
 
 export class BaseEntityAIActionParams {
@@ -670,7 +687,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param minifyJSON
      * @returns
      */
-    public async GetDataObjectJSON(params: DataObjectParams, minifyJSON: boolean = true): Promise<string> {
+    public async GetDataObjectJSON(params: DataObjectParams = null, minifyJSON: boolean = true): Promise<string> {
         const obj = await this.GetDataObject(params);
         if (minifyJSON)
             return JSON.stringify(obj);
@@ -684,7 +701,10 @@ export abstract class BaseEntity<T = unknown> {
      * @param params
      * @returns
      */
-    public async GetDataObject(params: DataObjectParams): Promise<any> {
+    public async GetDataObject(params: DataObjectParams = null): Promise<any> {
+        if (!params)
+            params = new DataObjectParams();
+        
         // first, get the object from GetAll
         const obj = this.GetAll(params.oldValues);
 
