@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
@@ -396,12 +396,12 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 
   protected generateServerGraphQLInputType(entity: EntityInfo): string {
     let sRet: string = '';
-    if (entity.AllowCreateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, false, 'Create');
-    if (entity.AllowUpdateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, true, 'Update');
+    if (entity.AllowCreateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, false, 'Create', true);
+    if (entity.AllowUpdateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, true, 'Update', true);
     return sRet;
   }
 
-  protected generateServerGraphQLInputTypeInner(entity: EntityInfo, isUpdate: boolean, classPrefix: string): string {
+  protected generateServerGraphQLInputTypeInner(entity: EntityInfo, isUpdate: boolean, classPrefix: string, nonPKEYFieldsOptional: boolean): string {
     let sRet: string = '';
     sRet += `\n
 //****************************************************************************
@@ -422,7 +422,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
       if ((includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly) {
         sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${codeName}${f.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(f.Type)};
+    ${codeName}${nonPKEYFieldsOptional && !f.IsPrimaryKey ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, f.AllowsNull)};
 `;
       }
     }
