@@ -39,7 +39,10 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     const results = await Promise.all(promises);
                     for (let i = 0; i < items.length; i++) {
                         const item = items[i];
-                        const result = results[i];
+                        let result = null;
+                        if (results[0] && results[i].length > 0) {
+                            result = results[i][0]; // get the first row of the result
+                        }
                         returnResults.push(new TransactionResult(item, result, result !== null));
                     }
                 }
