@@ -138,6 +138,7 @@ export abstract class ProviderBase implements IMetadataProvider {
             //ensure that the local metadata has the latest current user info
             const currentUser: UserInfo = await this.GetCurrentUser();
             this.UpdateLocalMetadataCurrentUser(currentUser);
+            await this.SaveLocalMetadataToStorage();
         }
 
         return true;
