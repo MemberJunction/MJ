@@ -1226,7 +1226,11 @@ export class SQLServerDataProvider
     }
   }
 
-  protected GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
+  /**
+   * This function generates the SQL Statement that will Save a record to the database, it is generally used by the Save() method of this class, but it is marked as public because
+   * it is also used by the SQLServerTransactionGroup to regenerate Save SQL if any values were changed by the transaction group due to transaction variables being set into the object.
+   */
+  public GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
     let sSQL: string = '';
@@ -1408,13 +1412,7 @@ export class SQLServerDataProvider
             // we are in replay mode we so do NOT need to do the validation stuff, skipping it...
           }
 
-          const spName = bNewRecord
-            ? entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0
-              ? entity.EntityInfo.spCreate
-              : 'spCreate' + entity.EntityInfo.BaseTable
-            : entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0
-              ? entity.EntityInfo.spUpdate
-              : 'spUpdate' + entity.EntityInfo.BaseTable;
+          const spName = this.GetCreateUpdateSPName(entity, bNewRecord);
           if (options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/) {
             await this.HandleEntityActions(entity, 'save', true, user);
           }
@@ -1506,6 +1504,23 @@ export class SQLServerDataProvider
       throw e; // rethrow the error
     }
   }
+
+  /**
+   * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
+   * @param entity 
+   * @param bNewRecord 
+   * @returns 
+   */
+  public GetCreateUpdateSPName(entity: BaseEntity, bNewRecord: boolean): string {
+    const spName = bNewRecord
+    ? entity.EntityInfo.spCreate?.length > 0
+      ? entity.EntityInfo.spCreate
+      : 'spCreate' + entity.EntityInfo.BaseTable
+    : entity.EntityInfo.spUpdate?.length > 0
+      ? entity.EntityInfo.spUpdate
+      : 'spUpdate' + entity.EntityInfo.BaseTable;
+    return spName;
+  } 
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',

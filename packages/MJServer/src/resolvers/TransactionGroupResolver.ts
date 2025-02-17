@@ -91,7 +91,7 @@ export class TransactionResolver {
 
             for (const item of group.Items) {
                 // instantiate a new entity object for the item
-                const entity = await md.GetEntityObject(item.EntityName);
+                const entity = await md.GetEntityObject(item.EntityName, context.userPayload.userRecord);
                 entityObjects.push(entity); // save for later for mapping variables if needed
 
                 // get the values from the payload
@@ -110,7 +110,7 @@ export class TransactionResolver {
                             await entity.InnerLoad(pkey);
                         }
                         objectValues.push(itemValues);
-                        entity.SetMany(itemValues);
+                        entity.SetMany(itemValues, true);
                         entity.TransactionGroup = tg;
                         await entity.Save();
                         break;

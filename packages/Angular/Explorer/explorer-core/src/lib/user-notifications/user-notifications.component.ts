@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
-import { UserNotificationEntity } from '@memberjunction/core-entities';
-import { Metadata, TransactionGroupBase } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse } from '@memberjunction/global';
 
@@ -203,11 +203,49 @@ export class UserNotificationsComponent implements AfterViewInit {
   }
 
   public async markAllAsRead() {
-    this.markAll(true);
+    await this.markAll(true);
+
+    // test harness for creating Conversations and Conversation Details record in a single transaction using variables
+    await this.TestTransactionGroupVariables();
+  }
+
+  public async TestTransactionGroupVariables() {
+    const md = new Metadata();
+    const transGroup = await md.CreateTransactionGroup();
+
+    const conversation = await md.GetEntityObject<ConversationEntity>('Conversations');
+    conversation.UserID = md.CurrentUser.ID;
+    conversation.Description = 'Test Conversation';
+    conversation.TransactionGroup = transGroup;
+    if (!await conversation.Save()) {
+      this.sharedService.CreateSimpleNotification('Unable to create conversation', 'error', 5000);
+    }
+
+    const tvDefine = new TransactionVariable('NewConvoID', conversation, 'ID', 'Define')
+    transGroup.AddVariable(tvDefine);
+
+    const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details');
+    conversationDetail.Message = 'Test Message';
+    conversationDetail.Role = 'User';
+    const fakeUUID = '00000000-0000-0000-0000-000000000000';
+    conversationDetail.ConversationID = 'x'; // fakeUUID; // must be non-null to pass validation, this will be replaced by the variable, since we're part of a TG, not a real save, so doesn't validate it as a true fkey
+    conversationDetail.TransactionGroup = transGroup;
+    if (!await conversationDetail.Save()) {
+      this.sharedService.CreateSimpleNotification('Unable to create conversation detail', 'error', 500);
+    }    
+    const tvUse = new TransactionVariable('NewConvoID', conversationDetail, 'ConversationID', 'Use')
+    transGroup.AddVariable(tvUse);
+
+    if (await transGroup.Submit()) {
+      this.sharedService.CreateSimpleNotification('Transaction Group with Variables worked', 'success', 5000);
+    }
+    else {
+      this.sharedService.CreateSimpleNotification('Transaction Group with Variables failed', 'error', 5000);
+    }
   }
 
   public async markAllAsUnread() {
-    this.markAll(false);
+    await this.markAll(false);
   }
 
   public async markAll(bRead: boolean) {
