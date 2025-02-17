@@ -22,6 +22,9 @@ export class TransactionItem {
     public get Instruction(): string {
         return this._instruction;
     }
+    public set Instruction(value: string) {
+        this._instruction = value;
+    }
     public get CallBack(): Function {
         return this._callBack;
     }
@@ -260,7 +263,10 @@ export abstract class TransactionGroupBase {
      * @returns 
      */
     protected MapVariableEntityObjectToPosition(variable: TransactionVariable): number {
-        return this._pendingTransactions.findIndex((t) => t.BaseEntity === variable.EntityObject);
+        const index = this._pendingTransactions.findIndex((t) => {
+            return t.BaseEntity === variable.EntityObject
+        });
+        return index;
     }
 
     /**
@@ -331,8 +337,10 @@ export abstract class TransactionGroupBase {
      * This utility method is to be used by sub-classes to set the values of the variables on the BaseEntity objects before the transaction is executed for variables
      * that are defined as 'Use' type. This is used to pass values from one transaction item to another.
      * @param entityObject 
+     * @returns the number of values set on the entity object
      */
-    protected SetEntityValuesFromVariables(entityObject: BaseEntity) {
+    protected SetEntityValuesFromVariables(entityObject: BaseEntity): number {
+        let numSet = 0;
         const vars = this.Variables.filter(v => v.EntityObject === entityObject);
         // we have variables that we need to handle for this object. For any variables that have type of 'Use'
         // we need to set those values on the object before we execute the query
@@ -347,6 +355,7 @@ export abstract class TransactionGroupBase {
 
                         // set the value on the BaseEntity for the current item
                         entityObject.Set(varItem.FieldName, value);
+                        numSet++;
                     }
                     else {
                         // the definition of the variable was never processed, so we can't set the value, must throw an exception and blow up the transaction
@@ -359,12 +368,15 @@ export abstract class TransactionGroupBase {
                 }
             }
         }
+        return numSet;
     }
 
     /**
      * This utility method is to be used by sub-classes to set the values of the variables on the BaseEntity objects after the transaction is executed for variables
+     * @returns the number of variables that had their processed values set from the provided entity object
      */
-    protected SetVariableValuesFromEntity(entityObject: BaseEntity, queryResults: any) {
+    protected SetVariableValuesFromEntity(entityObject: BaseEntity, queryResults: any): number {
+        let numVarsSet = 0;
         const vars = this.Variables.filter(v => v.EntityObject === entityObject);
         // we have variables that we need to handle for this object. For any variables that have type of 'Define'
         // we need to set those values on the variable object after we execute the query and have the results
@@ -375,7 +387,11 @@ export abstract class TransactionGroupBase {
 
                 // stash the value into the variable object
                 varItem.ProcessedValue = value;
+
+                // increment the counter
+                numVarsSet++;
             }
         }
+        return numVarsSet;
     }
 }
