@@ -111,7 +111,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
-
+        
         if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
@@ -133,6 +133,11 @@ export abstract class ProviderBase implements IMetadataProvider {
                 this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
                 await this.SaveLocalMetadataToStorage();
             }
+        }
+        else{
+            //ensure that the local metadata has the latest current user info
+            const currentUser: UserInfo = await this.GetCurrentUser();
+            this.UpdateLocalMetadataCurrentUser(currentUser);
         }
 
         return true;
@@ -719,6 +724,14 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     protected UpdateLocalMetadata(res: AllMetadata) {
         this._localMetadata = res;
+    }
+
+    protected UpdateLocalMetadataCurrentUser(user: UserInfo) {
+        if(!this._localMetadata || !user){
+            return;
+        }
+
+        this._localMetadata.CurrentUser = user;
     }
 
     abstract get LocalStorageProvider(): ILocalStorageProvider; // sub-class implements this based on whatever the local storage model is, different for browser vs. node
