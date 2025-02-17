@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.25.0
+
+### Minor Changes
+
+- 26c990d: - Add Conversations to Resource Types Entity* Update User View Grid to fix multi-edit bug* Transaction Management Changes - fixes bug in #803 - but not new feature in there* Clean bug in Notification Service to only show user-centric messages* Add Sharing dialog to Skip Chat component
+
+### Patch Changes
+
+- 0647504: support new TransactionItem constructor in SQLServerDataProvider
+- 824eca2: Transaction Group improvements
+- 86e6d3b: Finished debug for Variables support in transaction groups!
+- Updated dependencies [fd07dcd]
+- Updated dependencies [26c990d]
+- Updated dependencies [86e6d3b]
+  - @memberjunction/core@2.25.0
+  - @memberjunction/aiengine@2.25.0
+  - @memberjunction/ai-vector-dupe@2.25.0
+  - @memberjunction/actions@2.25.0
+  - @memberjunction/core-entities@2.25.0
+  - @memberjunction/queue@2.25.0
+  - @memberjunction/ai@2.25.0
+  - @memberjunction/global@2.25.0
+
 ## 2.24.1
 
 ### Patch Changes
