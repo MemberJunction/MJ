@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
@@ -396,12 +396,12 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 
   protected generateServerGraphQLInputType(entity: EntityInfo): string {
     let sRet: string = '';
-    if (entity.AllowCreateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, false, 'Create');
-    if (entity.AllowUpdateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, true, 'Update');
+    if (entity.AllowCreateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, 'Create', true);
+    if (entity.AllowUpdateAPI) sRet += this.generateServerGraphQLInputTypeInner(entity, 'Update', true);
     return sRet;
   }
 
-  protected generateServerGraphQLInputTypeInner(entity: EntityInfo, isUpdate: boolean, classPrefix: string): string {
+  protected generateServerGraphQLInputTypeInner(entity: EntityInfo, classPrefix: 'Create' | 'Update', nonPKEYFieldsOptional: boolean): string {
     let sRet: string = '';
     sRet += `\n
 //****************************************************************************
@@ -409,22 +409,28 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 //****************************************************************************
 @InputType()
 export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
-    for (let i = 0; i < entity.Fields.length; i++) {
-      const f = entity.Fields[i];
+    // first, filter the fields 
+    const fieldsToInclude = entity.Fields.filter((f) => {
+      // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
+      const includePrimaryKey = classPrefix === 'Update' || (!f.AutoIncrement && f.Type !== 'uniqueidentifier'); 
+      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
+    });
+
+    // now iterate through the filtered fields
+    for (const f of fieldsToInclude) {
       const sTypeGraphQLString: string = this.getTypeGraphQLFieldString(f);
       // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
       const codeName: string = f.CodeName.startsWith('__mj') ? '_mj_' + f.CodeName.substring(4) : f.CodeName;
 
       const sNull: string = f.AllowsNull ? '{ nullable: true }' : '';
       const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
-      // always include ID becuase it is used for UPDATES
-      const includePrimaryKey = isUpdate || (!f.AutoIncrement && f.Type !== 'uniqueidentifier'); // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
-      if ((includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly) {
+      // next - decide if we allow this field to be undefined or not - for UPDATES, we only allow undefined if the field is not a primary key and the param to this function is on,
+      // for CREATES, we allow undefined if the field is not a primary key and either the field allows null or has a default value
+      const fieldUndefined = classPrefix === 'Update' ? nonPKEYFieldsOptional && !f.IsPrimaryKey : nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue);
         sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${codeName}${f.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(f.Type)};
+    ${codeName}${fieldUndefined ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, f.AllowsNull)};
 `;
-      }
     }
 
     // if the classPrefix is UPDATE, we need to add an optional OldValues array which will simply be an array of

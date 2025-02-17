@@ -466,10 +466,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             // now add to the rest of the pending records
             for (const x of this._pendingRecords) {
               x.entityObject.TransactionGroup = tg;
-              if (x.action === 'save')
-                x.entityObject.Save(); // DO NOT AWAIT, part of a TG
-              else
-                x.entityObject.Delete(); // DO NOT AWAIT, part of a TG
+              if (x.action === 'save') {
+                await x.entityObject.Save();
+              }
+              else {
+                await x.entityObject.Delete();
+              }
             }
             // finally submit the TG
             return await tg.Submit();

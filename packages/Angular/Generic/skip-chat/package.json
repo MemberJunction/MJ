@@ -35,6 +35,7 @@
     "@memberjunction/ng-data-context": "2.24.1",
     "@memberjunction/ng-base-types": "2.24.1",
     "@memberjunction/ng-notifications": "2.24.1",
+    "@memberjunction/ng-resource-permissions": "2.24.1",
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-listview": "16.2.0",
     "@progress/kendo-angular-notification": "16.2.0",

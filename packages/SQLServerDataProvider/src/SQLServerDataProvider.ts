@@ -1226,7 +1226,11 @@ export class SQLServerDataProvider
     }
   }
 
-  protected GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
+  /**
+   * This function generates the SQL Statement that will Save a record to the database, it is generally used by the Save() method of this class, but it is marked as public because
+   * it is also used by the SQLServerTransactionGroup to regenerate Save SQL if any values were changed by the transaction group due to transaction variables being set into the object.
+   */
+  public GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): string {
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${this.generateSPParams(entity, !bNewRecord)}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'Record Changes');
     let sSQL: string = '';
@@ -1370,10 +1374,12 @@ export class SQLServerDataProvider
       if (!bReplay && !bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
         // existing record and not allowed to update
         throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
+      } 
+      else if (!bReplay && bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
         // new record and not allowed to create
         throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
-      } else {
+      } 
+      else {
         // getting here means we are good to save, now check to see if we're dirty and need to save
         // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
         if (entity.Dirty || options.IgnoreDirtyState || options.ReplayOnly) {
@@ -1406,13 +1412,7 @@ export class SQLServerDataProvider
             // we are in replay mode we so do NOT need to do the validation stuff, skipping it...
           }
 
-          const spName = bNewRecord
-            ? entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0
-              ? entity.EntityInfo.spCreate
-              : 'spCreate' + entity.EntityInfo.BaseTable
-            : entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0
-              ? entity.EntityInfo.spUpdate
-              : 'spUpdate' + entity.EntityInfo.BaseTable;
+          const spName = this.GetCreateUpdateSPName(entity, bNewRecord);
           if (options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/) {
             await this.HandleEntityActions(entity, 'save', true, user);
           }
@@ -1428,46 +1428,53 @@ export class SQLServerDataProvider
           if (entity.TransactionGroup && !bReplay /*we never participate in a transaction if we're in replay mode*/) {
             // we have a transaction group, need to play nice and be part of it
             entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
-            return new Promise((resolve, reject) => {
-              // we are part of a transaction group, so just add our query to the list
-              // and when the transaction is committed, we will send all the queries at once
-              this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-              entity.TransactionGroup.AddTransaction(
-                new TransactionItem(entity, sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
-                  // we get here whenever the transaction group does gets around to committing
-                  // our query.
-                  this._bAllowRefresh = true; // allow refreshes again
-                  entityResult.EndedAt = new Date();
-                  if (success && results) {
-                    // process any Entity AI actions that are set to trigger AFTER the save
-                    // these are fired off but are NOT part of the transaction group, so if they fail,
-                    // the transaction group will still commit, but the AI action will not be executed
-                    if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/)
-                      this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-
-                    // Same approach to Entity Actions as Entity AI Actions
-                    if (options.SkipEntityActions !== true) this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
-
-                    entityResult.Success = true;
-                    resolve(results[0]);
-                  } else {
-                    // the transaction failed, nothing to update, but we need to call Reject so the
-                    // promise resolves with a rejection so our outer caller knows
-                    entityResult.Success = false;
-                    entityResult.Message = 'Transaction Failed';
-                    reject(results);
+            // we are part of a transaction group, so just add our query to the list
+            // and when the transaction is committed, we will send all the queries at once
+            this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
+            entity.TransactionGroup.AddTransaction(
+              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+                // we get here whenever the transaction group does gets around to committing
+                // our query.
+                this._bAllowRefresh = true; // allow refreshes again
+                entityResult.EndedAt = new Date();
+                if (success && results) {
+                  // process any Entity AI actions that are set to trigger AFTER the save
+                  // these are fired off but are NOT part of the transaction group, so if they fail,
+                  // the transaction group will still commit, but the AI action will not be executed
+                  if (options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/) {
+                    this.HandleEntityAIActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
                   }
-                })
-              );
-            });
-          } else {
+
+                  // Same approach to Entity Actions as Entity AI Actions
+                  if (options.SkipEntityActions !== true) {
+                    this.HandleEntityActions(entity, 'save', false, user); // NO AWAIT INTENTIONALLY
+                  }
+
+                  entityResult.Success = true;
+                  entityResult.NewValues = results[0];
+                } 
+                else {
+                  // the transaction failed, nothing to update, but we need to call Reject so the
+                  // promise resolves with a rejection so our outer caller knows
+                  entityResult.Success = false;
+                  entityResult.Message = 'Transaction Failed';
+                }
+              })
+            );
+
+            return true; // we're part of a transaction group, so we're done here
+          } 
+          else {
             // no transaction group, just execute this immediately...
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
 
             let result;
-            if (bReplay)
+            if (bReplay) {
               result = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-            else result = await this.ExecuteSQL(sSQL);
+            }
+            else {
+              result = await this.ExecuteSQL(sSQL);
+            }
 
             this._bAllowRefresh = true; // allow refreshes now
 
@@ -1484,7 +1491,10 @@ export class SQLServerDataProvider
               return result[0];
             } else throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
           }
-        } else return entity; // nothing to save, just return the entity
+        } 
+        else {
+          return entity; // nothing to save, just return the entity
+        }
       }
     } catch (e) {
       this._bAllowRefresh = true; // allow refreshes again if we get a failure here
@@ -1494,6 +1504,23 @@ export class SQLServerDataProvider
       throw e; // rethrow the error
     }
   }
+
+  /**
+   * Returns the stored procedure name to use for the given entity based on if it is a new record or an existing record.
+   * @param entity 
+   * @param bNewRecord 
+   * @returns 
+   */
+  public GetCreateUpdateSPName(entity: BaseEntity, bNewRecord: boolean): string {
+    const spName = bNewRecord
+    ? entity.EntityInfo.spCreate?.length > 0
+      ? entity.EntityInfo.spCreate
+      : 'spCreate' + entity.EntityInfo.BaseTable
+    : entity.EntityInfo.spUpdate?.length > 0
+      ? entity.EntityInfo.spUpdate
+      : 'spUpdate' + entity.EntityInfo.BaseTable;
+    return spName;
+  } 
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     let sRet: string = '',
@@ -1904,40 +1931,44 @@ export class SQLServerDataProvider
       if (entity.TransactionGroup && !bReplay) {
         // we have a transaction group, need to play nice and be part of it
         entity.RaiseReadyForTransaction();
-        return new Promise((resolve, reject) => {
-          // we are part of a transaction group, so just add our query to the list
-          // and when the transaction is committed, we will send all the queries at once
-          entity.TransactionGroup.AddTransaction(
-            new TransactionItem(entity, sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
-              // we get here whenever the transaction group does gets around to committing
-              // our query.
-              result.EndedAt = new Date();
-              if (success && results) {
-                // Entity AI Actions and Actions - fired off async, NO await on purpose
-                if (false === options?.SkipEntityActions) this.HandleEntityActions(entity, 'delete', false, user);
-                if (false === options?.SkipEntityAIActions) this.HandleEntityAIActions(entity, 'delete', false, user);
-
-                // Make sure the return value matches up as that is how we know the SP was succesfully internally
-                for (let key of entity.PrimaryKeys) {
-                  if (key.Value !== results[0][key.Name]) {
-                    result.Success = false;
-                    result.Message = 'Transaction failed to commit';
-
-                    reject(results);
-                  }
-                }
-                result.Success = true;
-                resolve(true);
+        // we are part of a transaction group, so just add our query to the list
+        // and when the transaction is committed, we will send all the queries at once
+        entity.TransactionGroup.AddTransaction(
+          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+            // we get here whenever the transaction group does gets around to committing
+            // our query.
+            result.EndedAt = new Date();
+            if (success && results) {
+              // Entity AI Actions and Actions - fired off async, NO await on purpose
+              if (false === options?.SkipEntityActions) {
+                this.HandleEntityActions(entity, 'delete', false, user);
               }
+              if (false === options?.SkipEntityAIActions) {
+                this.HandleEntityAIActions(entity, 'delete', false, user);
+              }
+
+              // Make sure the return value matches up as that is how we know the SP was succesfully internally
+              for (let key of entity.PrimaryKeys) {
+                if (key.Value !== results[0][key.Name]) {
+                  result.Success = false;
+                  result.Message = 'Transaction failed to commit';
+                }
+              }
+              result.NewValues = results;
+              result.Success = true;
+            }
+            else {
               // the transaction failed, nothing to update, but we need to call Reject so the
               // promise resolves with a rejection so our outer caller knows
-              else result.Success = false;
+              result.Success = false;
               result.Message = 'Transaction failed to commit';
-              reject(results);
-            })
-          );
-        });
-      } else {
+            }
+          })
+        );
+
+        return true; // we're part of a transaction group, so we're done here
+      } 
+      else {
         let d;
         if (bReplay)
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
@@ -1955,13 +1986,15 @@ export class SQLServerDataProvider
 
           result.EndedAt = new Date();
           return true;
-        } else {
+        } 
+        else {
           result.Message = 'No result returned from SQL';
           result.EndedAt = new Date();
           return false;
         }
       }
-    } catch (e) {
+    } 
+    catch (e) {
       result.Message = e.message;
       result.Success = false;
       result.EndedAt = new Date();

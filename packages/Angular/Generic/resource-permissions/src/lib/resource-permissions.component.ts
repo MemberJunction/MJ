@@ -20,7 +20,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   @Input() ResourceTypeID!: string;
   /**
    * Required: the record ID of the resource that the permissions are being set for.
-   */
+   */ 
   @Input() ResourceRecordID!: string;
   /**
    * If set to true, the component will show a Save button to the user and persist the changes to the 
@@ -28,6 +28,11 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
    * to wrap the component as desired, and handle the save themselves.
    */
   @Input() ShowSaveButton: boolean = false;
+  /**
+   * If set to true, the component will show the permission levels to the user. By default this is on. If you have 
+   * a Resource Type or run-time use case where levels are not relevant, you can turn this off.
+   */
+  @Input() ShowPermissionLevels: boolean = true;
   /**
    * By default, this component will not show any error messages to the user. 
    * If you want to show error messages to the user, set this to true. The component will always throw exceptions when error occur internally.

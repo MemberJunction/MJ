@@ -63,6 +63,7 @@ export * from './resolvers/ReportResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
+export * from './resolvers/TransactionGroupResolver.js';
 
 export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 

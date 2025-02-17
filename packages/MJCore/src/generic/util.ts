@@ -28,6 +28,16 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
     }
 }
 
+export function TypeScriptTypeFromSQLTypeWithNullableOption(sqlType: string, addNullableOption: boolean): 'string' | 'string | null' | 'number' | 'number | null' | 'boolean' | 'boolean | null' | 'Date' | 'Date | null' {
+    const retVal = TypeScriptTypeFromSQLType(sqlType);
+    if (addNullableOption) {
+        return retVal + ' | null' as 'string | null' | 'number | null' | 'boolean | null' | 'Date | null';
+    }
+    else {
+        return retVal;
+    }
+}
+
 
 /**
  * Formats a value based on the parameters passed in

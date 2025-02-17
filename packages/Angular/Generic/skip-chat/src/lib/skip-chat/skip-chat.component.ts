@@ -15,8 +15,8 @@ import {
 } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
-import { LogError, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
+import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 
@@ -34,6 +34,7 @@ import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } fro
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
 @Component({
   selector: 'skip-chat',
@@ -63,6 +64,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * Set this property in order to set the user image. This can either be a URL or a Blob
    */
   @Input() public UserImage: string | Blob | undefined = undefined;
+
+  @Input() public VerboseLogging: boolean = false;
   
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -75,7 +78,22 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public ShowSkipLogoInConversationList: boolean = false;
 
   /**
-   * This property is used to set the placeholder text for the textbox where the user types their message to Skip. 
+   * When set to true, the component will show a sharing button that allows the user to share the conversation with others. Default is true.
+   */
+  @Input() public ShowSharingButton: boolean = true;
+
+  /**
+   * This array of role names will be excluded from the list of possible roles to share the conversation with.
+   */
+  @Input() public SharingExcludeRoleNames: string[] = [];
+
+  /**
+   * This array of emails will be excluded from the list of possible roles to share the conversation with.
+   */
+  @Input() public SharingExcludeEmails: string[] = [];
+
+  /**
+   * This property is used to set the placeholder text for the textbox where the user types their message to Skip.   
    */
   @Input() public DefaultTextboxPlaceholder: string = 'Type your message to Skip here...';
   /**
@@ -83,8 +101,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   @Input() public ProcessingTextBoxPlaceholder: string = 'Please wait...';
 
-
-
+ 
+ 
   /**
    * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
    */
@@ -108,6 +126,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @ViewChild('AskSkipInput') askSkipInput: any;
   @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
   @ViewChild('topLevelDiv') topLevelDiv!: ElementRef;
+  @ViewChild('resourcePermissions') set resourcePermissionsRef(
+    component: ResourcePermissionsComponent | undefined
+  ) {
+    if (component) {
+      // Component is instantiated
+      this.resourcePermissions = component;
+    } else {
+      // Component is destroyed
+      this.resourcePermissions = null;
+    }
+  }
+  resourcePermissions: ResourcePermissionsComponent | null = null;
+
 
   /**
    * Internal state variable to track if the conversation list is visible or not. Defaults to true. Conversation List only is shown if this is true and ShowConversationList is true.
@@ -197,9 +228,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
       (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
+        this.LogVerbose('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
-          const statusObj = SafeJSONParse(status.message);
-          if (statusObj) {
+          const statusObj = SafeJSONParse<any>(status.message);
+          if (statusObj && statusObj.type === 'AskSkip') {
             this.HandlePushStatusUpdate(statusObj);  
           }
         }
@@ -209,18 +241,41 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
+  protected LogVerbose(message: string) {
+    if (this.VerboseLogging) {
+      LogStatus(message);
+    }
+  }
+
   protected HandlePushStatusUpdate(statusObj: any) {
     try {
-      const obj: { type?: string; status?: string; conversationID?: string; message?: string } = statusObj;
+      const obj: { type?: string; 
+                   status?: string; 
+                   ResponsePhase: string, 
+                   conversationID?: string; 
+                   message?: string } = statusObj;
       if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
         if (obj.conversationID && this._conversationsInProgress[obj.conversationID]) {
           if (obj.conversationID === this.SelectedConversation?.ID) {
             if (obj.message && obj.message.length > 0) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+              this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} with message: ${obj.message}`);
               this.SetSkipStatusMessage(obj.message, 0);
             }
+            else {
+              this.LogVerbose(`Skip Chat: Received Push Status but no message for conversation ${obj.conversationID}`);
+            }
+          }
+          else {
+            this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not the current conversation`);
           }
         }
+        else {
+          this.LogVerbose(`Skip Chat: Received Push Status for conversation ${obj.conversationID} but it's not in progress in this instance of the SkipChat component. Current conversations in progress: ${JSON.stringify(this._conversationsInProgress)} `);
+        }
+      }
+      else {
+        this.LogVerbose(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
       }
     }
     catch (e) {
@@ -349,6 +404,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
+  public conversationResourceTypeID: string | undefined = undefined;
   public _initialLoadComplete: boolean = false;
   public _isLoading: boolean = false;
   public _numLoads: number = 0;
@@ -357,12 +413,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       await this.Load();
   }
 
+  protected get ResourcePermissionEngine(): ResourcePermissionEngine {
+    return <ResourcePermissionEngine>ResourcePermissionEngine.GetProviderInstance(this.ProviderToUse, ResourcePermissionEngine);
+  }
+
+
   /**
    * This property is used to determine if the component should automatically load the data when it is first shown. Default is true. Turn this off if you want to have more control over the loading sequence and manually call the Load() method when ready.
    */
   @Input() public AutoLoad: boolean = true;
   public async Load(forceRefresh: boolean = false) {
     if (!this._initialLoadComplete || forceRefresh) {
+      await this.ResourcePermissionEngine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+      this.conversationResourceTypeID = this.ResourcePermissionEngine.ResourceTypes.find((rt) => rt.Name === 'Conversations')?.ID;
       MJGlobal.Instance.ObjectCache.Remove('Conversations'); // clear the cache so we reload the conversations
       if (this.paramsSubscription) {
           this.paramsSubscription.unsubscribe();
@@ -486,20 +549,34 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       ); // filter OUT linked conversations
     }
 
-    if (this.Conversations.length === 0) {
-      // no conversations, so create a new one
+    if (this.Conversations.length === 0 && !conversationIdToLoad) {
+      // no conversations, so create a new one, BUT ONLY IF we weren't asked to load a specific conversation
+      // that can happen when a given user doesn't have their own conversations, but they are trying to view a shared conversation
       await this.CreateNewConversation();
       InvokeManualResize(1);
     } 
     else if (conversationIdToLoad) {
-      // we have > 0 convos and we were asked to load a specific one
+      // we are being asked to load a specific conversation
       const convo = this.Conversations.find((c) => c.ID == conversationIdToLoad);
       if (convo) {
         await this.SelectConversation(convo);
       } 
       else {
-        // we didn't find the conversation so just select the first one
-        await this.SelectConversation(this.Conversations[0]);
+        // we didn't find the conversation so check to see if it exists at all, could be a shared conversation
+        const sharedConvo = await this.LoadSingleConversation(conversationIdToLoad);
+        if (sharedConvo) {
+          await this.SelectConversation(sharedConvo);
+        }
+        else {
+          // no shared conversation, load the first conversation but alert user that the convo they tried to load isn't available
+          this.notificationService.CreateSimpleNotification(`Conversation ${conversationIdToLoad} not found`, 'error', 5000);
+          if (this.Conversations.length > 0) {
+            await this.SelectConversation(this.Conversations[0]);
+          }
+          else {
+            await this.CreateNewConversation();
+          }
+        }
       }
     } 
     else {
@@ -508,6 +585,23 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
     this._isLoading = false;
     this._numLoads++;
+  }
+
+  /**
+   * Loads a conversation from the database based on the conversation ID provided.
+   * @param conversationId 
+   * @returns 
+   */
+  public async LoadSingleConversation(conversationId: string): Promise<ConversationEntity | undefined> {
+    const rv = new RunView(this.RunViewToUse);
+    const result = await rv.RunView<ConversationEntity>({
+      EntityName: 'Conversations',
+      ExtraFilter: `ID='${conversationId}'`,
+      ResultType: 'entity_object'
+    });
+    if (result && result.Success) {
+      return result.Results[0];
+    }
   }
 
   private _oldConvoName: string = '';
@@ -670,6 +764,56 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   /**
+   * This method returns true if the specified user can access the conversation provided, otherwise false.
+   * @param conversation 
+   */
+  public async UserCanAccessConversation(user: UserInfo, conversation: ConversationEntity): Promise<boolean> {
+    if (!this.conversationResourceTypeID) {
+      LogError('Resource type ID for conversations is not loaded - metadata loading error');
+      return false;
+    }
+
+    if (!user || !conversation) {
+      return false;
+    }
+    else {
+      if (conversation.UserID === user.ID) {
+        return true;
+      }
+      else {
+        const level = await this.GetUserConversationPermissionLevel(user, conversation);
+        return level !== null;
+      }
+    }
+  }
+
+  /**
+   * Returns the permission level of the user for the conversation provided.
+   * @param user 
+   * @param conversation 
+   * @returns 
+   */
+  public async GetUserConversationPermissionLevel(user: UserInfo, conversation: ConversationEntity): Promise<"View" | "Edit" | "Owner" | null> {
+    if (!this.conversationResourceTypeID) {
+      LogError('Resource type ID for conversations is not loaded - metadata loading error');
+      return null;
+    }
+    else {
+      if (user.ID === conversation.UserID) {
+        return 'Owner'
+      }
+      else {
+        // check resource permissions for sharing
+        const engine = this.ResourcePermissionEngine;
+        await engine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+        return  engine.GetUserResourcePermissionLevel(this.conversationResourceTypeID, conversation.ID, user);
+      }
+    }
+  }
+
+  public SelectedConversationCurrentUserPermissionLevel: "View" | "Edit" | "Owner" | null = null;
+
+  /**
    * Sets the currently displayed conversation to the one provided
    * @param conversation 
    * @returns 
@@ -679,8 +823,25 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       return; // already processing this conversation so don't go back and forth
     }
     
-    if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // load up the conversation if not already the one that's loaded
+    if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
+      // check to see if the user has access to the conversation
+      if (!await this.UserCanAccessConversation(this.ProviderToUse.CurrentUser, conversation)) {
+        this.notificationService.CreateSimpleNotification(`You do not have access to conversation ${conversation.ID}`, 'error', 5000);
+        if (!this.SelectedConversation) {
+          if (this.Conversations.length > 0) {
+            // no current convo selected, so select the first one in the list
+            await this.SelectConversation(this.Conversations[0]);
+          }
+          else {
+            // doesn't have any conversations, so create a new one
+            await this.CreateNewConversation();
+          }
+        }
+        return;
+      }
+
+      this.SelectedConversationCurrentUserPermissionLevel = await this.GetUserConversationPermissionLevel(this.ProviderToUse.CurrentUser, conversation);
       this._conversationLoadComplete = false;
       this.ClearMessages();
       const oldStatus = this.IsSkipProcessing(conversation);
@@ -1238,12 +1399,32 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   }
 
   public isDataContextDialogVisible: boolean = false;
-  public showDataContext() {
+  public showDataContextDialog() {
     this.isDataContextDialogVisible = true;
   }
   public closeDataContextDialog() {
     this.isDataContextDialogVisible = false;
   }
+
+  public isSharingDialogVisible: boolean = false;
+  public showSharingDialog() {
+    this.isSharingDialogVisible = true;
+  }
+  public async closeSharingDialog(action: 'yes' | 'no') {
+    if (action === 'yes' && this.resourcePermissions) {
+      if (!await this.resourcePermissions.SavePermissions()) {
+        // let the user know that sharing failed
+        this.notificationService.CreateSimpleNotification('Failed to save permissions', 'error', 2500);
+      }
+      else {
+        // let the user know that sharing was successful
+        this.notificationService.CreateSimpleNotification('Conversation sharing settings updated', 'success', 1500);
+      }
+    }
+
+    this.isSharingDialogVisible = false;
+  }
+
 
   private CompositeKeyIsPopulated(): boolean {
     return this.LinkedEntityCompositeKey.KeyValuePairs && this.LinkedEntityCompositeKey.KeyValuePairs.length > 0;
@@ -1369,5 +1550,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         this.notificationService.CreateSimpleNotification('Error deleting messages', 'error', 3000);
       }
     }
+  }
+
+  public get NumVisibleButtons(): number {
+    let count = 1;
+    if (this.ShowDataContextButton) 
+      count++;
+    if (this.ShowSharingButton && this.SelectedConversationCurrentUserPermissionLevel === 'Owner') 
+      count++;
+    return count;
   }
 }

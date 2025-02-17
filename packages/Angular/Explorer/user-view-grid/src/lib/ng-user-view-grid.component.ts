@@ -529,17 +529,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           args.preventDefault();
         } 
         else if (formGroup.dirty) {
-          if (args.originalEvent && args.originalEvent.keyCode === Keys.Escape) 
+          if (args.originalEvent && args.originalEvent.keyCode === Keys.Escape) {
             return; // user hit escape, so don't save their changes
+          }
           
           // update the data item with the new values - this drives UI refresh while we save the record...
   
           Object.assign(dataItem, formGroup.value);
   
           const md = new Metadata();
-          // JONATHAN FIX THIS TO USE MULTI-COLUMN PRIMARY KEYS
-          alert('Jonathan, fix this to use multi-column primary keys - all commented out now til you fix')
-//          const pkey = this._entityInfo.PrimaryKey.Name;
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
@@ -553,9 +551,17 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             //   this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
           }
           else {
-            // JS - fix this too
-            // record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
-            if (!record) { // haven't edited this one before 
+            record = this._pendingRecords.find((r: GridPendingRecordItem) => {
+              // match on all columns within the primary key of the entity using the
+              // _entityInfo object to get the primary key fields
+              const noMatch = this._entityInfo!.PrimaryKeys.some((ef: EntityFieldInfo) => {
+                return r.record.Get(ef.Name) !== dataItem[ef.Name];
+              });
+              // noMatch will be true if any of the primary key fields don't match
+              return !noMatch;
+            })?.record;
+            if (!record) { 
+              // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               let compositeKey: CompositeKey = new CompositeKey();
               compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
