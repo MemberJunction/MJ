@@ -134,12 +134,6 @@ export abstract class ProviderBase implements IMetadataProvider {
                 await this.SaveLocalMetadataToStorage();
             }
         }
-        else{
-            //ensure that the local metadata has the latest current user info
-            const currentUser: UserInfo = await this.GetCurrentUser();
-            this.UpdateLocalMetadataCurrentUser(currentUser);
-            await this.SaveLocalMetadataToStorage();
-        }
 
         return true;
     }
@@ -680,6 +674,13 @@ export abstract class ProviderBase implements IMetadataProvider {
 
         if (!mdLocal || !mdRemote || !mdLocal.length || !mdRemote.length || mdLocal.length === 0 || mdRemote.length === 0)
             return true;
+
+        const userEmail: string = this.ConfigData.Data.UserEmail;
+        if(userEmail && this.CurrentUser && this.CurrentUser.Email !== userEmail){
+            //we are logged in as a different user than the one thats in the local metadata
+            //so we need to refresh
+            return true;
+        }
     
         for (let i = 0; i < mdRemote.length; ++i) {
             let bProcess: boolean = true;
