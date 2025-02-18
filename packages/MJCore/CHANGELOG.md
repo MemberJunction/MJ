@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 2.25.0
+
+### Minor Changes
+
+- 26c990d: - Add Conversations to Resource Types Entity* Update User View Grid to fix multi-edit bug* Transaction Management Changes - fixes bug in #803 - but not new feature in there* Clean bug in Notification Service to only show user-centric messages* Add Sharing dialog to Skip Chat component
+
+### Patch Changes
+
+- fd07dcd: Sparse Updates for Create/Update Mutations via CodeGen
+- 86e6d3b: Finished debug for Variables support in transaction groups!
+  - @memberjunction/global@2.25.0
+
 ## 2.24.1
 
 ### Patch Changes
