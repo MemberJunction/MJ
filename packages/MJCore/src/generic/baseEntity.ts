@@ -197,7 +197,12 @@ export class EntityField {
             }
             else if (fieldInfo.TSType === EntityFieldTSType.Number) {
                 // special handling for numbers as we don't want a string passed into a value for a numeric field
-                this.Value = Number(fieldInfo.DefaultValue);
+                if (!isNaN(Number(fieldInfo.DefaultValue))) {
+                    this.Value = Number(fieldInfo.DefaultValue);
+                }
+                else if (fieldInfo.DefaultValue.trim().toLowerCase() === "null") {
+                    this.Value = null;
+                }
             }
             else if (fieldInfo.Type.trim().toLowerCase() === "uniqueidentifier") {
                 // special handling for GUIDs, we don't want to populate anything here because the server always sets the value, leave blank

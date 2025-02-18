@@ -106,7 +106,7 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
                 newLib.LibraryID = libMetadata.ID;
                 newLib.ItemsUsed = lib.ItemsUsed.join(',');
                 newLib.TransactionGroup = tg;
-                newLib.Save(); // no await, within a TG
+                await newLib.Save(); 
             }
         }
 
@@ -115,14 +115,14 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
             const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
             lib.ItemsUsed = newCode.ItemsUsed.join(',');
             lib.TransactionGroup = tg;
-            lib.Save(); // no await, within a TG
+            await lib.Save();  
         }
 
         // now remove the libraries that are no longer used
         for (const lib of librariesToRemove) {
             // each lib in this array iteration is already a BaseEntity derived object
             lib.TransactionGroup = tg;
-            lib.Delete(); // no await, within a TG
+            await lib.Delete();  
         }
 
         // now commit the transaction

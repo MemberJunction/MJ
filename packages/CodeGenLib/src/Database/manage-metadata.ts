@@ -975,6 +975,10 @@ export class ManageMetadataBase {
                fieldDisplayName = convertCamelCaseToHaveSpaces(n.FieldName).trim();
                break;
       }
+      const parsedDefaultValue = this.parseDefaultValue(n.DefaultValue);
+      const quotedDefaultValue = parsedDefaultValue?.trim().length === 0 ? 'NULL' : 
+                                    (parsedDefaultValue?.trim().toLowerCase() === 'null' ? 'NULL' : `'${parsedDefaultValue}'`);
+      // in the above we are setting quotedDefaultValue to NULL if the parsed default value is an empty string or the string 'NULL' (case insensitive)
 
       return `
       IF NOT EXISTS (
@@ -1024,7 +1028,7 @@ export class ManageMetadataBase {
             ${n.Precision},
             ${n.Scale},
             ${n.AllowsNull ? 1 : 0},
-            '${this.parseDefaultValue(n.DefaultValue)}',
+            ${quotedDefaultValue},
             ${n.AutoIncrement ? 1 : 0},
             ${n.AllowUpdateAPI ? 1 : 0},
             ${n.IsVirtual ? 1 : 0},
@@ -1489,7 +1493,7 @@ export class ManageMetadataBase {
 
             // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if
             // our config option is set to create new applications from new schemas, then create a new application for this schema
-            let appUUID: string = '';
+            let appUUID: string | null = '';
             if (isNewSchema && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
                // new schema and config option is to create a new application from the schema name so do that
 
@@ -1561,7 +1565,7 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
 
-   protected async createNewApplication(ds: DataSource, appID: string, appName: string): Promise<number>{
+   protected async createNewApplication(ds: DataSource, appID: string, appName: string): Promise<number | null>{
       const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema')";
       const result = await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
       return result && result.length > 0 ? result[0].ID : null;
@@ -1573,7 +1577,7 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
 
-   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string>{
+   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string | null>{
       const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${schemaName}'`;
       const result = await ds.query(sSQL);
       return result && result.length > 0 ? result[0].ID : null;

@@ -199,7 +199,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (this._pendingDeletes.includes(permission)) {
         // don't save a permission record that is new, if it was also marked for deletion
         permission.TransactionGroup = tg;
-        if (!permission.Save()) { // no await on saves, use tg.Submit() below
+        if (!await permission.Save()) { 
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
@@ -215,7 +215,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       // make sure not in the delete array
       if (!this._pendingDeletes.includes(permission)) {
         permission.TransactionGroup = tg;
-        if (!permission.Save()) { // no await on saves, use tg.Submit() below
+        if (!await permission.Save()) {  
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
