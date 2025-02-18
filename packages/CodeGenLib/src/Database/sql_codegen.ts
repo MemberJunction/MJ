@@ -851,7 +851,7 @@ ${whereClause}GO${permissions}
         for (let i: number = 0; i < entity.Permissions.length; i++) {
             const ep: EntityPermissionInfo = entity.Permissions[i];
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+                sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`
             }
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
@@ -945,7 +945,7 @@ ${whereClause}GO${permissions}
                     (type == SPType.Delete && ep.CanDelete)
                ) {
                     if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                        sOutput += (sOutput == '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${spName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+                        sOutput += (sOutput === '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${spName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
                     }
                }
         }
@@ -958,7 +958,7 @@ ${whereClause}GO${permissions}
             const ep: EntityPermissionInfo = entity.Permissions[i];
             if (ep.CanRead) {
                 if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                    sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                    sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
                 }
             }
         }
