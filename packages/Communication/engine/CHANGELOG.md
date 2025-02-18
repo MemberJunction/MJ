@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/communication-engine
 
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies [23801c5]
+  - @memberjunction/core@2.26.0
+  - @memberjunction/communication-types@2.26.0
+  - @memberjunction/core-entities@2.26.0
+  - @memberjunction/templates@2.26.0
+  - @memberjunction/global@2.26.0
+
 ## 2.25.0
 
 ### Patch Changes
