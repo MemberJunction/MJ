@@ -5,6 +5,7 @@ import {
   EntityFieldTSType,
   EntityPermissionType,
   LogError,
+  LogStatus,
   Metadata,
   RunView,
   RunViewParams,
@@ -244,6 +245,7 @@ export class ResolverBase {
     return results;
   }
 
+  private static _priorEmittedData: {Entity: string, PKey: CompositeKey}[] = [];
   protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
     if (ResolverBase._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
       const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
@@ -255,6 +257,27 @@ export class ResolverBase {
       const cloudEvent = new CloudEvent({ type, source, subject, data });
 
       try {
+        // check to see if the combination of Entity and pkey was already emitted, if so, Log that condtion next
+        const pkey = args.baseEntity.PrimaryKeys as CompositeKey;
+        const emittedData = { Entity: args.baseEntity.EntityInfo.Name, PKey: pkey };
+        if (ResolverBase._priorEmittedData.find((e) => {
+          if (e.Entity !== emittedData.Entity) return false;
+          // if we get here compare the pkeys
+          const pkey2 = e.PKey as CompositeKey;
+          if (pkey.KeyValuePairs.length !== pkey2.KeyValuePairs.length) 
+            return false;
+          for (const kv of pkey.KeyValuePairs) {
+            // find the match by field name
+            const kv2 = pkey2.KeyValuePairs.find((k) => k.FieldName === kv.FieldName);
+            if (!kv2 || kv2.Value !== kv.Value) 
+              return false;
+          }
+          return true; // if we get here, all the keys matched
+        })) {
+          console.log(`IMPORTANT: CloudEvent already emitted for ${JSON.stringify(emittedData)}`);
+        }
+
+        LogStatus(`Emitting CloudEvent: ${JSON.stringify(cloudEvent)}`);
         const cloudeventTransportResponse = await ResolverBase._emit(cloudEvent, { headers: ResolverBase._cloudeventsHeaders });
         const cloudeventResponse = JSON.stringify(cloudeventTransportResponse);
         if (/error/i.test(cloudeventResponse)) {

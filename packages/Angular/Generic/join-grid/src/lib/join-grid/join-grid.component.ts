@@ -221,17 +221,18 @@ export class JoinGridComponent implements AfterViewInit {
     if (this.ColumnsMode === 'Entity') {
       let validated = true;
       const valErrors: ValidationErrorInfo[][] = [];
-      this._pendingDeletes.forEach(obj => {
+      for (const obj of this._pendingDeletes) {
         obj.TransactionGroup = tg;
-        obj.Delete();
-      });
-      this._pendingInserts.forEach(obj => {
+        await obj.Delete();
+      }
+      for (const obj of this._pendingInserts) {
         obj.TransactionGroup = tg;
         const valResult = obj.Validate()
         validated = validated && valResult.Success;
         valErrors.push(valResult.Errors);
-        obj.Save();
-      });
+        await obj.Save();
+      }
+
       if (validated) {
         if (!await tg.Submit()) {
           alert ('Error saving changes');
@@ -252,15 +253,18 @@ export class JoinGridComponent implements AfterViewInit {
       // in fields mode we use the _joinEntityData array to save the changes
       let validated = true;
       const valErrors: ValidationErrorInfo[][] = [];
-      this._joinEntityData?.forEach(obj => {
-        if (obj.Dirty) {
-          obj.TransactionGroup = tg;
-          const valResult = obj.Validate()
-          validated = validated && valResult.Success;
-          valErrors.push(valResult.Errors);
-          obj.Save();
+      if (this._joinEntityData) {
+        for (const obj of this._joinEntityData) {
+          if (obj.Dirty) {
+            obj.TransactionGroup = tg;
+            const valResult = obj.Validate()
+            validated = validated && valResult.Success;
+            valErrors.push(valResult.Errors);
+            await obj.Save();
+          }
         }
-      });
+      }
+
       if (validated) {
         if (!await tg.Submit()) {
           alert ('Error saving changes');

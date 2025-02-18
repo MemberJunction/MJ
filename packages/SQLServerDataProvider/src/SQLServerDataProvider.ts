@@ -1528,7 +1528,7 @@ export class SQLServerDataProvider
     for (let i = 0; i < entityInfo.Fields.length; i++) {
       const f = entityInfo.Fields[i];
       if (outputCount !== 0) sRet += ',\n';
-      sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull ? 'NULL' : 'NOT NULL');
+      sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual? 'NULL' : 'NOT NULL');
       outputCount++;
     }
     return sRet;

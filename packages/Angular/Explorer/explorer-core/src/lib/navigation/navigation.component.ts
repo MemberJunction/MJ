@@ -930,7 +930,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       }
       else {
         entity.TransactionGroup = transGroup;
-        entity.Delete(); // no await here, we're in a transaction group so we don't want to block
+        await entity.Delete();  
       }
     }
   }

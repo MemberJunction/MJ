@@ -157,7 +157,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
             for (const cd of result.Results) {
                 const cdE = <ConversationDetailEntity>cd;
                 cdE.TransactionGroup = tg;
-                cdE.Delete();  // dont await because inside a TG
+                await cdE.Delete();  
             }
             const convoEntity = await md.GetEntityObject<ConversationEntity>("Conversations");
             await convoEntity.Load(this._conversationId);
@@ -171,19 +171,19 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                 for (const dciEntity of resultDCI.Results) {
                     const dci = <DataContextItemEntity>dciEntity;
                     dci.TransactionGroup = tg;
-                    dci.Delete(); // dont await because inside a TG
+                    await dci.Delete();  
                 }
 
                 // now delete the data context itself
                 const dcEntity = await md.GetEntityObject<DataContextEntity>("Data Contexts");
                 await dcEntity.Load(convoEntity.DataContextID);
                 dcEntity.TransactionGroup = tg;
-                dcEntity.Delete(); // dont await because inside a TG
+                await dcEntity.Delete();  
             }
 
             // now delete the conversation itself
             convoEntity.TransactionGroup = tg;
-            convoEntity.Delete(); // dont await because inside a TG
+            await convoEntity.Delete();  
 
             await tg.Submit();
 

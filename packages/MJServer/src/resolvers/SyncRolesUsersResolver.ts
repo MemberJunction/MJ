@@ -154,7 +154,7 @@ export class SyncRolesAndUsersResolver {
             const currentRole = currentRoles.find(r => r.Name.trim().toLowerCase() === update.Name.trim().toLowerCase());
             if (currentRole) {
                 currentRole.Description = update.Description;
-                ok = ok && await currentRole.Save(); // no await, we do that with submit below
+                ok = ok && await currentRole.Save();  
             }
         }
         return { Success: ok };
@@ -170,7 +170,7 @@ export class SyncRolesAndUsersResolver {
                 const role = await md.GetEntityObject<RoleEntity>("Roles", user);
                 role.Name = add.Name;
                 role.Description = add.Description;
-                ok = ok && await role.Save(); // no await, we do that with submit below
+                ok = ok && await role.Save();  
             }
         }
         return ok;
@@ -384,7 +384,7 @@ export class SyncRolesAndUsersResolver {
                                 const ur = await md.GetEntityObject<UserRoleEntity>("User Roles", u);
                                 ur.UserID = dbUser.ID;
                                 ur.RoleID = dbRole.ID;
-                                ok = ok && await ur.Save(); // no await, we do that with submit below
+                                ok = ok && await ur.Save();  
                             }
                         }
                     }

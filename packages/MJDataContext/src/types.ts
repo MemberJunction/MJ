@@ -664,7 +664,7 @@ export class DataContext {
                     dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
 
                 dciEntity.TransactionGroup = tg;
-                dciEntity.Save() // no await because we are part of a transaction group
+                await dciEntity.Save()  
             }          
             const result = await tg.Submit();
             if (result) {
@@ -796,7 +796,7 @@ export class DataContext {
                         newItem.DataJSON = null; // if we aren't including the data, we need to clear it out
 
                     newItem.TransactionGroup = tg;
-                    newItem.Save(); // no await because we are part of a transaction group
+                    await newItem.Save();  
                 }
                 const result = await tg.Submit();
                 if (!result)

@@ -216,14 +216,14 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
           }
           // finally, we need to submit a single transaction so we have one server round trip to commit all this good stuff
           const tg = await md.CreateTransactionGroup();
-          userAppEntitiesToSave.forEach(toSave => {
+          for (const toSave of userAppEntitiesToSave) {
             toSave.TransactionGroup = tg;
-            toSave.Save(); // no await since we are in a transaction group
-          })
-          userAppEntitiesToDelete.forEach(d => {
+            await toSave.Save();  
+          }
+          for (const d of userAppEntitiesToDelete) {
             d.TransactionGroup = tg;
-            d.Delete(); // no await 
-          })
+            await d.Delete();   
+          }
 
           if (!await tg.Submit()) {
             // the data doesn't need to be updated when we are succesful because we're all bound to the same data which is cool
