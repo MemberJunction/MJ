@@ -850,7 +850,9 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         for (let i: number = 0; i < entity.Permissions.length; i++) {
             const ep: EntityPermissionInfo = entity.Permissions[i];
-            sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+            if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
+                sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+            }
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
@@ -941,8 +943,11 @@ ${whereClause}GO${permissions}
                     (type == SPType.Create && ep.CanCreate) ||
                     (type == SPType.Update && ep.CanUpdate) ||
                     (type == SPType.Delete && ep.CanDelete)
-               )
-                sOutput += (sOutput == '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${spName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+               ) {
+                    if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
+                        sOutput += (sOutput == '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${spName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+                    }
+               }
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
@@ -951,8 +956,11 @@ ${whereClause}GO${permissions}
         let sOutput: string = '';
         for (let i: number = 0; i < entity.Permissions.length; i++) {
             const ep: EntityPermissionInfo = entity.Permissions[i];
-            if (ep.CanRead)
-                sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`
+            if (ep.CanRead) {
+                if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
+                    sOutput += (sOutput == '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                }
+            }
         }
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
