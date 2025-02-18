@@ -120,7 +120,7 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       for (let index = 0; index < userAppsToSave.length; index++) {
         const ua = userAppsToSave[index];
         ua.TransactionGroup = tg;
-        ua.Save(); // no await since we are in a transaction group
+        await ua.Save();  
       }
       if (!await tg.Submit()) {
         // the data doesn't need to be updated when we are succesful because we're all bound to the same data which is cool

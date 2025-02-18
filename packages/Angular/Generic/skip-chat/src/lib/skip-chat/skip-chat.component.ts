@@ -1524,7 +1524,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           // check to see if it loaded succesfully or not, sometimes it is already deleted
           if (actualEntityObject.ConversationID === this.SelectedConversation.ID) {
             actualEntityObject.TransactionGroup = tg;
-            actualEntityObject.Delete(); // no await as we'll await the transaciton group below    
+            await actualEntityObject.Delete();  
           }
           else {
             // didn't load successfully, drop to console, possibly the record was already deleted, non-fatal

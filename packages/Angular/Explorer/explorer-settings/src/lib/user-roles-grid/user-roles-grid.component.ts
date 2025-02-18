@@ -144,7 +144,7 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
     const md = new Metadata();
     const tg = await md.CreateTransactionGroup();
     let itemCount: number = 0;
-    this.userRoles.forEach(ur => {
+    for (const ur of this.userRoles) {
       if (this.IsReallyDirty(ur)) {
         ur.TransactionGroup = tg;
         itemCount++;
@@ -153,11 +153,12 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
         // if ur.Selected === false and we are in the database, we need to delete
         // otherwise, we need to save
         if (ur.Selected)
-          ur.Save(); 
+          await ur.Save(); 
         else
-          ur.Delete();  
+          await ur.Delete();  
       }
-    })
+    }
+
     if (itemCount > 0) {
       if (await tg.Submit()) {
         // for any items in the above that were deleted, we would have had the User property wiped out so we need to go check to see if we have a null ID and if so, copy the UserName back into the User property
