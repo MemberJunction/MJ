@@ -204,17 +204,29 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   private paramsSubscription!: Subscription;
   ngOnInit() {
-    this.SubscribeToNotifications();
   }
 
   public static get SkipChatWindowsCurrentlyVisible(): number {
     return SkipChatComponent.__skipChatWindowsCurrentlyVisible;
   }
 
+  private _mjGlobalEventSub: Subscription | undefined;
+  private _providerPushStatusSub: Subscription | undefined;
   protected SubscribeToNotifications() {
     try {
-      // subscribe to MJ events for push status updates 
-      MJGlobal.Instance.GetEventListener().subscribe((event: MJEvent) => {
+      // subscribe to MJ events for push status updates, but first unsubscribe if we are already subscribed
+      if (this._mjGlobalEventSub) {
+        try {
+          this._mjGlobalEventSub.unsubscribe();
+        }
+        catch (e) {
+          LogError(`Error unsubscribing from provider push status updates: ${e}`);
+        }
+        finally {
+          this._mjGlobalEventSub = undefined;
+        }
+      }
+      this._mjGlobalEventSub = MJGlobal.Instance.GetEventListener().subscribe((event: MJEvent) => {
         if (event.event === MJEventType.ComponentEvent) {
           if (!event.args) {
             return;
@@ -227,7 +239,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // Directly subscribe to the push status updates from the GraphQLDataProvider. If SkipChat is running in an environment where someone else is NOT 
       // picking them up and broadcasting via MJ Events, we need this. If we get both, that's okay too as the update will not look any different and be 
       // near instant from the user's perspective.
-      (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
+      // FIRST, unsubscribe if we are already subscribed
+      if (this._providerPushStatusSub) {
+        try {
+          this._providerPushStatusSub.unsubscribe();
+        }
+        catch (e) {
+          LogError(`Error unsubscribing from provider push status updates: ${e}`);
+        }
+        finally {
+          this._providerPushStatusSub = undefined;
+        }
+      }
+      this._providerPushStatusSub = (this.ProviderToUse as GraphQLDataProvider).PushStatusUpdates().subscribe((status: any) => {
         this.LogVerbose('Push status update received in Skip Chat: ' + JSON.stringify(status));
         if (status && status.message) {
           const statusObj = SafeJSONParse<any>(status.message);
@@ -424,6 +448,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public AutoLoad: boolean = true;
   public async Load(forceRefresh: boolean = false) {
     if (!this._initialLoadComplete || forceRefresh) {
+      this.SubscribeToNotifications(); // subscribe to notifications, this auto-cleans up old subs if they exist - we do this HERE becuase the ProviderToUse is set by this point in time whereas in ngOnInit it's not necessarily set yet
       await this.ResourcePermissionEngine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
       this.conversationResourceTypeID = this.ResourcePermissionEngine.ResourceTypes.find((rt) => rt.Name === 'Conversations')?.ID;
       MJGlobal.Instance.ObjectCache.Remove('Conversations'); // clear the cache so we reload the conversations
