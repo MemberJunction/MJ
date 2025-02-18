@@ -30,7 +30,7 @@ jobs:
         run: docker run --rm -d -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 
       - name: Create SQL database
-        run: docker run -it --rm --network host mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+        run: docker run --rm --network host mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Install MJ CLI globally
         run: npm install --global @memberjunction/cli
