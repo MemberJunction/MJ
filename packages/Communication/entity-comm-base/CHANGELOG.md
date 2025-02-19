@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/entity-communications-base
 
+## 2.26.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.26.1
+- @memberjunction/core@2.26.1
+- @memberjunction/core-entities@2.26.1
+- @memberjunction/global@2.26.1
+
 ## 2.26.0
 
 ### Patch Changes

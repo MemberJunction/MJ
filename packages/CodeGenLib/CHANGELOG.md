@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.26.1
+
+### Patch Changes
+
+- 896ada0: Only emit GRANT statements for permissions where MJ Roles have an underlying SQL Role
+- a8ff81f: Mark optional input fields as nullable for graphql.
+
+  This adds the `nullable: true` flag for the type-graphql decorators on optional input type fields.
+  This allows the field to be `null` or undefined. If not defined, it will not be updated. If defined as
+  `null`, then it should set the value of the column to `NULL` (provided that's permitted for the column).
+
+  - @memberjunction/ai@2.26.1
+  - @memberjunction/actions@2.26.1
+  - @memberjunction/core@2.26.1
+  - @memberjunction/core-entities@2.26.1
+  - @memberjunction/global@2.26.1
+  - @memberjunction/sqlserver-dataprovider@2.26.1
+
 ## 2.26.0
 
 ### Minor Changes

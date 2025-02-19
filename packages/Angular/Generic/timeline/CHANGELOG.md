@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 2.26.1
+
+### Patch Changes
+
+- @memberjunction/ng-entity-form-dialog@2.26.1
+- @memberjunction/ng-shared@2.26.1
+- @memberjunction/ng-container-directives@2.26.1
+- @memberjunction/core@2.26.1
+- @memberjunction/core-entities@2.26.1
+- @memberjunction/global@2.26.1
+
 ## 2.26.0
 
 ### Patch Changes
