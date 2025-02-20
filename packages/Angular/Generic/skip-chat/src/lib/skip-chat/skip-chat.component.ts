@@ -856,7 +856,15 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         if (!this.SelectedConversation) {
           if (this.Conversations.length > 0) {
             // no current convo selected, so select the first one in the list
-            await this.SelectConversation(this.Conversations[0]);
+            const currentIndex: number = this.Conversations.findIndex((c) => c.ID === conversation.ID);
+            if (currentIndex >= 0) {
+              // select the next one in the list
+              await this.SelectConversation(this.Conversations[currentIndex + 1]);
+            }
+            else {
+              // select the first one in the list
+              await this.SelectConversation(this.Conversations[0]);
+            }
           }
           else {
             // doesn't have any conversations, so create a new one
