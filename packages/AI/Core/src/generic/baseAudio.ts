@@ -8,6 +8,7 @@ import { ChatResult } from "./chat.types";
  */
 export abstract class BaseAudioGenerator extends BaseModel {
     public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;
+    public abstract SpeechToText(params: SpeechToTextParams): Promise<SpeechResult>;
     public abstract GetVoices(): Promise<VoiceInfo[]>;
     public abstract GetModels(): Promise<AudioModel[]>
     public abstract GetPronounciationDictionaries(): Promise<PronounciationDictionary[]>
@@ -27,9 +28,17 @@ export class SpeechResult {
      */
     errorMessage?: string;
     /**
-     * If the request was successful, this will contain the audio file in a base 64 encoded string
+     * If the request was successful, this will contain the results. For CreateSpeech requests, an audio file in a base 64 encoded string and for
+     * SpeechToText requests, the text that was transcribed.
      */
-    fileContents: string;
+    content: string;
+}
+
+export class SpeechToTextParams extends BaseParams {
+    /**
+     * Base 64 encoded audio file to convert to text
+     */
+    audioFile: string;    
 }
 
 export class TextToSpeechParams extends BaseParams {
