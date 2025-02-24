@@ -3083,10 +3083,21 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Summary Of Earlier Conversation
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
+    UserID: z.string().nullish().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
     Conversation: z.string().nullish().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullish().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
@@ -4910,7 +4921,7 @@ export const EntityDocumentSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
-        * * Display Name: AI Model
+        * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -6040,7 +6051,7 @@ export const FileSchema = z.object({
 export type FileEntityType = z.infer<typeof FileSchema>;
 
 /**
- * zod schema definition for the entity flyway _schema _histories
+ * zod schema definition for the entity Flyway _schema _histories
  */
 export const flyway_schema_historySchema = z.object({
     installed_rank: z.number().describe(`
@@ -7097,8 +7108,7 @@ export const RecommendationItemSchema = z.object({
         * * Field Name: DestinationEntityID
         * * Display Name: Destination Entity ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-    * * Description: dest entity!`),
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
     DestinationEntityRecordID: z.string().describe(`
         * * Field Name: DestinationEntityRecordID
         * * Display Name: Destination Entity Record ID
@@ -7166,8 +7176,7 @@ export const RecommendationRunSchema = z.object({
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()
-    * * Description: Da Key :`),
+        * * Default Value: newsequentialid()`),
     RecommendationProviderID: z.string().describe(`
         * * Field Name: RecommendationProviderID
         * * Display Name: Recommendation Provider ID
@@ -17936,12 +17945,36 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -22650,7 +22683,7 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AI Model
+    * * Display Name: AIModel
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {
@@ -25507,20 +25540,20 @@ export class FileEntity extends BaseEntity<FileEntityType> {
 
 
 /**
- * flyway _schema _histories - strongly typed entity sub-class
+ * Flyway _schema _histories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: flyway_schema_history
- * * Base View: vwflyway_schema_histories
+ * * Base View: vwFlyway_schema_histories
  * * Primary Key: installed_rank
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'flyway _schema _histories')
+@RegisterClass(BaseEntity, 'Flyway _schema _histories')
 export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_historyEntityType> {
     /**
-    * Loads the flyway _schema _histories record from the database
-    * @param installed_rank: number - primary key value to load the flyway _schema _histories record.
+    * Loads the Flyway _schema _histories record from the database
+    * @param installed_rank: number - primary key value to load the Flyway _schema _histories record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
@@ -28456,7 +28489,6 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     * * Display Name: Destination Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-    * * Description: dest entity!
     */
     get DestinationEntityID(): string {
         return this.Get('DestinationEntityID');
@@ -28655,7 +28687,6 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
-    * * Description: Da Key :
     */
     get ID(): string {
         return this.Get('ID');
