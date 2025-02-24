@@ -25,9 +25,10 @@ export class VideoResult {
 }
 
 export class AvatarInfo {
+    id: string;
     name: string;
-    description: string;
     gender: string;
+    description: string;
     previewImageUrl: string;
     previewVideoUrl: string;
 }
@@ -56,4 +57,11 @@ export class AvatarVideoParams {
     outputHeight: number;
 
     avatarId: string;
+
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+    audioAssetId: string;
+    imageAssetId: string;
+    avatarStyle: string; // 'circle' etc.
 }
