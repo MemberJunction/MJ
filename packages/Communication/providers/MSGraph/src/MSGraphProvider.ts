@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { User, Message } from "@microsoft/microsoft-graph-types";
 import { RegisterClass } from "@memberjunction/global";
@@ -6,7 +6,6 @@ import { LogError, LogStatus } from "@memberjunction/core";
 import { compile, compiledFunction } from 'html-to-text';
 import * as Auth from "./auth";
 import * as Config from "./config";
-import { ForwardMessageParams, ForwardMessageResult } from "./generic/models";
 
 /**
  * Implementation of the MS Graph provider for sending and receiving messages
@@ -81,14 +80,13 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         }
     }
 
-    public async ReplyToMessage(message: ProcessedMessage, messageID: string): Promise<MessageResult> {
+    public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
         try{
             const user: User | null = await this.GetServiceAccount();
             if(!user){
                 return {
-                    Message: message,
                     Success: false,
-                    Error: 'Service account not found'
+                    ErrorMessage: 'Service account not found'
                 };
             }
 
@@ -97,29 +95,27 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                     toRecipients: [
                         {
                             emailAddress: {
-                                address: message.To
+                                address: params.Message.From
                             }
                         }
                     ]
                 },
-                comment: message.ProcessedBody || message.ProcessedHTMLBody
+                comment: params.Message.ProcessedBody || params.Message.ProcessedHTMLBody
             };
 
-            const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${messageID}/reply`;
-            await Auth.GraphClient.api(sendMessagePath).post(reply);
-
+            const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${params.MessageID}/reply`;
+            const result: any = await Auth.GraphClient.api(sendMessagePath).post(reply);
+        
             return {
-                Message: message,
                 Success: true,
-                Error: ''
+                Result: result
             };
         }
         catch(ex){
             LogError(ex);
             return {
-                Message: message,
                 Success: false,
-                Error: 'Error sending message'
+                ErrorMessage: 'Error sending message'
             };
         }
     }
@@ -129,19 +125,20 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         const user: User | null = await this.GetServiceAccount(contextData?.Email);
         if(!user || !user.id){
             return {
+                Success: false,
                 Messages: []
             };
         }
 
-        let filter: string = "(isRead eq false) and (startswith(subject, '[support]') or startswith(subject, 'RE: [support]'))";
-        let top: number = 10;
+        let filter: string = "";
+        let top: number = params.NumMessages;
+
+        if(params.UnreadOnly){
+            filter = "(isRead eq false)";
+        }
 
         if(contextData && contextData.Filter){
             filter = contextData.Filter;
-        }
-
-        if(contextData && contextData.Top){
-            top = contextData.Top;
         }
 
         const messagesPath: string = `${Auth.ApiConfig.uri}/${user.id}/messages`;
@@ -150,8 +147,8 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         .filter(filter).top(top).get();
 
         if(!response){
-            console.log('Error: could not get messages');
             return {
+                Success: false,
                 Messages: []
             };
         }
@@ -159,14 +156,19 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         const sourceMessages: Record<string, any>[] = response.value;
 
         let messageResults: GetMessagesResult = {
+            Success: true,
             SourceData: sourceMessages,
             Messages: []
         };
 
         const messages = sourceMessages.map((message: Message) => {
+            const replyTo: string[] = message.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [];
+            const primaryToRecipient: string = replyTo.length > 0 ? replyTo[0]: '';
+
             return {
                 From: message.from?.emailAddress?.address || '',
-                ReplyTo: message.replyTo?.map((replyTo) => replyTo.emailAddress?.address || '') || [],
+                To: primaryToRecipient,
+                ReplyTo: replyTo,
                 Subject: message.subject || '',
                 Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
@@ -186,10 +188,10 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
     public async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
         try{
-            if(!params.EmailID){
+            if(!params.MessageID){
                 return {
                     Success: false,
-                    Message: 'Email ID not set'
+                    ErrorMessage: 'Message ID not set'
                 }
             }
 
@@ -197,7 +199,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
             if(!user){
                 return {
                     Success: false,
-                    Message: 'Service account not found'
+                    ErrorMessage: 'Service account not found'
                 }
             }
 
@@ -213,18 +215,19 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 })
             };
 
-            const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${params.EmailID}/forward`;
-            await Auth.GraphClient.api(sendMessagePath).post(forward);
+            const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/messages/${params.MessageID}/forward`;
+            const forwardResult: any = await Auth.GraphClient.api(sendMessagePath).post(forward);
 
             return {
-                Success: true
-            }
+                Success: true,
+                Result: forwardResult
+            };
         }
         catch(ex){
             LogError(ex);
             return {
-                Message: 'An Error occurred while forwarding the message',
-                Success: false,
+                ErrorMessage: 'An Error occurred while forwarding the message',
+                Success: false
             };
         }
     }
