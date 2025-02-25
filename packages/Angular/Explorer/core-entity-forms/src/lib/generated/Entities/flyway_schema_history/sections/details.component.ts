@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { flyway_schema_historyEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'flyway _schema _histories.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Flyway _schema _histories.details') // Tell MemberJunction about this class 
 @Component({
     selector: 'gen-flyway_schema_history-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],

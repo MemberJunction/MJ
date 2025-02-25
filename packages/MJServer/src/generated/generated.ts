@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, QueryEntityEntity, flyway_schema_historyEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, flyway_schema_historyEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, AIAgentLearningCycleEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -106,44 +106,44 @@ export class ScheduledAction_ {
 //****************************************************************************
 @InputType()
 export class CreateScheduledActionInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    CreatedByUserID: string;
-
-    @Field()
-    ActionID: string;
-
-    @Field()
-    Type: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CronExpression?: string;
+    CreatedByUserID?: string;
 
-    @Field()
-    Timezone: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    CronExpression: string | null;
+
+    @Field({ nullable: true })
+    Timezone?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => Int, { nullable: true })
-    IntervalDays?: number;
+    IntervalDays: number | null;
 
     @Field({ nullable: true })
-    DayOfWeek?: string;
+    DayOfWeek: string | null;
 
     @Field(() => Int, { nullable: true })
-    DayOfMonth?: number;
+    DayOfMonth: number | null;
 
     @Field({ nullable: true })
-    Month?: string;
+    Month: string | null;
 
     @Field({ nullable: true })
-    CustomCronExpression?: string;
+    CustomCronExpression: string | null;
 }
     
 
@@ -155,44 +155,44 @@ export class UpdateScheduledActionInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    CreatedByUserID: string;
-
-    @Field()
-    ActionID: string;
-
-    @Field()
-    Type: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CronExpression?: string;
+    CreatedByUserID?: string;
 
-    @Field()
-    Timezone: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    CronExpression?: string | null;
+
+    @Field({ nullable: true })
+    Timezone?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => Int, { nullable: true })
-    IntervalDays?: number;
+    IntervalDays?: number | null;
 
     @Field({ nullable: true })
-    DayOfWeek?: string;
+    DayOfWeek?: string | null;
 
     @Field(() => Int, { nullable: true })
-    DayOfMonth?: number;
+    DayOfMonth?: number | null;
 
     @Field({ nullable: true })
-    Month?: string;
+    Month?: string | null;
 
     @Field({ nullable: true })
-    CustomCronExpression?: string;
+    CustomCronExpression?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -342,20 +342,20 @@ export class ScheduledActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateScheduledActionParamInput {
-    @Field()
-    ScheduledActionID: string;
-
-    @Field()
-    ActionParamID: string;
-
-    @Field()
-    ValueType: string;
+    @Field({ nullable: true })
+    ScheduledActionID?: string;
 
     @Field({ nullable: true })
-    Value?: string;
+    ActionParamID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Value: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -367,20 +367,20 @@ export class UpdateScheduledActionParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    ScheduledActionID: string;
-
-    @Field()
-    ActionParamID: string;
-
-    @Field()
-    ValueType: string;
+    @Field({ nullable: true })
+    ScheduledActionID?: string;
 
     @Field({ nullable: true })
-    Value?: string;
+    ActionParamID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Value?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -525,32 +525,32 @@ export class ExplorerNavigationItem_ {
 //****************************************************************************
 @InputType()
 export class CreateExplorerNavigationItemInput {
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Route: string;
-
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field(() => Boolean)
-    ShowInHomeScreen: boolean;
-
-    @Field(() => Boolean)
-    ShowInNavigationDrawer: boolean;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    IconCSSClass?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Route?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ShowInHomeScreen?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ShowInNavigationDrawer?: boolean;
 
     @Field({ nullable: true })
-    Comments?: string;
+    IconCSSClass: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -562,32 +562,32 @@ export class UpdateExplorerNavigationItemInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Route: string;
-
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field(() => Boolean)
-    ShowInHomeScreen: boolean;
-
-    @Field(() => Boolean)
-    ShowInNavigationDrawer: boolean;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    IconCSSClass?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Route?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ShowInHomeScreen?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ShowInNavigationDrawer?: boolean;
 
     @Field({ nullable: true })
-    Comments?: string;
+    IconCSSClass?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -725,16 +725,16 @@ export class AIAgentModel_ {
 @InputType()
 export class CreateAIAgentModelInput {
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID: string | null;
 
     @Field({ nullable: true })
-    ModelID?: string;
+    ModelID: string | null;
 
     @Field(() => Boolean, { nullable: true })
-    Active?: boolean;
+    Active: boolean | null;
 
     @Field(() => Int, { nullable: true })
-    Priority?: number;
+    Priority: number | null;
 }
     
 
@@ -747,16 +747,16 @@ export class UpdateAIAgentModelInput {
     ID: string;
 
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID?: string | null;
 
     @Field({ nullable: true })
-    ModelID?: string;
+    ModelID?: string | null;
 
     @Field(() => Boolean, { nullable: true })
-    Active?: boolean;
+    Active?: boolean | null;
 
     @Field(() => Int, { nullable: true })
-    Priority?: number;
+    Priority?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -882,10 +882,10 @@ export class AIAgentNoteType_ {
 @InputType()
 export class CreateAIAgentNoteTypeInput {
     @Field({ nullable: true })
-    Name?: string;
+    Name: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -898,10 +898,10 @@ export class UpdateAIAgentNoteTypeInput {
     ID: string;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1002,6 +1002,218 @@ export class AIAgentNoteTypeResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for Flyway _schema _histories
+//****************************************************************************
+@ObjectType()
+export class flyway_schema_history_ {
+    @Field(() => Int) 
+    installed_rank: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    version?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(400)
+    description?: string;
+        
+    @Field() 
+    @MaxLength(40)
+    type: string;
+        
+    @Field() 
+    @MaxLength(2000)
+    script: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    checksum?: number;
+        
+    @Field() 
+    @MaxLength(200)
+    installed_by: string;
+        
+    @Field() 
+    @MaxLength(8)
+    installed_on: Date;
+        
+    @Field(() => Int) 
+    execution_time: number;
+        
+    @Field(() => Boolean) 
+    success: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for Flyway _schema _histories
+//****************************************************************************
+@InputType()
+export class Createflyway_schema_historyInput {
+    @Field(() => Int)
+    installed_rank: number;
+
+    @Field({ nullable: true })
+    version: string | null;
+
+    @Field({ nullable: true })
+    description: string | null;
+
+    @Field({ nullable: true })
+    type?: string;
+
+    @Field({ nullable: true })
+    script?: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum: number | null;
+
+    @Field({ nullable: true })
+    installed_by?: string;
+
+    @Field({ nullable: true })
+    installed_on?: Date;
+
+    @Field(() => Int, { nullable: true })
+    execution_time?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    success?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for Flyway _schema _histories
+//****************************************************************************
+@InputType()
+export class Updateflyway_schema_historyInput {
+    @Field(() => Int)
+    installed_rank: number;
+
+    @Field({ nullable: true })
+    version?: string | null;
+
+    @Field({ nullable: true })
+    description?: string | null;
+
+    @Field({ nullable: true })
+    type?: string;
+
+    @Field({ nullable: true })
+    script?: string;
+
+    @Field(() => Int, { nullable: true })
+    checksum?: number | null;
+
+    @Field({ nullable: true })
+    installed_by?: string;
+
+    @Field({ nullable: true })
+    installed_on?: Date;
+
+    @Field(() => Int, { nullable: true })
+    execution_time?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    success?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Flyway _schema _histories
+//****************************************************************************
+@ObjectType()
+export class Runflyway_schema_historyViewResult {
+    @Field(() => [flyway_schema_history_])
+    Results: flyway_schema_history_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(flyway_schema_history_)
+export class flyway_schema_historyResolver extends ResolverBase {
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Runflyway_schema_historyViewResult)
+    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'Flyway _schema _histories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => flyway_schema_history_, { nullable: true })
+    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
+        this.CheckUserReadPermissions('Flyway _schema _histories', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwFlyway_schema_histories] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause('Flyway _schema _histories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Flyway _schema _histories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => flyway_schema_history_)
+    async Createflyway_schema_history(
+        @Arg('input', () => Createflyway_schema_historyInput) input: Createflyway_schema_historyInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('Flyway _schema _histories', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => flyway_schema_history_)
+    async Updateflyway_schema_history(
+        @Arg('input', () => Updateflyway_schema_historyInput) input: Updateflyway_schema_historyInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('Flyway _schema _histories', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => flyway_schema_history_)
+    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
+        return this.DeleteRecord('Flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for AI Agents
 //****************************************************************************
 @ObjectType({ description: `Table to store information about AI agents.` })
@@ -1052,13 +1264,13 @@ export class AIAgent_ {
 @InputType()
 export class CreateAIAgentInput {
     @Field({ nullable: true })
-    Name?: string;
+    Name: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    LogoURL?: string;
+    LogoURL: string | null;
 }
     
 
@@ -1071,13 +1283,13 @@ export class UpdateAIAgentInput {
     ID: string;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    LogoURL?: string;
+    LogoURL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1269,19 +1481,19 @@ export class AIAgentNote_ {
 @InputType()
 export class CreateAIAgentNoteInput {
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID: string | null;
 
     @Field({ nullable: true })
-    AgentNoteTypeID?: string;
+    AgentNoteTypeID: string | null;
 
     @Field({ nullable: true })
-    Note?: string;
-
-    @Field()
-    Type: string;
+    Note: string | null;
 
     @Field({ nullable: true })
-    UserID?: string;
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
 }
     
 
@@ -1294,19 +1506,19 @@ export class UpdateAIAgentNoteInput {
     ID: string;
 
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID?: string | null;
 
     @Field({ nullable: true })
-    AgentNoteTypeID?: string;
+    AgentNoteTypeID?: string | null;
 
     @Field({ nullable: true })
-    Note?: string;
-
-    @Field()
-    Type: string;
+    Note?: string | null;
 
     @Field({ nullable: true })
-    UserID?: string;
+    Type?: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1442,13 +1654,13 @@ export class AIAgentAction_ {
 @InputType()
 export class CreateAIAgentActionInput {
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID: string | null;
 
     @Field({ nullable: true })
-    ActionID?: string;
+    ActionID: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -1461,13 +1673,13 @@ export class UpdateAIAgentActionInput {
     ID: string;
 
     @Field({ nullable: true })
-    AgentID?: string;
+    AgentID?: string | null;
 
     @Field({ nullable: true })
-    ActionID?: string;
+    ActionID?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1633,35 +1845,35 @@ export class AIPrompt_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    TemplateID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    TypeID: string;
-
-    @Field()
-    Status: string;
-
-    @Field(() => Boolean)
-    CacheResults: boolean;
-
-    @Field(() => Float)
-    CacheExpiration: number;
-
-    @Field()
-    ResponseFormat: string;
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    ModelSpecificResponseFormat?: string;
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheResults?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    CacheExpiration?: number;
+
+    @Field({ nullable: true })
+    ResponseFormat?: string;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseFormat: string | null;
 }
     
 
@@ -1673,35 +1885,35 @@ export class UpdateAIPromptInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    TemplateID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    TypeID: string;
-
-    @Field()
-    Status: string;
-
-    @Field(() => Boolean)
-    CacheResults: boolean;
-
-    @Field(() => Float)
-    CacheExpiration: number;
-
-    @Field()
-    ResponseFormat: string;
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    ModelSpecificResponseFormat?: string;
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    TypeID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CacheResults?: boolean;
+
+    @Field(() => Float, { nullable: true })
+    CacheExpiration?: number;
+
+    @Field({ nullable: true })
+    ResponseFormat?: string;
+
+    @Field({ nullable: true })
+    ModelSpecificResponseFormat?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -1859,26 +2071,26 @@ export class AIResultCache_ {
 //****************************************************************************
 @InputType()
 export class CreateAIResultCacheInput {
-    @Field()
-    AIPromptID: string;
-
-    @Field()
-    AIModelID: string;
-
-    @Field()
-    RunAt: Date;
-
-    @Field()
-    PromptText: string;
+    @Field({ nullable: true })
+    AIPromptID?: string;
 
     @Field({ nullable: true })
-    ResultText?: string;
-
-    @Field()
-    Status: string;
+    AIModelID?: string;
 
     @Field({ nullable: true })
-    ExpiredOn?: Date;
+    RunAt?: Date;
+
+    @Field({ nullable: true })
+    PromptText?: string;
+
+    @Field({ nullable: true })
+    ResultText: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ExpiredOn: Date | null;
 }
     
 
@@ -1890,26 +2102,26 @@ export class UpdateAIResultCacheInput {
     @Field()
     ID: string;
 
-    @Field()
-    AIPromptID: string;
-
-    @Field()
-    AIModelID: string;
-
-    @Field()
-    RunAt: Date;
-
-    @Field()
-    PromptText: string;
+    @Field({ nullable: true })
+    AIPromptID?: string;
 
     @Field({ nullable: true })
-    ResultText?: string;
-
-    @Field()
-    Status: string;
+    AIModelID?: string;
 
     @Field({ nullable: true })
-    ExpiredOn?: Date;
+    RunAt?: Date;
+
+    @Field({ nullable: true })
+    PromptText?: string;
+
+    @Field({ nullable: true })
+    ResultText?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ExpiredOn?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2045,14 +2257,14 @@ export class AIPromptCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -2064,14 +2276,14 @@ export class UpdateAIPromptCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2214,11 +2426,11 @@ export class AIPromptType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIPromptTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -2230,11 +2442,11 @@ export class UpdateAIPromptTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2387,20 +2599,20 @@ export class Company_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyInput {
-    @Field()
-    Name: string;
-
-    @Field()
-    Description: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Website?: string;
+    Description?: string;
 
     @Field({ nullable: true })
-    LogoURL?: string;
+    Website: string | null;
 
     @Field({ nullable: true })
-    Domain?: string;
+    LogoURL: string | null;
+
+    @Field({ nullable: true })
+    Domain: string | null;
 }
     
 
@@ -2412,20 +2624,20 @@ export class UpdateCompanyInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
-
-    @Field()
-    Description: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Website?: string;
+    Description?: string;
 
     @Field({ nullable: true })
-    LogoURL?: string;
+    Website?: string | null;
 
     @Field({ nullable: true })
-    Domain?: string;
+    LogoURL?: string | null;
+
+    @Field({ nullable: true })
+    Domain?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2646,29 +2858,29 @@ export class Employee_ {
 //****************************************************************************
 @InputType()
 export class CreateEmployeeInput {
-    @Field()
-    FirstName: string;
-
-    @Field()
-    LastName: string;
-
-    @Field()
-    CompanyID: string;
+    @Field({ nullable: true })
+    FirstName?: string;
 
     @Field({ nullable: true })
-    SupervisorID?: string;
+    LastName?: string;
 
     @Field({ nullable: true })
-    Title?: string;
-
-    @Field()
-    Email: string;
+    CompanyID?: string;
 
     @Field({ nullable: true })
-    Phone?: string;
+    SupervisorID: string | null;
 
-    @Field(() => Boolean)
-    Active: boolean;
+    @Field({ nullable: true })
+    Title: string | null;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Phone: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Active?: boolean;
 }
     
 
@@ -2680,29 +2892,29 @@ export class UpdateEmployeeInput {
     @Field()
     ID: string;
 
-    @Field()
-    FirstName: string;
-
-    @Field()
-    LastName: string;
-
-    @Field()
-    CompanyID: string;
+    @Field({ nullable: true })
+    FirstName?: string;
 
     @Field({ nullable: true })
-    SupervisorID?: string;
+    LastName?: string;
 
     @Field({ nullable: true })
-    Title?: string;
-
-    @Field()
-    Email: string;
+    CompanyID?: string;
 
     @Field({ nullable: true })
-    Phone?: string;
+    SupervisorID?: string | null;
 
-    @Field(() => Boolean)
-    Active: boolean;
+    @Field({ nullable: true })
+    Title?: string | null;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    Phone?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    Active?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -2895,14 +3107,14 @@ export class UserFavorite_ {
 //****************************************************************************
 @InputType()
 export class CreateUserFavoriteInput {
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 }
     
 
@@ -2914,14 +3126,14 @@ export class UpdateUserFavoriteInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3054,17 +3266,17 @@ export class UpdateEmployeeCompanyIntegrationInput {
     @Field()
     ID: string;
 
-    @Field()
-    EmployeeID: string;
+    @Field({ nullable: true })
+    EmployeeID?: string;
 
-    @Field()
-    CompanyIntegrationID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
 
-    @Field()
-    ExternalSystemRecordID: string;
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3177,11 +3389,11 @@ export class UpdateEmployeeRoleInput {
     @Field()
     ID: string;
 
-    @Field()
-    EmployeeID: string;
+    @Field({ nullable: true })
+    EmployeeID?: string;
 
-    @Field()
-    RoleID: string;
+    @Field({ nullable: true })
+    RoleID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3301,11 +3513,11 @@ export class UpdateEmployeeSkillInput {
     @Field()
     ID: string;
 
-    @Field()
-    EmployeeID: string;
+    @Field({ nullable: true })
+    EmployeeID?: string;
 
-    @Field()
-    SkillID: string;
+    @Field({ nullable: true })
+    SkillID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3443,17 +3655,17 @@ export class Role_ {
 //****************************************************************************
 @InputType()
 export class CreateRoleInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    DirectoryID?: string;
+    DirectoryID: string | null;
 
     @Field({ nullable: true })
-    SQLName?: string;
+    SQLName: string | null;
 }
     
 
@@ -3465,17 +3677,17 @@ export class UpdateRoleInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    DirectoryID?: string;
+    DirectoryID?: string | null;
 
     @Field({ nullable: true })
-    SQLName?: string;
+    SQLName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3804,17 +4016,17 @@ export class UpdateIntegrationURLFormatInput {
     @Field()
     ID: string;
 
-    @Field()
-    IntegrationID: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field()
-    URLFormat: string;
+    @Field({ nullable: true })
+    IntegrationID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    URLFormat?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -3963,26 +4175,26 @@ export class Integration_ {
 //****************************************************************************
 @InputType()
 export class UpdateIntegrationInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    NavigationBaseURL?: string;
+    NavigationBaseURL?: string | null;
 
     @Field({ nullable: true })
-    ClassName?: string;
+    ClassName?: string | null;
 
     @Field({ nullable: true })
-    ImportPath?: string;
+    ImportPath?: string | null;
 
-    @Field(() => Int)
-    BatchMaxRequestCount: number;
+    @Field(() => Int, { nullable: true })
+    BatchMaxRequestCount?: number;
 
-    @Field(() => Int)
-    BatchRequestWaitTime: number;
+    @Field(() => Int, { nullable: true })
+    BatchRequestWaitTime?: number;
 
     @Field()
     ID: string;
@@ -4215,41 +4427,41 @@ export class UpdateCompanyIntegrationInput {
     @Field()
     ID: string;
 
-    @Field()
-    CompanyID: string;
+    @Field({ nullable: true })
+    CompanyID?: string;
 
-    @Field()
-    IntegrationID: string;
+    @Field({ nullable: true })
+    IntegrationID?: string;
 
     @Field(() => Boolean, { nullable: true })
-    IsActive?: boolean;
+    IsActive?: boolean | null;
 
     @Field({ nullable: true })
-    AccessToken?: string;
+    AccessToken?: string | null;
 
     @Field({ nullable: true })
-    RefreshToken?: string;
+    RefreshToken?: string | null;
 
     @Field({ nullable: true })
-    TokenExpirationDate?: Date;
+    TokenExpirationDate?: Date | null;
 
     @Field({ nullable: true })
-    APIKey?: string;
+    APIKey?: string | null;
 
     @Field({ nullable: true })
-    ExternalSystemID?: string;
+    ExternalSystemID?: string | null;
 
-    @Field(() => Boolean)
-    IsExternalSystemReadOnly: boolean;
-
-    @Field({ nullable: true })
-    ClientID?: string;
+    @Field(() => Boolean, { nullable: true })
+    IsExternalSystemReadOnly?: boolean;
 
     @Field({ nullable: true })
-    ClientSecret?: string;
+    ClientID?: string | null;
 
     @Field({ nullable: true })
-    CustomAttribute1?: string;
+    ClientSecret?: string | null;
+
+    @Field({ nullable: true })
+    CustomAttribute1?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4576,91 +4788,91 @@ export class EntityField_ {
 @InputType()
 export class CreateEntityFieldInput {
     @Field({ nullable: true })
-    DisplayName?: string;
+    DisplayName: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateDescription: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDescription?: boolean;
 
-    @Field(() => Boolean)
-    IsPrimaryKey: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryKey?: boolean;
 
-    @Field(() => Boolean)
-    IsUnique: boolean;
-
-    @Field({ nullable: true })
-    Category?: string;
-
-    @Field()
-    ValueListType: string;
+    @Field(() => Boolean, { nullable: true })
+    IsUnique?: boolean;
 
     @Field({ nullable: true })
-    ExtendedType?: string;
+    Category: string | null;
 
     @Field({ nullable: true })
-    CodeType?: string;
-
-    @Field(() => Boolean)
-    DefaultInView: boolean;
+    ValueListType?: string;
 
     @Field({ nullable: true })
-    ViewCellTemplate?: string;
+    ExtendedType: string | null;
+
+    @Field({ nullable: true })
+    CodeType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultInView?: boolean;
+
+    @Field({ nullable: true })
+    ViewCellTemplate: string | null;
 
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth?: number;
+    DefaultColumnWidth: number | null;
 
-    @Field(() => Boolean)
-    AllowUpdateAPI: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateAPI?: boolean;
 
-    @Field(() => Boolean)
-    AllowUpdateInView: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateInView?: boolean;
 
-    @Field(() => Boolean)
-    IncludeInUserSearchAPI: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IncludeInUserSearchAPI?: boolean;
 
-    @Field(() => Boolean)
-    FullTextSearchEnabled: boolean;
-
-    @Field({ nullable: true })
-    UserSearchParamFormatAPI?: string;
-
-    @Field(() => Boolean)
-    IncludeInGeneratedForm: boolean;
-
-    @Field()
-    GeneratedFormSection: string;
-
-    @Field(() => Boolean)
-    IsNameField: boolean;
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchEnabled?: boolean;
 
     @Field({ nullable: true })
-    RelatedEntityID?: string;
+    UserSearchParamFormatAPI: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGeneratedForm?: boolean;
 
     @Field({ nullable: true })
-    RelatedEntityFieldName?: string;
+    GeneratedFormSection?: string;
 
-    @Field(() => Boolean)
-    IncludeRelatedEntityNameFieldInBaseView: boolean;
-
-    @Field({ nullable: true })
-    RelatedEntityNameFieldMap?: string;
-
-    @Field()
-    RelatedEntityDisplayType: string;
+    @Field(() => Boolean, { nullable: true })
+    IsNameField?: boolean;
 
     @Field({ nullable: true })
-    EntityIDFieldName?: string;
+    RelatedEntityID: string | null;
 
     @Field({ nullable: true })
-    ScopeDefault?: string;
+    RelatedEntityFieldName: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateRelatedEntityInfo: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IncludeRelatedEntityNameFieldInBaseView?: boolean;
 
-    @Field()
-    ValuesToPackWithSchema: string;
+    @Field({ nullable: true })
+    RelatedEntityNameFieldMap: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityDisplayType?: string;
+
+    @Field({ nullable: true })
+    EntityIDFieldName: string | null;
+
+    @Field({ nullable: true })
+    ScopeDefault: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateRelatedEntityInfo?: boolean;
+
+    @Field({ nullable: true })
+    ValuesToPackWithSchema?: string;
 }
     
 
@@ -4673,91 +4885,91 @@ export class UpdateEntityFieldInput {
     ID: string;
 
     @Field({ nullable: true })
-    DisplayName?: string;
+    DisplayName?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateDescription: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDescription?: boolean;
 
-    @Field(() => Boolean)
-    IsPrimaryKey: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsPrimaryKey?: boolean;
 
-    @Field(() => Boolean)
-    IsUnique: boolean;
-
-    @Field({ nullable: true })
-    Category?: string;
-
-    @Field()
-    ValueListType: string;
+    @Field(() => Boolean, { nullable: true })
+    IsUnique?: boolean;
 
     @Field({ nullable: true })
-    ExtendedType?: string;
+    Category?: string | null;
 
     @Field({ nullable: true })
-    CodeType?: string;
-
-    @Field(() => Boolean)
-    DefaultInView: boolean;
+    ValueListType?: string;
 
     @Field({ nullable: true })
-    ViewCellTemplate?: string;
+    ExtendedType?: string | null;
+
+    @Field({ nullable: true })
+    CodeType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DefaultInView?: boolean;
+
+    @Field({ nullable: true })
+    ViewCellTemplate?: string | null;
 
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth?: number;
+    DefaultColumnWidth?: number | null;
 
-    @Field(() => Boolean)
-    AllowUpdateAPI: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateAPI?: boolean;
 
-    @Field(() => Boolean)
-    AllowUpdateInView: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateInView?: boolean;
 
-    @Field(() => Boolean)
-    IncludeInUserSearchAPI: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IncludeInUserSearchAPI?: boolean;
 
-    @Field(() => Boolean)
-    FullTextSearchEnabled: boolean;
-
-    @Field({ nullable: true })
-    UserSearchParamFormatAPI?: string;
-
-    @Field(() => Boolean)
-    IncludeInGeneratedForm: boolean;
-
-    @Field()
-    GeneratedFormSection: string;
-
-    @Field(() => Boolean)
-    IsNameField: boolean;
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchEnabled?: boolean;
 
     @Field({ nullable: true })
-    RelatedEntityID?: string;
+    UserSearchParamFormatAPI?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInGeneratedForm?: boolean;
 
     @Field({ nullable: true })
-    RelatedEntityFieldName?: string;
+    GeneratedFormSection?: string;
 
-    @Field(() => Boolean)
-    IncludeRelatedEntityNameFieldInBaseView: boolean;
-
-    @Field({ nullable: true })
-    RelatedEntityNameFieldMap?: string;
-
-    @Field()
-    RelatedEntityDisplayType: string;
+    @Field(() => Boolean, { nullable: true })
+    IsNameField?: boolean;
 
     @Field({ nullable: true })
-    EntityIDFieldName?: string;
+    RelatedEntityID?: string | null;
 
     @Field({ nullable: true })
-    ScopeDefault?: string;
+    RelatedEntityFieldName?: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateRelatedEntityInfo: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IncludeRelatedEntityNameFieldInBaseView?: boolean;
 
-    @Field()
-    ValuesToPackWithSchema: string;
+    @Field({ nullable: true })
+    RelatedEntityNameFieldMap?: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityDisplayType?: string;
+
+    @Field({ nullable: true })
+    EntityIDFieldName?: string | null;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateRelatedEntityInfo?: boolean;
+
+    @Field({ nullable: true })
+    ValuesToPackWithSchema?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5189,145 +5401,145 @@ export class Entity_ {
 @InputType()
 export class CreateEntityInput {
     @Field({ nullable: true })
-    ParentID?: string;
-
-    @Field()
-    Name: string;
+    ParentID: string | null;
 
     @Field({ nullable: true })
-    NameSuffix?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    AutoUpdateDescription: boolean;
-
-    @Field()
-    BaseView: string;
-
-    @Field(() => Boolean)
-    BaseViewGenerated: boolean;
-
-    @Field(() => Boolean)
-    VirtualEntity: boolean;
-
-    @Field(() => Boolean)
-    TrackRecordChanges: boolean;
-
-    @Field(() => Boolean)
-    AuditRecordAccess: boolean;
-
-    @Field(() => Boolean)
-    AuditViewRuns: boolean;
-
-    @Field(() => Boolean)
-    IncludeInAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowAllRowsAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowUpdateAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowCreateAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowDeleteAPI: boolean;
-
-    @Field(() => Boolean)
-    CustomResolverAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowUserSearchAPI: boolean;
-
-    @Field(() => Boolean)
-    FullTextSearchEnabled: boolean;
+    NameSuffix: string | null;
 
     @Field({ nullable: true })
-    FullTextCatalog?: string;
+    Description: string | null;
 
-    @Field(() => Boolean)
-    FullTextCatalogGenerated: boolean;
-
-    @Field({ nullable: true })
-    FullTextIndex?: string;
-
-    @Field(() => Boolean)
-    FullTextIndexGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDescription?: boolean;
 
     @Field({ nullable: true })
-    FullTextSearchFunction?: string;
+    BaseView?: string;
 
-    @Field(() => Boolean)
-    FullTextSearchFunctionGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    BaseViewGenerated?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    VirtualEntity?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrackRecordChanges?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditRecordAccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditViewRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowAllRowsAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowCreateAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDeleteAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomResolverAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchEnabled?: boolean;
+
+    @Field({ nullable: true })
+    FullTextCatalog: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextCatalogGenerated?: boolean;
+
+    @Field({ nullable: true })
+    FullTextIndex: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextIndexGenerated?: boolean;
+
+    @Field({ nullable: true })
+    FullTextSearchFunction: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchFunctionGenerated?: boolean;
 
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows?: number;
+    UserViewMaxRows?: number | null;
 
     @Field({ nullable: true })
-    spCreate?: string;
+    spCreate: string | null;
 
     @Field({ nullable: true })
-    spUpdate?: string;
+    spUpdate: string | null;
 
     @Field({ nullable: true })
-    spDelete?: string;
+    spDelete: string | null;
 
-    @Field(() => Boolean)
-    spCreateGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spCreateGenerated?: boolean;
 
-    @Field(() => Boolean)
-    spUpdateGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spUpdateGenerated?: boolean;
 
-    @Field(() => Boolean)
-    spDeleteGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spDeleteGenerated?: boolean;
 
-    @Field(() => Boolean)
-    CascadeDeletes: boolean;
-
-    @Field()
-    DeleteType: string;
-
-    @Field(() => Boolean)
-    AllowRecordMerge: boolean;
+    @Field(() => Boolean, { nullable: true })
+    CascadeDeletes?: boolean;
 
     @Field({ nullable: true })
-    spMatch?: string;
+    DeleteType?: string;
 
-    @Field()
-    RelationshipDefaultDisplayType: string;
-
-    @Field(() => Boolean)
-    UserFormGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowRecordMerge?: boolean;
 
     @Field({ nullable: true })
-    EntityObjectSubclassName?: string;
+    spMatch: string | null;
 
     @Field({ nullable: true })
-    EntityObjectSubclassImport?: string;
+    RelationshipDefaultDisplayType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UserFormGenerated?: boolean;
 
     @Field({ nullable: true })
-    PreferredCommunicationField?: string;
+    EntityObjectSubclassName: string | null;
 
     @Field({ nullable: true })
-    Icon?: string;
+    EntityObjectSubclassImport: string | null;
 
     @Field({ nullable: true })
-    ScopeDefault?: string;
-
-    @Field()
-    RowsToPackWithSchema: string;
-
-    @Field()
-    RowsToPackSampleMethod: string;
-
-    @Field(() => Int)
-    RowsToPackSampleCount: number;
+    PreferredCommunicationField: string | null;
 
     @Field({ nullable: true })
-    RowsToPackSampleOrder?: string;
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    ScopeDefault: string | null;
+
+    @Field({ nullable: true })
+    RowsToPackWithSchema?: string;
+
+    @Field({ nullable: true })
+    RowsToPackSampleMethod?: string;
+
+    @Field(() => Int, { nullable: true })
+    RowsToPackSampleCount?: number;
+
+    @Field({ nullable: true })
+    RowsToPackSampleOrder: string | null;
 }
     
 
@@ -5340,145 +5552,145 @@ export class UpdateEntityInput {
     ID: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
-
-    @Field()
-    Name: string;
+    ParentID?: string | null;
 
     @Field({ nullable: true })
-    NameSuffix?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    AutoUpdateDescription: boolean;
-
-    @Field()
-    BaseView: string;
-
-    @Field(() => Boolean)
-    BaseViewGenerated: boolean;
-
-    @Field(() => Boolean)
-    VirtualEntity: boolean;
-
-    @Field(() => Boolean)
-    TrackRecordChanges: boolean;
-
-    @Field(() => Boolean)
-    AuditRecordAccess: boolean;
-
-    @Field(() => Boolean)
-    AuditViewRuns: boolean;
-
-    @Field(() => Boolean)
-    IncludeInAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowAllRowsAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowUpdateAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowCreateAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowDeleteAPI: boolean;
-
-    @Field(() => Boolean)
-    CustomResolverAPI: boolean;
-
-    @Field(() => Boolean)
-    AllowUserSearchAPI: boolean;
-
-    @Field(() => Boolean)
-    FullTextSearchEnabled: boolean;
+    NameSuffix?: string | null;
 
     @Field({ nullable: true })
-    FullTextCatalog?: string;
+    Description?: string | null;
 
-    @Field(() => Boolean)
-    FullTextCatalogGenerated: boolean;
-
-    @Field({ nullable: true })
-    FullTextIndex?: string;
-
-    @Field(() => Boolean)
-    FullTextIndexGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDescription?: boolean;
 
     @Field({ nullable: true })
-    FullTextSearchFunction?: string;
+    BaseView?: string;
 
-    @Field(() => Boolean)
-    FullTextSearchFunctionGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    BaseViewGenerated?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    VirtualEntity?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    TrackRecordChanges?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditRecordAccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AuditViewRuns?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IncludeInAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowAllRowsAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowUpdateAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowCreateAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowDeleteAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomResolverAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowUserSearchAPI?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchEnabled?: boolean;
+
+    @Field({ nullable: true })
+    FullTextCatalog?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextCatalogGenerated?: boolean;
+
+    @Field({ nullable: true })
+    FullTextIndex?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextIndexGenerated?: boolean;
+
+    @Field({ nullable: true })
+    FullTextSearchFunction?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    FullTextSearchFunctionGenerated?: boolean;
 
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows?: number;
+    UserViewMaxRows?: number | null;
 
     @Field({ nullable: true })
-    spCreate?: string;
+    spCreate?: string | null;
 
     @Field({ nullable: true })
-    spUpdate?: string;
+    spUpdate?: string | null;
 
     @Field({ nullable: true })
-    spDelete?: string;
+    spDelete?: string | null;
 
-    @Field(() => Boolean)
-    spCreateGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spCreateGenerated?: boolean;
 
-    @Field(() => Boolean)
-    spUpdateGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spUpdateGenerated?: boolean;
 
-    @Field(() => Boolean)
-    spDeleteGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    spDeleteGenerated?: boolean;
 
-    @Field(() => Boolean)
-    CascadeDeletes: boolean;
-
-    @Field()
-    DeleteType: string;
-
-    @Field(() => Boolean)
-    AllowRecordMerge: boolean;
+    @Field(() => Boolean, { nullable: true })
+    CascadeDeletes?: boolean;
 
     @Field({ nullable: true })
-    spMatch?: string;
+    DeleteType?: string;
 
-    @Field()
-    RelationshipDefaultDisplayType: string;
-
-    @Field(() => Boolean)
-    UserFormGenerated: boolean;
+    @Field(() => Boolean, { nullable: true })
+    AllowRecordMerge?: boolean;
 
     @Field({ nullable: true })
-    EntityObjectSubclassName?: string;
+    spMatch?: string | null;
 
     @Field({ nullable: true })
-    EntityObjectSubclassImport?: string;
+    RelationshipDefaultDisplayType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UserFormGenerated?: boolean;
 
     @Field({ nullable: true })
-    PreferredCommunicationField?: string;
+    EntityObjectSubclassName?: string | null;
 
     @Field({ nullable: true })
-    Icon?: string;
+    EntityObjectSubclassImport?: string | null;
 
     @Field({ nullable: true })
-    ScopeDefault?: string;
-
-    @Field()
-    RowsToPackWithSchema: string;
-
-    @Field()
-    RowsToPackSampleMethod: string;
-
-    @Field(() => Int)
-    RowsToPackSampleCount: number;
+    PreferredCommunicationField?: string | null;
 
     @Field({ nullable: true })
-    RowsToPackSampleOrder?: string;
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    ScopeDefault?: string | null;
+
+    @Field({ nullable: true })
+    RowsToPackWithSchema?: string;
+
+    @Field({ nullable: true })
+    RowsToPackSampleMethod?: string;
+
+    @Field(() => Int, { nullable: true })
+    RowsToPackSampleCount?: number;
+
+    @Field({ nullable: true })
+    RowsToPackSampleOrder?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6097,6 +6309,9 @@ export class User_ {
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_RequestForUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
+    @Field(() => [ConversationDetail_])
+    ConversationDetails_UserIDArray: ConversationDetail_[]; // Link to ConversationDetails
+    
 }
 
 //****************************************************************************
@@ -6104,38 +6319,38 @@ export class User_ {
 //****************************************************************************
 @InputType()
 export class CreateUserInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    FirstName?: string;
+    FirstName: string | null;
 
     @Field({ nullable: true })
-    LastName?: string;
+    LastName: string | null;
 
     @Field({ nullable: true })
-    Title?: string;
-
-    @Field()
-    Email: string;
-
-    @Field()
-    Type: string;
-
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field()
-    LinkedRecordType: string;
+    Title: string | null;
 
     @Field({ nullable: true })
-    LinkedEntityID?: string;
+    Email?: string;
 
     @Field({ nullable: true })
-    LinkedEntityRecordID?: string;
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field({ nullable: true })
-    EmployeeID?: string;
+    LinkedRecordType?: string;
+
+    @Field({ nullable: true })
+    LinkedEntityID: string | null;
+
+    @Field({ nullable: true })
+    LinkedEntityRecordID: string | null;
+
+    @Field({ nullable: true })
+    EmployeeID: string | null;
 }
     
 
@@ -6147,38 +6362,38 @@ export class UpdateUserInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    FirstName?: string;
+    FirstName?: string | null;
 
     @Field({ nullable: true })
-    LastName?: string;
+    LastName?: string | null;
 
     @Field({ nullable: true })
-    Title?: string;
-
-    @Field()
-    Email: string;
-
-    @Field()
-    Type: string;
-
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field()
-    LinkedRecordType: string;
+    Title?: string | null;
 
     @Field({ nullable: true })
-    LinkedEntityID?: string;
+    Email?: string;
 
     @Field({ nullable: true })
-    LinkedEntityRecordID?: string;
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field({ nullable: true })
-    EmployeeID?: string;
+    LinkedRecordType?: string;
+
+    @Field({ nullable: true })
+    LinkedEntityID?: string | null;
+
+    @Field({ nullable: true })
+    LinkedEntityRecordID?: string | null;
+
+    @Field({ nullable: true })
+    EmployeeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6582,6 +6797,15 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [ConversationDetail_])
+    async ConversationDetails_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Conversation Details', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => User_)
     async CreateUser(
         @Arg('input', () => CreateUserInput) input: CreateUserInput,
@@ -6746,62 +6970,62 @@ export class EntityRelationship_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipInput {
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    RelatedEntityID: string;
-
-    @Field(() => Boolean)
-    BundleInAPI: boolean;
-
-    @Field(() => Boolean)
-    IncludeInParentAllQuery: boolean;
-
-    @Field()
-    Type: string;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    EntityKeyField?: string;
+    RelatedEntityID?: string;
 
-    @Field()
-    RelatedEntityJoinField: string;
+    @Field(() => Boolean, { nullable: true })
+    BundleInAPI?: boolean;
 
-    @Field({ nullable: true })
-    JoinView?: string;
-
-    @Field({ nullable: true })
-    JoinEntityJoinField?: string;
+    @Field(() => Boolean, { nullable: true })
+    IncludeInParentAllQuery?: boolean;
 
     @Field({ nullable: true })
-    JoinEntityInverseJoinField?: string;
-
-    @Field(() => Boolean)
-    DisplayInForm: boolean;
-
-    @Field()
-    DisplayLocation: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    DisplayName?: string;
-
-    @Field()
-    DisplayIconType: string;
+    EntityKeyField: string | null;
 
     @Field({ nullable: true })
-    DisplayIcon?: string;
+    RelatedEntityJoinField?: string;
 
     @Field({ nullable: true })
-    DisplayComponentID?: string;
+    JoinView: string | null;
 
     @Field({ nullable: true })
-    DisplayComponentConfiguration?: string;
+    JoinEntityJoinField: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateFromSchema: boolean;
+    @Field({ nullable: true })
+    JoinEntityInverseJoinField: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DisplayInForm?: boolean;
+
+    @Field({ nullable: true })
+    DisplayLocation?: string;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    DisplayIconType?: string;
+
+    @Field({ nullable: true })
+    DisplayIcon: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentID: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFromSchema?: boolean;
 }
     
 
@@ -6813,62 +7037,62 @@ export class UpdateEntityRelationshipInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    RelatedEntityID: string;
-
-    @Field(() => Boolean)
-    BundleInAPI: boolean;
-
-    @Field(() => Boolean)
-    IncludeInParentAllQuery: boolean;
-
-    @Field()
-    Type: string;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    EntityKeyField?: string;
+    RelatedEntityID?: string;
 
-    @Field()
-    RelatedEntityJoinField: string;
+    @Field(() => Boolean, { nullable: true })
+    BundleInAPI?: boolean;
 
-    @Field({ nullable: true })
-    JoinView?: string;
-
-    @Field({ nullable: true })
-    JoinEntityJoinField?: string;
+    @Field(() => Boolean, { nullable: true })
+    IncludeInParentAllQuery?: boolean;
 
     @Field({ nullable: true })
-    JoinEntityInverseJoinField?: string;
-
-    @Field(() => Boolean)
-    DisplayInForm: boolean;
-
-    @Field()
-    DisplayLocation: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    DisplayName?: string;
-
-    @Field()
-    DisplayIconType: string;
+    EntityKeyField?: string | null;
 
     @Field({ nullable: true })
-    DisplayIcon?: string;
+    RelatedEntityJoinField?: string;
 
     @Field({ nullable: true })
-    DisplayComponentID?: string;
+    JoinView?: string | null;
 
     @Field({ nullable: true })
-    DisplayComponentConfiguration?: string;
+    JoinEntityJoinField?: string | null;
 
-    @Field(() => Boolean)
-    AutoUpdateFromSchema: boolean;
+    @Field({ nullable: true })
+    JoinEntityInverseJoinField?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DisplayInForm?: boolean;
+
+    @Field({ nullable: true })
+    DisplayLocation?: string;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    DisplayIconType?: string;
+
+    @Field({ nullable: true })
+    DisplayIcon?: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateFromSchema?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7042,23 +7266,23 @@ export class UpdateUserRecordLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
-    @Field()
-    EarliestAt: Date;
+    @Field({ nullable: true })
+    EarliestAt?: Date;
 
-    @Field()
-    LatestAt: Date;
+    @Field({ nullable: true })
+    LatestAt?: Date;
 
-    @Field(() => Int)
-    TotalCount: number;
+    @Field(() => Int, { nullable: true })
+    TotalCount?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7244,56 +7468,56 @@ export class UserView_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewInput {
-    @Field()
-    UserID: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    EntityID?: string;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field(() => Boolean)
-    IsShared: boolean;
-
-    @Field(() => Boolean)
-    IsDefault: boolean;
+    Name?: string;
 
     @Field({ nullable: true })
-    GridState?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    FilterState?: string;
+    CategoryID: string | null;
 
-    @Field(() => Boolean)
-    CustomFilterState: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsShared?: boolean;
 
-    @Field(() => Boolean)
-    SmartFilterEnabled: boolean;
-
-    @Field({ nullable: true })
-    SmartFilterPrompt?: string;
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
 
     @Field({ nullable: true })
-    SmartFilterWhereClause?: string;
+    GridState: string | null;
 
     @Field({ nullable: true })
-    SmartFilterExplanation?: string;
+    FilterState: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomFilterState?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SmartFilterEnabled?: boolean;
 
     @Field({ nullable: true })
-    WhereClause?: string;
-
-    @Field(() => Boolean)
-    CustomWhereClause: boolean;
+    SmartFilterPrompt: string | null;
 
     @Field({ nullable: true })
-    SortState?: string;
+    SmartFilterWhereClause: string | null;
+
+    @Field({ nullable: true })
+    SmartFilterExplanation: string | null;
+
+    @Field({ nullable: true })
+    WhereClause: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomWhereClause?: boolean;
+
+    @Field({ nullable: true })
+    SortState: string | null;
 }
     
 
@@ -7305,56 +7529,56 @@ export class UpdateUserViewInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    EntityID?: string;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field(() => Boolean)
-    IsShared: boolean;
-
-    @Field(() => Boolean)
-    IsDefault: boolean;
+    Name?: string;
 
     @Field({ nullable: true })
-    GridState?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    FilterState?: string;
+    CategoryID?: string | null;
 
-    @Field(() => Boolean)
-    CustomFilterState: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsShared?: boolean;
 
-    @Field(() => Boolean)
-    SmartFilterEnabled: boolean;
-
-    @Field({ nullable: true })
-    SmartFilterPrompt?: string;
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
 
     @Field({ nullable: true })
-    SmartFilterWhereClause?: string;
+    GridState?: string | null;
 
     @Field({ nullable: true })
-    SmartFilterExplanation?: string;
+    FilterState?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomFilterState?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SmartFilterEnabled?: boolean;
 
     @Field({ nullable: true })
-    WhereClause?: string;
-
-    @Field(() => Boolean)
-    CustomWhereClause: boolean;
+    SmartFilterPrompt?: string | null;
 
     @Field({ nullable: true })
-    SortState?: string;
+    SmartFilterWhereClause?: string | null;
+
+    @Field({ nullable: true })
+    SmartFilterExplanation?: string | null;
+
+    @Field({ nullable: true })
+    WhereClause?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CustomWhereClause?: boolean;
+
+    @Field({ nullable: true })
+    SortState?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7558,32 +7782,32 @@ export class CompanyIntegrationRun_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRunInput {
-    @Field()
-    CompanyIntegrationID: string;
-
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    RunByUserID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field(() => Int)
-    TotalRecords: number;
+    StartedAt: Date | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    EndedAt: Date | null;
 
-    @Field()
-    Status: string;
-
-    @Field({ nullable: true })
-    ErrorLog?: string;
+    @Field(() => Int, { nullable: true })
+    TotalRecords?: number;
 
     @Field({ nullable: true })
-    ConfigData?: string;
+    Comments: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorLog: string | null;
+
+    @Field({ nullable: true })
+    ConfigData: string | null;
 }
     
 
@@ -7595,32 +7819,32 @@ export class UpdateCompanyIntegrationRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    CompanyIntegrationID: string;
-
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    RunByUserID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field(() => Int)
-    TotalRecords: number;
+    StartedAt?: Date | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    EndedAt?: Date | null;
 
-    @Field()
-    Status: string;
-
-    @Field({ nullable: true })
-    ErrorLog?: string;
+    @Field(() => Int, { nullable: true })
+    TotalRecords?: number;
 
     @Field({ nullable: true })
-    ConfigData?: string;
+    Comments?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorLog?: string | null;
+
+    @Field({ nullable: true })
+    ConfigData?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7793,23 +8017,23 @@ export class CompanyIntegrationRunDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRunDetailInput {
-    @Field()
-    CompanyIntegrationRunID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationRunID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
-    @Field()
-    Action: string;
+    @Field({ nullable: true })
+    Action?: string;
 
-    @Field()
-    ExecutedAt: Date;
+    @Field({ nullable: true })
+    ExecutedAt?: Date;
 
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
 }
     
 
@@ -7821,23 +8045,23 @@ export class UpdateCompanyIntegrationRunDetailInput {
     @Field()
     ID: string;
 
-    @Field()
-    CompanyIntegrationRunID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationRunID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
-    @Field()
-    Action: string;
+    @Field({ nullable: true })
+    Action?: string;
 
-    @Field()
-    ExecutedAt: Date;
+    @Field({ nullable: true })
+    ExecutedAt?: Date;
 
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7985,28 +8209,28 @@ export class ErrorLog_ {
 @InputType()
 export class CreateErrorLogInput {
     @Field({ nullable: true })
-    CompanyIntegrationRunID?: string;
+    CompanyIntegrationRunID: string | null;
 
     @Field({ nullable: true })
-    CompanyIntegrationRunDetailID?: string;
+    CompanyIntegrationRunDetailID: string | null;
 
     @Field({ nullable: true })
-    Code?: string;
+    Code: string | null;
 
     @Field({ nullable: true })
-    Message?: string;
+    Message: string | null;
 
     @Field({ nullable: true })
-    CreatedBy?: string;
+    CreatedBy?: string | null;
 
     @Field({ nullable: true })
-    Status?: string;
+    Status: string | null;
 
     @Field({ nullable: true })
-    Category?: string;
+    Category: string | null;
 
     @Field({ nullable: true })
-    Details?: string;
+    Details: string | null;
 }
     
 
@@ -8019,28 +8243,28 @@ export class UpdateErrorLogInput {
     ID: string;
 
     @Field({ nullable: true })
-    CompanyIntegrationRunID?: string;
+    CompanyIntegrationRunID?: string | null;
 
     @Field({ nullable: true })
-    CompanyIntegrationRunDetailID?: string;
+    CompanyIntegrationRunDetailID?: string | null;
 
     @Field({ nullable: true })
-    Code?: string;
+    Code?: string | null;
 
     @Field({ nullable: true })
-    Message?: string;
+    Message?: string | null;
 
     @Field({ nullable: true })
-    CreatedBy?: string;
+    CreatedBy?: string | null;
 
     @Field({ nullable: true })
-    Status?: string;
+    Status?: string | null;
 
     @Field({ nullable: true })
-    Category?: string;
+    Category?: string | null;
 
     @Field({ nullable: true })
-    Details?: string;
+    Details?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8171,17 +8395,17 @@ export class Application_ {
 //****************************************************************************
 @InputType()
 export class CreateApplicationInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    Icon?: string;
+    Icon: string | null;
 
-    @Field(() => Boolean)
-    DefaultForNewUser: boolean;
+    @Field(() => Boolean, { nullable: true })
+    DefaultForNewUser?: boolean;
 }
     
 
@@ -8193,17 +8417,17 @@ export class UpdateApplicationInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    Icon?: string;
+    Icon?: string | null;
 
-    @Field(() => Boolean)
-    DefaultForNewUser: boolean;
+    @Field(() => Boolean, { nullable: true })
+    DefaultForNewUser?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8389,17 +8613,17 @@ export class ApplicationEntity_ {
 //****************************************************************************
 @InputType()
 export class CreateApplicationEntityInput {
-    @Field()
-    ApplicationID: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field(() => Boolean)
-    DefaultForNewUser: boolean;
+    @Field(() => Boolean, { nullable: true })
+    DefaultForNewUser?: boolean;
 }
     
 
@@ -8411,17 +8635,17 @@ export class UpdateApplicationEntityInput {
     @Field()
     ID: string;
 
-    @Field()
-    ApplicationID: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field(() => Boolean)
-    DefaultForNewUser: boolean;
+    @Field(() => Boolean, { nullable: true })
+    DefaultForNewUser?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8600,35 +8824,35 @@ export class EntityPermission_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityPermissionInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RoleID: string;
-
-    @Field(() => Boolean)
-    CanCreate: boolean;
-
-    @Field(() => Boolean)
-    CanRead: boolean;
-
-    @Field(() => Boolean)
-    CanUpdate: boolean;
-
-    @Field(() => Boolean)
-    CanDelete: boolean;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ReadRLSFilterID?: string;
+    RoleID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CanCreate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanDelete?: boolean;
 
     @Field({ nullable: true })
-    CreateRLSFilterID?: string;
+    ReadRLSFilterID: string | null;
 
     @Field({ nullable: true })
-    UpdateRLSFilterID?: string;
+    CreateRLSFilterID: string | null;
 
     @Field({ nullable: true })
-    DeleteRLSFilterID?: string;
+    UpdateRLSFilterID: string | null;
+
+    @Field({ nullable: true })
+    DeleteRLSFilterID: string | null;
 }
     
 
@@ -8640,35 +8864,35 @@ export class UpdateEntityPermissionInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RoleID: string;
-
-    @Field(() => Boolean)
-    CanCreate: boolean;
-
-    @Field(() => Boolean)
-    CanRead: boolean;
-
-    @Field(() => Boolean)
-    CanUpdate: boolean;
-
-    @Field(() => Boolean)
-    CanDelete: boolean;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ReadRLSFilterID?: string;
+    RoleID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    CanCreate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanRead?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    CanDelete?: boolean;
 
     @Field({ nullable: true })
-    CreateRLSFilterID?: string;
+    ReadRLSFilterID?: string | null;
 
     @Field({ nullable: true })
-    UpdateRLSFilterID?: string;
+    CreateRLSFilterID?: string | null;
 
     @Field({ nullable: true })
-    DeleteRLSFilterID?: string;
+    UpdateRLSFilterID?: string | null;
+
+    @Field({ nullable: true })
+    DeleteRLSFilterID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8815,14 +9039,14 @@ export class UserApplicationEntity_ {
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationEntityInput {
-    @Field()
-    UserApplicationID: string;
+    @Field({ nullable: true })
+    UserApplicationID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 }
     
 
@@ -8834,14 +9058,14 @@ export class UpdateUserApplicationEntityInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserApplicationID: string;
+    @Field({ nullable: true })
+    UserApplicationID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8981,17 +9205,17 @@ export class UserApplication_ {
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationInput {
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    ApplicationID: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -9003,17 +9227,17 @@ export class UpdateUserApplicationInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    ApplicationID: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9158,23 +9382,23 @@ export class CompanyIntegrationRunAPILog_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRunAPILogInput {
-    @Field()
-    CompanyIntegrationRunID: string;
-
-    @Field()
-    ExecutedAt: Date;
-
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field({ nullable: true })
+    CompanyIntegrationRunID?: string;
 
     @Field({ nullable: true })
-    RequestMethod?: string;
+    ExecutedAt?: Date;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
 
     @Field({ nullable: true })
-    URL?: string;
+    RequestMethod: string | null;
 
     @Field({ nullable: true })
-    Parameters?: string;
+    URL: string | null;
+
+    @Field({ nullable: true })
+    Parameters: string | null;
 }
     
 
@@ -9186,23 +9410,23 @@ export class UpdateCompanyIntegrationRunAPILogInput {
     @Field()
     ID: string;
 
-    @Field()
-    CompanyIntegrationRunID: string;
-
-    @Field()
-    ExecutedAt: Date;
-
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field({ nullable: true })
+    CompanyIntegrationRunID?: string;
 
     @Field({ nullable: true })
-    RequestMethod?: string;
+    ExecutedAt?: Date;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
 
     @Field({ nullable: true })
-    URL?: string;
+    RequestMethod?: string | null;
 
     @Field({ nullable: true })
-    Parameters?: string;
+    URL?: string | null;
+
+    @Field({ nullable: true })
+    Parameters?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9355,26 +9579,26 @@ export class List_ {
 //****************************************************************************
 @InputType()
 export class CreateListInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field()
-    UserID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ExternalSystemRecordID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    CompanyIntegrationID?: string;
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID: string | null;
+
+    @Field({ nullable: true })
+    CompanyIntegrationID: string | null;
 }
     
 
@@ -9386,26 +9610,26 @@ export class UpdateListInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    EntityID: string;
-
-    @Field()
-    UserID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ExternalSystemRecordID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    CompanyIntegrationID?: string;
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string | null;
+
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9560,20 +9784,20 @@ export class ListDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateListDetailInput {
-    @Field()
-    ListID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    ListID?: string;
 
     @Field({ nullable: true })
-    AdditionalData?: string;
+    RecordID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AdditionalData: string | null;
 }
     
 
@@ -9585,20 +9809,20 @@ export class UpdateListDetailInput {
     @Field()
     ID: string;
 
-    @Field()
-    ListID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    ListID?: string;
 
     @Field({ nullable: true })
-    AdditionalData?: string;
+    RecordID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AdditionalData?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9736,14 +9960,14 @@ export class UserViewRun_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunInput {
-    @Field()
-    UserViewID: string;
+    @Field({ nullable: true })
+    UserViewID?: string;
 
-    @Field()
-    RunAt: Date;
+    @Field({ nullable: true })
+    RunAt?: Date;
 
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    RunByUserID?: string;
 }
     
 
@@ -9755,14 +9979,14 @@ export class UpdateUserViewRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserViewID: string;
+    @Field({ nullable: true })
+    UserViewID?: string;
 
-    @Field()
-    RunAt: Date;
+    @Field({ nullable: true })
+    RunAt?: Date;
 
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    RunByUserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9895,11 +10119,11 @@ export class UserViewRunDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunDetailInput {
-    @Field()
-    UserViewRunID: string;
+    @Field({ nullable: true })
+    UserViewRunID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 }
     
 
@@ -9911,11 +10135,11 @@ export class UpdateUserViewRunDetailInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserViewRunID: string;
+    @Field({ nullable: true })
+    UserViewRunID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10057,23 +10281,23 @@ export class UpdateWorkflowRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    WorkflowID: string;
-
-    @Field()
-    ExternalSystemRecordID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    WorkflowID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field()
-    Status: string;
+    ExternalSystemRecordID?: string;
 
     @Field({ nullable: true })
-    Results?: string;
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Results?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10212,29 +10436,29 @@ export class UpdateWorkflowInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    WorkflowEngineID: string;
-
-    @Field()
-    ExternalSystemRecordID: string;
-
-    @Field(() => Boolean)
-    AutoRunEnabled: boolean;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    AutoRunIntervalUnits?: string;
+    WorkflowEngineID?: string;
+
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRunEnabled?: boolean;
+
+    @Field({ nullable: true })
+    AutoRunIntervalUnits?: string | null;
 
     @Field(() => Int, { nullable: true })
-    AutoRunInterval?: number;
+    AutoRunInterval?: number | null;
 
     @Field({ nullable: true })
-    SubclassName?: string;
+    SubclassName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10371,17 +10595,17 @@ export class UpdateWorkflowEngineInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    DriverPath: string;
+    @Field({ nullable: true })
+    DriverPath?: string;
 
-    @Field()
-    DriverClass: string;
+    @Field({ nullable: true })
+    DriverClass?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10558,47 +10782,47 @@ export class RecordChange_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    UserID: string;
-
-    @Field()
-    Type: string;
-
-    @Field()
-    Source: string;
-
-    @Field()
-    ChangedAt: Date;
-
-    @Field()
-    ChangesJSON: string;
-
-    @Field()
-    ChangesDescription: string;
-
-    @Field()
-    FullRecordJSON: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ErrorLog?: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    ReplayRunID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    IntegrationID?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Source?: string;
+
+    @Field({ nullable: true })
+    ChangedAt?: Date;
+
+    @Field({ nullable: true })
+    ChangesJSON?: string;
+
+    @Field({ nullable: true })
+    ChangesDescription?: string;
+
+    @Field({ nullable: true })
+    FullRecordJSON?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorLog: string | null;
+
+    @Field({ nullable: true })
+    ReplayRunID: string | null;
+
+    @Field({ nullable: true })
+    IntegrationID: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -10610,47 +10834,47 @@ export class UpdateRecordChangeInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    UserID: string;
-
-    @Field()
-    Type: string;
-
-    @Field()
-    Source: string;
-
-    @Field()
-    ChangedAt: Date;
-
-    @Field()
-    ChangesJSON: string;
-
-    @Field()
-    ChangesDescription: string;
-
-    @Field()
-    FullRecordJSON: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ErrorLog?: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    ReplayRunID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    IntegrationID?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Source?: string;
+
+    @Field({ nullable: true })
+    ChangedAt?: Date;
+
+    @Field({ nullable: true })
+    ChangesJSON?: string;
+
+    @Field({ nullable: true })
+    ChangesDescription?: string;
+
+    @Field({ nullable: true })
+    FullRecordJSON?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ErrorLog?: string | null;
+
+    @Field({ nullable: true })
+    ReplayRunID?: string | null;
+
+    @Field({ nullable: true })
+    IntegrationID?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10774,11 +10998,11 @@ export class UserRole_ {
 //****************************************************************************
 @InputType()
 export class CreateUserRoleInput {
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
-    @Field()
-    RoleID: string;
+    @Field({ nullable: true })
+    RoleID?: string;
 }
     
 //****************************************************************************
@@ -11042,29 +11266,29 @@ export class AuditLog_ {
 //****************************************************************************
 @InputType()
 export class CreateAuditLogInput {
-    @Field()
-    UserID: string;
-
-    @Field()
-    AuditLogTypeID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    AuthorizationID?: string;
-
-    @Field()
-    Status: string;
+    AuditLogTypeID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    AuthorizationID: string | null;
 
     @Field({ nullable: true })
-    Details?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    Details: string | null;
+
+    @Field({ nullable: true })
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    RecordID: string | null;
 }
     
 
@@ -11076,29 +11300,29 @@ export class UpdateAuditLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
-
-    @Field()
-    AuditLogTypeID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    AuthorizationID?: string;
-
-    @Field()
-    Status: string;
+    AuditLogTypeID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    AuthorizationID?: string | null;
 
     @Field({ nullable: true })
-    Details?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    Details?: string | null;
+
+    @Field({ nullable: true })
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    RecordID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11642,20 +11866,20 @@ export class UpdateEntityFieldValueInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityFieldID: string;
+    @Field({ nullable: true })
+    EntityFieldID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    Value: string;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    Code?: string;
+    Value?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Code?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11839,47 +12063,47 @@ export class AIModel_ {
 //****************************************************************************
 @InputType()
 export class CreateAIModelInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    Vendor?: string;
+    Vendor: string | null;
 
-    @Field()
-    AIModelTypeID: string;
+    @Field({ nullable: true })
+    AIModelTypeID?: string;
 
     @Field(() => Int, { nullable: true })
-    PowerRank?: number;
+    PowerRank?: number | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field({ nullable: true })
-    DriverImportPath?: string;
+    DriverClass: string | null;
 
     @Field({ nullable: true })
-    APIName?: string;
+    DriverImportPath: string | null;
+
+    @Field({ nullable: true })
+    APIName: string | null;
 
     @Field(() => Int, { nullable: true })
-    SpeedRank?: number;
+    SpeedRank?: number | null;
 
     @Field(() => Int, { nullable: true })
-    CostRank?: number;
+    CostRank?: number | null;
 
     @Field({ nullable: true })
-    ModelSelectionInsights?: string;
+    ModelSelectionInsights: string | null;
 
     @Field(() => Int, { nullable: true })
-    InputTokenLimit?: number;
+    InputTokenLimit: number | null;
 
-    @Field()
-    SupportedResponseFormats: string;
+    @Field({ nullable: true })
+    SupportedResponseFormats?: string;
 }
     
 
@@ -11891,47 +12115,47 @@ export class UpdateAIModelInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    Vendor?: string;
+    Vendor?: string | null;
 
-    @Field()
-    AIModelTypeID: string;
+    @Field({ nullable: true })
+    AIModelTypeID?: string;
 
     @Field(() => Int, { nullable: true })
-    PowerRank?: number;
+    PowerRank?: number | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field({ nullable: true })
-    DriverImportPath?: string;
+    DriverClass?: string | null;
 
     @Field({ nullable: true })
-    APIName?: string;
+    DriverImportPath?: string | null;
+
+    @Field({ nullable: true })
+    APIName?: string | null;
 
     @Field(() => Int, { nullable: true })
-    SpeedRank?: number;
+    SpeedRank?: number | null;
 
     @Field(() => Int, { nullable: true })
-    CostRank?: number;
+    CostRank?: number | null;
 
     @Field({ nullable: true })
-    ModelSelectionInsights?: string;
+    ModelSelectionInsights?: string | null;
 
     @Field(() => Int, { nullable: true })
-    InputTokenLimit?: number;
+    InputTokenLimit?: number | null;
 
-    @Field()
-    SupportedResponseFormats: string;
+    @Field({ nullable: true })
+    SupportedResponseFormats?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12154,20 +12378,20 @@ export class AIAction_ {
 //****************************************************************************
 @InputType()
 export class CreateAIActionInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    DefaultPrompt?: string;
+    DefaultPrompt: string | null;
 
     @Field({ nullable: true })
-    DefaultModelID?: string;
+    DefaultModelID: string | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -12179,20 +12403,20 @@ export class UpdateAIActionInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    DefaultPrompt?: string;
+    DefaultPrompt?: string | null;
 
     @Field({ nullable: true })
-    DefaultModelID?: string;
+    DefaultModelID?: string | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12353,14 +12577,14 @@ export class AIModelAction_ {
 //****************************************************************************
 @InputType()
 export class CreateAIModelActionInput {
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field()
-    AIActionID: string;
+    @Field({ nullable: true })
+    AIActionID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -12372,14 +12596,14 @@ export class UpdateAIModelActionInput {
     @Field()
     ID: string;
 
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field()
-    AIActionID: string;
+    @Field({ nullable: true })
+    AIActionID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12563,41 +12787,41 @@ export class EntityAIAction_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityAIActionInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    AIModelID: string;
-
-    @Field()
-    AIActionID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    Prompt?: string;
-
-    @Field()
-    TriggerEvent: string;
-
-    @Field()
-    UserMessage: string;
-
-    @Field()
-    OutputType: string;
+    AIModelID?: string;
 
     @Field({ nullable: true })
-    OutputField?: string;
-
-    @Field(() => Boolean)
-    SkipIfOutputFieldNotEmpty: boolean;
+    AIActionID?: string;
 
     @Field({ nullable: true })
-    OutputEntityID?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Prompt: string | null;
+
+    @Field({ nullable: true })
+    TriggerEvent?: string;
+
+    @Field({ nullable: true })
+    UserMessage?: string;
+
+    @Field({ nullable: true })
+    OutputType?: string;
+
+    @Field({ nullable: true })
+    OutputField: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SkipIfOutputFieldNotEmpty?: boolean;
+
+    @Field({ nullable: true })
+    OutputEntityID: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -12609,41 +12833,41 @@ export class UpdateEntityAIActionInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    AIModelID: string;
-
-    @Field()
-    AIActionID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    Prompt?: string;
-
-    @Field()
-    TriggerEvent: string;
-
-    @Field()
-    UserMessage: string;
-
-    @Field()
-    OutputType: string;
+    AIModelID?: string;
 
     @Field({ nullable: true })
-    OutputField?: string;
-
-    @Field(() => Boolean)
-    SkipIfOutputFieldNotEmpty: boolean;
+    AIActionID?: string;
 
     @Field({ nullable: true })
-    OutputEntityID?: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Prompt?: string | null;
+
+    @Field({ nullable: true })
+    TriggerEvent?: string;
+
+    @Field({ nullable: true })
+    UserMessage?: string;
+
+    @Field({ nullable: true })
+    OutputType?: string;
+
+    @Field({ nullable: true })
+    OutputField?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SkipIfOutputFieldNotEmpty?: boolean;
+
+    @Field({ nullable: true })
+    OutputEntityID?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12777,11 +13001,11 @@ export class AIModelType_ {
 //****************************************************************************
 @InputType()
 export class CreateAIModelTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -12793,11 +13017,11 @@ export class UpdateAIModelTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -13104,53 +13328,53 @@ export class Queue_ {
 //****************************************************************************
 @InputType()
 export class CreateQueueInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    QueueTypeID: string;
+    @Field({ nullable: true })
+    QueueTypeID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => Int, { nullable: true })
-    ProcessPID?: number;
+    ProcessPID: number | null;
 
     @Field({ nullable: true })
-    ProcessPlatform?: string;
+    ProcessPlatform: string | null;
 
     @Field({ nullable: true })
-    ProcessVersion?: string;
+    ProcessVersion: string | null;
 
     @Field({ nullable: true })
-    ProcessCwd?: string;
+    ProcessCwd: string | null;
 
     @Field({ nullable: true })
-    ProcessIPAddress?: string;
+    ProcessIPAddress: string | null;
 
     @Field({ nullable: true })
-    ProcessMacAddress?: string;
+    ProcessMacAddress: string | null;
 
     @Field({ nullable: true })
-    ProcessOSName?: string;
+    ProcessOSName: string | null;
 
     @Field({ nullable: true })
-    ProcessOSVersion?: string;
+    ProcessOSVersion: string | null;
 
     @Field({ nullable: true })
-    ProcessHostName?: string;
+    ProcessHostName: string | null;
 
     @Field({ nullable: true })
-    ProcessUserID?: string;
+    ProcessUserID: string | null;
 
     @Field({ nullable: true })
-    ProcessUserName?: string;
+    ProcessUserName: string | null;
 
-    @Field()
-    LastHeartbeat: Date;
+    @Field({ nullable: true })
+    LastHeartbeat?: Date;
 }
     
 
@@ -13162,53 +13386,53 @@ export class UpdateQueueInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    QueueTypeID: string;
+    @Field({ nullable: true })
+    QueueTypeID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => Int, { nullable: true })
-    ProcessPID?: number;
+    ProcessPID?: number | null;
 
     @Field({ nullable: true })
-    ProcessPlatform?: string;
+    ProcessPlatform?: string | null;
 
     @Field({ nullable: true })
-    ProcessVersion?: string;
+    ProcessVersion?: string | null;
 
     @Field({ nullable: true })
-    ProcessCwd?: string;
+    ProcessCwd?: string | null;
 
     @Field({ nullable: true })
-    ProcessIPAddress?: string;
+    ProcessIPAddress?: string | null;
 
     @Field({ nullable: true })
-    ProcessMacAddress?: string;
+    ProcessMacAddress?: string | null;
 
     @Field({ nullable: true })
-    ProcessOSName?: string;
+    ProcessOSName?: string | null;
 
     @Field({ nullable: true })
-    ProcessOSVersion?: string;
+    ProcessOSVersion?: string | null;
 
     @Field({ nullable: true })
-    ProcessHostName?: string;
+    ProcessHostName?: string | null;
 
     @Field({ nullable: true })
-    ProcessUserID?: string;
+    ProcessUserID?: string | null;
 
     @Field({ nullable: true })
-    ProcessUserName?: string;
+    ProcessUserName?: string | null;
 
-    @Field()
-    LastHeartbeat: Date;
+    @Field({ nullable: true })
+    LastHeartbeat?: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -13360,32 +13584,32 @@ export class QueueTask_ {
 //****************************************************************************
 @InputType()
 export class CreateQueueTaskInput {
-    @Field()
-    QueueID: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    QueueID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    Status?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    StartedAt: Date | null;
 
     @Field({ nullable: true })
-    Data?: string;
+    EndedAt: Date | null;
 
     @Field({ nullable: true })
-    Options?: string;
+    Data: string | null;
 
     @Field({ nullable: true })
-    Output?: string;
+    Options: string | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    Output: string | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -13397,32 +13621,32 @@ export class UpdateQueueTaskInput {
     @Field()
     ID: string;
 
-    @Field()
-    QueueID: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    QueueID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    Status?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    StartedAt?: Date | null;
 
     @Field({ nullable: true })
-    Data?: string;
+    EndedAt?: Date | null;
 
     @Field({ nullable: true })
-    Options?: string;
+    Data?: string | null;
 
     @Field({ nullable: true })
-    Output?: string;
+    Options?: string | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    Output?: string | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -13556,20 +13780,20 @@ export class Dashboard_ {
 //****************************************************************************
 @InputType()
 export class CreateDashboardInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    UserID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    UserID?: string;
 
-    @Field()
-    UIConfigDetails: string;
+    @Field({ nullable: true })
+    CategoryID: string | null;
+
+    @Field({ nullable: true })
+    UIConfigDetails?: string;
 }
     
 
@@ -13581,20 +13805,20 @@ export class UpdateDashboardInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    UserID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    UserID?: string;
 
-    @Field()
-    UIConfigDetails: string;
+    @Field({ nullable: true })
+    CategoryID?: string | null;
+
+    @Field({ nullable: true })
+    UIConfigDetails?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14090,50 +14314,50 @@ export class Report_ {
 //****************************************************************************
 @InputType()
 export class CreateReportInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    UserID: string;
-
-    @Field()
-    SharingScope: string;
+    CategoryID: string | null;
 
     @Field({ nullable: true })
-    ConversationID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    ConversationDetailID?: string;
+    SharingScope?: string;
 
     @Field({ nullable: true })
-    DataContextID?: string;
+    ConversationID: string | null;
 
     @Field({ nullable: true })
-    Configuration?: string;
+    ConversationDetailID: string | null;
 
     @Field({ nullable: true })
-    OutputTriggerTypeID?: string;
+    DataContextID: string | null;
 
     @Field({ nullable: true })
-    OutputFormatTypeID?: string;
+    Configuration: string | null;
 
     @Field({ nullable: true })
-    OutputDeliveryTypeID?: string;
+    OutputTriggerTypeID: string | null;
 
     @Field({ nullable: true })
-    OutputFrequency?: string;
+    OutputFormatTypeID: string | null;
 
     @Field({ nullable: true })
-    OutputTargetEmail?: string;
+    OutputDeliveryTypeID: string | null;
 
     @Field({ nullable: true })
-    OutputWorkflowID?: string;
+    OutputFrequency: string | null;
+
+    @Field({ nullable: true })
+    OutputTargetEmail: string | null;
+
+    @Field({ nullable: true })
+    OutputWorkflowID: string | null;
 }
     
 
@@ -14145,50 +14369,50 @@ export class UpdateReportInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    UserID: string;
-
-    @Field()
-    SharingScope: string;
+    CategoryID?: string | null;
 
     @Field({ nullable: true })
-    ConversationID?: string;
+    UserID?: string;
 
     @Field({ nullable: true })
-    ConversationDetailID?: string;
+    SharingScope?: string;
 
     @Field({ nullable: true })
-    DataContextID?: string;
+    ConversationID?: string | null;
 
     @Field({ nullable: true })
-    Configuration?: string;
+    ConversationDetailID?: string | null;
 
     @Field({ nullable: true })
-    OutputTriggerTypeID?: string;
+    DataContextID?: string | null;
 
     @Field({ nullable: true })
-    OutputFormatTypeID?: string;
+    Configuration?: string | null;
 
     @Field({ nullable: true })
-    OutputDeliveryTypeID?: string;
+    OutputTriggerTypeID?: string | null;
 
     @Field({ nullable: true })
-    OutputFrequency?: string;
+    OutputFormatTypeID?: string | null;
 
     @Field({ nullable: true })
-    OutputTargetEmail?: string;
+    OutputDeliveryTypeID?: string | null;
 
     @Field({ nullable: true })
-    OutputWorkflowID?: string;
+    OutputFrequency?: string | null;
+
+    @Field({ nullable: true })
+    OutputTargetEmail?: string | null;
+
+    @Field({ nullable: true })
+    OutputWorkflowID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14331,14 +14555,14 @@ export class ReportSnapshot_ {
 //****************************************************************************
 @InputType()
 export class CreateReportSnapshotInput {
-    @Field()
-    ReportID: string;
+    @Field({ nullable: true })
+    ReportID?: string;
 
-    @Field()
-    ResultSet: string;
+    @Field({ nullable: true })
+    ResultSet?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -14350,14 +14574,14 @@ export class UpdateReportSnapshotInput {
     @Field()
     ID: string;
 
-    @Field()
-    ReportID: string;
+    @Field({ nullable: true })
+    ReportID?: string;
 
-    @Field()
-    ResultSet: string;
+    @Field({ nullable: true })
+    ResultSet?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14860,14 +15084,14 @@ export class Workspace_ {
 //****************************************************************************
 @InputType()
 export class CreateWorkspaceInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -14879,14 +15103,14 @@ export class UpdateWorkspaceInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15043,26 +15267,26 @@ export class WorkspaceItem_ {
 //****************************************************************************
 @InputType()
 export class CreateWorkspaceItemInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    WorkspaceID: string;
-
-    @Field()
-    ResourceTypeID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
-
-    @Field(() => Int)
-    Sequence: number;
+    WorkspaceID?: string;
 
     @Field({ nullable: true })
-    Configuration?: string;
+    ResourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ResourceRecordID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -15074,26 +15298,26 @@ export class UpdateWorkspaceItemInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    WorkspaceID: string;
-
-    @Field()
-    ResourceTypeID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
-
-    @Field(() => Int)
-    Sequence: number;
+    WorkspaceID?: string;
 
     @Field({ nullable: true })
-    Configuration?: string;
+    ResourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15441,9 +15665,17 @@ export class ConversationDetail_ {
     @Field({nullable: true, description: `This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`}) 
     SummaryOfEarlierConversation?: string;
         
+    @Field({nullable: true, description: `This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`}) 
+    @MaxLength(16)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
         
     @Field(() => [Report_])
     Reports_ConversationDetailIDArray: Report_[]; // Link to Reports
@@ -15455,35 +15687,38 @@ export class ConversationDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationDetailInput {
-    @Field()
-    ConversationID: string;
+    @Field({ nullable: true })
+    ConversationID?: string;
 
     @Field({ nullable: true })
-    ExternalID?: string;
-
-    @Field()
-    Role: string;
-
-    @Field()
-    Message: string;
+    ExternalID: string | null;
 
     @Field({ nullable: true })
-    Error?: string;
+    Role?: string;
 
-    @Field(() => Boolean)
-    HiddenToUser: boolean;
+    @Field({ nullable: true })
+    Message?: string;
+
+    @Field({ nullable: true })
+    Error: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HiddenToUser?: boolean;
 
     @Field(() => Int, { nullable: true })
-    UserRating?: number;
+    UserRating: number | null;
 
     @Field({ nullable: true })
-    UserFeedback?: string;
+    UserFeedback: string | null;
 
     @Field({ nullable: true })
-    ReflectionInsights?: string;
+    ReflectionInsights: string | null;
 
     @Field({ nullable: true })
-    SummaryOfEarlierConversation?: string;
+    SummaryOfEarlierConversation: string | null;
+
+    @Field({ nullable: true })
+    UserID: string | null;
 }
     
 
@@ -15495,35 +15730,38 @@ export class UpdateConversationDetailInput {
     @Field()
     ID: string;
 
-    @Field()
-    ConversationID: string;
+    @Field({ nullable: true })
+    ConversationID?: string;
 
     @Field({ nullable: true })
-    ExternalID?: string;
-
-    @Field()
-    Role: string;
-
-    @Field()
-    Message: string;
+    ExternalID?: string | null;
 
     @Field({ nullable: true })
-    Error?: string;
+    Role?: string;
 
-    @Field(() => Boolean)
-    HiddenToUser: boolean;
+    @Field({ nullable: true })
+    Message?: string;
+
+    @Field({ nullable: true })
+    Error?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HiddenToUser?: boolean;
 
     @Field(() => Int, { nullable: true })
-    UserRating?: number;
+    UserRating?: number | null;
 
     @Field({ nullable: true })
-    UserFeedback?: string;
+    UserFeedback?: string | null;
 
     @Field({ nullable: true })
-    ReflectionInsights?: string;
+    ReflectionInsights?: string | null;
 
     @Field({ nullable: true })
-    SummaryOfEarlierConversation?: string;
+    SummaryOfEarlierConversation?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15699,32 +15937,32 @@ export class Conversation_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationInput {
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    ExternalID?: string;
+    ExternalID: string | null;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
-
-    @Field(() => Boolean)
-    IsArchived: boolean;
+    Description: string | null;
 
     @Field({ nullable: true })
-    LinkedEntityID?: string;
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArchived?: boolean;
 
     @Field({ nullable: true })
-    LinkedRecordID?: string;
+    LinkedEntityID: string | null;
 
     @Field({ nullable: true })
-    DataContextID?: string;
+    LinkedRecordID: string | null;
+
+    @Field({ nullable: true })
+    DataContextID: string | null;
 }
     
 
@@ -15736,32 +15974,32 @@ export class UpdateConversationInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    ExternalID?: string;
+    ExternalID?: string | null;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
-
-    @Field(() => Boolean)
-    IsArchived: boolean;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    LinkedEntityID?: string;
+    Type?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArchived?: boolean;
 
     @Field({ nullable: true })
-    LinkedRecordID?: string;
+    LinkedEntityID?: string | null;
 
     @Field({ nullable: true })
-    DataContextID?: string;
+    LinkedRecordID?: string | null;
+
+    @Field({ nullable: true })
+    DataContextID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15931,29 +16169,29 @@ export class UserNotification_ {
 //****************************************************************************
 @InputType()
 export class CreateUserNotificationInput {
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    Title?: string;
+    Title: string | null;
 
     @Field({ nullable: true })
-    Message?: string;
+    Message: string | null;
 
     @Field({ nullable: true })
-    ResourceTypeID?: string;
+    ResourceTypeID: string | null;
 
     @Field({ nullable: true })
-    ResourceConfiguration?: string;
+    ResourceConfiguration: string | null;
 
-    @Field(() => Boolean)
-    Unread: boolean;
-
-    @Field({ nullable: true })
-    ReadAt?: Date;
+    @Field(() => Boolean, { nullable: true })
+    Unread?: boolean;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
+    ReadAt: Date | null;
+
+    @Field({ nullable: true })
+    ResourceRecordID: string | null;
 }
     
 
@@ -15965,29 +16203,29 @@ export class UpdateUserNotificationInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    Title?: string;
+    Title?: string | null;
 
     @Field({ nullable: true })
-    Message?: string;
+    Message?: string | null;
 
     @Field({ nullable: true })
-    ResourceTypeID?: string;
+    ResourceTypeID?: string | null;
 
     @Field({ nullable: true })
-    ResourceConfiguration?: string;
+    ResourceConfiguration?: string | null;
 
-    @Field(() => Boolean)
-    Unread: boolean;
-
-    @Field({ nullable: true })
-    ReadAt?: Date;
+    @Field(() => Boolean, { nullable: true })
+    Unread?: boolean;
 
     @Field({ nullable: true })
-    ResourceRecordID?: string;
+    ReadAt?: Date | null;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16115,17 +16353,17 @@ export class SchemaInfo_ {
 //****************************************************************************
 @InputType()
 export class CreateSchemaInfoInput {
-    @Field()
-    SchemaName: string;
+    @Field({ nullable: true })
+    SchemaName?: string;
 
-    @Field(() => Int)
-    EntityIDMin: number;
+    @Field(() => Int, { nullable: true })
+    EntityIDMin?: number;
 
-    @Field(() => Int)
-    EntityIDMax: number;
+    @Field(() => Int, { nullable: true })
+    EntityIDMax?: number;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Comments: string | null;
 }
     
 
@@ -16137,17 +16375,17 @@ export class UpdateSchemaInfoInput {
     @Field()
     ID: string;
 
-    @Field()
-    SchemaName: string;
+    @Field({ nullable: true })
+    SchemaName?: string;
 
-    @Field(() => Int)
-    EntityIDMin: number;
+    @Field(() => Int, { nullable: true })
+    EntityIDMin?: number;
 
-    @Field(() => Int)
-    EntityIDMax: number;
+    @Field(() => Int, { nullable: true })
+    EntityIDMax?: number;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16275,17 +16513,17 @@ export class CompanyIntegrationRecordMap_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRecordMapInput {
-    @Field()
-    CompanyIntegrationID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
 
-    @Field()
-    ExternalSystemRecordID: string;
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    EntityRecordID: string;
+    @Field({ nullable: true })
+    EntityRecordID?: string;
 }
     
 
@@ -16297,17 +16535,17 @@ export class UpdateCompanyIntegrationRecordMapInput {
     @Field()
     ID: string;
 
-    @Field()
-    CompanyIntegrationID: string;
+    @Field({ nullable: true })
+    CompanyIntegrationID?: string;
 
-    @Field()
-    ExternalSystemRecordID: string;
+    @Field({ nullable: true })
+    ExternalSystemRecordID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    EntityRecordID: string;
+    @Field({ nullable: true })
+    EntityRecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16471,35 +16709,35 @@ export class RecordMergeLog_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeLogInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    SurvivingRecordID: string;
-
-    @Field()
-    InitiatedByUserID: string;
-
-    @Field()
-    ApprovalStatus: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ApprovedByUserID?: string;
-
-    @Field()
-    ProcessingStatus: string;
-
-    @Field()
-    ProcessingStartedAt: Date;
+    SurvivingRecordID?: string;
 
     @Field({ nullable: true })
-    ProcessingEndedAt?: Date;
+    InitiatedByUserID?: string;
 
     @Field({ nullable: true })
-    ProcessingLog?: string;
+    ApprovalStatus?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ApprovedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ProcessingStatus?: string;
+
+    @Field({ nullable: true })
+    ProcessingStartedAt?: Date;
+
+    @Field({ nullable: true })
+    ProcessingEndedAt: Date | null;
+
+    @Field({ nullable: true })
+    ProcessingLog: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -16511,35 +16749,35 @@ export class UpdateRecordMergeLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    SurvivingRecordID: string;
-
-    @Field()
-    InitiatedByUserID: string;
-
-    @Field()
-    ApprovalStatus: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    ApprovedByUserID?: string;
-
-    @Field()
-    ProcessingStatus: string;
-
-    @Field()
-    ProcessingStartedAt: Date;
+    SurvivingRecordID?: string;
 
     @Field({ nullable: true })
-    ProcessingEndedAt?: Date;
+    InitiatedByUserID?: string;
 
     @Field({ nullable: true })
-    ProcessingLog?: string;
+    ApprovalStatus?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ApprovedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ProcessingStatus?: string;
+
+    @Field({ nullable: true })
+    ProcessingStartedAt?: Date;
+
+    @Field({ nullable: true })
+    ProcessingEndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ProcessingLog?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16680,17 +16918,17 @@ export class RecordMergeDeletionLog_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeDeletionLogInput {
-    @Field()
-    RecordMergeLogID: string;
-
-    @Field()
-    DeletedRecordID: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    RecordMergeLogID?: string;
 
     @Field({ nullable: true })
-    ProcessingLog?: string;
+    DeletedRecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ProcessingLog: string | null;
 }
     
 
@@ -16702,17 +16940,17 @@ export class UpdateRecordMergeDeletionLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    RecordMergeLogID: string;
-
-    @Field()
-    DeletedRecordID: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    RecordMergeLogID?: string;
 
     @Field({ nullable: true })
-    ProcessingLog?: string;
+    DeletedRecordID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ProcessingLog?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16870,41 +17108,41 @@ export class QueryField_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryFieldInput {
-    @Field()
-    QueryID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    SQLBaseType: string;
-
-    @Field()
-    SQLFullType: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    SourceEntityID?: string;
+    Description: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    SourceFieldName?: string;
-
-    @Field(() => Boolean)
-    IsComputed: boolean;
+    SQLBaseType?: string;
 
     @Field({ nullable: true })
-    ComputationDescription?: string;
-
-    @Field(() => Boolean)
-    IsSummary: boolean;
+    SQLFullType?: string;
 
     @Field({ nullable: true })
-    SummaryDescription?: string;
+    SourceEntityID: string | null;
+
+    @Field({ nullable: true })
+    SourceFieldName: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsComputed?: boolean;
+
+    @Field({ nullable: true })
+    ComputationDescription: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSummary?: boolean;
+
+    @Field({ nullable: true })
+    SummaryDescription: string | null;
 }
     
 
@@ -16916,41 +17154,41 @@ export class UpdateQueryFieldInput {
     @Field()
     ID: string;
 
-    @Field()
-    QueryID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Int)
-    Sequence: number;
-
-    @Field()
-    SQLBaseType: string;
-
-    @Field()
-    SQLFullType: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    SourceEntityID?: string;
+    Description?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
     @Field({ nullable: true })
-    SourceFieldName?: string;
-
-    @Field(() => Boolean)
-    IsComputed: boolean;
+    SQLBaseType?: string;
 
     @Field({ nullable: true })
-    ComputationDescription?: string;
-
-    @Field(() => Boolean)
-    IsSummary: boolean;
+    SQLFullType?: string;
 
     @Field({ nullable: true })
-    SummaryDescription?: string;
+    SourceEntityID?: string | null;
+
+    @Field({ nullable: true })
+    SourceFieldName?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsComputed?: boolean;
+
+    @Field({ nullable: true })
+    ComputationDescription?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSummary?: boolean;
+
+    @Field({ nullable: true })
+    SummaryDescription?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17094,17 +17332,17 @@ export class QueryCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -17116,17 +17354,17 @@ export class UpdateQueryCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17311,38 +17549,38 @@ export class Query_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    CategoryID: string | null;
 
     @Field({ nullable: true })
-    UserQuestion?: string;
+    UserQuestion: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    SQL?: string;
+    SQL: string | null;
 
     @Field({ nullable: true })
-    TechnicalDescription?: string;
+    TechnicalDescription: string | null;
 
     @Field({ nullable: true })
-    OriginalSQL?: string;
+    OriginalSQL: string | null;
 
     @Field({ nullable: true })
-    Feedback?: string;
+    Feedback: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => Int, { nullable: true })
-    QualityRank?: number;
+    QualityRank?: number | null;
 
     @Field(() => Int, { nullable: true })
-    ExecutionCostRank?: number;
+    ExecutionCostRank: number | null;
 }
     
 
@@ -17354,38 +17592,38 @@ export class UpdateQueryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    CategoryID?: string | null;
 
     @Field({ nullable: true })
-    UserQuestion?: string;
+    UserQuestion?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    SQL?: string;
+    SQL?: string | null;
 
     @Field({ nullable: true })
-    TechnicalDescription?: string;
+    TechnicalDescription?: string | null;
 
     @Field({ nullable: true })
-    OriginalSQL?: string;
+    OriginalSQL?: string | null;
 
     @Field({ nullable: true })
-    Feedback?: string;
+    Feedback?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => Int, { nullable: true })
-    QualityRank?: number;
+    QualityRank?: number | null;
 
     @Field(() => Int, { nullable: true })
-    ExecutionCostRank?: number;
+    ExecutionCostRank?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17552,11 +17790,11 @@ export class QueryPermission_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryPermissionInput {
-    @Field()
-    QueryID: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
-    @Field()
-    RoleID: string;
+    @Field({ nullable: true })
+    RoleID?: string;
 }
     
 
@@ -17568,11 +17806,11 @@ export class UpdateQueryPermissionInput {
     @Field()
     ID: string;
 
-    @Field()
-    QueryID: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
-    @Field()
-    RoleID: string;
+    @Field({ nullable: true })
+    RoleID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17713,17 +17951,17 @@ export class VectorIndex_ {
 //****************************************************************************
 @InputType()
 export class CreateVectorIndexInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    VectorDatabaseID: string;
+    @Field({ nullable: true })
+    VectorDatabaseID?: string;
 
-    @Field()
-    EmbeddingModelID: string;
+    @Field({ nullable: true })
+    EmbeddingModelID?: string;
 }
     
 
@@ -17735,17 +17973,17 @@ export class UpdateVectorIndexInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    VectorDatabaseID: string;
+    @Field({ nullable: true })
+    VectorDatabaseID?: string;
 
-    @Field()
-    EmbeddingModelID: string;
+    @Field({ nullable: true })
+    EmbeddingModelID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17879,11 +18117,11 @@ export class EntityDocumentType_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -17895,11 +18133,11 @@ export class UpdateEntityDocumentTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18043,17 +18281,17 @@ export class EntityDocumentRun_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentRunInput {
-    @Field()
-    EntityDocumentID: string;
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    StartedAt: Date | null;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    EndedAt: Date | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -18065,17 +18303,17 @@ export class UpdateEntityDocumentRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityDocumentID: string;
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    StartedAt?: Date | null;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    EndedAt?: Date | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18204,17 +18442,17 @@ export class VectorDatabase_ {
 //****************************************************************************
 @InputType()
 export class CreateVectorDatabaseInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    DefaultURL?: string;
+    DefaultURL: string | null;
 
     @Field({ nullable: true })
-    ClassKey?: string;
+    ClassKey: string | null;
 }
     
 
@@ -18226,17 +18464,17 @@ export class UpdateVectorDatabaseInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    DefaultURL?: string;
+    DefaultURL?: string | null;
 
     @Field({ nullable: true })
-    ClassKey?: string;
+    ClassKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18411,29 +18649,29 @@ export class EntityRecordDocument_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRecordDocumentInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    EntityDocumentID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    DocumentText?: string;
-
-    @Field()
-    VectorIndexID: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    VectorID?: string;
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    VectorJSON?: string;
+    DocumentText: string | null;
 
-    @Field()
-    EntityRecordUpdatedAt: Date;
+    @Field({ nullable: true })
+    VectorIndexID?: string;
+
+    @Field({ nullable: true })
+    VectorID: string | null;
+
+    @Field({ nullable: true })
+    VectorJSON: string | null;
+
+    @Field({ nullable: true })
+    EntityRecordUpdatedAt?: Date;
 }
     
 
@@ -18445,29 +18683,29 @@ export class UpdateEntityRecordDocumentInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    EntityDocumentID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    DocumentText?: string;
-
-    @Field()
-    VectorIndexID: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    VectorID?: string;
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    VectorJSON?: string;
+    DocumentText?: string | null;
 
-    @Field()
-    EntityRecordUpdatedAt: Date;
+    @Field({ nullable: true })
+    VectorIndexID?: string;
+
+    @Field({ nullable: true })
+    VectorID?: string | null;
+
+    @Field({ nullable: true })
+    VectorJSON?: string | null;
+
+    @Field({ nullable: true })
+    EntityRecordUpdatedAt?: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18638,32 +18876,32 @@ export class EntityDocument_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    TypeID: string;
+    @Field({ nullable: true })
+    TypeID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    VectorDatabaseID: string;
+    @Field({ nullable: true })
+    VectorDatabaseID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field()
-    TemplateID: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field(() => Float)
-    PotentialMatchThreshold: number;
+    @Field(() => Float, { nullable: true })
+    PotentialMatchThreshold?: number;
 
-    @Field(() => Float)
-    AbsoluteMatchThreshold: number;
+    @Field(() => Float, { nullable: true })
+    AbsoluteMatchThreshold?: number;
 }
     
 
@@ -18675,32 +18913,32 @@ export class UpdateEntityDocumentInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    TypeID: string;
+    @Field({ nullable: true })
+    TypeID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    VectorDatabaseID: string;
+    @Field({ nullable: true })
+    VectorDatabaseID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field()
-    TemplateID: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field(() => Float)
-    PotentialMatchThreshold: number;
+    @Field(() => Float, { nullable: true })
+    PotentialMatchThreshold?: number;
 
-    @Field(() => Float)
-    AbsoluteMatchThreshold: number;
+    @Field(() => Float, { nullable: true })
+    AbsoluteMatchThreshold?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18888,35 +19126,35 @@ export class DataContextItem_ {
 //****************************************************************************
 @InputType()
 export class CreateDataContextItemInput {
-    @Field()
-    DataContextID: string;
-
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    DataContextID?: string;
 
     @Field({ nullable: true })
-    ViewID?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    QueryID?: string;
+    ViewID: string | null;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    QueryID: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    EntityID: string | null;
 
     @Field({ nullable: true })
-    SQL?: string;
+    RecordID: string | null;
 
     @Field({ nullable: true })
-    DataJSON?: string;
+    SQL: string | null;
 
     @Field({ nullable: true })
-    LastRefreshedAt?: Date;
+    DataJSON: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    LastRefreshedAt: Date | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
 }
     
 
@@ -18928,35 +19166,35 @@ export class UpdateDataContextItemInput {
     @Field()
     ID: string;
 
-    @Field()
-    DataContextID: string;
-
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    DataContextID?: string;
 
     @Field({ nullable: true })
-    ViewID?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    QueryID?: string;
+    ViewID?: string | null;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    QueryID?: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    EntityID?: string | null;
 
     @Field({ nullable: true })
-    SQL?: string;
+    RecordID?: string | null;
 
     @Field({ nullable: true })
-    DataJSON?: string;
+    SQL?: string | null;
 
     @Field({ nullable: true })
-    LastRefreshedAt?: Date;
+    DataJSON?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    LastRefreshedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19099,17 +19337,17 @@ export class DataContext_ {
 //****************************************************************************
 @InputType()
 export class CreateDataContextInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    UserID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    LastRefreshedAt?: Date;
+    UserID?: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date | null;
 }
     
 
@@ -19121,17 +19359,17 @@ export class UpdateDataContextInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    UserID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    LastRefreshedAt?: Date;
+    UserID?: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19310,20 +19548,20 @@ export class UserViewCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -19335,20 +19573,20 @@ export class UpdateUserViewCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19510,17 +19748,17 @@ export class DashboardCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateDashboardCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -19532,17 +19770,17 @@ export class UpdateDashboardCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19704,17 +19942,17 @@ export class ReportCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateReportCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -19726,17 +19964,17 @@ export class UpdateReportCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19893,23 +20131,23 @@ export class FileStorageProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateFileStorageProviderInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    ServerDriverKey: string;
+    @Field({ nullable: true })
+    ServerDriverKey?: string;
 
-    @Field()
-    ClientDriverKey: string;
+    @Field({ nullable: true })
+    ClientDriverKey?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -19921,23 +20159,23 @@ export class UpdateFileStorageProviderInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    ServerDriverKey: string;
+    @Field({ nullable: true })
+    ServerDriverKey?: string;
 
-    @Field()
-    ClientDriverKey: string;
+    @Field({ nullable: true })
+    ClientDriverKey?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20099,26 +20337,26 @@ export class File_ {
 //****************************************************************************
 @InputType()
 export class CreateFileInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    ProviderID: string;
+    CategoryID: string | null;
 
     @Field({ nullable: true })
-    ContentType?: string;
+    ProviderID?: string;
 
     @Field({ nullable: true })
-    ProviderKey?: string;
+    ContentType: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    ProviderKey: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -20130,26 +20368,26 @@ export class UpdateFileInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    ProviderID: string;
+    CategoryID?: string | null;
 
     @Field({ nullable: true })
-    ContentType?: string;
+    ProviderID?: string;
 
     @Field({ nullable: true })
-    ProviderKey?: string;
+    ContentType?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    ProviderKey?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20294,14 +20532,14 @@ export class FileCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateFileCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -20313,14 +20551,14 @@ export class UpdateFileCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20473,14 +20711,14 @@ export class FileEntityRecordLink_ {
 //****************************************************************************
 @InputType()
 export class CreateFileEntityRecordLinkInput {
-    @Field()
-    FileID: string;
+    @Field({ nullable: true })
+    FileID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 }
     
 
@@ -20492,14 +20730,14 @@ export class UpdateFileEntityRecordLinkInput {
     @Field()
     ID: string;
 
-    @Field()
-    FileID: string;
+    @Field({ nullable: true })
+    FileID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    RecordID: string;
+    @Field({ nullable: true })
+    RecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20645,29 +20883,29 @@ export class VersionInstallation_ {
 //****************************************************************************
 @InputType()
 export class CreateVersionInstallationInput {
-    @Field(() => Int)
-    MajorVersion: number;
+    @Field(() => Int, { nullable: true })
+    MajorVersion?: number;
 
-    @Field(() => Int)
-    MinorVersion: number;
+    @Field(() => Int, { nullable: true })
+    MinorVersion?: number;
 
-    @Field(() => Int)
-    PatchVersion: number;
-
-    @Field({ nullable: true })
-    Type?: string;
-
-    @Field()
-    InstalledAt: Date;
-
-    @Field()
-    Status: string;
+    @Field(() => Int, { nullable: true })
+    PatchVersion?: number;
 
     @Field({ nullable: true })
-    InstallLog?: string;
+    Type?: string | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    InstalledAt?: Date;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InstallLog: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -20679,29 +20917,29 @@ export class UpdateVersionInstallationInput {
     @Field()
     ID: string;
 
-    @Field(() => Int)
-    MajorVersion: number;
+    @Field(() => Int, { nullable: true })
+    MajorVersion?: number;
 
-    @Field(() => Int)
-    MinorVersion: number;
+    @Field(() => Int, { nullable: true })
+    MinorVersion?: number;
 
-    @Field(() => Int)
-    PatchVersion: number;
-
-    @Field({ nullable: true })
-    Type?: string;
-
-    @Field()
-    InstalledAt: Date;
-
-    @Field()
-    Status: string;
+    @Field(() => Int, { nullable: true })
+    PatchVersion?: number;
 
     @Field({ nullable: true })
-    InstallLog?: string;
+    Type?: string | null;
 
     @Field({ nullable: true })
-    Comments?: string;
+    InstalledAt?: Date;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InstallLog?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -20848,35 +21086,35 @@ export class DuplicateRunDetailMatch_ {
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunDetailMatchInput {
-    @Field()
-    DuplicateRunDetailID: string;
-
-    @Field()
-    MatchSource: string;
-
-    @Field()
-    MatchRecordID: string;
-
-    @Field(() => Float)
-    MatchProbability: number;
-
-    @Field()
-    MatchedAt: Date;
-
-    @Field()
-    Action: string;
-
-    @Field()
-    ApprovalStatus: string;
+    @Field({ nullable: true })
+    DuplicateRunDetailID?: string;
 
     @Field({ nullable: true })
-    RecordMergeLogID?: string;
+    MatchSource?: string;
 
-    @Field()
-    MergeStatus: string;
+    @Field({ nullable: true })
+    MatchRecordID?: string;
 
-    @Field()
-    MergedAt: Date;
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+
+    @Field({ nullable: true })
+    MatchedAt?: Date;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    ApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    RecordMergeLogID: string | null;
+
+    @Field({ nullable: true })
+    MergeStatus?: string;
+
+    @Field({ nullable: true })
+    MergedAt?: Date;
 }
     
 
@@ -20888,35 +21126,35 @@ export class UpdateDuplicateRunDetailMatchInput {
     @Field()
     ID: string;
 
-    @Field()
-    DuplicateRunDetailID: string;
-
-    @Field()
-    MatchSource: string;
-
-    @Field()
-    MatchRecordID: string;
-
-    @Field(() => Float)
-    MatchProbability: number;
-
-    @Field()
-    MatchedAt: Date;
-
-    @Field()
-    Action: string;
-
-    @Field()
-    ApprovalStatus: string;
+    @Field({ nullable: true })
+    DuplicateRunDetailID?: string;
 
     @Field({ nullable: true })
-    RecordMergeLogID?: string;
+    MatchSource?: string;
 
-    @Field()
-    MergeStatus: string;
+    @Field({ nullable: true })
+    MatchRecordID?: string;
 
-    @Field()
-    MergedAt: Date;
+    @Field(() => Float, { nullable: true })
+    MatchProbability?: number;
+
+    @Field({ nullable: true })
+    MatchedAt?: Date;
+
+    @Field({ nullable: true })
+    Action?: string;
+
+    @Field({ nullable: true })
+    ApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    RecordMergeLogID?: string | null;
+
+    @Field({ nullable: true })
+    MergeStatus?: string;
+
+    @Field({ nullable: true })
+    MergedAt?: Date;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21042,17 +21280,17 @@ export class EntityDocumentSetting_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentSettingInput {
-    @Field()
-    EntityDocumentID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -21064,17 +21302,17 @@ export class UpdateEntityDocumentSettingInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityDocumentID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21207,17 +21445,17 @@ export class EntitySetting_ {
 //****************************************************************************
 @InputType()
 export class CreateEntitySettingInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -21229,17 +21467,17 @@ export class UpdateEntitySettingInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21411,35 +21649,35 @@ export class DuplicateRun_ {
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunInput {
-    @Field()
-    EntityID: string;
-
-    @Field()
-    StartedByUserID: string;
-
-    @Field()
-    SourceListID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field()
-    ApprovalStatus: string;
+    StartedByUserID?: string;
 
     @Field({ nullable: true })
-    ApprovalComments?: string;
+    SourceListID?: string;
 
     @Field({ nullable: true })
-    ApprovedByUserID?: string;
-
-    @Field()
-    ProcessingStatus: string;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    ProcessingErrorMessage?: string;
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    ApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    ApprovalComments: string | null;
+
+    @Field({ nullable: true })
+    ApprovedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ProcessingStatus?: string;
+
+    @Field({ nullable: true })
+    ProcessingErrorMessage: string | null;
 }
     
 
@@ -21451,35 +21689,35 @@ export class UpdateDuplicateRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
-
-    @Field()
-    StartedByUserID: string;
-
-    @Field()
-    SourceListID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field()
-    ApprovalStatus: string;
+    StartedByUserID?: string;
 
     @Field({ nullable: true })
-    ApprovalComments?: string;
+    SourceListID?: string;
 
     @Field({ nullable: true })
-    ApprovedByUserID?: string;
-
-    @Field()
-    ProcessingStatus: string;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    ProcessingErrorMessage?: string;
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    ApprovalStatus?: string;
+
+    @Field({ nullable: true })
+    ApprovalComments?: string | null;
+
+    @Field({ nullable: true })
+    ApprovedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ProcessingStatus?: string;
+
+    @Field({ nullable: true })
+    ProcessingErrorMessage?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21624,26 +21862,26 @@ export class DuplicateRunDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateDuplicateRunDetailInput {
-    @Field()
-    DuplicateRunID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    MatchStatus: string;
+    @Field({ nullable: true })
+    DuplicateRunID?: string;
 
     @Field({ nullable: true })
-    SkippedReason?: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    MatchErrorMessage?: string;
-
-    @Field()
-    MergeStatus: string;
+    MatchStatus?: string;
 
     @Field({ nullable: true })
-    MergeErrorMessage?: string;
+    SkippedReason: string | null;
+
+    @Field({ nullable: true })
+    MatchErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    MergeStatus?: string;
+
+    @Field({ nullable: true })
+    MergeErrorMessage: string | null;
 }
     
 
@@ -21655,26 +21893,26 @@ export class UpdateDuplicateRunDetailInput {
     @Field()
     ID: string;
 
-    @Field()
-    DuplicateRunID: string;
-
-    @Field()
-    RecordID: string;
-
-    @Field()
-    MatchStatus: string;
+    @Field({ nullable: true })
+    DuplicateRunID?: string;
 
     @Field({ nullable: true })
-    SkippedReason?: string;
+    RecordID?: string;
 
     @Field({ nullable: true })
-    MatchErrorMessage?: string;
-
-    @Field()
-    MergeStatus: string;
+    MatchStatus?: string;
 
     @Field({ nullable: true })
-    MergeErrorMessage?: string;
+    SkippedReason?: string | null;
+
+    @Field({ nullable: true })
+    MatchErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    MergeStatus?: string;
+
+    @Field({ nullable: true })
+    MergeErrorMessage?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21809,17 +22047,17 @@ export class ApplicationSetting_ {
 //****************************************************************************
 @InputType()
 export class CreateApplicationSettingInput {
-    @Field()
-    ApplicationID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -21831,17 +22069,17 @@ export class UpdateApplicationSettingInput {
     @Field()
     ID: string;
 
-    @Field()
-    ApplicationID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    ApplicationID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Value?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21981,17 +22219,17 @@ export class ActionCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateActionCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -22003,17 +22241,17 @@ export class UpdateActionCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22175,14 +22413,14 @@ export class EntityAction_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInput {
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    ActionID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -22191,14 +22429,14 @@ export class CreateEntityActionInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityActionInput {
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    ActionID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field()
     ID: string;
@@ -22359,14 +22597,14 @@ export class EntityActionInvocation_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationInput {
-    @Field()
-    EntityActionID: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
-    @Field()
-    InvocationTypeID: string;
+    @Field({ nullable: true })
+    InvocationTypeID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -22378,14 +22616,14 @@ export class UpdateEntityActionInvocationInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityActionID: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
-    @Field()
-    InvocationTypeID: string;
+    @Field({ nullable: true })
+    InvocationTypeID?: string;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22519,14 +22757,14 @@ export class ActionAuthorization_ {
 //****************************************************************************
 @InputType()
 export class CreateActionAuthorizationInput {
-    @Field()
-    ActionID: string;
-
-    @Field()
-    AuthorizationID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    AuthorizationID?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -22538,14 +22776,14 @@ export class UpdateActionAuthorizationInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
-
-    @Field()
-    AuthorizationID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    AuthorizationID?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22673,14 +22911,14 @@ export class EntityActionInvocationType_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionInvocationTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field(() => Int)
-    DisplaySequence: number;
+    @Field(() => Int, { nullable: true })
+    DisplaySequence?: number;
 }
     
 
@@ -22692,14 +22930,14 @@ export class UpdateEntityActionInvocationTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field(() => Int)
-    DisplaySequence: number;
+    @Field(() => Int, { nullable: true })
+    DisplaySequence?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22914,52 +23152,52 @@ export class Action_ {
 @InputType()
 export class CreateActionInput {
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    Name: string;
+    CategoryID: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    UserPrompt?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    UserComments?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    Code?: string;
+    UserPrompt: string | null;
 
     @Field({ nullable: true })
-    CodeComments?: string;
-
-    @Field()
-    CodeApprovalStatus: string;
+    UserComments: string | null;
 
     @Field({ nullable: true })
-    CodeApprovalComments?: string;
+    Code: string | null;
 
     @Field({ nullable: true })
-    CodeApprovedByUserID?: string;
+    CodeComments: string | null;
 
     @Field({ nullable: true })
-    CodeApprovedAt?: Date;
+    CodeApprovalStatus?: string;
 
-    @Field(() => Boolean)
-    CodeLocked: boolean;
+    @Field({ nullable: true })
+    CodeApprovalComments: string | null;
 
-    @Field(() => Boolean)
-    ForceCodeGeneration: boolean;
+    @Field({ nullable: true })
+    CodeApprovedByUserID: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovedAt: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ForceCodeGeneration?: boolean;
 
     @Field(() => Int, { nullable: true })
-    RetentionPeriod?: number;
+    RetentionPeriod: number | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -22972,52 +23210,52 @@ export class UpdateActionInput {
     ID: string;
 
     @Field({ nullable: true })
-    CategoryID?: string;
-
-    @Field()
-    Name: string;
+    CategoryID?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    UserPrompt?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    UserComments?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    Code?: string;
+    UserPrompt?: string | null;
 
     @Field({ nullable: true })
-    CodeComments?: string;
-
-    @Field()
-    CodeApprovalStatus: string;
+    UserComments?: string | null;
 
     @Field({ nullable: true })
-    CodeApprovalComments?: string;
+    Code?: string | null;
 
     @Field({ nullable: true })
-    CodeApprovedByUserID?: string;
+    CodeComments?: string | null;
 
     @Field({ nullable: true })
-    CodeApprovedAt?: Date;
+    CodeApprovalStatus?: string;
 
-    @Field(() => Boolean)
-    CodeLocked: boolean;
+    @Field({ nullable: true })
+    CodeApprovalComments?: string | null;
 
-    @Field(() => Boolean)
-    ForceCodeGeneration: boolean;
+    @Field({ nullable: true })
+    CodeApprovedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    CodeApprovedAt?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ForceCodeGeneration?: boolean;
 
     @Field(() => Int, { nullable: true })
-    RetentionPeriod?: number;
+    RetentionPeriod?: number | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23228,17 +23466,17 @@ export class EntityActionFilter_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionFilterInput {
-    @Field()
-    EntityActionID: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
-    @Field()
-    ActionFilterID: string;
+    @Field({ nullable: true })
+    ActionFilterID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -23250,17 +23488,17 @@ export class UpdateEntityActionFilterInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityActionID: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
-    @Field()
-    ActionFilterID: string;
+    @Field({ nullable: true })
+    ActionFilterID?: string;
 
-    @Field(() => Int)
-    Sequence: number;
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23390,17 +23628,17 @@ export class ActionFilter_ {
 //****************************************************************************
 @InputType()
 export class CreateActionFilterInput {
-    @Field()
-    UserDescription: string;
+    @Field({ nullable: true })
+    UserDescription?: string;
 
     @Field({ nullable: true })
-    UserComments?: string;
-
-    @Field()
-    Code: string;
+    UserComments: string | null;
 
     @Field({ nullable: true })
-    CodeExplanation?: string;
+    Code?: string;
+
+    @Field({ nullable: true })
+    CodeExplanation: string | null;
 }
     
 
@@ -23412,17 +23650,17 @@ export class UpdateActionFilterInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserDescription: string;
+    @Field({ nullable: true })
+    UserDescription?: string;
 
     @Field({ nullable: true })
-    UserComments?: string;
-
-    @Field()
-    Code: string;
+    UserComments?: string | null;
 
     @Field({ nullable: true })
-    CodeExplanation?: string;
+    Code?: string;
+
+    @Field({ nullable: true })
+    CodeExplanation?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23556,11 +23794,11 @@ export class ActionContextType_ {
 //****************************************************************************
 @InputType()
 export class CreateActionContextTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -23572,11 +23810,11 @@ export class UpdateActionContextTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23718,17 +23956,17 @@ export class ActionResultCode_ {
 //****************************************************************************
 @InputType()
 export class CreateActionResultCodeInput {
-    @Field()
-    ActionID: string;
-
-    @Field()
-    ResultCode: string;
-
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    ResultCode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
+
+    @Field({ nullable: true })
+    Description: string | null;
 }
     
 
@@ -23740,17 +23978,17 @@ export class UpdateActionResultCodeInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
-
-    @Field()
-    ResultCode: string;
-
-    @Field(() => Boolean)
-    IsSuccess: boolean;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    ResultCode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSuccess?: boolean;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23885,14 +24123,14 @@ export class ActionContext_ {
 //****************************************************************************
 @InputType()
 export class CreateActionContextInput {
-    @Field()
-    ActionID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    ContextTypeID?: string;
+    ContextTypeID: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -23904,14 +24142,14 @@ export class UpdateActionContextInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    ContextTypeID?: string;
+    ContextTypeID?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24060,26 +24298,26 @@ export class ActionExecutionLog_ {
 //****************************************************************************
 @InputType()
 export class CreateActionExecutionLogInput {
-    @Field()
-    ActionID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    Params?: string;
+    EndedAt: Date | null;
 
     @Field({ nullable: true })
-    ResultCode?: string;
+    Params: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    ResultCode: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => Int, { nullable: true })
-    RetentionPeriod?: number;
+    RetentionPeriod: number | null;
 }
     
 
@@ -24091,26 +24329,26 @@ export class UpdateActionExecutionLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    Params?: string;
+    EndedAt?: Date | null;
 
     @Field({ nullable: true })
-    ResultCode?: string;
+    Params?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    ResultCode?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => Int, { nullable: true })
-    RetentionPeriod?: number;
+    RetentionPeriod?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24263,29 +24501,29 @@ export class ActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateActionParamInput {
-    @Field()
-    ActionID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field()
-    Type: string;
-
-    @Field()
-    ValueType: string;
-
-    @Field(() => Boolean)
-    IsArray: boolean;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    DefaultValue: string | null;
 
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArray?: boolean;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 }
     
 
@@ -24297,29 +24535,29 @@ export class UpdateActionParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field()
-    Type: string;
-
-    @Field()
-    ValueType: string;
-
-    @Field(() => Boolean)
-    IsArray: boolean;
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    DefaultValue?: string | null;
 
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    ValueType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsArray?: boolean;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24471,14 +24709,14 @@ export class ActionLibrary_ {
 //****************************************************************************
 @InputType()
 export class CreateActionLibraryInput {
-    @Field()
-    ActionID: string;
-
-    @Field()
-    LibraryID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    ItemsUsed?: string;
+    LibraryID?: string;
+
+    @Field({ nullable: true })
+    ItemsUsed: string | null;
 }
     
 
@@ -24490,14 +24728,14 @@ export class UpdateActionLibraryInput {
     @Field()
     ID: string;
 
-    @Field()
-    ActionID: string;
-
-    @Field()
-    LibraryID: string;
+    @Field({ nullable: true })
+    ActionID?: string;
 
     @Field({ nullable: true })
-    ItemsUsed?: string;
+    LibraryID?: string;
+
+    @Field({ nullable: true })
+    ItemsUsed?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24635,20 +24873,20 @@ export class Library_ {
 //****************************************************************************
 @InputType()
 export class CreateLibraryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Status: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    TypeDefinitions?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    SampleCode?: string;
+    TypeDefinitions: string | null;
+
+    @Field({ nullable: true })
+    SampleCode: string | null;
 }
     
 
@@ -24660,20 +24898,20 @@ export class UpdateLibraryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Status: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    TypeDefinitions?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    SampleCode?: string;
+    TypeDefinitions?: string | null;
+
+    @Field({ nullable: true })
+    SampleCode?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24835,17 +25073,17 @@ export class ListCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateListCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -24857,17 +25095,17 @@ export class UpdateListCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25026,23 +25264,23 @@ export class CommunicationProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field(() => Boolean)
-    SupportsSending: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsSending?: boolean;
 
-    @Field(() => Boolean)
-    SupportsReceiving: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsReceiving?: boolean;
 
-    @Field(() => Boolean)
-    SupportsScheduledSending: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsScheduledSending?: boolean;
 }
     
 
@@ -25054,23 +25292,23 @@ export class UpdateCommunicationProviderInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field(() => Boolean)
-    SupportsSending: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsSending?: boolean;
 
-    @Field(() => Boolean)
-    SupportsReceiving: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsReceiving?: boolean;
 
-    @Field(() => Boolean)
-    SupportsScheduledSending: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsScheduledSending?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25236,26 +25474,26 @@ export class CommunicationRun_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationRunInput {
-    @Field()
-    UserID: string;
-
-    @Field()
-    Direction: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    Direction?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    Status?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    StartedAt: Date | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
 }
     
 
@@ -25267,26 +25505,26 @@ export class UpdateCommunicationRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
-
-    @Field()
-    Direction: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    StartedAt?: Date;
+    Direction?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    Status?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    StartedAt?: Date | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25433,20 +25671,20 @@ export class CommunicationProviderMessageType_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationProviderMessageTypeInput {
-    @Field()
-    CommunicationProviderID: string;
-
-    @Field()
-    CommunicationBaseMessageTypeID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    CommunicationProviderID?: string;
 
     @Field({ nullable: true })
-    AdditionalAttributes?: string;
+    CommunicationBaseMessageTypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes: string | null;
 }
     
 
@@ -25458,20 +25696,20 @@ export class UpdateCommunicationProviderMessageTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    CommunicationProviderID: string;
-
-    @Field()
-    CommunicationBaseMessageTypeID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    CommunicationProviderID?: string;
 
     @Field({ nullable: true })
-    AdditionalAttributes?: string;
+    CommunicationBaseMessageTypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25633,29 +25871,29 @@ export class CommunicationLog_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationLogInput {
-    @Field()
-    CommunicationProviderID: string;
-
-    @Field()
-    CommunicationProviderMessageTypeID: string;
+    @Field({ nullable: true })
+    CommunicationProviderID?: string;
 
     @Field({ nullable: true })
-    CommunicationRunID?: string;
-
-    @Field()
-    Direction: string;
-
-    @Field()
-    MessageDate: Date;
-
-    @Field()
-    Status: string;
+    CommunicationProviderMessageTypeID?: string;
 
     @Field({ nullable: true })
-    MessageContent?: string;
+    CommunicationRunID: string | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    Direction?: string;
+
+    @Field({ nullable: true })
+    MessageDate?: Date;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    MessageContent: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
 }
     
 
@@ -25667,29 +25905,29 @@ export class UpdateCommunicationLogInput {
     @Field()
     ID: string;
 
-    @Field()
-    CommunicationProviderID: string;
-
-    @Field()
-    CommunicationProviderMessageTypeID: string;
+    @Field({ nullable: true })
+    CommunicationProviderID?: string;
 
     @Field({ nullable: true })
-    CommunicationRunID?: string;
-
-    @Field()
-    Direction: string;
-
-    @Field()
-    MessageDate: Date;
-
-    @Field()
-    Status: string;
+    CommunicationProviderMessageTypeID?: string;
 
     @Field({ nullable: true })
-    MessageContent?: string;
+    CommunicationRunID?: string | null;
 
     @Field({ nullable: true })
-    ErrorMessage?: string;
+    Direction?: string;
+
+    @Field({ nullable: true })
+    MessageDate?: Date;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    MessageContent?: string | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -25819,20 +26057,20 @@ export class CommunicationBaseMessageType_ {
 //****************************************************************************
 @InputType()
 export class CreateCommunicationBaseMessageTypeInput {
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    Type?: string;
 
-    @Field(() => Boolean)
-    SupportsAttachments: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsAttachments?: boolean;
 
-    @Field(() => Boolean)
-    SupportsSubjectLine: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsSubjectLine?: boolean;
 
-    @Field(() => Boolean)
-    SupportsHtml: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsHtml?: boolean;
 
     @Field(() => Int, { nullable: true })
-    MaxBytes?: number;
+    MaxBytes: number | null;
 }
     
 
@@ -25844,20 +26082,20 @@ export class UpdateCommunicationBaseMessageTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    Type?: string;
 
-    @Field(() => Boolean)
-    SupportsAttachments: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsAttachments?: boolean;
 
-    @Field(() => Boolean)
-    SupportsSubjectLine: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsSubjectLine?: boolean;
 
-    @Field(() => Boolean)
-    SupportsHtml: boolean;
+    @Field(() => Boolean, { nullable: true })
+    SupportsHtml?: boolean;
 
     @Field(() => Int, { nullable: true })
-    MaxBytes?: number;
+    MaxBytes?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26039,29 +26277,29 @@ export class Template_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    CategoryID: string | null;
 
     @Field({ nullable: true })
-    UserPrompt?: string;
-
-    @Field()
-    UserID: string;
+    UserPrompt: string | null;
 
     @Field({ nullable: true })
-    ActiveAt?: Date;
+    UserID?: string;
 
     @Field({ nullable: true })
-    DisabledAt?: Date;
+    ActiveAt: Date | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field({ nullable: true })
+    DisabledAt: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -26073,29 +26311,29 @@ export class UpdateTemplateInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    CategoryID?: string;
+    CategoryID?: string | null;
 
     @Field({ nullable: true })
-    UserPrompt?: string;
-
-    @Field()
-    UserID: string;
+    UserPrompt?: string | null;
 
     @Field({ nullable: true })
-    ActiveAt?: Date;
+    UserID?: string;
 
     @Field({ nullable: true })
-    DisabledAt?: Date;
+    ActiveAt?: Date | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field({ nullable: true })
+    DisabledAt?: Date | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26275,17 +26513,17 @@ export class TemplateCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateCategoryInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -26297,17 +26535,17 @@ export class UpdateTemplateCategoryInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    ParentID?: string;
+    ParentID?: string | null;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26465,20 +26703,20 @@ export class TemplateContent_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateContentInput {
-    @Field()
-    TemplateID: string;
-
-    @Field()
-    TypeID: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    TemplateText?: string;
+    TypeID?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field({ nullable: true })
+    TemplateText: string | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -26490,20 +26728,20 @@ export class UpdateTemplateContentInput {
     @Field()
     ID: string;
 
-    @Field()
-    TemplateID: string;
-
-    @Field()
-    TypeID: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    TemplateText?: string;
+    TypeID?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field({ nullable: true })
+    TemplateText?: string | null;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26669,41 +26907,41 @@ export class TemplateParam_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateParamInput {
-    @Field()
-    TemplateID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    Description: string | null;
 
     @Field({ nullable: true })
-    LinkedParameterName?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    LinkedParameterField?: string;
+    DefaultValue: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 
     @Field({ nullable: true })
-    ExtraFilter?: string;
+    LinkedParameterName: string | null;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    LinkedParameterField: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    ExtraFilter: string | null;
 
     @Field({ nullable: true })
-    OrderBy?: string;
+    EntityID: string | null;
+
+    @Field({ nullable: true })
+    RecordID: string | null;
+
+    @Field({ nullable: true })
+    OrderBy: string | null;
 }
     
 
@@ -26715,41 +26953,41 @@ export class UpdateTemplateParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    TemplateID: string;
-
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    TemplateID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    Type: string;
+    Name?: string;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    LinkedParameterName?: string;
+    Type?: string;
 
     @Field({ nullable: true })
-    LinkedParameterField?: string;
+    DefaultValue?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 
     @Field({ nullable: true })
-    ExtraFilter?: string;
+    LinkedParameterName?: string | null;
 
     @Field({ nullable: true })
-    EntityID?: string;
+    LinkedParameterField?: string | null;
 
     @Field({ nullable: true })
-    RecordID?: string;
+    ExtraFilter?: string | null;
 
     @Field({ nullable: true })
-    OrderBy?: string;
+    EntityID?: string | null;
+
+    @Field({ nullable: true })
+    RecordID?: string | null;
+
+    @Field({ nullable: true })
+    OrderBy?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26878,14 +27116,14 @@ export class TemplateContentType_ {
 //****************************************************************************
 @InputType()
 export class CreateTemplateContentTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    CodeType: string;
+    @Field({ nullable: true })
+    CodeType?: string;
 }
     
 
@@ -26897,14 +27135,14 @@ export class UpdateTemplateContentTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    CodeType: string;
+    @Field({ nullable: true })
+    CodeType?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27046,14 +27284,14 @@ export class Recommendation_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationInput {
-    @Field()
-    RecommendationRunID: string;
+    @Field({ nullable: true })
+    RecommendationRunID?: string;
 
-    @Field()
-    SourceEntityID: string;
+    @Field({ nullable: true })
+    SourceEntityID?: string;
 
-    @Field()
-    SourceEntityRecordID: string;
+    @Field({ nullable: true })
+    SourceEntityRecordID?: string;
 }
     
 
@@ -27065,14 +27303,14 @@ export class UpdateRecommendationInput {
     @Field()
     ID: string;
 
-    @Field()
-    RecommendationRunID: string;
+    @Field({ nullable: true })
+    RecommendationRunID?: string;
 
-    @Field()
-    SourceEntityID: string;
+    @Field({ nullable: true })
+    SourceEntityID?: string;
 
-    @Field()
-    SourceEntityRecordID: string;
+    @Field({ nullable: true })
+    SourceEntityRecordID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27199,11 +27437,11 @@ export class RecommendationProvider_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationProviderInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -27215,11 +27453,11 @@ export class UpdateRecommendationProviderInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27324,7 +27562,7 @@ export class RecommendationProviderResolver extends ResolverBase {
 //****************************************************************************
 @ObjectType({ description: `Recommendation runs log each time a provider is requested to provide recommendations` })
 export class RecommendationRun_ {
-    @Field({description: `Da Key :`}) 
+    @Field() 
     @MaxLength(16)
     ID: string;
         
@@ -27377,23 +27615,23 @@ export class RecommendationRun_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationRunInput {
-    @Field()
-    RecommendationProviderID: string;
-
-    @Field()
-    StartDate: Date;
+    @Field({ nullable: true })
+    RecommendationProviderID?: string;
 
     @Field({ nullable: true })
-    EndDate?: Date;
-
-    @Field()
-    Status: string;
+    StartDate?: Date;
 
     @Field({ nullable: true })
-    Description?: string;
+    EndDate: Date | null;
 
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
 }
     
 
@@ -27405,23 +27643,23 @@ export class UpdateRecommendationRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    RecommendationProviderID: string;
-
-    @Field()
-    StartDate: Date;
+    @Field({ nullable: true })
+    RecommendationProviderID?: string;
 
     @Field({ nullable: true })
-    EndDate?: Date;
-
-    @Field()
-    Status: string;
+    StartDate?: Date;
 
     @Field({ nullable: true })
-    Description?: string;
+    EndDate?: Date | null;
 
-    @Field()
-    RunByUserID: string;
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    RunByUserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27527,7 +27765,7 @@ export class RecommendationItem_ {
     @MaxLength(16)
     RecommendationID: string;
         
-    @Field({description: `dest entity!`}) 
+    @Field() 
     @MaxLength(16)
     DestinationEntityID: string;
         
@@ -27557,17 +27795,17 @@ export class RecommendationItem_ {
 //****************************************************************************
 @InputType()
 export class CreateRecommendationItemInput {
-    @Field()
-    RecommendationID: string;
+    @Field({ nullable: true })
+    RecommendationID?: string;
 
-    @Field()
-    DestinationEntityID: string;
+    @Field({ nullable: true })
+    DestinationEntityID?: string;
 
-    @Field()
-    DestinationEntityRecordID: string;
+    @Field({ nullable: true })
+    DestinationEntityRecordID?: string;
 
     @Field(() => Float, { nullable: true })
-    MatchProbability?: number;
+    MatchProbability: number | null;
 }
     
 
@@ -27579,17 +27817,17 @@ export class UpdateRecommendationItemInput {
     @Field()
     ID: string;
 
-    @Field()
-    RecommendationID: string;
+    @Field({ nullable: true })
+    RecommendationID?: string;
 
-    @Field()
-    DestinationEntityID: string;
+    @Field({ nullable: true })
+    DestinationEntityID?: string;
 
-    @Field()
-    DestinationEntityRecordID: string;
+    @Field({ nullable: true })
+    DestinationEntityRecordID?: string;
 
     @Field(() => Float, { nullable: true })
-    MatchProbability?: number;
+    MatchProbability?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27719,14 +27957,14 @@ export class EntityCommunicationMessageType_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityCommunicationMessageTypeInput {
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    BaseMessageTypeID: string;
+    @Field({ nullable: true })
+    BaseMessageTypeID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 }
     
 
@@ -27738,14 +27976,14 @@ export class UpdateEntityCommunicationMessageTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
-    @Field()
-    BaseMessageTypeID: string;
+    @Field({ nullable: true })
+    BaseMessageTypeID?: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -27880,14 +28118,14 @@ export class EntityCommunicationField_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityCommunicationFieldInput {
-    @Field()
-    EntityCommunicationMessageTypeID: string;
+    @Field({ nullable: true })
+    EntityCommunicationMessageTypeID?: string;
 
-    @Field()
-    FieldName: string;
+    @Field({ nullable: true })
+    FieldName?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 }
     
 
@@ -27899,14 +28137,14 @@ export class UpdateEntityCommunicationFieldInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityCommunicationMessageTypeID: string;
+    @Field({ nullable: true })
+    EntityCommunicationMessageTypeID?: string;
 
-    @Field()
-    FieldName: string;
+    @Field({ nullable: true })
+    FieldName?: string;
 
-    @Field(() => Int)
-    Priority: number;
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28044,17 +28282,17 @@ export class RecordChangeReplayRun_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeReplayRunInput {
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    EndedAt: Date | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 }
     
 
@@ -28066,17 +28304,17 @@ export class UpdateRecordChangeReplayRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
+    EndedAt?: Date | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    Status?: string;
 
-    @Field()
-    UserID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28209,14 +28447,14 @@ export class LibraryItem_ {
 //****************************************************************************
 @InputType()
 export class CreateLibraryItemInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    LibraryID: string;
+    @Field({ nullable: true })
+    LibraryID?: string;
 
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    Type?: string;
 }
     
 
@@ -28228,14 +28466,14 @@ export class UpdateLibraryItemInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    LibraryID: string;
+    @Field({ nullable: true })
+    LibraryID?: string;
 
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    Type?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28364,14 +28602,14 @@ export class EntityRelationshipDisplayComponent_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipDisplayComponentInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    RelationshipType: string;
+    @Field({ nullable: true })
+    RelationshipType?: string;
 }
     
 
@@ -28383,14 +28621,14 @@ export class UpdateEntityRelationshipDisplayComponentInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    RelationshipType: string;
+    @Field({ nullable: true })
+    RelationshipType?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28529,20 +28767,20 @@ export class EntityActionParam_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityActionParamInput {
-    @Field()
-    EntityActionID: string;
-
-    @Field()
-    ActionParamID: string;
-
-    @Field()
-    ValueType: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
     @Field({ nullable: true })
-    Value?: string;
+    ActionParamID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Value: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -28554,20 +28792,20 @@ export class UpdateEntityActionParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    EntityActionID: string;
-
-    @Field()
-    ActionParamID: string;
-
-    @Field()
-    ValueType: string;
+    @Field({ nullable: true })
+    EntityActionID?: string;
 
     @Field({ nullable: true })
-    Value?: string;
+    ActionParamID?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    ValueType?: string;
+
+    @Field({ nullable: true })
+    Value?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28730,32 +28968,32 @@ export class ResourcePermission_ {
 //****************************************************************************
 @InputType()
 export class CreateResourcePermissionInput {
-    @Field()
-    ResourceTypeID: string;
-
-    @Field()
-    ResourceRecordID: string;
-
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    ResourceTypeID?: string;
 
     @Field({ nullable: true })
-    StartSharingAt?: Date;
+    ResourceRecordID?: string;
 
     @Field({ nullable: true })
-    EndSharingAt?: Date;
+    Type?: string;
 
     @Field({ nullable: true })
-    RoleID?: string;
+    StartSharingAt: Date | null;
 
     @Field({ nullable: true })
-    UserID?: string;
+    EndSharingAt: Date | null;
 
     @Field({ nullable: true })
-    PermissionLevel?: string;
+    RoleID: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    PermissionLevel: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -28767,32 +29005,32 @@ export class UpdateResourcePermissionInput {
     @Field()
     ID: string;
 
-    @Field()
-    ResourceTypeID: string;
-
-    @Field()
-    ResourceRecordID: string;
-
-    @Field()
-    Type: string;
+    @Field({ nullable: true })
+    ResourceTypeID?: string;
 
     @Field({ nullable: true })
-    StartSharingAt?: Date;
+    ResourceRecordID?: string;
 
     @Field({ nullable: true })
-    EndSharingAt?: Date;
+    Type?: string;
 
     @Field({ nullable: true })
-    RoleID?: string;
+    StartSharingAt?: Date | null;
 
     @Field({ nullable: true })
-    UserID?: string;
+    EndSharingAt?: Date | null;
 
     @Field({ nullable: true })
-    PermissionLevel?: string;
+    RoleID?: string | null;
 
-    @Field()
-    Status: string;
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    PermissionLevel?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -28931,17 +29169,17 @@ export class ResourceLink_ {
 //****************************************************************************
 @InputType()
 export class CreateResourceLinkInput {
-    @Field()
-    UserID: string;
-
-    @Field()
-    ResourceTypeID: string;
-
-    @Field()
-    ResourceRecordID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    FolderID?: string;
+    ResourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
+
+    @Field({ nullable: true })
+    FolderID: string | null;
 }
     
 
@@ -28953,17 +29191,17 @@ export class UpdateResourceLinkInput {
     @Field()
     ID: string;
 
-    @Field()
-    UserID: string;
-
-    @Field()
-    ResourceTypeID: string;
-
-    @Field()
-    ResourceRecordID: string;
+    @Field({ nullable: true })
+    UserID?: string;
 
     @Field({ nullable: true })
-    FolderID?: string;
+    ResourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ResourceRecordID?: string;
+
+    @Field({ nullable: true })
+    FolderID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29123,32 +29361,32 @@ export class AIAgentRequest_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentRequestInput {
-    @Field()
-    AgentID: string;
-
-    @Field()
-    RequestedAt: Date;
+    @Field({ nullable: true })
+    AgentID?: string;
 
     @Field({ nullable: true })
-    RequestForUserID?: string;
-
-    @Field()
-    Status: string;
-
-    @Field()
-    Request: string;
+    RequestedAt?: Date;
 
     @Field({ nullable: true })
-    Response?: string;
+    RequestForUserID: string | null;
 
     @Field({ nullable: true })
-    ResponseByUserID?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    RespondedAt?: Date;
+    Request?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Response: string | null;
+
+    @Field({ nullable: true })
+    ResponseByUserID: string | null;
+
+    @Field({ nullable: true })
+    RespondedAt: Date | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
 }
     
 
@@ -29160,32 +29398,32 @@ export class UpdateAIAgentRequestInput {
     @Field()
     ID: string;
 
-    @Field()
-    AgentID: string;
-
-    @Field()
-    RequestedAt: Date;
+    @Field({ nullable: true })
+    AgentID?: string;
 
     @Field({ nullable: true })
-    RequestForUserID?: string;
-
-    @Field()
-    Status: string;
-
-    @Field()
-    Request: string;
+    RequestedAt?: Date;
 
     @Field({ nullable: true })
-    Response?: string;
+    RequestForUserID?: string | null;
 
     @Field({ nullable: true })
-    ResponseByUserID?: string;
+    Status?: string;
 
     @Field({ nullable: true })
-    RespondedAt?: Date;
+    Request?: string;
 
     @Field({ nullable: true })
-    Comments?: string;
+    Response?: string | null;
+
+    @Field({ nullable: true })
+    ResponseByUserID?: string | null;
+
+    @Field({ nullable: true })
+    RespondedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29316,11 +29554,11 @@ export class QueryEntity_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryEntityInput {
-    @Field()
-    QueryID: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 }
     
 
@@ -29332,11 +29570,11 @@ export class UpdateQueryEntityInput {
     @Field()
     ID: string;
 
-    @Field()
-    QueryID: string;
+    @Field({ nullable: true })
+    QueryID?: string;
 
-    @Field()
-    EntityID: string;
+    @Field({ nullable: true })
+    EntityID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29428,218 +29666,6 @@ export class QueryEntityResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for flyway _schema _histories
-//****************************************************************************
-@ObjectType()
-export class flyway_schema_history_ {
-    @Field(() => Int) 
-    installed_rank: number;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    version?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(400)
-    description?: string;
-        
-    @Field() 
-    @MaxLength(40)
-    type: string;
-        
-    @Field() 
-    @MaxLength(2000)
-    script: string;
-        
-    @Field(() => Int, {nullable: true}) 
-    checksum?: number;
-        
-    @Field() 
-    @MaxLength(200)
-    installed_by: string;
-        
-    @Field() 
-    @MaxLength(8)
-    installed_on: Date;
-        
-    @Field(() => Int) 
-    execution_time: number;
-        
-    @Field(() => Boolean) 
-    success: boolean;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-}
-
-//****************************************************************************
-// INPUT TYPE for flyway _schema _histories
-//****************************************************************************
-@InputType()
-export class Createflyway_schema_historyInput {
-    @Field(() => Int)
-    installed_rank: number;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    script: string;
-
-    @Field(() => Int, { nullable: true })
-    checksum?: number;
-
-    @Field()
-    installed_by: string;
-
-    @Field()
-    installed_on: Date;
-
-    @Field(() => Int)
-    execution_time: number;
-
-    @Field(() => Boolean)
-    success: boolean;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for flyway _schema _histories
-//****************************************************************************
-@InputType()
-export class Updateflyway_schema_historyInput {
-    @Field(() => Int)
-    installed_rank: number;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    script: string;
-
-    @Field(() => Int, { nullable: true })
-    checksum?: number;
-
-    @Field()
-    installed_by: string;
-
-    @Field()
-    installed_on: Date;
-
-    @Field(() => Int)
-    execution_time: number;
-
-    @Field(() => Boolean)
-    success: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for flyway _schema _histories
-//****************************************************************************
-@ObjectType()
-export class Runflyway_schema_historyViewResult {
-    @Field(() => [flyway_schema_history_])
-    Results: flyway_schema_history_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(flyway_schema_history_)
-export class flyway_schema_historyResolver extends ResolverBase {
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => Runflyway_schema_historyViewResult)
-    async Runflyway_schema_historyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        input.EntityName = 'flyway _schema _histories';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => flyway_schema_history_, { nullable: true })
-    async flyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<flyway_schema_history_ | null> {
-        this.CheckUserReadPermissions('flyway _schema _histories', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwflyway_schema_histories] WHERE [installed_rank]=${installed_rank} ` + this.getRowLevelSecurityWhereClause('flyway _schema _histories', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('flyway _schema _histories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => flyway_schema_history_)
-    async Createflyway_schema_history(
-        @Arg('input', () => Createflyway_schema_historyInput) input: Createflyway_schema_historyInput,
-        @Ctx() { dataSources, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const dataSource = GetReadWriteDataSource(dataSources);
-        return this.CreateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => flyway_schema_history_)
-    async Updateflyway_schema_history(
-        @Arg('input', () => Updateflyway_schema_historyInput) input: Updateflyway_schema_historyInput,
-        @Ctx() { dataSources, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const dataSource = GetReadWriteDataSource(dataSources);
-        return this.UpdateRecord('flyway _schema _histories', input, dataSource, userPayload, pubSub);
-    }
-    
-    @Mutation(() => flyway_schema_history_)
-    async Deleteflyway_schema_history(@Arg('installed_rank', () => Int) installed_rank: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const dataSource = GetReadWriteDataSource(dataSources);
-        const key = new CompositeKey([{FieldName: 'installed_rank', Value: installed_rank}]);
-        return this.DeleteRecord('flyway _schema _histories', key, options, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for Content Process Runs
 //****************************************************************************
 @ObjectType()
@@ -29686,20 +29712,20 @@ export class ContentProcessRun_ {
 //****************************************************************************
 @InputType()
 export class CreateContentProcessRunInput {
-    @Field()
-    SourceID: string;
+    @Field({ nullable: true })
+    SourceID?: string;
 
     @Field({ nullable: true })
-    StartTime?: Date;
+    StartTime: Date | null;
 
     @Field({ nullable: true })
-    EndTime?: Date;
+    EndTime: Date | null;
 
     @Field({ nullable: true })
-    Status?: string;
+    Status: string | null;
 
     @Field(() => Int, { nullable: true })
-    ProcessedItems?: number;
+    ProcessedItems: number | null;
 }
     
 
@@ -29711,20 +29737,20 @@ export class UpdateContentProcessRunInput {
     @Field()
     ID: string;
 
-    @Field()
-    SourceID: string;
+    @Field({ nullable: true })
+    SourceID?: string;
 
     @Field({ nullable: true })
-    StartTime?: Date;
+    StartTime?: Date | null;
 
     @Field({ nullable: true })
-    EndTime?: Date;
+    EndTime?: Date | null;
 
     @Field({ nullable: true })
-    Status?: string;
+    Status?: string | null;
 
     @Field(() => Int, { nullable: true })
-    ProcessedItems?: number;
+    ProcessedItems?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -29881,19 +29907,19 @@ export class ContentSource_ {
 @InputType()
 export class CreateContentSourceInput {
     @Field({ nullable: true })
-    Name?: string;
+    Name: string | null;
 
-    @Field()
-    ContentTypeID: string;
+    @Field({ nullable: true })
+    ContentTypeID?: string;
 
-    @Field()
-    ContentSourceTypeID: string;
+    @Field({ nullable: true })
+    ContentSourceTypeID?: string;
 
-    @Field()
-    ContentFileTypeID: string;
+    @Field({ nullable: true })
+    ContentFileTypeID?: string;
 
-    @Field()
-    URL: string;
+    @Field({ nullable: true })
+    URL?: string;
 }
     
 
@@ -29906,19 +29932,19 @@ export class UpdateContentSourceInput {
     ID: string;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name?: string | null;
 
-    @Field()
-    ContentTypeID: string;
+    @Field({ nullable: true })
+    ContentTypeID?: string;
 
-    @Field()
-    ContentSourceTypeID: string;
+    @Field({ nullable: true })
+    ContentSourceTypeID?: string;
 
-    @Field()
-    ContentFileTypeID: string;
+    @Field({ nullable: true })
+    ContentFileTypeID?: string;
 
-    @Field()
-    URL: string;
+    @Field({ nullable: true })
+    URL?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30075,14 +30101,14 @@ export class ContentSourceParam_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceParamInput {
-    @Field()
-    ContentSourceID: string;
+    @Field({ nullable: true })
+    ContentSourceID?: string;
 
-    @Field()
-    ContentSourceTypeParamID: string;
+    @Field({ nullable: true })
+    ContentSourceTypeParamID?: string;
 
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    Value?: string;
 }
     
 
@@ -30094,14 +30120,14 @@ export class UpdateContentSourceParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    ContentSourceID: string;
+    @Field({ nullable: true })
+    ContentSourceID?: string;
 
-    @Field()
-    ContentSourceTypeParamID: string;
+    @Field({ nullable: true })
+    ContentSourceTypeParamID?: string;
 
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    Value?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30230,11 +30256,11 @@ export class ContentSourceType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 }
     
 
@@ -30246,11 +30272,11 @@ export class UpdateContentSourceTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30400,20 +30426,20 @@ export class ContentSourceTypeParam_ {
 //****************************************************************************
 @InputType()
 export class CreateContentSourceTypeParamInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    Type?: string;
+    Type: string | null;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
+    DefaultValue: string | null;
 
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 }
     
 
@@ -30425,20 +30451,20 @@ export class UpdateContentSourceTypeParamInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    Type?: string;
+    Type?: string | null;
 
     @Field({ nullable: true })
-    DefaultValue?: string;
+    DefaultValue?: string | null;
 
-    @Field(() => Boolean)
-    IsRequired: boolean;
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30580,20 +30606,20 @@ export class ContentType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description: string | null;
 
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field(() => Int)
-    MinTags: number;
+    @Field(() => Int, { nullable: true })
+    MinTags?: number;
 
-    @Field(() => Int)
-    MaxTags: number;
+    @Field(() => Int, { nullable: true })
+    MaxTags?: number;
 }
     
 
@@ -30605,20 +30631,20 @@ export class UpdateContentTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Description?: string | null;
 
-    @Field()
-    AIModelID: string;
+    @Field({ nullable: true })
+    AIModelID?: string;
 
-    @Field(() => Int)
-    MinTags: number;
+    @Field(() => Int, { nullable: true })
+    MinTags?: number;
 
-    @Field(() => Int)
-    MaxTags: number;
+    @Field(() => Int, { nullable: true })
+    MaxTags?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30765,17 +30791,17 @@ export class ContentTypeAttribute_ {
 //****************************************************************************
 @InputType()
 export class CreateContentTypeAttributeInput {
-    @Field()
-    ContentTypeID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Prompt: string;
+    @Field({ nullable: true })
+    ContentTypeID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Prompt?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
 }
     
 
@@ -30787,17 +30813,17 @@ export class UpdateContentTypeAttributeInput {
     @Field()
     ID: string;
 
-    @Field()
-    ContentTypeID: string;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    Prompt: string;
+    @Field({ nullable: true })
+    ContentTypeID?: string;
 
     @Field({ nullable: true })
-    Description?: string;
+    Name?: string;
+
+    @Field({ nullable: true })
+    Prompt?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30926,11 +30952,11 @@ export class ContentFileType_ {
 //****************************************************************************
 @InputType()
 export class CreateContentFileTypeInput {
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    FileExtension?: string;
+    FileExtension: string | null;
 }
     
 
@@ -30942,11 +30968,11 @@ export class UpdateContentFileTypeInput {
     @Field()
     ID: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
     @Field({ nullable: true })
-    FileExtension?: string;
+    FileExtension?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31135,32 +31161,32 @@ export class ContentItem_ {
 //****************************************************************************
 @InputType()
 export class CreateContentItemInput {
-    @Field()
-    ContentSourceID: string;
+    @Field({ nullable: true })
+    ContentSourceID?: string;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    ContentTypeID: string;
-
-    @Field()
-    ContentSourceTypeID: string;
-
-    @Field()
-    ContentFileTypeID: string;
+    Description: string | null;
 
     @Field({ nullable: true })
-    Checksum?: string;
-
-    @Field()
-    URL: string;
+    ContentTypeID?: string;
 
     @Field({ nullable: true })
-    Text?: string;
+    ContentSourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ContentFileTypeID?: string;
+
+    @Field({ nullable: true })
+    Checksum: string | null;
+
+    @Field({ nullable: true })
+    URL?: string;
+
+    @Field({ nullable: true })
+    Text: string | null;
 }
     
 
@@ -31172,32 +31198,32 @@ export class UpdateContentItemInput {
     @Field()
     ID: string;
 
-    @Field()
-    ContentSourceID: string;
+    @Field({ nullable: true })
+    ContentSourceID?: string;
 
     @Field({ nullable: true })
-    Name?: string;
+    Name?: string | null;
 
     @Field({ nullable: true })
-    Description?: string;
-
-    @Field()
-    ContentTypeID: string;
-
-    @Field()
-    ContentSourceTypeID: string;
-
-    @Field()
-    ContentFileTypeID: string;
+    Description?: string | null;
 
     @Field({ nullable: true })
-    Checksum?: string;
-
-    @Field()
-    URL: string;
+    ContentTypeID?: string;
 
     @Field({ nullable: true })
-    Text?: string;
+    ContentSourceTypeID?: string;
+
+    @Field({ nullable: true })
+    ContentFileTypeID?: string;
+
+    @Field({ nullable: true })
+    Checksum?: string | null;
+
+    @Field({ nullable: true })
+    URL?: string;
+
+    @Field({ nullable: true })
+    Text?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31345,14 +31371,14 @@ export class ContentItemAttribute_ {
 //****************************************************************************
 @InputType()
 export class CreateContentItemAttributeInput {
-    @Field()
-    ContentItemID: string;
+    @Field({ nullable: true })
+    ContentItemID?: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    Value?: string;
 }
     
 
@@ -31364,14 +31390,14 @@ export class UpdateContentItemAttributeInput {
     @Field()
     ID: string;
 
-    @Field()
-    ContentItemID: string;
+    @Field({ nullable: true })
+    ContentItemID?: string;
 
-    @Field()
-    Name: string;
+    @Field({ nullable: true })
+    Name?: string;
 
-    @Field()
-    Value: string;
+    @Field({ nullable: true })
+    Value?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31498,11 +31524,11 @@ export class ContentItemTag_ {
 //****************************************************************************
 @InputType()
 export class CreateContentItemTagInput {
-    @Field()
-    ItemID: string;
+    @Field({ nullable: true })
+    ItemID?: string;
 
-    @Field()
-    Tag: string;
+    @Field({ nullable: true })
+    Tag?: string;
 }
     
 
@@ -31514,11 +31540,11 @@ export class UpdateContentItemTagInput {
     @Field()
     ID: string;
 
-    @Field()
-    ItemID: string;
+    @Field({ nullable: true })
+    ItemID?: string;
 
-    @Field()
-    Tag: string;
+    @Field({ nullable: true })
+    Tag?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31656,20 +31682,20 @@ export class AIAgentLearningCycle_ {
 //****************************************************************************
 @InputType()
 export class CreateAIAgentLearningCycleInput {
-    @Field()
-    AgentID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    AgentID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field()
-    Status: string;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    AgentSummary?: string;
+    EndedAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentSummary: string | null;
 }
     
 
@@ -31681,20 +31707,20 @@ export class UpdateAIAgentLearningCycleInput {
     @Field()
     ID: string;
 
-    @Field()
-    AgentID: string;
-
-    @Field()
-    StartedAt: Date;
+    @Field({ nullable: true })
+    AgentID?: string;
 
     @Field({ nullable: true })
-    EndedAt?: Date;
-
-    @Field()
-    Status: string;
+    StartedAt?: Date;
 
     @Field({ nullable: true })
-    AgentSummary?: string;
+    EndedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentSummary?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

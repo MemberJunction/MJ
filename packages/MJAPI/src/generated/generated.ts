@@ -9,7 +9,8 @@
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
-            AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp } from '@memberjunction/server';
+            AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
+            GetReadOnlyDataSource, GetReadWriteDataSource } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
