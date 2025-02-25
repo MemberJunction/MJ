@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.26.1
+
+### Patch Changes
+
+- 896ada0: Only emit GRANT statements for permissions where MJ Roles have an underlying SQL Role
+- a8ff81f: Mark optional input fields as nullable for graphql.
+
+  This adds the `nullable: true` flag for the type-graphql decorators on optional input type fields.
+  This allows the field to be `null` or undefined. If not defined, it will not be updated. If defined as
+  `null`, then it should set the value of the column to `NULL` (provided that's permitted for the column).
+
+  - @memberjunction/ai@2.26.1
+  - @memberjunction/actions@2.26.1
+  - @memberjunction/core@2.26.1
+  - @memberjunction/core-entities@2.26.1
+  - @memberjunction/global@2.26.1
+  - @memberjunction/sqlserver-dataprovider@2.26.1
+
+## 2.26.0
+
+### Minor Changes
+
+- 23801c5: Changes to use of TransactionGroup to use await at all times.Fixed up some metadata bugs in the \_\_mj schema that somehow existed from prior builds.Cleaned up SQL Server Data Provider handling of virtual fields in track record changesFixed CodeGen to not emit null wrapped as a string that was happening in some casesHardened MJCore.BaseEntity to treat a string with the word null in it as same as a true null value (in case someone throws that into the DB)
+
+### Patch Changes
+
+- Updated dependencies [23801c5]
+  - @memberjunction/core@2.26.0
+  - @memberjunction/sqlserver-dataprovider@2.26.0
+  - @memberjunction/actions@2.26.0
+  - @memberjunction/core-entities@2.26.0
+  - @memberjunction/ai@2.26.0
+  - @memberjunction/global@2.26.0
+
 ## 2.25.0
 
 ### Patch Changes

@@ -409,10 +409,10 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 //****************************************************************************
 @InputType()
 export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
-    // first, filter the fields 
+    // first, filter the fields
     const fieldsToInclude = entity.Fields.filter((f) => {
       // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
-      const includePrimaryKey = classPrefix === 'Update' || (!f.AutoIncrement && f.Type !== 'uniqueidentifier'); 
+      const includePrimaryKey = classPrefix === 'Update' || (!f.AutoIncrement && f.Type !== 'uniqueidentifier');
       return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
     });
 
@@ -422,11 +422,11 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
       // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
       const codeName: string = f.CodeName.startsWith('__mj') ? '_mj_' + f.CodeName.substring(4) : f.CodeName;
 
-      const sNull: string = f.AllowsNull ? '{ nullable: true }' : '';
-      const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
       // next - decide if we allow this field to be undefined or not - for UPDATES, we only allow undefined if the field is not a primary key and the param to this function is on,
       // for CREATES, we allow undefined if the field is not a primary key and either the field allows null or has a default value
       const fieldUndefined = classPrefix === 'Update' ? nonPKEYFieldsOptional && !f.IsPrimaryKey : nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue);
+      const sNull: string = f.AllowsNull || fieldUndefined ? '{ nullable: true }' : '';
+      const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
         sRet += `
     @Field(${sFullTypeGraphQLString})
     ${codeName}${fieldUndefined ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, f.AllowsNull)};

@@ -157,7 +157,7 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
     const md = new Metadata();
     const tg = await md.CreateTransactionGroup();
     let itemCount: number = 0;
-    this.rows.forEach(r => {
+    for (const r of this.rows) {
       if (this.IsReallyDirty(r)) {
         r.TransactionGroup = tg;
         itemCount++;
@@ -166,11 +166,12 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
         // if ur.Selected === false and we are in the database, we need to delete
         // otherwise, we need to save
         if (r.Selected)
-          r.Save(); 
+          await r.Save(); 
         else
-          r.Delete();  
+          await r.Delete();  
       }
-    })
+    }
+
     if (itemCount > 0) {
       if (await tg.Submit()) {
         // for any items in the above that were deleted, we would have had the ApplicationName/Application and Entity property wiped out so we need to go check to see if we have a null ID and if so, copy the values back in

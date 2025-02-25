@@ -151,13 +151,13 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       const md = new Metadata();
       const tg = await md.CreateTransactionGroup();
       let itemCount: number = 0;
-      this.permissions.forEach(p => {
+      for (const p of this.permissions) {
         if (this.IsPermissionReallyDirty(p)) {
           p.TransactionGroup = tg;
           itemCount++;
-          p.Save(); // don't await since we are using a tg
+          await p.Save();  
         }
-      })
+      }
       if (itemCount > 0)
         await tg.Submit();
     }

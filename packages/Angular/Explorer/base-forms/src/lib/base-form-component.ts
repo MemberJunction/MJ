@@ -461,7 +461,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             const md = new Metadata();
             const tg = await md.CreateTransactionGroup();
             this.record.TransactionGroup = tg;
-            this.record.Save(); // DO NOT USE await - trans group.submit() is where we await
+            await this.record.Save();  
 
             // now add to the rest of the pending records
             for (const x of this._pendingRecords) {

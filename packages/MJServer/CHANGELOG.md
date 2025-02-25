@@ -1,5 +1,63 @@
 # Change Log - @memberjunction/server
 
+## 2.26.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.26.1
+- @memberjunction/aiengine@2.26.1
+- @memberjunction/ai-mistral@2.26.1
+- @memberjunction/ai-openai@2.26.1
+- @memberjunction/ai-vectors-pinecone@2.26.1
+- @memberjunction/core-actions@2.26.1
+- @memberjunction/actions@2.26.1
+- @memberjunction/entity-communications-server@2.26.1
+- @memberjunction/doc-utils@2.26.1
+- @memberjunction/external-change-detection@2.26.1
+- @memberjunction/graphql-dataprovider@2.26.1
+- @memberjunction/core@2.26.1
+- @memberjunction/core-entities@2.26.1
+- @memberjunction/data-context@2.26.1
+- @memberjunction/data-context-server@2.26.1
+- @memberjunction/global@2.26.1
+- @memberjunction/queue@2.26.1
+- @memberjunction/storage@2.26.1
+- @memberjunction/sqlserver-dataprovider@2.26.1
+- @memberjunction/skip-types@2.26.1
+- @memberjunction/templates@2.26.1
+
+## 2.26.0
+
+### Minor Changes
+
+- 23801c5: Changes to use of TransactionGroup to use await at all times.Fixed up some metadata bugs in the \_\_mj schema that somehow existed from prior builds.Cleaned up SQL Server Data Provider handling of virtual fields in track record changesFixed CodeGen to not emit null wrapped as a string that was happening in some casesHardened MJCore.BaseEntity to treat a string with the word null in it as same as a true null value (in case someone throws that into the DB)
+
+### Patch Changes
+
+- 7171f2b: logging for cloud events
+- Updated dependencies [23801c5]
+  - @memberjunction/core@2.26.0
+  - @memberjunction/data-context@2.26.0
+  - @memberjunction/data-context-server@2.26.0
+  - @memberjunction/sqlserver-dataprovider@2.26.0
+  - @memberjunction/aiengine@2.26.0
+  - @memberjunction/ai-vectors-pinecone@2.26.0
+  - @memberjunction/core-actions@2.26.0
+  - @memberjunction/actions@2.26.0
+  - @memberjunction/entity-communications-server@2.26.0
+  - @memberjunction/doc-utils@2.26.0
+  - @memberjunction/external-change-detection@2.26.0
+  - @memberjunction/graphql-dataprovider@2.26.0
+  - @memberjunction/core-entities@2.26.0
+  - @memberjunction/queue@2.26.0
+  - @memberjunction/storage@2.26.0
+  - @memberjunction/templates@2.26.0
+  - @memberjunction/skip-types@2.26.0
+  - @memberjunction/ai@2.26.0
+  - @memberjunction/ai-mistral@2.26.0
+  - @memberjunction/ai-openai@2.26.0
+  - @memberjunction/global@2.26.0
+
 ## 2.25.0
 
 ### Patch Changes

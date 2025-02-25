@@ -183,7 +183,7 @@ export class UserNotificationsComponent implements AfterViewInit {
       // part of a transaction group, if so, add it as that will defer the actual network traffic/save
       if (transGroup) {
         notificationEntity.TransactionGroup = transGroup;
-        notificationEntity.Save() // no await when using a transaction group
+        await notificationEntity.Save()  
         return true;
       }
       else {
@@ -227,8 +227,7 @@ export class UserNotificationsComponent implements AfterViewInit {
     const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details');
     conversationDetail.Message = 'Test Message';
     conversationDetail.Role = 'User';
-    const fakeUUID = '00000000-0000-0000-0000-000000000000';
-    conversationDetail.ConversationID = 'x'; // fakeUUID; // must be non-null to pass validation, this will be replaced by the variable, since we're part of a TG, not a real save, so doesn't validate it as a true fkey
+    conversationDetail.ConversationID = 'x'; // fake UUID must be non-null to pass validation, this will be replaced by the variable, since we're part of a TG, not a real save, so doesn't validate it as a true fkey
     conversationDetail.TransactionGroup = transGroup;
     if (!await conversationDetail.Save()) {
       this.sharedService.CreateSimpleNotification('Unable to create conversation detail', 'error', 500);

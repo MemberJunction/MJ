@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.26.1
+
+### Patch Changes
+
+- 00e9718: Clean up notifications from push status updates and wire up to Load() instead of ngOnInit because if the provider is different from the default one we won't get notifications in multi-provider application contexts
+  - @memberjunction/ng-base-types@2.26.1
+  - @memberjunction/ng-container-directives@2.26.1
+  - @memberjunction/ng-data-context@2.26.1
+  - @memberjunction/ng-notifications@2.26.1
+  - @memberjunction/ng-resource-permissions@2.26.1
+  - @memberjunction/graphql-dataprovider@2.26.1
+  - @memberjunction/core@2.26.1
+  - @memberjunction/core-entities@2.26.1
+  - @memberjunction/data-context@2.26.1
+  - @memberjunction/global@2.26.1
+  - @memberjunction/skip-types@2.26.1
+
+## 2.26.0
+
+### Patch Changes
+
+- Updated dependencies [23801c5]
+  - @memberjunction/core@2.26.0
+  - @memberjunction/data-context@2.26.0
+  - @memberjunction/ng-base-types@2.26.0
+  - @memberjunction/ng-container-directives@2.26.0
+  - @memberjunction/ng-data-context@2.26.0
+  - @memberjunction/ng-notifications@2.26.0
+  - @memberjunction/ng-resource-permissions@2.26.0
+  - @memberjunction/graphql-dataprovider@2.26.0
+  - @memberjunction/core-entities@2.26.0
+  - @memberjunction/skip-types@2.26.0
+  - @memberjunction/global@2.26.0
+
 ## 2.25.0
 
 ### Patch Changes
