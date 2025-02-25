@@ -102,7 +102,7 @@ export class VoiceInfo {
     /**
      * Optional, array of labels for the voice
      */
-    labels?: string[];
+    labels?: object[];
 
     /**
      * User defined category for managing voices
