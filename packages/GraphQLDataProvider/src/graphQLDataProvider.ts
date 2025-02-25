@@ -58,6 +58,13 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
+     * The Email of the current user. This field is used during the bootstrap process to determine if the local metadata should be refreshed.
+     * If the email is different than the user's email in the local metadata, then the metadata will be refreshed from the server
+     */
+    get UserEmail(): string { return this.Data.UserEmail }
+    set UserEmail(email: string) { this.Data.UserEmail = email }
+
+    /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
