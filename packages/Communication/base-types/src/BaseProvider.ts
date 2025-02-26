@@ -131,9 +131,22 @@ export class MessageResult {
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
+};
+
+export type BaseMessageResult = {
+    Success: boolean;
+    ErrorMessage?: string;
 }
 
 export type GetMessagesParams<T = Record<string, any>> = {
+    /**
+     * The number of messages to return
+     */
+    NumMessages: number;
+    /**
+     * Optional. If true, only messages not marked as read will be returned
+     */
+    UnreadOnly?: boolean;
     /**
      * Optional, any provider-specific parameters that are needed to get messages
      */
@@ -142,13 +155,18 @@ export type GetMessagesParams<T = Record<string, any>> = {
 
 export type GetMessageMessage = {
     From: string;
+    To: string,
+    /**
+     * In some providers, such as MS Graph, replies can be sent to multiple other recipients
+     * rather than just the original sender
+     */
     ReplyTo: string[];
     Subject: string;
     Body: string;
     ExternalSystemRecordID: string;
-}
+};
 
-export type GetMessagesResult<T = Record<string, any>> = {
+export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {
     /**
      * If populated, holds provider-specific data that is returned from the provider
      */
@@ -158,6 +176,52 @@ export type GetMessagesResult<T = Record<string, any>> = {
      */
     Messages: GetMessageMessage[];
 };
+
+export type ForwardMessageParams = {
+    /**
+     * The ID of the message to forward
+     */
+    MessageID: string;
+    /**
+     * An optional message to go along with the forwarded message
+     */
+    Message?: string;
+    /*
+    * The recipients to forward the message to
+    */
+    ToRecipients: {
+        Name: string,
+        Address: string;
+    }[];
+};
+
+export type ForwardMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    Result?: T;
+};
+
+export type ReplyToMessageParams<T = Record<string, any>> = {
+    /**
+     * The ID of the message to reply to
+     */
+    MessageID: string;
+    /**
+     * The message to send as a reply
+     */
+    Message: ProcessedMessage;
+
+    /*
+    * Provider-specific context data
+    */
+    ContextData?: T
+};
+
+export type ReplyToMessageResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * If populated, holds provider-specific result of replying to the message
+     */
+    Result?: T;
+};
+
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
@@ -172,6 +236,17 @@ export abstract class BaseCommunicationProvider {
      * Fetches messages using the provider 
      */
     public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>
+
+    /**
+     * Forwards a message to another client using the provider
+     */
+    public abstract ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>
+
+    /**
+     * Replies to a message using the provider
+     */
+    public abstract ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>
+
 }
 
 @RegisterClass(BaseEntity, 'Communication Providers') // sub-class to extend the properties of the base entity
