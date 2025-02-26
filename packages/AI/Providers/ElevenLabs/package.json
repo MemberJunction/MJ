@@ -1,0 +1,26 @@
+{
+  "name": "@memberjunction/ai-elevenlabs",
+  "version": "2.26.1",
+  "description": "MemberJunction Wrapper for ElevenLabs Audio Generation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "2.26.1",
+    "@memberjunction/global": "2.26.1",
+    "elevenlabs": "^1.51.0"
+  }
+}
