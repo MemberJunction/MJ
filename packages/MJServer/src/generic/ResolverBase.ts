@@ -4,6 +4,7 @@ import {
   CompositeKey,
   EntityFieldTSType,
   EntityPermissionType,
+  LogDebug,
   LogError,
   LogStatus,
   Metadata,
@@ -30,7 +31,18 @@ import { Subscription } from 'rxjs';
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
-  private static _eventSubscriptions = new Map<string, Subscription>;
+
+  private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
+  private get EventSubscriptions(): Map<string, Subscription> {
+    // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
+    // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    if (!g[ResolverBase._eventSubscriptionKey]) {
+      LogDebug(`>>>>> MJServer.ResolverBase.EventSubscriptions: Creating new Map - this should only happen once per server instance <<<<<<`);
+      g[ResolverBase._eventSubscriptionKey] = new Map<string, Subscription>();
+    }
+    return g[ResolverBase._eventSubscriptionKey];
+  }
 
   protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
     // for the given entity name provided, check to see if there are any fields
@@ -576,15 +588,19 @@ export class ResolverBase {
     // cause issues with multiple messages for the same event.
     const uniqueKey = entityObject.EntityInfo.Name;
 
-    if (!ResolverBase._eventSubscriptions.has(uniqueKey)) {
+    if (!this.EventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
+      LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
         if (event) {
+          LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(event)}`);
           await this.EmitCloudEvent(event);
+          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);  
 
           if (event.args && event.args instanceof BaseEntityEvent) {
             const baseEntityEvent = event.args as BaseEntityEvent;
             // message from our entity object, relay it to the client
+            LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
             pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
               message: JSON.stringify({
                 status: 'OK',
@@ -598,7 +614,7 @@ export class ResolverBase {
           }
         }
       });
-      ResolverBase._eventSubscriptions.set(uniqueKey, theSub);
+      this.EventSubscriptions.set(uniqueKey, theSub);
     }
   }
 
