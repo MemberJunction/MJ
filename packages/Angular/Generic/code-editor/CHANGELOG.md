@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-code-editor
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.27.1
+- @memberjunction/core@2.27.1
+- @memberjunction/core-entities@2.27.1
+- @memberjunction/global@2.27.1
+
 ## 2.27.0
 
 ### Patch Changes

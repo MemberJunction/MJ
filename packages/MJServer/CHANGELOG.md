@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.27.1
+
+### Patch Changes
+
+- aceeef2: Fixed Cloud Logging issues in MJServer, modified functionality for thumbs up/down in Skip Chat component
+  - @memberjunction/ai@2.27.1
+  - @memberjunction/aiengine@2.27.1
+  - @memberjunction/ai-mistral@2.27.1
+  - @memberjunction/ai-openai@2.27.1
+  - @memberjunction/ai-vectors-pinecone@2.27.1
+  - @memberjunction/core-actions@2.27.1
+  - @memberjunction/actions@2.27.1
+  - @memberjunction/entity-communications-server@2.27.1
+  - @memberjunction/doc-utils@2.27.1
+  - @memberjunction/external-change-detection@2.27.1
+  - @memberjunction/graphql-dataprovider@2.27.1
+  - @memberjunction/core@2.27.1
+  - @memberjunction/core-entities@2.27.1
+  - @memberjunction/data-context@2.27.1
+  - @memberjunction/data-context-server@2.27.1
+  - @memberjunction/global@2.27.1
+  - @memberjunction/queue@2.27.1
+  - @memberjunction/storage@2.27.1
+  - @memberjunction/sqlserver-dataprovider@2.27.1
+  - @memberjunction/skip-types@2.27.1
+  - @memberjunction/templates@2.27.1
+
 ## 2.27.0
 
 ### Patch Changes

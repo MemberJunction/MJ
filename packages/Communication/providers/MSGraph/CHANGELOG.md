@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.27.1
+- @memberjunction/aiengine@2.27.1
+- @memberjunction/ai-openai@2.27.1
+- @memberjunction/communication-types@2.27.1
+- @memberjunction/core@2.27.1
+- @memberjunction/core-entities@2.27.1
+- @memberjunction/global@2.27.1
+- @memberjunction/sqlserver-dataprovider@2.27.1
+
 ## 2.27.0
 
 ### Patch Changes
