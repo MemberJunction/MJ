@@ -24,6 +24,27 @@
                         <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()"></span>
                     </div>
                 }
+                <!-- Rating UI for AI messages that haven't been rated yet -->
+                @if(!IsTemporaryMessage && ShouldShowRating) {
+                    <div class="message-rating">
+                        <div class="rating-prompt">Was this response helpful?</div>
+                        <div class="rating-buttons">
+                            <span class="fa-solid fa-thumbs-up" (click)="rateMessage(10)" title="This was helpful"></span>
+                            <span class="fa-solid fa-thumbs-down" (click)="rateMessage(0)" title="This wasn't helpful"></span>
+                        </div>
+                    </div>
+                }
+                <!-- Show rating feedback after user has rated -->
+                @if(!IsTemporaryMessage && IsAIMessage && ConversationDetailRecord.UserRating !== null) {
+                    <div class="rating-feedback">
+                        <span class="rating-status-text">{{RatingStatusText}}</span>
+                        @if(ConversationDetailRecord.UserRating === 10) {
+                            <span class="fa-solid fa-thumbs-up rating-icon-selected"></span>
+                        } @else {
+                            <span class="fa-solid fa-thumbs-down rating-icon-selected"></span>
+                        }
+                    </div>
+                }
             </div>
             <div #reportContainer>
                 <!-- this is where the report will go - dynamically instantiated -->

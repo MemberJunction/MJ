@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
@@ -43,6 +43,15 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      */
     @Input() public ShowMessageEditPanel: boolean = true;
 
+    /**
+     * If set to true, AI messages that are the last in the conversation will show thumbs up/down rating
+     */
+    @Input() public ShowMessageRating: boolean = true;
+
+    /** 
+     * Indicates if the message is currently being rated (helps with UI transitions)
+     */
+    public isRating: boolean = false;
 
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
@@ -208,6 +217,35 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
       this.EditMessageRequested.emit(this.ConversationDetailRecord);
     }
 
+    /**
+     * Rate the AI response with either thumbs up (10) or thumbs down (0)
+     * @param rating The rating to assign, 10 for thumbs up, 0 for thumbs down
+     */
+    public async rateMessage(rating: number): Promise<void> {
+      if (!this.ConversationDetailRecord || !this.IsAIMessage) {
+        return;
+      }
+
+      try {
+        this.isRating = true;
+        // Update the UserRating property
+        this.ConversationDetailRecord.UserRating = rating;
+        
+        // Save the updated record
+        if (await this.ConversationDetailRecord.Save()) {
+          // Force change detection
+          this.cdRef.detectChanges();
+        }
+        else {
+          throw new Error(this.ConversationDetailRecord.LatestResult.Error);
+        }
+      } catch (error) {
+        LogError('Error rating message:' + error);
+      } finally {
+        this.isRating = false;
+      }
+    }
+
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
@@ -284,5 +322,30 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     public get IsLastMessageInConversation(): boolean {
       const result = this.ConversationMessages.indexOf(this.ConversationDetailRecord) === this.ConversationMessages.length - 1;
       return result;
+    }
+
+    /**
+     * Determines if we should show the rating UI for this message
+     */
+    public get ShouldShowRating(): boolean {
+      return this.ShowMessageRating && 
+             this.IsAIMessage && 
+             this.IsLastMessageInConversation && 
+             !this.ConversationProcessing &&
+             this.ConversationDetailRecord.UserRating === null &&
+             !this.isRating;
+    }
+
+    /**
+     * Gets a descriptive string based on the user rating
+     */
+    public get RatingStatusText(): string {
+      if (this.ConversationDetailRecord.UserRating === null) {
+        return '';
+      } else if (this.ConversationDetailRecord.UserRating === 10) {
+        return 'Thanks for the positive feedback!';
+      } else {
+        return 'Thanks for your feedback!';
+      }
     }
 }
