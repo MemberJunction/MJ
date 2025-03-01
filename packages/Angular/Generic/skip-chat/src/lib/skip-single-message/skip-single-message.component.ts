@@ -1,11 +1,13 @@
 import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { Meta } from '@angular/platform-browser';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
  
 
 @Component({
@@ -43,6 +45,20 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      */
     @Input() public ShowMessageEditPanel: boolean = true;
 
+    /**
+     * If set to true, AI messages that are the last in the conversation will show thumbs up/down rating
+     */
+    @Input() public ShowMessageRating: boolean = true;
+
+    /** 
+     * Indicates if the message is currently being rated and saved to the database
+     */
+    public RatingBeingSaved: boolean = false;
+
+    /**
+     * This is an internal property that is turned on just after a user succesfully rates a message, and is never true otherwise. This allows the UI to show a thank you message for the rating.
+     */
+    public UserJustRated: boolean = false;
 
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
@@ -77,7 +93,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     public SuggestedQuestionsClicked: boolean = false;
     public SuggestedAnswersClicked: boolean = false;
 
-    constructor (private cdRef: ChangeDetectorRef) { 
+    constructor (private cdRef: ChangeDetectorRef, private notificationService: MJNotificationService ) { 
       super();
     }
 
@@ -208,6 +224,54 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
       this.EditMessageRequested.emit(this.ConversationDetailRecord);
     }
 
+    /**
+     * Rate the AI response with either thumbs up (10) or thumbs down (0)
+     * @param rating The rating to assign, 10 for thumbs up, 0 for thumbs down
+     */
+    public async RateMessage(rating: number): Promise<void> {
+      if (!this.ConversationDetailRecord || !this.IsAIMessage) {
+        return;
+      }
+
+      try {
+        this.RatingBeingSaved = true;
+        // Update the UserRating property in the local object
+        this.ConversationDetailRecord.UserRating = rating;
+
+        let objToSave = this.ConversationDetailRecord;
+        
+        if (undefined === this.ConversationDetailRecord.Save) {
+          // this means that the current object is not a ConversationDetailEntity, so we can't save it directly, we must load an object first
+          const p = this.ProviderToUse;
+          const savedID = this.ConversationDetailRecord.ID;
+          objToSave = await p.GetEntityObject<ConversationDetailEntity>("Conversation Details", p.CurrentUser);
+          await objToSave.Load(savedID);
+          objToSave.UserRating = rating
+          // now we have a real object, we can save it below
+        }
+
+        // Save the updated record
+        if (await objToSave.Save()) {
+          // Force change detection
+          this.UserJustRated = true; // show the thank you message
+
+          // set a timer to wait for 10 seconds and after that we'll set the UserJustRated to false
+          setTimeout(() => {
+            this.UserJustRated = false;
+          }, 10000);
+        }
+        else {
+          throw objToSave.LatestResult.Message;
+        }
+      } catch (error) {
+        LogError('Error rating message:' + error);
+
+        this.notificationService.CreateSimpleNotification('Error rating message', "error", 3500);
+      } finally {
+        this.RatingBeingSaved = false;
+      }
+    }
+
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
@@ -284,5 +348,31 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     public get IsLastMessageInConversation(): boolean {
       const result = this.ConversationMessages.indexOf(this.ConversationDetailRecord) === this.ConversationMessages.length - 1;
       return result;
+    }
+
+    /**
+     * Determines if we should show the rating UI for this message
+     */
+    public get ShouldShowRating(): boolean {
+      return this.ShowMessageRating && 
+             this.IsAIMessage && 
+             this.IsLastMessageInConversation && 
+             !this.ConversationProcessing &&
+             this.ConversationDetailRecord.UserRating === null &&
+             !!this.AnalysisResult && // only show this if we have an analysis result meaning this is a message that shows a report. we don't want to ask for ratings in other AI messages 
+             !this.RatingBeingSaved;
+    }
+
+    /**
+     * Gets a descriptive string based on the user rating
+     */
+    public get RatingStatusText(): string {
+      if (this.ConversationDetailRecord.UserRating === null) {
+        return '';
+      } else if (this.ConversationDetailRecord.UserRating === 10) {
+        return 'Thanks for the positive feedback!';
+      } else {
+        return 'Thanks for your feedback!';
+      }
     }
 }
