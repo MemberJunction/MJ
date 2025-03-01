@@ -6,6 +6,8 @@ import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynami
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { Meta } from '@angular/platform-browser';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
  
 
 @Component({
@@ -49,9 +51,14 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     @Input() public ShowMessageRating: boolean = true;
 
     /** 
-     * Indicates if the message is currently being rated (helps with UI transitions)
+     * Indicates if the message is currently being rated and saved to the database
      */
-    public isRating: boolean = false;
+    public RatingBeingSaved: boolean = false;
+
+    /**
+     * This is an internal property that is turned on just after a user succesfully rates a message, and is never true otherwise. This allows the UI to show a thank you message for the rating.
+     */
+    public UserJustRated: boolean = false;
 
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
@@ -86,7 +93,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     public SuggestedQuestionsClicked: boolean = false;
     public SuggestedAnswersClicked: boolean = false;
 
-    constructor (private cdRef: ChangeDetectorRef) { 
+    constructor (private cdRef: ChangeDetectorRef, private notificationService: MJNotificationService ) { 
       super();
     }
 
@@ -221,28 +228,47 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * Rate the AI response with either thumbs up (10) or thumbs down (0)
      * @param rating The rating to assign, 10 for thumbs up, 0 for thumbs down
      */
-    public async rateMessage(rating: number): Promise<void> {
+    public async RateMessage(rating: number): Promise<void> {
       if (!this.ConversationDetailRecord || !this.IsAIMessage) {
         return;
       }
 
       try {
-        this.isRating = true;
-        // Update the UserRating property
+        this.RatingBeingSaved = true;
+        // Update the UserRating property in the local object
         this.ConversationDetailRecord.UserRating = rating;
+
+        let objToSave = this.ConversationDetailRecord;
         
+        if (undefined === this.ConversationDetailRecord.Save) {
+          // this means that the current object is not a ConversationDetailEntity, so we can't save it directly, we must load an object first
+          const p = this.ProviderToUse;
+          const savedID = this.ConversationDetailRecord.ID;
+          objToSave = await p.GetEntityObject<ConversationDetailEntity>("Conversation Details", p.CurrentUser);
+          await objToSave.Load(savedID);
+          objToSave.UserRating = rating
+          // now we have a real object, we can save it below
+        }
+
         // Save the updated record
-        if (await this.ConversationDetailRecord.Save()) {
+        if (await objToSave.Save()) {
           // Force change detection
-          this.cdRef.detectChanges();
+          this.UserJustRated = true; // show the thank you message
+
+          // set a timer to wait for 10 seconds and after that we'll set the UserJustRated to false
+          setTimeout(() => {
+            this.UserJustRated = false;
+          }, 10000);
         }
         else {
-          throw new Error(this.ConversationDetailRecord.LatestResult.Error);
+          throw objToSave.LatestResult.Message;
         }
       } catch (error) {
         LogError('Error rating message:' + error);
+
+        this.notificationService.CreateSimpleNotification('Error rating message', "error", 3500);
       } finally {
-        this.isRating = false;
+        this.RatingBeingSaved = false;
       }
     }
 
@@ -333,7 +359,8 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
              this.IsLastMessageInConversation && 
              !this.ConversationProcessing &&
              this.ConversationDetailRecord.UserRating === null &&
-             !this.isRating;
+             !!this.AnalysisResult && // only show this if we have an analysis result meaning this is a message that shows a report. we don't want to ask for ratings in other AI messages 
+             !this.RatingBeingSaved;
     }
 
     /**

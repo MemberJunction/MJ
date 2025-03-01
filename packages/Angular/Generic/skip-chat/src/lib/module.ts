@@ -39,6 +39,7 @@ import { SkipDynamicReportWrapperComponent } from './dynamic-report/skip-dynamic
 import { SkipDynamicLinearReportComponent } from './dynamic-report/linear-report';
 import { SkipDynamicChartComponent } from './dynamic-report/dynamic-chart';
 import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
+import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 
 
 @NgModule({
@@ -60,6 +61,7 @@ import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
     LabelModule,
     ContainerDirectivesModule,
     ListViewModule,
+    MJNotificationsModule,
     DropDownsModule,
     GridModule,
     ButtonsModule,
