@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+      "experimentalDecorators": true,
+      "esModuleInterop": true,
+      "target": "es2020",
+      "module": "CommonJS",
+      "declaration": true,
+      "declarationMap": true,
+      "moduleResolution": "node",
+      "sourceMap": true,
+      "outDir": "dist",
+    },
+    "include": ["src/**/*", "test.ts"],
+    "exclude": ["node_modules", "**/*.spec.ts"]
+  }
