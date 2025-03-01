@@ -1,3 +1,5 @@
+import debug, { Debugger } from 'debug';
+
 let fs: any;
 
 if (runningOnNode()) {
@@ -8,6 +10,26 @@ if (runningOnNode()) {
         // try/catch block just in case.
         // fs module is not available, normal in browser situation, we can't log to "Files" as that doesn't make sense in browser
     }
+}
+
+// Create the default logger with the "MJGlobal" namespace.
+const __defaultLogger: Debugger = debug('MJGlobal');
+
+/**
+ * Logs a debug message using the default 'MJGlobal' namespace logger.
+ *
+ * This function wraps the debug library's logger for the 'MJGlobal' namespace.
+ * It accepts any number of arguments and forwards them directly to the underlying
+ * debug logger. This provides a simple, out-of-the-box logging function for the MJGlobal library.
+ *
+ * @param {...any} args - The messages or objects to be logged.
+ *
+ * @example
+ * LogDebug('Initialization complete, version %s', '1.0.0');
+ */
+export function LogDebug(...args: any[]): void {
+  // Using apply to avoid spread argument type issues.
+  __defaultLogger.apply(undefined, args);
 }
 
 export function LogError(message: any, logToFileName: string | null = null, ...args: any[]) {

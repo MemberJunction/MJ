@@ -5,7 +5,7 @@ import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
-import { LogError, LogStatus } from './logging';
+import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { finalize, firstValueFrom, from, Observable, of, shareReplay, Subject, Subscription, switchMap } from 'rxjs';
 import { z } from 'zod';
@@ -374,6 +374,11 @@ export class BaseEntityEvent {
     type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other';
 
     /**
+     * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
+     */
+    saveSubType?: 'create' | 'update';
+
+    /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
     payload: any;
@@ -455,9 +460,11 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
-    protected RaiseEvent(type: 'new_record' | 'save' | 'delete' | 'transaction_ready' | 'other', payload: any) {
+    protected RaiseEvent(type: BaseEntityEvent["type"], payload: any, saveSubType: BaseEntityEvent["saveSubType"] = undefined) {
         // this is the local event handler that is specific to THIS instance of the entity object
-        this._eventSubject.next({type: type, payload: payload, baseEntity: this});
+        LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
+        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
+
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // at the moment we only broadcast save/delete not the others
         if (type === 'save' || type === 'delete') {
@@ -465,7 +472,9 @@ export abstract class BaseEntity<T = unknown> {
             event.baseEntity = this;
             event.payload = payload;
             event.type = type;
+            event.saveSubType = saveSubType;
 
+            LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call MJGlobal.RaiseEvent()`);
             MJGlobal.Instance.RaiseEvent({
                 component: this,
                 event: MJEventType.ComponentEvent,
@@ -897,6 +906,7 @@ export abstract class BaseEntity<T = unknown> {
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
 
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
+            const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
@@ -915,7 +925,7 @@ export abstract class BaseEntity<T = unknown> {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
-                            return this.finalizeSave(data);
+                            return this.finalizeSave(data, saveSubType);
                         }
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
@@ -923,7 +933,7 @@ export abstract class BaseEntity<T = unknown> {
                                 if (success) {
                                     const transItem = results.find(r => r.Transaction.BaseEntity === this); 
                                     if (transItem) {
-                                        this.finalizeSave(transItem.Result); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                     }
                                     else {
                                         // should never get here, but if we do, we need to throw an error
@@ -962,7 +972,7 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
-    private finalizeSave(data: any): boolean {
+    private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             this.SetMany(data, false, true); // set the new values from the data returned from the save, this will also reset the old values
@@ -970,7 +980,7 @@ export abstract class BaseEntity<T = unknown> {
             if (result)
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
 
-            this.RaiseEvent('save', null);
+            this.RaiseEvent('save', null, saveSubType);
 
             return true;
         }
