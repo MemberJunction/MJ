@@ -1,5 +1,36 @@
 # Change Log - @memberjunction/server
 
+## 2.27.0
+
+### Patch Changes
+
+- c48d3b7: Added logging for Debug/Events to ResolverBase
+- 5a81451: Added a UserID column to the Conversation Details Entity for the future extensibility of multi-user conversations with Skip.
+- Updated dependencies [54ab868]
+- Updated dependencies [b4d3cbc]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/ai@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/templates@2.27.0
+  - @memberjunction/aiengine@2.27.0
+  - @memberjunction/ai-vectors-pinecone@2.27.0
+  - @memberjunction/core-actions@2.27.0
+  - @memberjunction/actions@2.27.0
+  - @memberjunction/entity-communications-server@2.27.0
+  - @memberjunction/doc-utils@2.27.0
+  - @memberjunction/external-change-detection@2.27.0
+  - @memberjunction/graphql-dataprovider@2.27.0
+  - @memberjunction/data-context@2.27.0
+  - @memberjunction/queue@2.27.0
+  - @memberjunction/storage@2.27.0
+  - @memberjunction/sqlserver-dataprovider@2.27.0
+  - @memberjunction/ai-mistral@2.27.0
+  - @memberjunction/ai-openai@2.27.0
+  - @memberjunction/skip-types@2.27.0
+  - @memberjunction/data-context-server@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.27.0
+
+### Minor Changes
+
+- 2c889fe: Added new AI Model Types for Audio and Video
+
+### Patch Changes
+
+- Updated dependencies [b4d3cbc]
+  - @memberjunction/ai@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes
