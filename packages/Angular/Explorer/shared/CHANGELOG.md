@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-shared
 
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies [54ab868]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/ng-base-types@2.27.0
+  - @memberjunction/ng-notifications@2.27.0
+  - @memberjunction/graphql-dataprovider@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes
