@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/doc-utils
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/core@2.27.1
+- @memberjunction/core-entities@2.27.1
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies [54ab868]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

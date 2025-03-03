@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- 54ab868: Added LogDebug
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

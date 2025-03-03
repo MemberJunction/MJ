@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ai
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- b4d3cbc: Proposed base classes for audio and video generation
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

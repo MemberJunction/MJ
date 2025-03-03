@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.27.1
+
+### Patch Changes
+
+- 2770442: Added thumbs up/down functionality
+- aceeef2: Fixed Cloud Logging issues in MJServer, modified functionality for thumbs up/down in Skip Chat component
+  - @memberjunction/ng-base-types@2.27.1
+  - @memberjunction/ng-container-directives@2.27.1
+  - @memberjunction/ng-data-context@2.27.1
+  - @memberjunction/ng-notifications@2.27.1
+  - @memberjunction/ng-resource-permissions@2.27.1
+  - @memberjunction/graphql-dataprovider@2.27.1
+  - @memberjunction/core@2.27.1
+  - @memberjunction/core-entities@2.27.1
+  - @memberjunction/data-context@2.27.1
+  - @memberjunction/global@2.27.1
+  - @memberjunction/skip-types@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies [54ab868]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/ng-base-types@2.27.0
+  - @memberjunction/ng-container-directives@2.27.0
+  - @memberjunction/ng-data-context@2.27.0
+  - @memberjunction/ng-notifications@2.27.0
+  - @memberjunction/ng-resource-permissions@2.27.0
+  - @memberjunction/graphql-dataprovider@2.27.0
+  - @memberjunction/data-context@2.27.0
+  - @memberjunction/skip-types@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

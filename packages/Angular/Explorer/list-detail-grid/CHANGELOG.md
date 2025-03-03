@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/ng-compare-records@2.27.1
+- @memberjunction/ng-shared@2.27.1
+- @memberjunction/ng-container-directives@2.27.1
+- @memberjunction/core@2.27.1
+- @memberjunction/core-entities@2.27.1
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies [54ab868]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/ng-compare-records@2.27.0
+  - @memberjunction/ng-shared@2.27.0
+  - @memberjunction/ng-container-directives@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

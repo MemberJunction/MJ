@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@2.27.1
+- @memberjunction/ng-form-toolbar@2.27.1
+- @memberjunction/ng-base-forms@2.27.1
+- @memberjunction/ng-code-editor@2.27.1
+- @memberjunction/ng-container-directives@2.27.1
+- @memberjunction/ng-join-grid@2.27.1
+- @memberjunction/ng-tabstrip@2.27.1
+- @memberjunction/ng-timeline@2.27.1
+- @memberjunction/core@2.27.1
+- @memberjunction/core-entities@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- 5a81451: Added a UserID column to the Conversation Details Entity for the future extensibility of multi-user conversations with Skip.
+- Updated dependencies [54ab868]
+- Updated dependencies [5a81451]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/core-entities@2.27.0
+  - @memberjunction/ng-base-forms@2.27.0
+  - @memberjunction/ng-explorer-core@2.27.0
+  - @memberjunction/ng-form-toolbar@2.27.0
+  - @memberjunction/ng-code-editor@2.27.0
+  - @memberjunction/ng-container-directives@2.27.0
+  - @memberjunction/ng-join-grid@2.27.0
+  - @memberjunction/ng-timeline@2.27.0
+  - @memberjunction/ng-tabstrip@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

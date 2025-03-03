@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired,  } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
@@ -9,6 +9,9 @@ import { LogError, LogStatus } from "@memberjunction/core";
  */
 @RegisterClass(BaseCommunicationProvider, 'SendGrid')
 export class SendGridProvider extends BaseCommunicationProvider {
+    /**
+     * Sends a single message using the provider
+     */
     public async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
         
         const from: string = message.From
@@ -74,8 +77,25 @@ export class SendGridProvider extends BaseCommunicationProvider {
         }
     }
 
+    /**
+     * Fetches messages from the provider
+     */
     public async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
         throw new Error("SendGridProvider does not support fetching messages");
+    }
+
+    /**
+     * Forwards a message to another client using the provider
+     */
+    public ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>{
+        throw new Error("SendGridProvider does not support forwarding messages");
+    }
+
+    /**
+     * Replies to a message using the provider
+     */
+    public ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
+        throw new Error("SendGridProvider does not support replying to messages");
     }
 }
 

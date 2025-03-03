@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/communication-ms-graph",
-  "version": "2.26.1",
+  "version": "2.27.1",
   "description": "MemberJunction: Microsoft Graph Provider for the MJ Communication Framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,24 +17,26 @@
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5",
-    "@types/html-to-text": "^9.0.4",
-    "@microsoft/microsoft-graph-types": "^2.40.0"
+    "@types/node": "^20.14.10"
   },
   "dependencies": {
     "@azure/identity": "^4.4.1",
-    "@azure/msal-node": "^2.13.1",
-    "@memberjunction/communication-types": "2.26.1",
-    "@memberjunction/ai": "2.26.1",
-    "@memberjunction/ai-openai": "2.26.1",
-    "@memberjunction/aiengine": "2.26.1",
-    "@memberjunction/core": "2.26.1",
-    "@memberjunction/core-entities": "2.26.1",
-    "@memberjunction/global": "2.26.1",
-    "@memberjunction/sqlserver-dataprovider": "2.26.1",
+    "@memberjunction/communication-types": "2.27.1",
+    "@memberjunction/ai": "2.27.1",
+    "@memberjunction/ai-openai": "2.27.1",
+    "@memberjunction/aiengine": "2.27.1",
+    "@memberjunction/core": "2.27.1",
+    "@memberjunction/core-entities": "2.27.1",
+    "@memberjunction/global": "2.27.1",
+    "@memberjunction/sqlserver-dataprovider": "2.27.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@azure/msal-node": "^2.14.0",
     "html-to-text": "^9.0.5",
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",
-    "env-var": "^7.5.0"
+    "env-var": "^7.5.0",
+    "isomorphic-fetch": "^3.0.0",
+    "@types/html-to-text": "^9.0.4",
+    "@microsoft/microsoft-graph-types": "^2.40.0"
   }
 }
