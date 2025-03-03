@@ -729,14 +729,6 @@ export abstract class ProviderBase implements IMetadataProvider {
         this._localMetadata = res;
     }
 
-    protected UpdateLocalMetadataCurrentUser(user: UserInfo) {
-        if(!this._localMetadata || !user){
-            return;
-        }
-
-        this._localMetadata.CurrentUser = user;
-    }
-
     abstract get LocalStorageProvider(): ILocalStorageProvider; // sub-class implements this based on whatever the local storage model is, different for browser vs. node
 
     protected async LoadLocalMetadataFromStorage() {
