@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.28.0
+
+### Patch Changes
+
+- 19d0383: Ensure switching of saved conversations when URL changes in a multi-instance Skip environment.
+- Updated dependencies [8259093]
+  - @memberjunction/core@2.28.0
+  - @memberjunction/ng-base-types@2.28.0
+  - @memberjunction/ng-container-directives@2.28.0
+  - @memberjunction/ng-data-context@2.28.0
+  - @memberjunction/ng-notifications@2.28.0
+  - @memberjunction/ng-resource-permissions@2.28.0
+  - @memberjunction/graphql-dataprovider@2.28.0
+  - @memberjunction/core-entities@2.28.0
+  - @memberjunction/data-context@2.28.0
+  - @memberjunction/skip-types@2.28.0
+  - @memberjunction/global@2.28.0
+
 ## 2.27.1
 
 ### Patch Changes

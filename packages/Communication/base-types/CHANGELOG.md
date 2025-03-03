@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.28.0
+
+### Patch Changes
+
+- ffb98bf: Update communication providers to support forwarding and replying to messages
+- Updated dependencies [8259093]
+  - @memberjunction/core@2.28.0
+  - @memberjunction/core-entities@2.28.0
+  - @memberjunction/templates-base-types@2.28.0
+  - @memberjunction/global@2.28.0
+
 ## 2.27.1
 
 ### Patch Changes
