@@ -16,7 +16,7 @@ WHERE ID = '3EEE423E-F36B-1410-8874-005D02743E8C'
 
 EXEC sys.sp_addextendedproperty 
 @name=N'MS_Description', 
-@value=N'Whether or not the provider supports forwarding messages to another client' , 
+@value=N'Whether or not the provider supports forwarding messages to another recipient ' , 
 @level0type=N'SCHEMA',
 @level0name=N'${flyway:defaultSchema}', 
 @level1type=N'TABLE',

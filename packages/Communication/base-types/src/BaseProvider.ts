@@ -156,14 +156,14 @@ export type GetMessagesParams<T = Record<string, any>> = {
 export type GetMessageMessage = {
     From: string;
     To: string,
+    Body: string;
     /**
      * In some providers, such as MS Graph, replies can be sent to multiple other recipients
      * rather than just the original sender
      */
-    ReplyTo: string[];
-    Subject: string;
-    Body: string;
-    ExternalSystemRecordID: string;
+    ReplyTo?: string[];
+    Subject?: string;
+    ExternalSystemRecordID?: string;
 };
 
 export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {

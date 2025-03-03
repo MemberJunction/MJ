@@ -13,8 +13,8 @@ import * as Config from "./config";
 @RegisterClass(BaseCommunicationProvider, 'Microsoft Graph')
 export class MSGraphProvider extends BaseCommunicationProvider{
 
-    ServiceAccount: User | null = null;
-    HTMLConverter: compiledFunction;
+    private ServiceAccount: User | null = null;
+    private HTMLConverter: compiledFunction;
     
     constructor() {
         super();
@@ -239,8 +239,9 @@ export class MSGraphProvider extends BaseCommunicationProvider{
 
         let accountEmail: string = email || Config.AZURE_ACCOUNT_EMAIL;
 
-        const path: string = `${Auth.ApiConfig.uri}/${accountEmail}`;
-        const user: User | null = await Auth.CallGraphApi<User>(path)
+        const endpoint: string = `${Auth.ApiConfig.uri}/${accountEmail}`;
+        const user: User | null = await Auth.GraphClient.api(endpoint).get();
+
         if(!user){
             LogError('Error: could not get user info');
             return null;
