@@ -80,6 +80,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
      * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server. 
+     * @param options optional, a record of additional fields that will be passed to the base config class
      */
     constructor(token: string,
                 url: string,
@@ -88,19 +89,22 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 MJCoreSchemaName?: string,
                 includeSchemas?: string[],
                 excludeSchemas?: string[],
-                mjAPIKey?: string) {
-        super(
-                {
-                    Token: token,
-                    URL: url,
-                    WSURL: wsurl,
-                    MJAPIKey: mjAPIKey,
-                    RefreshTokenFunction: refreshTokenFunction,
-                },
-                MJCoreSchemaName,
-                includeSchemas,
-                excludeSchemas
-            );
+                mjAPIKey?: string,
+                options?: Record<string, any>) {
+
+        let data: Record<string, any> = {
+            Token: token,
+            URL: url,
+            WSURL: wsurl,
+            MJAPIKey: mjAPIKey,
+            RefreshTokenFunction: refreshTokenFunction,
+        };
+        
+        if(options){
+            data = {...data, ...options};
+        }
+        
+        super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
     }
 }
 

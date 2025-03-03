@@ -84,34 +84,46 @@ import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
+
   get DataSource(): any {
     return this.Data.DataSource;
   }
-  get CurrentUserEmail(): string {
-    return this.Data.CurrentUserEmail;
-  }
+
   get CheckRefreshIntervalSeconds(): number {
     return this.Data.CheckRefreshIntervalSeconds;
   }
 
+  /**
+   *
+   * @param dataSource the TypeORM DataSource object that is used to connect to the SQL Server database
+   * @param currentUserEmail the email of the current user, this is used to determine the permissions of the user
+   * @param MJCoreSchemaName the name of the MJ Core schema, if it is not the default name of __mj
+   * @param checkRefreshIntervalSeconds optional, the number of seconds to wait between checking for a refresh of the metadata. If not passed, the default is 0 which means no auto refresh
+   * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
+   * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
+   * @param options optional, a record of additional fields that will be passed to the base config class
+   */
   constructor(
     dataSource: any,
     currentUserEmail: string,
     MJCoreSchemaName?: string,
     checkRefreshIntervalSeconds: number = 0 /*default to disabling auto refresh */,
     includeSchemas?: string[],
-    excludeSchemas?: string[]
+    excludeSchemas?: string[],
+    options?: Record<string, any>
   ) {
-    super(
-      {
-        DataSource: dataSource,
-        CurrentUserEmail: currentUserEmail,
-        CheckRefreshIntervalSeconds: checkRefreshIntervalSeconds,
-      },
-      MJCoreSchemaName,
-      includeSchemas,
-      excludeSchemas
-    );
+
+    let data = {
+      DataSource: dataSource,
+      CurrentUserEmail: currentUserEmail,
+      CheckRefreshIntervalSeconds: checkRefreshIntervalSeconds,
+    };
+
+    if(options){
+      data = {...data, ...options};
+    }
+
+    super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
   }
 }
 
