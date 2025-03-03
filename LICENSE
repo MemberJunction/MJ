@@ -1,11 +1,7 @@
 ISC License
 
-Copyright (c) 2025 MemberJunction
+Copyright (c) 2023 MemberJunction
 
-Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted under the terms of this License Agreement, provided that the above copyright notice and this permission notice appear in all copies.
-1. The term “tax exempt entity” as used in this License Agreement shall mean any entity that is registered as a not-for-profit organization and is qualified by the United States Internal Revenue Service as tax exempt under Internal Revenue Code 501(c)(3), (c)(4), (c)(5), or (c)(6).
-2. Any user that is a tax exempt entity may use this software on a royalty-free, non-exclusive,  worldwide basis during the term of this Agreement, for its internal purposes only, including for development, testing and production purposes.
-3. Any user that is not a tax exempt entity may use this software on a royalty-free, non-exclusive,  worldwide basis during the term of this Agreement for its internal purposes and for development and testing only, and not for production purposes.
-4. Any user that is not a tax exempt entity may use this software on a non-exclusive, worldwide basis during the term of this Agreement, for production. However, any such user with annual revenues greater than One Hundred Million Dollars or with an enterprise value exceeding One Billion Dollars, shall pay to MemberJunction an annual license fee equal to the then current  license fee published on the MemberJunction website, www.memberjunction.com/licensing. 
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
 
 THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

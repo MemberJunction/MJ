@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/core@2.27.1
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- 5a81451: Added a UserID column to the Conversation Details Entity for the future extensibility of multi-user conversations with Skip.
+- Updated dependencies [54ab868]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes

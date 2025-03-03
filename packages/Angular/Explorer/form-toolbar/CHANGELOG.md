@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 2.27.1
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.27.1
+- @memberjunction/ng-base-forms@2.27.1
+- @memberjunction/ng-record-changes@2.27.1
+- @memberjunction/ng-shared@2.27.1
+- @memberjunction/ng-container-directives@2.27.1
+- @memberjunction/core@2.27.1
+- @memberjunction/global@2.27.1
+
+## 2.27.0
+
+### Patch Changes
+
+- Updated dependencies [54ab868]
+- Updated dependencies [2be5fb4]
+  - @memberjunction/core@2.27.0
+  - @memberjunction/ng-ask-skip@2.27.0
+  - @memberjunction/ng-base-forms@2.27.0
+  - @memberjunction/ng-record-changes@2.27.0
+  - @memberjunction/ng-shared@2.27.0
+  - @memberjunction/ng-container-directives@2.27.0
+  - @memberjunction/global@2.27.0
+
 ## 2.26.1
 
 ### Patch Changes
