@@ -17,7 +17,7 @@ import { Location } from '@angular/common';
 import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
 import { LogError, UserInfo, CompositeKey, LogStatus, RunView } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 
 import { Subscription } from 'rxjs';
@@ -536,11 +536,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     this.loadConversations();
   }
 
+  private static _cacheRootKey: string = '___SkipChat__'
   protected async loadConversations(conversationIdToLoad: string | undefined = undefined) {
     this._isLoading = true; 
-    let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
-    if (!cachedConversations) {
+
+    const cacheConversationsKey = `${SkipChatComponent._cacheRootKey}_Conversations`;
+    const cacheConversationServerURLKey = `${SkipChatComponent._cacheRootKey}_ConversationsServerURL`;
+    let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>(cacheConversationsKey);
+    const cacheConversationsServerURL = MJGlobal.Instance.ObjectCache.Find<string>(cacheConversationServerURLKey);
+    const gqlConfig = <GraphQLProviderConfigData>this.ProviderToUse.ConfigData;
+
+    if (!cachedConversations || gqlConfig.URL !== cacheConversationsServerURL ) {
       // load up from the database as we don't have any cached conversations
+      // or we have a different URL 
       const result = await this.RunViewToUse.RunView({
         EntityName: 'Conversations',
         ExtraFilter: `UserID='${this.ProviderToUse.CurrentUser.ID}'`,
@@ -548,7 +556,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       });
       if (result && result.Success) {
         // now, cache the conversations for future use
-        MJGlobal.Instance.ObjectCache.Replace('Conversations', result.Results); // use Replace for safety in case someone else has added to the cache between when we checked and now
+        MJGlobal.Instance.ObjectCache.Replace(cacheConversationsKey, result.Results); // use Replace for safety in case someone else has added to the cache between when we checked and now
+        MJGlobal.Instance.ObjectCache.Replace(cacheConversationServerURLKey, gqlConfig.URL); // ensure the key for the conversations object is set to the current server URL
+
         // also set the local variable so we can use it below
         cachedConversations = <ConversationEntity[]>result.Results;
       }
