@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.28.0
+
+### Minor Changes
+
+- 8259093: Communication Provider now supports forwarding messages
+
+### Patch Changes
+
+- @memberjunction/global@2.28.0
+
 ## 2.27.1
 
 ### Patch Changes

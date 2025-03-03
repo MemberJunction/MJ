@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/actions
 
+## 2.28.0
+
+### Patch Changes
+
+- Updated dependencies [8259093]
+  - @memberjunction/core@2.28.0
+  - @memberjunction/aiengine@2.28.0
+  - @memberjunction/actions-base@2.28.0
+  - @memberjunction/doc-utils@2.28.0
+  - @memberjunction/core-entities@2.28.0
+  - @memberjunction/ai@2.28.0
+  - @memberjunction/global@2.28.0
+
 ## 2.27.1
 
 ### Patch Changes

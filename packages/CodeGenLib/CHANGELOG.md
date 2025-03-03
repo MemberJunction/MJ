@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.28.0
+
+### Patch Changes
+
+- Updated dependencies [8259093]
+  - @memberjunction/core@2.28.0
+  - @memberjunction/actions@2.28.0
+  - @memberjunction/core-entities@2.28.0
+  - @memberjunction/sqlserver-dataprovider@2.28.0
+  - @memberjunction/ai@2.28.0
+  - @memberjunction/global@2.28.0
+
 ## 2.27.1
 
 ### Patch Changes
