@@ -16,6 +16,7 @@ export class ProviderConfigDataBase {
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
     private _data: Record<string, any>;
+    private _currentUserEmail: string = '';
     
     public get Data(): Record<string, any> {
         return this._data;
@@ -33,8 +34,15 @@ export class ProviderConfigDataBase {
         return this._excludeSchemas;
     }
 
+    /**
+     * The email of the user this provider is to use. To be set by sub-classes.
+     */
     public get CurrentUserEmail(): string {
-        return this._data.CurrentUserEmail;
+        return this._currentUserEmail;
+    }
+
+    public set CurrentUserEmail(value: string) {
+        this._currentUserEmail = value;
     }
 
     constructor(data: Record<string, any>, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {

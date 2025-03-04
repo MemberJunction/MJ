@@ -124,6 +124,8 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     }
 
     super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
+
+    this.CurrentUserEmail = currentUserEmail;
   }
 }
 

@@ -674,14 +674,6 @@ export abstract class ProviderBase implements IMetadataProvider {
 
         if (!mdLocal || !mdRemote || !mdLocal.length || !mdRemote.length || mdLocal.length === 0 || mdRemote.length === 0)
             return true;
-
-        const userEmail: string = this.ConfigData.CurrentUserEmail;
-        if(userEmail && this.CurrentUser && this.CurrentUser.Email !== userEmail){
-            //Current user's email doesnt match the user's email found in the local metadata, 
-            //which means the user has changed since we last fetched the metadata
-            //so we need to refresh
-            return true;
-        }
     
         for (let i = 0; i < mdRemote.length; ++i) {
             let bProcess: boolean = true;
