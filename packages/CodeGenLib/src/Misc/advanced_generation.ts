@@ -42,6 +42,45 @@ export class AdvancedGeneration {
                             IMPORTANT: DO NOT USE MARKDOWN - Just emit pure JSON with no preceding or trailing text. I must be able to pass your response directly to JSON.parse()`,
             userMessage: ""
         },
+        {
+            feature: 'CheckConstraintParser',
+            systemPrompt: `You are an SQL CHECK constraint parser and TypeScript code generator. Your task is to take a single SQL CHECK constraint and output a JSON object with two keys: "Description" and "TypeScriptImplementation".
+1. "Description": Provide a plain-language, non-technical description explaining what the constraint enforces. This description should be understandable to business users.
+2. "TypeScriptImplementation": Generate a TypeScript code snippet that can be used in the Validate() method of a BaseEntity class. Assume that the class has getter properties for each database field (e.g., for a column TaxRate, use this.TaxRate). 
+  Use if/else statements to implement the check. If the validation fails, the code should add an error to a locally scoped variable called "result" within its "errors" array by creating a new ValidationErrorInfo object and populating it with the information
+  needed to know what the issue is. The ValidationErrorInfo object has a constructor that takes in the following 4 parameters:
+    * Source: The name of the field that caused the error.
+    * Message: A message that describes the error.
+    * Value: The value of the field that caused the error.
+    * Type: The type of error (ValidationErrorType.Failure or ValidationErrorType.Warning).
+  NOTE: For TypeScript code, use multiline quotes with \` so that you can use nice formatting so the code is super easy to read and include comments if needed for more complex code.
+
+**** IMPORTANT: If you return anything other than the JSON below, the system will break ***** 
+Here's an example of the JSON you should return for the following input:
+
+ALTER TABLE Customers
+ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
+    (IsActive = 1 AND DeactivationDate IS NULL)
+    OR
+    (IsActive = 0 AND DeactivationDate IS NOT NULL)
+);
+
+
+RETURN THIS JSON FOR THE ABOVE INPUT:
+{
+  "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
+  "TypeScriptImplementation": \`
+if (this.IsActive === 1 && this.DeactivationDate !== null) {
+    result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
+} 
+else if (this.IsActive === 0 && this.DeactivationDate === null) {
+    result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
+}
+\`
+}
+`,
+            userMessage: ""
+        }
     ];
 
     private static _cachedLLM: BaseLLM = null!;

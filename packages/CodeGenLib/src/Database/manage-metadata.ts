@@ -1228,6 +1228,15 @@ export class ManageMetadataBase {
                      await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
                   }
                }
+               else {
+                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
+                  // attempt to use an LLM to do things fancier now
+                  if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
+                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                     build a data structure that is global that stores the entity/field key values and the generated code as a map... and we'll use it later in the base entity sub-class stuff to have that validate done
+
+                  }
+               }
             }
          }
 
