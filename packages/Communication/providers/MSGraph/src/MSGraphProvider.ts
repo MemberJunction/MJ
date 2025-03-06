@@ -95,7 +95,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                     toRecipients: [
                         {
                             emailAddress: {
-                                address: params.Message.From
+                                address: params.Message.To
                             }
                         }
                     ]
