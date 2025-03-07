@@ -143,6 +143,7 @@ export const loadModule = () => {
     }`;
 
     const validateFunction: string | null = this.GenerateValidateFunction(sClassName, entity);
+    need to test this
 
       let sRet: string = `
 
