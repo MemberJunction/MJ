@@ -4,6 +4,7 @@ import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
 import { logStatus } from './status_logging';
+import { ManageMetadataBase } from '../Database/manage-metadata';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -141,6 +142,8 @@ export const loadModule = () => {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
+    const validateFunction: string | null = this.GenerateValidateFunction(sClassName, entity);
+
       let sRet: string = `
 
 /**
@@ -154,7 +157,7 @@ export const loadModule = () => {
  * @public
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
@@ -164,6 +167,40 @@ ${fields}
       return sRet;
     }
   }
+
+  public GenerateValidateFunction(className: string, entity: EntityInfo): string | null{
+    // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
+    const fieldValidators = ManageMetadataBase.generatedFieldValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    if (fieldValidators.length === 0) {
+      return null;
+    }
+    else {
+      const ret = `    /**
+  * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+${fieldValidators.map((f) => `  * * ${f.fieldName}`).join('\n')}  
+  * @public
+  * @method
+  * @override
+  * @memberof ${className}
+  */
+  public override Validate(): ValidationResult {
+    const result = super.Validate();
+${fieldValidators.map((f) => `    this.${f.functionName}(result);`).join('\n')}
+  }
+${fieldValidators.map((f) => {
+  // output the function text and the function description in a JSDoc block
+  return `    /**
+    * ${f.functionDescription}
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    * @memberof ${className}
+    */
+  ${f.functionText}`  
+}).join('\n')}`
+      return ret;
+  }
+}
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
