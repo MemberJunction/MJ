@@ -4,13 +4,22 @@ import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, Lo
 import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, stripTrailingChars } from "@memberjunction/global";
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
 import { SQLLogging } from "../Misc/sql_logging";
 
+
+export class FieldValidatorResult {
+   public entityName: string = "";
+   public fieldName: string = "";
+   public functionText: string = "";
+   public functionName: string = "";
+   public functionDescription: string = "";
+   public success: boolean = false;
+}
 
 /**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
@@ -36,6 +45,13 @@ export class ManageMetadataBase {
     */
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
+   }
+   private static _generatedFieldValidators: FieldValidatorResult[] = [];
+   /**
+    * Globally scoped list of field validators that have been generated during the metadata management process.
+    */
+   public static get generatedFieldValidators(): FieldValidatorResult[] {
+      return this._generatedFieldValidators;
    }
 
    /**
@@ -1233,19 +1249,75 @@ export class ManageMetadataBase {
                   // attempt to use an LLM to do things fancier now
                   if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
                      // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
-                     build a data structure that is global that stores the entity/field key values and the generated code as a map... and we'll use it later in the base entity sub-class stuff to have that validate done
-
+                     //build a data structure that is global that stores the entity/field key values and the generated code as a map... and we'll use it later in the base entity sub-class stuff to have that validate done
+                     const generatedFunction = await this.generateFieldValidatorFunctionFromCheckConstraint(r.EntityName, r.ColumnName, r.ConstraintDefinition);
+                     if (generatedFunction?.success) {
+                        // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
+                        ManageMetadataBase._generatedFieldValidators.push(generatedFunction);
+                     }
                   }
                }
             }
          }
-
 
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
+      }
+   }
+
+   /**
+    * Generates a TypeScript field validator function from the text of a SQL CHECK constraint. 
+    * @param entityName 
+    * @param fieldName 
+    * @param constraintDefinition 
+    * @returns a data structure with the function text, function name, function description, and a success flag
+    */
+   protected async generateFieldValidatorFunctionFromCheckConstraint(entityName: string, fieldName: string, constraintDefinition: string): Promise<FieldValidatorResult> {
+      const returnResult = new FieldValidatorResult();
+      returnResult.success = false;
+      returnResult.entityName = entityName;
+      returnResult.fieldName = fieldName;
+
+      try {
+         if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
+            // feature is enabled, so let's call the LLM to generate a function for us
+            const ag = new AdvancedGeneration();
+            const llm = ag.LLM;
+            const prompt = ag.getPrompt('CheckConstraintParser');
+            const result = await llm.ChatCompletion({
+               messages: [
+                  {
+                     role: 'system',
+                     content: prompt.systemPrompt
+                  },
+                  {
+                     role: 'user',
+                     content: `${constraintDefinition}`
+                  }
+               ],
+               model: ag.AIModel,
+               responseFormat: 'JSON'
+            });
+            if (result && result.success) {
+               const jsonResult = result.data.choices[0].message.content;
+               const structuredResult = <any>SafeJSONParse(jsonResult);
+               if (structuredResult?.Description && structuredResult?.Code && structuredResult?.MethodName) {
+                  returnResult.functionText = structuredResult.Code;
+                  returnResult.functionName = structuredResult.MethodName;
+                  returnResult.functionDescription = structuredResult.Description;
+                  returnResult.success = true;
+               }
+            }
+         }
+      }
+      catch (e) {
+         logError(e as string);
+      }
+      finally {
+         return returnResult;
       }
    }
 

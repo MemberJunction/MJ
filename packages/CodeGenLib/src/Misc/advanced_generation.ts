@@ -44,20 +44,21 @@ export class AdvancedGeneration {
         },
         {
             feature: 'CheckConstraintParser',
-            systemPrompt: `You are an SQL CHECK constraint parser and TypeScript code generator. Your task is to take a single SQL CHECK constraint and output a JSON object with two keys: "Description" and "TypeScriptImplementation".
+            systemPrompt: `You are an SQL CHECK constraint parser and TypeScript code generator. Each User Message will contain the text of a single SQL Check Constraint. Your task is to take a single SQL CHECK constraint and output a JSON object with two keys: "Description" and "TypeScriptImplementation".
 1. "Description": Provide a plain-language, non-technical description explaining what the constraint enforces. This description should be understandable to business users.
-2. "TypeScriptImplementation": Generate a TypeScript code snippet that can be used in the Validate() method of a BaseEntity class. Assume that the class has getter properties for each database field (e.g., for a column TaxRate, use this.TaxRate). 
-  Use if/else statements to implement the check. If the validation fails, the code should add an error to a locally scoped variable called "result" within its "errors" array by creating a new ValidationErrorInfo object and populating it with the information
+2. "Code": Generate a TypeScript class method that can be called from the Validate() method of a BaseEntity sub-class. Assume that the class has getter properties for each database field (e.g., for a column TaxRate, use this.TaxRate). 
+  Use if/else statements to implement the check. If the validation fails, the code should add an error to provided method parameter called "result". 
+  Within the result object there is an "errors" array. For each error or warning, you create a new ValidationErrorInfo object and populating it with the information
   needed to know what the issue is. The ValidationErrorInfo object has a constructor that takes in the following 4 parameters:
     * Source: The name of the field that caused the error.
     * Message: A message that describes the error.
     * Value: The value of the field that caused the error.
     * Type: The type of error (ValidationErrorType.Failure or ValidationErrorType.Warning).
-  NOTE: For TypeScript code, use multiline quotes with \` so that you can use nice formatting so the code is super easy to read and include comments if needed for more complex code.
+  NOTE: For TypeScript code, use multiline quotes with \` so that you can use nice formatting so the code is super easy to read and include comments if needed for more complex code. Also use a single tab to indent each line of the code as shown in the example below.
+3. "MethodName": Provide the string here for the name of the method you created, use the pattern of Validate{FieldName} where FieldName is the name of the field that the constraint is for.
 
 **** IMPORTANT: If you return anything other than the JSON below, the system will break ***** 
 Here's an example of the JSON you should return for the following input:
-
 ALTER TABLE Customers
 ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
     (IsActive = 1 AND DeactivationDate IS NULL)
@@ -69,18 +70,20 @@ ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
 RETURN THIS JSON FOR THE ABOVE INPUT:
 {
   "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
-  "TypeScriptImplementation": \`
-if (this.IsActive === 1 && this.DeactivationDate !== null) {
-    result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
-} 
-else if (this.IsActive === 0 && this.DeactivationDate === null) {
-    result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
-}
-\`
-}
-`,
-            userMessage: ""
+  "Code": \`
+    public ValidateDeactivationDate(result: ValidationResult) {
+        if (this.IsActive === 1 && this.DeactivationDate !== null) {
+            result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
+        } 
+        else if (this.IsActive === 0 && this.DeactivationDate === null) {
+            result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
         }
+    }
+\`,
+ "MethodName": "ValidateDeactivationDate"
+}`,
+            userMessage: ""
+        },
     ];
 
     private static _cachedLLM: BaseLLM = null!;
@@ -123,6 +126,12 @@ else if (this.IsActive === 0 && this.DeactivationDate === null) {
         }
     }
 
+    /**
+     * A template can be populated with any number of variable placeholders in the form ${variableName}. This function will replace all the placeholders with the values provided in the variables object.
+     * @param template 
+     * @param variables 
+     * @returns 
+     */
     public fillTemplate(template: string, variables: { [key: string]: any }): string {
         return template.replace(/\${(.*?)}/g, (_, g) => variables[g]);
     }
