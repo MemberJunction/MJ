@@ -82,7 +82,7 @@ const codegenConfig = {
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
-    AIModel: 'gpt-4-1106-preview',
+    AIModel: 'gpt-4o',
     features: [
       {
         name: 'EntityNames',
@@ -121,7 +121,7 @@ const codegenConfig = {
         name: 'ParseCheckConstraints',
         description:
           'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
-        enabled: false,
+        enabled: true,
       }
     ],
   },

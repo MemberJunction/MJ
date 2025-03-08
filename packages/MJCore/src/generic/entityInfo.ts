@@ -1160,10 +1160,10 @@ export type ValidationErrorType = typeof ValidationErrorType[keyof typeof Valida
 export class ValidationErrorInfo {
     Source: string
     Message: string
-    Value: string
+    Value: any
     Type: ValidationErrorType
 
-    constructor(Source: string, Message: string, Value: string, Type: ValidationErrorType = ValidationErrorType.Failure) {
+    constructor(Source: string, Message: string, Value: any, Type: ValidationErrorType = ValidationErrorType.Failure) {
         this.Source = Source;
         this.Message = Message;
         this.Value = Value;

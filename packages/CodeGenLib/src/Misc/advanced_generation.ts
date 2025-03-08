@@ -7,6 +7,17 @@ export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
 export type PromptDefinition = { feature: string, systemPrompt: string, userMessage: string };
 
+import { LoadOpenAIEmbedding, LoadOpenAILLM } from "@memberjunction/ai-openai";
+LoadOpenAILLM();
+LoadOpenAIEmbedding();
+
+import { LoadMistralEmbedding, LoadMistralLLM } from "@memberjunction/ai-mistral";
+LoadMistralEmbedding();
+LoadMistralLLM();
+
+import { LoadAnthropicLLM } from "@memberjunction/ai-anthropic";
+LoadAnthropicLLM();
+
 /**
  * This class is responsible for managing the advanced generation capabilities of the system. You can override the class to provide your own implementation.
  */
@@ -73,10 +84,10 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
   "Code": \`
     public ValidateDeactivationDate(result: ValidationResult) {
         if (this.IsActive === 1 && this.DeactivationDate !== null) {
-            result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
+            result.Errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
         } 
         else if (this.IsActive === 0 && this.DeactivationDate === null) {
-            result.errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
+            result.Errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
         }
     }
 \`,
@@ -117,7 +128,8 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
             return AdvancedGeneration._cachedLLM;
         }
         else if (configInfo.advancedGeneration!.AIVendor && configInfo.advancedGeneration!.AIVendor.length > 0) {
-            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, configInfo.advancedGeneration!.AIVendor, GetAIAPIKey(configInfo.advancedGeneration!.AIVendor))!;
+            const AIVendorWithKeySuffix = configInfo.advancedGeneration!.AIVendor.toUpperCase() + 'LLM';
+            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, AIVendorWithKeySuffix, GetAIAPIKey(AIVendorWithKeySuffix))!;
             return AdvancedGeneration._cachedLLM;    
         }
         else {

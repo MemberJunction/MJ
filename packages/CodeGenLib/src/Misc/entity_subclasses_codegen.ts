@@ -30,7 +30,7 @@ export class EntitySubClassGeneratorBase {
   }
 
   public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -143,7 +143,6 @@ export const loadModule = () => {
     }`;
 
     const validateFunction: string | null = this.GenerateValidateFunction(sClassName, entity);
-    need to test this
 
       let sRet: string = `
 
@@ -177,17 +176,18 @@ ${fields}
     }
     else {
       const ret = `    /**
-  * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
 ${fieldValidators.map((f) => `  * * ${f.fieldName}`).join('\n')}  
-  * @public
-  * @method
-  * @override
-  * @memberof ${className}
-  */
-  public override Validate(): ValidationResult {
-    const result = super.Validate();
-${fieldValidators.map((f) => `    this.${f.functionName}(result);`).join('\n')}
-  }
+    * @public
+    * @method
+    * @override
+    * @memberof ${className}
+    */
+    public override Validate(): ValidationResult {
+      const result = super.Validate();
+  ${fieldValidators.map((f) => `    this.${f.functionName}(result);`).join('\n')}
+      return result;
+    }
 ${fieldValidators.map((f) => {
   // output the function text and the function description in a JSDoc block
   return `    /**
