@@ -175,30 +175,38 @@ ${fields}
       return null;
     }
     else {
-      const ret = `    /**
-    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
-${fieldValidators.map((f) => `  * * ${f.fieldName}`).join('\n')}  
-    * @public
-    * @method
-    * @override
-    * @memberof ${className}
-    */
-    public override Validate(): ValidationResult {
-      const result = super.Validate();
-  ${fieldValidators.map((f) => `    this.${f.functionName}(result);`).join('\n')}
-      return result;
-    }
-${fieldValidators.map((f) => {
-  // output the function text and the function description in a JSDoc block
-  return `    /**
+      const validationFunctions = fieldValidators.map((f) => {
+        // output the function text and the function description in a JSDoc block
+
+        // first format the function text to ensure that escaped \n and \t are removed and replaced with actual newlines and tabs
+        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
+        const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
+
+        return `    /**
     * ${f.functionDescription}
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
-    * @memberof ${className}
     */
-  ${f.functionText}`  
-}).join('\n')}`
+${formattedText}`  
+      }).join('\n')
+
+      const ret = `    /**
+    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+${fieldValidators.map((f) => `    * * ${f.fieldName}: ${f.functionDescription}`).join('\n')}  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+${fieldValidators.map((f) => `        this.${f.functionName}(result);`).join('\n')}
+
+        return result;
+    }
+
+${validationFunctions}`
       return ret;
   }
 }

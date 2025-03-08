@@ -100,8 +100,8 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
-  AIVendor: z.enum(['openai', 'anthropic', 'mistral']).default('openai'),
-  AIModel: z.string().default('gpt-4-1106-preview'),
+  AIVendor: z.enum(['openai', 'anthropic', 'mistral', 'groq']).default('openai'),
+  AIModel: z.string().default('gpt-4o'),
   features: advancedGenerationFeatureSchema.array().default([
     {
       name: 'EntityNames',

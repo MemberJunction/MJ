@@ -26,6 +26,7 @@
     "@memberjunction/sqlserver-dataprovider": "2.28.0",
     "@memberjunction/ai": "2.28.0",
     "@memberjunction/ai-openai": "2.28.0",
+    "@memberjunction/ai-groq": "2.28.0",
     "@memberjunction/ai-mistral": "2.28.0",
     "@memberjunction/ai-anthropic": "2.28.0",
     "cosmiconfig": "9.0.0",

@@ -18,6 +18,9 @@ LoadMistralLLM();
 import { LoadAnthropicLLM } from "@memberjunction/ai-anthropic";
 LoadAnthropicLLM();
 
+import { LoadGroqLLM } from "@memberjunction/ai-groq";
+LoadGroqLLM();
+
 /**
  * This class is responsible for managing the advanced generation capabilities of the system. You can override the class to provide your own implementation.
  */
@@ -70,6 +73,7 @@ export class AdvancedGeneration {
 
 **** IMPORTANT: If you return anything other than the JSON below, the system will break ***** 
 Here's an example of the JSON you should return for the following input:
+
 ALTER TABLE Customers
 ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
     (IsActive = 1 AND DeactivationDate IS NULL)
@@ -77,11 +81,8 @@ ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
     (IsActive = 0 AND DeactivationDate IS NOT NULL)
 );
 
+Here is example TypeScript code that you should return for the above input:
 
-RETURN THIS JSON FOR THE ABOVE INPUT:
-{
-  "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
-  "Code": \`
     public ValidateDeactivationDate(result: ValidationResult) {
         if (this.IsActive === 1 && this.DeactivationDate !== null) {
             result.Errors.push(new ValidationErrorInfo('DeactivationDate', 'An active customer cannot have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
@@ -90,8 +91,12 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
             result.Errors.push(new ValidationErrorInfo('DeactivationDate', 'An inactive customer must have a deactivation date.', this.DeactivationDate, ValidationErrorType.Failure));
         }
     }
-\`,
- "MethodName": "ValidateDeactivationDate"
+
+RETURN THIS JSON FOR THE ABOVE INPUT:
+{
+  "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
+  "Code": "This is where you put the actual code in TypeScript INCLUDING the method signature, see above example. Don't include punctuation, quotes, markdown, or anything else. Just the code.",
+  "MethodName": "ValidateDeactivationDate"
 }`,
             userMessage: ""
         },

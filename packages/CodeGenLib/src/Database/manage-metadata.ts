@@ -1,7 +1,7 @@
 import { DataSource } from "typeorm";
 import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
-import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logging";
+import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
 import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
@@ -1310,6 +1310,12 @@ export class ManageMetadataBase {
                   returnResult.functionDescription = structuredResult.Description;
                   returnResult.success = true;
                }
+               else {
+                  logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
+               }
+            }
+            else {
+               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM call failed.`);
             }
          }
       }

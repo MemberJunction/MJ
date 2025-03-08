@@ -82,7 +82,7 @@ const codegenConfig = {
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
-    AIModel: 'gpt-4o',
+    AIModel: 'gpt-4o-mini',
     features: [
       {
         name: 'EntityNames',
