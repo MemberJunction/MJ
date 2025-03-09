@@ -58,7 +58,7 @@ export class SQLLogging {
             if (SQLLogging.getFileLength(SQLLogging.SQLLoggingFilePath) === 0) {
                 // no content in the file, so delete it
                 fs.unlinkSync(SQLLogging.SQLLoggingFilePath);
-                logStatus("SQL logging file was empty and has been deleted");
+                logStatus(" >>> SQL logging file was empty and has been deleted");
             }
             else if(configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
                 SQLLogging.convertSQLLogToFlywaySchema();
