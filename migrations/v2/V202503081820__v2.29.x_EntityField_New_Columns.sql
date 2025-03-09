@@ -206,3 +206,22 @@ UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=1 WHERE ID='C3E44
 /* SQL text to update entity field value sequence */
 UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=3 WHERE ID='B7E4423E-F36B-1410-8D9A-00021F8B792E'
 
+
+/***** GET RID OF flyway schema history entity ****/
+/***** CODEGEN NOW EXCLUDES THAT TABLE *****/
+DECLARE @FlywayEntityID UNIQUEIDENTIFIER;
+SELECT @FlywayEntityID=ID FROM ${flyway:defaultSchema}.Entity WHERE SchemaName='${flyway:defaultSchema}' AND BaseTable='flyway_schema_history';
+IF (@FlywayEntityID IS NOT NULL)
+BEGIN
+  PRINT 'DELETING flyway_schema_history Entity Metadata'
+  DELETE FROM ${flyway:defaultSchema}.ApplicationEntity WHERE EntityID=@FlywayEntityID;
+  DELETE FROM ${flyway:defaultSchema}.EntityRelationship WHERE RelatedEntityID = @FlywayEntityID OR EntityID = @FlywayEntityID;
+  DELETE FROM ${flyway:defaultSchema}.EntityFieldValue WHERE EntityFieldID IN ( SELECT ID FROM ${flyway:defaultSchema}.EntityField WHERE EntityID=@FlywayEntityID);
+  DELETE FROM ${flyway:defaultSchema}.EntityPermission WHERE EntityID = @FlywayEntityID;
+  DELETE FROM ${flyway:defaultSchema}.EntityField WHERE EntityID = @FlywayEntityID;
+  DELETE FROM ${flyway:defaultSchema}.Entity WHERE ID = @FlywayEntityID;
+END
+ELSE
+BEGIN
+  PRINT 'No flyway_schema_history entity in place, doing nothing'
+END
