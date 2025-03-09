@@ -2,6 +2,12 @@
 ALTER TABLE ${flyway:defaultSchema}.EntityField
   DROP CONSTRAINT CK_ValueListType 
 
+ALTER TABLE ${flyway:defaultSchema}.EntityField
+  DROP CONSTRAINT CK_EntityField_ValueListType
+
+ALTER TABLE ${flyway:defaultSchema}.EntityField
+  ADD CONSTRAINT CK_EntityField_ValueListType_New CHECK (ValueListType IN ('None','List','ListOrUserEntry'))
+
 
 ALTER TABLE ${flyway:defaultSchema}.EntityField
 ADD 
