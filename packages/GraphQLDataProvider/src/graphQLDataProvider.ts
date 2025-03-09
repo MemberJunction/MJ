@@ -243,28 +243,71 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // START ---- IRunQueryProvider
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        if (params.QueryID) {
+            return this.RunQueryByID(params.QueryID, contextUser);
+        }
+        else if (params.QueryName) {
+            return this.RunQueryByName(params.QueryName, contextUser);
+        }
+        else {
+            throw new Error("No QueryID or QueryName provided to RunQuery");
+        }
+    }
+    public async RunQueryByID(QueryID: string, contextUser?: UserInfo): Promise<RunQueryResult> {
         const query = gql`
         query GetQueryDataQuery ($QueryID: String!) {
             GetQueryData(QueryID: $QueryID) {
-                Success
-                Results
-                RowCount
-                ExecutionTime
-                ErrorMessage
+                ${this.QueryReturnFieldList}
             }
         }`
 
-        const result = await this.ExecuteGQL(query, {QueryID: params.QueryID} );
-        if (result && result.GetQueryData)
-            return {
-                QueryID: params.QueryID,
-                Success: result.GetQueryData.Success,
-                Results: JSON.parse(result.GetQueryData.Results),
-                RowCount: result.GetQueryData.RowCount,
-                ExecutionTime: result.GetQueryData.ExecutionTime,
-                ErrorMessage: result.GetQueryData.ErrorMessage,
-            };
+        const result = await this.ExecuteGQL(query, {QueryID: QueryID} );
+        if (result && result.GetQueryData) {
+            return this.TransformQueryPayload(result.GetQueryData);
+        }
     }
+    public async RunQueryByName(QueryName: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+        const query = gql`
+        query GetQueryDataByNameQuery ($QueryName: String!) {
+            GetQueryDataByName(QueryName: $QueryName) {
+                ${this.QueryReturnFieldList}
+            }
+        }`
+
+        const result = await this.ExecuteGQL(query, {QueryName: QueryName} );
+        if (result && result.GetQueryDataByName) {
+            return this.TransformQueryPayload(result.GetQueryDataByName);
+        }
+    }
+
+    protected get QueryReturnFieldList(): string {
+        return `
+                Success
+                QueryID
+                QueryName
+                Results
+                RowCount
+                ExecutionTime
+                ErrorMessage`
+    }
+    protected TransformQueryPayload(data: any): RunQueryResult {
+        try {
+            return {
+                QueryID: data.QueryID,
+                QueryName: data.QueryName,
+                Success: data.Success,
+                Results: JSON.parse(data.Results),
+                RowCount: data.RowCount,
+                ExecutionTime: data.ExecutionTime,
+                ErrorMessage: data.ErrorMessage,
+            };    
+        }
+        catch (e) {
+            LogError(`Error transforming query payload: ${e}`);
+            return null;
+        }
+    }
+
     /**************************************************************************/
     // END ---- IRunReportProvider
     /**************************************************************************/
