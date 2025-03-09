@@ -193,3 +193,11 @@ WHERE
   ID='AC5717F0-6F36-EF11-86D4-6045BDEE16E6';
 
 
+GO
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=1 WHERE ID='C3E4423E-F36B-1410-8D9A-00021F8B792E'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=3 WHERE ID='B7E4423E-F36B-1410-8D9A-00021F8B792E'
+

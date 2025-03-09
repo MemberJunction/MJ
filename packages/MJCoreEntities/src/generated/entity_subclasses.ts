@@ -12693,8 +12693,8 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     /**
     * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
     * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
-    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
-    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.  
+    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.  
     * @public
     * @method
     * @override
@@ -12702,8 +12702,8 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateSpeedRank(result);
-        this.ValidatePowerRank(result);
         this.ValidateCostRank(result);
+        this.ValidatePowerRank(result);
 
         return result;
     }
@@ -12721,18 +12721,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePowerRank(result: ValidationResult) {
-    	if (this.PowerRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -12742,6 +12730,18 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     	if (this.CostRank < 0) {
     		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
     	} 
+    }
+
+    /**
+    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRank(result: ValidationResult) {
+    	if (this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
