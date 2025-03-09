@@ -16,6 +16,7 @@ import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterCla
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
+import { SystemIntegrityBase } from './Misc/system_integrity';
 
 const { mjCoreSchema } = configInfo;
 
@@ -262,6 +263,9 @@ export class RunCodeGenBase {
 
       // WRAP UP SQL LOGGING HERE
       SQLLogging.finishSQLLogging(); // finish up the SQL Logging
+
+      // now run integrity checks
+      await SystemIntegrityBase.RunIntegrityChecks(AppDataSource, true);
 
       /****************************************************************************************
       // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file

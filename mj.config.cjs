@@ -79,6 +79,10 @@ const codegenConfig = {
       },
     ],
   },
+  integrityChecks: {
+    enabled: true,
+    entityFieldsSequenceCheck: true,
+  },
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',

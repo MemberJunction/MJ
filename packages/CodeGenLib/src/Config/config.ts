@@ -139,6 +139,14 @@ const advancedGenerationSchema = z.object({
   ]),
 });
 
+
+export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
+
+const integrityCheckConfigSchema = z.object({
+  enabled: z.boolean(),
+  entityFieldsSequenceCheck: z.boolean(),
+});
+
 export type SQLOutputConfig = z.infer<typeof sqlOutputConfigSchema>;
 
 const sqlOutputConfigSchema = z.object({
@@ -237,6 +245,10 @@ const configInfoSchema = z.object({
     },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
+  integrityChecks: integrityCheckConfigSchema.default({
+    enabled: true,
+    entityFieldsSequenceCheck: true
+  }),
   output: outputInfoSchema.array().default([
     { type: 'SQL', directory: '../../SQL Scripts/generated', appendOutputCode: true },
     { type: 'Angular', directory: '../MJExplorer/src/app/generated', options: [{ name: 'maxComponentsPerModule', value: 20 }] },
