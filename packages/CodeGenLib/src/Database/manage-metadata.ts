@@ -15,9 +15,11 @@ import { SQLLogging } from "../Misc/sql_logging";
 export class FieldValidatorResult {
    public entityName: string = "";
    public fieldName: string = "";
+   public sourceCheckConstraint: string = "";
    public functionText: string = "";
    public functionName: string = "";
    public functionDescription: string = "";
+   public wasGenerated: boolean = true;
    public success: boolean = false;
 }
 
@@ -1250,7 +1252,7 @@ export class ManageMetadataBase {
                   if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
                      // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
                      //build a data structure that is global that stores the entity/field key values and the generated code as a map... and we'll use it later in the base entity sub-class stuff to have that validate done
-                     const generatedFunction = await this.generateFieldValidatorFunctionFromCheckConstraint(r.EntityName, r.ColumnName, r.ConstraintDefinition);
+                     const generatedFunction = await this.generateFieldValidatorFunctionFromCheckConstraint(r);
                      if (generatedFunction?.success) {
                         // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
                         ManageMetadataBase._generatedFieldValidators.push(generatedFunction);
@@ -1275,11 +1277,32 @@ export class ManageMetadataBase {
     * @param constraintDefinition 
     * @returns a data structure with the function text, function name, function description, and a success flag
     */
-   protected async generateFieldValidatorFunctionFromCheckConstraint(entityName: string, fieldName: string, constraintDefinition: string): Promise<FieldValidatorResult> {
+   protected async generateFieldValidatorFunctionFromCheckConstraint(data: any): Promise<FieldValidatorResult> {
+      const entityName = data.EntityName;
+      const fieldName = data.ColumnName;
+      const constraintDefinition = data.ConstraintDefinition;
+      const generatedValidationFunctionName = data.GeneratedValidationFunctionName;
+      const generatedValidationFunctionDescription = data.GeneratedValidationFunctionDescription;
+      const generatedValidationFunctionCode = data.GeneratedValidationFunctionCode;
+      const generatedValidationFunctionCheckConstraint = data.GeneratedValidationFunctionCheckConstraint;
+
       const returnResult = new FieldValidatorResult();
       returnResult.success = false;
       returnResult.entityName = entityName;
       returnResult.fieldName = fieldName;
+      returnResult.sourceCheckConstraint = constraintDefinition;
+      if (generatedValidationFunctionCheckConstraint === constraintDefinition) {
+         // in this situation, we have an EXACT match of the previous version of a CHECK constraint and what is now the CHECK constraint - meaning it hasn't changed
+         // in this situation if we have a generated function name, description, and code, we can just return that and not call the LLM
+         if (generatedValidationFunctionName && generatedValidationFunctionDescription && generatedValidationFunctionCode) {
+            returnResult.functionText = generatedValidationFunctionCode;
+            returnResult.functionName = generatedValidationFunctionName;
+            returnResult.functionDescription = generatedValidationFunctionDescription;
+            returnResult.wasGenerated = false; // we did NOT just generate this code, was already saved
+            returnResult.success = true;
+            return returnResult;
+         }
+      }
 
       try {
          if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
@@ -1308,6 +1331,7 @@ export class ManageMetadataBase {
                   returnResult.functionText = structuredResult.Code;
                   returnResult.functionName = structuredResult.MethodName;
                   returnResult.functionDescription = structuredResult.Description;
+                  returnResult.wasGenerated = true; // we just generated this code
                   returnResult.success = true;
                }
                else {

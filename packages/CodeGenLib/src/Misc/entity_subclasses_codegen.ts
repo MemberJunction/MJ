@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
-import { logStatus } from './status_logging';
-import { ManageMetadataBase } from '../Database/manage-metadata';
+import { logError, logStatus } from './status_logging';
+import { FieldValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
+import { mj_core_schema } from '../Config/config';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -142,7 +143,7 @@ export const loadModule = () => {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
-    const validateFunction: string | null = this.GenerateValidateFunction(sClassName, entity);
+    const validateFunction: string | null = this.LogAndGenerateValidateFunction(entity);
 
       let sRet: string = `
 
@@ -168,7 +169,40 @@ ${fields}
     }
   }
 
-  public GenerateValidateFunction(className: string, entity: EntityInfo): string | null{
+  public LogAndGenerateValidateFunction(entity: EntityInfo): string | null {
+    // first generate the validate function
+    const ret = this.GenerateValidateFunction(entity);
+    if (ret && ret.code) {
+      // logging the generated function means that we want to EMIT SQL that will update the EntityField table for the fields that had emitted validation functions
+      // so that we have a record of what was generated
+      // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
+      let sSQL: string  = '';
+      const justGenerated = ret.fieldValidators.filter((f) => f.wasGenerated);
+      for (const v of justGenerated) {
+        // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
+        const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName.trim().toLowerCase());      
+        if (f) {
+          sSQL += `-- CHECK constraint for ${entity.Name}.${f.Name} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the EntityField table with the new generated validation function
+UPDATE [${mj_core_schema}].[EntityField] SET 
+  GeneratedValidationFunctionCheckConstraint='${v.sourceCheckConstraint.replace(/'/g, "''")}', 
+  GeneratedValidationFunctionCode='${v.functionText.replace(/'/g, "''")}',
+  GeneratedValidationFunctionDescription='${v.functionDescription.replace(/'/g, "''")}'
+  GeneratedValidationFunctionName='${v.functionName.replace(/'/g, "''")}'
+WHERE 
+  ID='${f.ID}';
+`;           
+        }  
+        else {
+          logError(`Field ${v.fieldName} not found in entity ${entity.Name} for generated validation function.`);
+        }
+      }
+      return ret.code;
+    }
+    else {
+      return null;
+    }
+  }
+  public GenerateValidateFunction(entity: EntityInfo): null | { code: string, fieldValidators: FieldValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const fieldValidators = ManageMetadataBase.generatedFieldValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
     if (fieldValidators.length === 0) {
@@ -207,7 +241,7 @@ ${fieldValidators.map((f) => `        this.${f.functionName}(result);`).join('\n
     }
 
 ${validationFunctions}`
-      return ret;
+      return {code: ret, fieldValidators: fieldValidators};
   }
 }
 
