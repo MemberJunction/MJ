@@ -100,8 +100,8 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
-  AIVendor: z.enum(['openai', 'anthropic', 'mistral']).default('openai'),
-  AIModel: z.string().default('gpt-4-1106-preview'),
+  AIVendor: z.enum(['openai', 'anthropic', 'mistral', 'groq']).default('openai'),
+  AIModel: z.string().default('gpt-4o'),
   features: advancedGenerationFeatureSchema.array().default([
     {
       name: 'EntityNames',
@@ -137,6 +137,14 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
   ]),
+});
+
+
+export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
+
+const integrityCheckConfigSchema = z.object({
+  enabled: z.boolean(),
+  entityFieldsSequenceCheck: z.boolean(),
 });
 
 export type SQLOutputConfig = z.infer<typeof sqlOutputConfigSchema>;
@@ -237,6 +245,10 @@ const configInfoSchema = z.object({
     },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
+  integrityChecks: integrityCheckConfigSchema.default({
+    enabled: true,
+    entityFieldsSequenceCheck: true
+  }),
   output: outputInfoSchema.array().default([
     { type: 'SQL', directory: '../../SQL Scripts/generated', appendOutputCode: true },
     { type: 'Angular', directory: '../MJExplorer/src/app/generated', options: [{ name: 'maxComponentsPerModule', value: 20 }] },

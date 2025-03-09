@@ -220,6 +220,7 @@ CREATE VIEW [__mj].vwEntityFields
 AS
 SELECT
 	ef.*,
+  __mj.GetProgrammaticName(REPLACE(ef.Name,' ','')) AS FieldCodeName,
 	e.Name Entity,
 	e.SchemaName,
 	e.BaseTable,
@@ -1439,6 +1440,10 @@ SELECT
 	  e.Name as EntityName,
     ef.ID as EntityFieldID,
     ef.Name as EntityFieldName,
+    ef.GeneratedValidationFunctionName,
+    ef.GeneratedValidationFunctionDescription,
+    ef.GeneratedValidationFunctionCode,
+    ef.GeneratedValidationFunctionCheckConstraint,
     sch.name AS SchemaName,
     obj.name AS TableName,
     col.name AS ColumnName,

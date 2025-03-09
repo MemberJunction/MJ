@@ -16,6 +16,7 @@ import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterCla
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
+import { SystemIntegrityBase } from './Misc/system_integrity';
 
 const { mjCoreSchema } = configInfo;
 
@@ -137,9 +138,10 @@ export class RunCodeGenBase {
           if (!sqlSuccess) {
             logError('Error managing SQL scripts and execution');
           }
-        } else logStatus('SQL output directory NOT found in config file, skipping...');
-
-        SQLLogging.finishSQLLogging(); // finish up the SQL Logging
+        } 
+        else {
+          logStatus('SQL output directory NOT found in config file, skipping...');
+        }
       } else {
         logMessage(
           'Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings',
@@ -185,7 +187,7 @@ export class RunCodeGenBase {
         logStatus('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir)) {
           logError('Error generating entity subclass code');
         }
       }
@@ -199,7 +201,7 @@ export class RunCodeGenBase {
         logStatus('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir)) {
           logError('Error generating entity subclass code');
         }
       } else {
@@ -259,9 +261,15 @@ export class RunCodeGenBase {
           logError('Error generating Actions code');
       } else logStatus('Actions output directory NOT found in config file, skipping...');
 
+      // WRAP UP SQL LOGGING HERE
+      SQLLogging.finishSQLLogging(); // finish up the SQL Logging
+
+      // now run integrity checks
+      await SystemIntegrityBase.RunIntegrityChecks(AppDataSource, true);
+
       /****************************************************************************************
-            // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
-            ****************************************************************************************/
+      // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
+      ****************************************************************************************/
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {
         logStatus('Executing AFTER commands...');
@@ -270,12 +278,12 @@ export class RunCodeGenBase {
       }
 
       /****************************************************************************************
-            // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
-            ****************************************************************************************/
+      // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
+      ****************************************************************************************/
       if (!skipDB) {
         if (!(await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))) logError('ERROR running after-all SQL Scripts');
       }
-
+        
       logStatus(md.Entities.length + ' entities processed and outputed to configured directories');
       logStatus(
         'MJ CodeGen Run Complete! @ ' +

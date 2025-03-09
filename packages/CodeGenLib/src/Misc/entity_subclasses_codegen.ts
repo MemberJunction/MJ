@@ -3,19 +3,26 @@ import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
 import { RegisterClass } from '@memberjunction/global';
-import { logStatus } from './status_logging';
+import { logError, logStatus } from './status_logging';
+import { FieldValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
+import { mj_core_schema } from '../Config/config';
+import { SQLLogging } from './sql_logging';
+import { DataSource } from 'typeorm';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 @RegisterClass(EntitySubClassGeneratorBase)
 export class EntitySubClassGeneratorBase {
-  public generateAllEntitySubClasses(entities: EntityInfo[], directory: string): boolean {
+  public async generateAllEntitySubClasses(ds: DataSource, entities: EntityInfo[], directory: string): Promise<boolean> {
     try {
       const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
       const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
-      const sContent = sortedEntities.map((e) => this.generateEntitySubClass(e, false)).join('');
+      let sContent: string = "";
+      for (const e of sortedEntities) {
+        sContent += await this.generateEntitySubClass(ds, e, false);
+      }
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
 
       makeDir(directory);
@@ -29,7 +36,7 @@ export class EntitySubClassGeneratorBase {
   }
 
   public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -45,7 +52,7 @@ export const loadModule = () => {
    * @param entity
    * @param includeFileHeader
    */
-  public generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false): string {
+  public async generateEntitySubClass(ds: DataSource, entity: EntityInfo, includeFileHeader: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
@@ -141,6 +148,8 @@ export const loadModule = () => {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
+    const validateFunction: string | null = await this.LogAndGenerateValidateFunction(ds, entity);
+
       let sRet: string = `
 
 /**
@@ -154,7 +163,7 @@ export const loadModule = () => {
  * @public
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
@@ -164,6 +173,85 @@ ${fields}
       return sRet;
     }
   }
+
+  public async LogAndGenerateValidateFunction(ds: DataSource, entity: EntityInfo): Promise<string | null> {
+    // first generate the validate function
+    const ret = this.GenerateValidateFunction(entity);
+    if (ret && ret.code) {
+      // logging the generated function means that we want to EMIT SQL that will update the EntityField table for the fields that had emitted validation functions
+      // so that we have a record of what was generated
+      // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
+      let sSQL: string  = '';
+      const justGenerated = ret.fieldValidators.filter((f) => f.wasGenerated);
+      for (const v of justGenerated) {
+        // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
+        const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName.trim().toLowerCase());      
+        if (f) {
+          sSQL += `-- CHECK constraint for ${entity.Name}.${f.Name} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the EntityField table with the new generated validation function
+UPDATE [${mj_core_schema()}].[EntityField] SET 
+  GeneratedValidationFunctionCheckConstraint='${v.sourceCheckConstraint.replace(/'/g, "''")}', 
+  GeneratedValidationFunctionCode='${v.functionText.replace(/'/g, "''")}',
+  GeneratedValidationFunctionDescription='${v.functionDescription.replace(/'/g, "''")}',
+  GeneratedValidationFunctionName='${v.functionName.replace(/'/g, "''")}'
+WHERE 
+  ID='${f.ID}';
+`;           
+        }  
+        else {
+          logError(`Field ${v.fieldName} not found in entity ${entity.Name} for generated validation function.`);
+        }
+      }
+
+      // now Log and Execute the SQL
+      await SQLLogging.LogSQLAndExecute(ds, sSQL);
+      return ret.code;
+    }
+    else {
+      return null;
+    }
+  }
+  public GenerateValidateFunction(entity: EntityInfo): null | { code: string, fieldValidators: FieldValidatorResult[] } {
+    // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
+    const fieldValidators = ManageMetadataBase.generatedFieldValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
+    if (fieldValidators.length === 0) {
+      return null;
+    }
+    else {
+      const validationFunctions = fieldValidators.map((f) => {
+        // output the function text and the function description in a JSDoc block
+
+        // first format the function text to ensure that escaped \n and \t are removed and replaced with actual newlines and tabs
+        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
+        const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
+
+        return `    /**
+    * ${f.functionDescription}
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+${formattedText}`  
+      }).join('\n\n')
+
+      const ret = `    /**
+    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+${fieldValidators.map((f) => `    * * ${f.fieldName}: ${f.functionDescription}`).join('\n')}  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+${fieldValidators.map((f) => `        this.${f.functionName}(result);`).join('\n')}
+
+        return result;
+    }
+
+${validationFunctions}`
+      return {code: ret, fieldValidators: fieldValidators};
+  }
+}
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
