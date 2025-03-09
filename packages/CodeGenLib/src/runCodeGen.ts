@@ -260,9 +260,12 @@ export class RunCodeGenBase {
           logError('Error generating Actions code');
       } else logStatus('Actions output directory NOT found in config file, skipping...');
 
+      // WRAP UP SQL LOGGING HERE
+      SQLLogging.finishSQLLogging(); // finish up the SQL Logging
+
       /****************************************************************************************
-            // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
-            ****************************************************************************************/
+      // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
+      ****************************************************************************************/
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {
         logStatus('Executing AFTER commands...');
@@ -271,14 +274,12 @@ export class RunCodeGenBase {
       }
 
       /****************************************************************************************
-            // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
-            ****************************************************************************************/
+      // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
+      ****************************************************************************************/
       if (!skipDB) {
         if (!(await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))) logError('ERROR running after-all SQL Scripts');
       }
         
-      SQLLogging.finishSQLLogging(); // finish up the SQL Logging
-
       logStatus(md.Entities.length + ' entities processed and outputed to configured directories');
       logStatus(
         'MJ CodeGen Run Complete! @ ' +
