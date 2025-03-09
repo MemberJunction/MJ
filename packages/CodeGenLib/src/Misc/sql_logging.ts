@@ -55,7 +55,12 @@ export class SQLLogging {
 
      public static finishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) { 
-            if(configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
+            if (SQLLogging.getFileLength(SQLLogging.SQLLoggingFilePath) === 0) {
+                // no content in the file, so delete it
+                fs.unlinkSync(SQLLogging.SQLLoggingFilePath);
+                logStatus("SQL logging file was empty and has been deleted");
+            }
+            else if(configInfo.SQLOutput.convertCoreSchemaToFlywayMigrationFile){
                 SQLLogging.convertSQLLogToFlywaySchema();
             }
         }
@@ -121,6 +126,15 @@ export class SQLLogging {
         return await ds.query(query);
     }
 
+    protected static getFileLength(filePath: string): number {
+        try {
+            const stats = fs.statSync(filePath);
+            return stats.size;
+        } 
+        catch (err) {
+            return 0;
+        }
+    }
   
     protected static convertSQLLogToFlywaySchema(): void {
         if(!this.SQLLoggingFilePath){
