@@ -190,7 +190,7 @@ ${fields}
     * @method
     */
 ${formattedText}`  
-      }).join('\n')
+      }).join('\n\n')
 
       const ret = `    /**
     * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 

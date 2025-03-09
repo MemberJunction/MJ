@@ -220,6 +220,7 @@ CREATE VIEW [__mj].vwEntityFields
 AS
 SELECT
 	ef.*,
+  __mj.GetProgrammaticName(REPLACE(ef.Name,' ','')) AS FieldCodeName,
 	e.Name Entity,
 	e.SchemaName,
 	e.BaseTable,
