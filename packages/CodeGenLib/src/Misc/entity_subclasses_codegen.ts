@@ -191,7 +191,7 @@ ${fields}
 UPDATE [${mj_core_schema()}].[EntityField] SET 
   GeneratedValidationFunctionCheckConstraint='${v.sourceCheckConstraint.replace(/'/g, "''")}', 
   GeneratedValidationFunctionCode='${v.functionText.replace(/'/g, "''")}',
-  GeneratedValidationFunctionDescription='${v.functionDescription.replace(/'/g, "''")}'
+  GeneratedValidationFunctionDescription='${v.functionDescription.replace(/'/g, "''")}',
   GeneratedValidationFunctionName='${v.functionName.replace(/'/g, "''")}'
 WHERE 
   ID='${f.ID}';

@@ -1226,6 +1226,8 @@ export class ManageMetadataBase {
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
          const allEntityFieldValues = await ds.query(efvSQL);
 
+         const generationPromises = [];
+
          // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
          for (const r of result) {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
@@ -1251,23 +1253,29 @@ export class ManageMetadataBase {
                   // attempt to use an LLM to do things fancier now
                   if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
                      // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
-                     //build a data structure that is global that stores the entity/field key values and the generated code as a map... and we'll use it later in the base entity sub-class stuff to have that validate done
-                     const generatedFunction = await this.generateFieldValidatorFunctionFromCheckConstraint(r);
-                     if (generatedFunction?.success) {
-                        // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
-                        ManageMetadataBase._generatedFieldValidators.push(generatedFunction);
-                     }
+                     // run this in parallel
+                     generationPromises.push(this.runValidationGeneration(r));
                   }
                }
             }
          }
 
+         // await the completion of all generation promises here
+         await Promise.all(generationPromises);
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
       }
+   }
+
+   private async runValidationGeneration(r: any) {
+      const generatedFunction = await this.generateFieldValidatorFunctionFromCheckConstraint(r);
+      if (generatedFunction?.success) {
+         // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
+         ManageMetadataBase._generatedFieldValidators.push(generatedFunction);
+      }   
    }
 
    /**

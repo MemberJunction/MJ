@@ -137,9 +137,10 @@ export class RunCodeGenBase {
           if (!sqlSuccess) {
             logError('Error managing SQL scripts and execution');
           }
-        } else logStatus('SQL output directory NOT found in config file, skipping...');
-
-        SQLLogging.finishSQLLogging(); // finish up the SQL Logging
+        } 
+        else {
+          logStatus('SQL output directory NOT found in config file, skipping...');
+        }
       } else {
         logMessage(
           'Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings',
@@ -275,6 +276,8 @@ export class RunCodeGenBase {
       if (!skipDB) {
         if (!(await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))) logError('ERROR running after-all SQL Scripts');
       }
+        
+      SQLLogging.finishSQLLogging(); // finish up the SQL Logging
 
       logStatus(md.Entities.length + ' entities processed and outputed to configured directories');
       logStatus(
