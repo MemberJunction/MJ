@@ -30,7 +30,7 @@ import {
   SkipResponsePhase,
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';
+import { CopyScalarsAndArrays, InvokeManualResize, MJEvent, MJEventType, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -299,7 +299,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         }
       }
       else {
-        this.LogVerbose(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(statusObj)}`);
+        this.LogVerbose(`Skip Chat: Received Push Status but it's not for AskSkip or not status of OK: ${JSON.stringify(CopyScalarsAndArrays(statusObj))}`);
       }
     }
     catch (e) {

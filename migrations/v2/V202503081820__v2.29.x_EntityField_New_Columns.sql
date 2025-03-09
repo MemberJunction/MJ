@@ -1,3 +1,8 @@
+-- Fix incorrect sequence in metadata for Conversation Details - fix bug in 2.27.x build
+
+UPDATE ${flyway:defaultSchema}.EntityField SET Sequence=15 WHERE ID='6D4317F0-6F36-EF11-86D4-6045BDEE16E6' -- update Conversation virtual field to be correct sequence in the Conversation Detail entity
+
+
 -- Remove duplicate constraint for Entity Field table
 ALTER TABLE ${flyway:defaultSchema}.EntityField
   DROP CONSTRAINT CK_ValueListType 
