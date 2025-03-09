@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -2067,6 +2067,18 @@ export const CommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Whether or not the provider supports sending messages at a specific time`),
+    SupportsForwarding: z.boolean().describe(`
+        * * Field Name: SupportsForwarding
+        * * Display Name: Supports Forwarding
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Whether or not the provider supports forwarding messages to another recipient `),
+    SupportsReplying: z.boolean().describe(`
+        * * Field Name: SupportsReplying
+        * * Display Name: Supports Replying
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Whether or not the provider supports replying to messages`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -3096,8 +3108,7 @@ export const ConversationDetailSchema = z.object({
     User: z.string().nullish().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
@@ -5070,16 +5081,16 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)`),
-    ValueListType: z.union([z.literal('None'), z.literal('List'), z.literal('ListOrUserEntry')]).describe(`
+    ValueListType: z.union([z.literal('ListOrUserEntry'), z.literal('List'), z.literal('None')]).describe(`
         * * Field Name: ValueListType
         * * Display Name: Value List Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * None
-    *   * List
     *   * ListOrUserEntry
+    *   * List
+    *   * None
     * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
     ExtendedType: z.union([z.literal('Email'), z.literal('URL'), z.literal('Tel'), z.literal('SMS'), z.literal('Geo'), z.literal('WhatsApp'), z.literal('FaceTime'), z.literal('Skype'), z.literal('SIP'), z.literal('MSTeams'), z.literal('ZoomMtg'), z.literal('Other'), z.literal('Code')]).nullish().describe(`
         * * Field Name: ExtendedType
@@ -5251,6 +5262,30 @@ export const EntityFieldSchema = z.object({
     *   * None
     *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
+    GeneratedValidationFunctionName: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionName
+        * * Display Name: Generated Validation Function Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise`),
+    GeneratedValidationFunctionDescription: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionDescription
+        * * Display Name: Generated Validation Function Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains a description for business users of what the validation function for this field does, if it exists`),
+    GeneratedValidationFunctionCode: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionCode
+        * * Display Name: Generated Validation Function Code
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.`),
+    GeneratedValidationFunctionCheckConstraint: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionCheckConstraint
+        * * Display Name: Generated Validation Function Check Constraint
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`),
+    FieldCodeName: z.string().nullish().describe(`
+        * * Field Name: FieldCodeName
+        * * Display Name: Field Code Name
+        * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -12656,6 +12691,60 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
+    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
+    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSpeedRank(result);
+        this.ValidatePowerRank(result);
+        this.ValidateCostRank(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the speed rank must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRank(result: ValidationResult) {
+    	if (this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRank(result: ValidationResult) {
+    	if (this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRank(result: ValidationResult) {
+    	if (this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
+    	} 
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -15174,6 +15263,34 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
     set SupportsScheduledSending(value: boolean) {
         this.Set('SupportsScheduledSending', value);
+    }
+
+    /**
+    * * Field Name: SupportsForwarding
+    * * Display Name: Supports Forwarding
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports forwarding messages to another recipient 
+    */
+    get SupportsForwarding(): boolean {
+        return this.Get('SupportsForwarding');
+    }
+    set SupportsForwarding(value: boolean) {
+        this.Set('SupportsForwarding', value);
+    }
+
+    /**
+    * * Field Name: SupportsReplying
+    * * Display Name: Supports Replying
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports replying to messages
+    */
+    get SupportsReplying(): boolean {
+        return this.Get('SupportsReplying');
+    }
+    set SupportsReplying(value: boolean) {
+        this.Set('SupportsReplying', value);
     }
 }
 
@@ -17783,6 +17900,32 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * * UserRating: This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserRating(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserRating(result: ValidationResult) {
+    	if (this.UserRating < 1 || this.UserRating > 10) {
+    		result.Errors.push(new ValidationErrorInfo('UserRating', 'The user rating must be between 1 and 10, inclusive.', this.UserRating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -17971,7 +18114,6 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string | null {
         return this.Get('User');
@@ -23076,15 +23218,15 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * None
-    *   * List
     *   * ListOrUserEntry
+    *   * List
+    *   * None
     * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
     */
-    get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {
+    get ValueListType(): 'ListOrUserEntry' | 'List' | 'None' {
         return this.Get('ValueListType');
     }
-    set ValueListType(value: 'None' | 'List' | 'ListOrUserEntry') {
+    set ValueListType(value: 'ListOrUserEntry' | 'List' | 'None') {
         this.Set('ValueListType', value);
     }
 
@@ -23447,6 +23589,67 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set ValuesToPackWithSchema(value: 'Auto' | 'None' | 'All') {
         this.Set('ValuesToPackWithSchema', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionName
+    * * Display Name: Generated Validation Function Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise
+    */
+    get GeneratedValidationFunctionName(): string | null {
+        return this.Get('GeneratedValidationFunctionName');
+    }
+    set GeneratedValidationFunctionName(value: string | null) {
+        this.Set('GeneratedValidationFunctionName', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionDescription
+    * * Display Name: Generated Validation Function Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains a description for business users of what the validation function for this field does, if it exists
+    */
+    get GeneratedValidationFunctionDescription(): string | null {
+        return this.Get('GeneratedValidationFunctionDescription');
+    }
+    set GeneratedValidationFunctionDescription(value: string | null) {
+        this.Set('GeneratedValidationFunctionDescription', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionCode
+    * * Display Name: Generated Validation Function Code
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.
+    */
+    get GeneratedValidationFunctionCode(): string | null {
+        return this.Get('GeneratedValidationFunctionCode');
+    }
+    set GeneratedValidationFunctionCode(value: string | null) {
+        this.Set('GeneratedValidationFunctionCode', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionCheckConstraint
+    * * Display Name: Generated Validation Function Check Constraint
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.
+    */
+    get GeneratedValidationFunctionCheckConstraint(): string | null {
+        return this.Get('GeneratedValidationFunctionCheckConstraint');
+    }
+    set GeneratedValidationFunctionCheckConstraint(value: string | null) {
+        this.Set('GeneratedValidationFunctionCheckConstraint', value);
+    }
+
+    /**
+    * * Field Name: FieldCodeName
+    * * Display Name: Field Code Name
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get FieldCodeName(): string | null {
+        return this.Get('FieldCodeName');
     }
 
     /**
@@ -24858,6 +25061,32 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * * Sequence: This rule ensures that the sequence must be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSequence(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the sequence must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSequence(result: ValidationResult) {
+    	if (this.Sequence <= 0) {
+    		result.Errors.push(new ValidationErrorInfo('Sequence', 'The sequence must be greater than zero.', this.Sequence, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -28459,6 +28688,32 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     */
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for Recommendation Items, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * * MatchProbability: This rule ensures that the match probability value is between 0 and 1, inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMatchProbability(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the match probability value is between 0 and 1, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMatchProbability(result: ValidationResult) {
+    	if (this.MatchProbability < 0 || this.MatchProbability > 1) {
+    		result.Errors.push(new ValidationErrorInfo('MatchProbability', 'The match probability must be between 0 and 1, inclusive.', this.MatchProbability, ValidationErrorType.Failure));
+    	}
     }
 
     /**
