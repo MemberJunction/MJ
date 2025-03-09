@@ -62,6 +62,10 @@ const codegenConfig = {
       schema: '%',
       table: 'sys%',
     },
+    {
+      schema: '%', 
+      table: 'flyway_schema_history' // Exclude Flyway schema history table from ever being part of CodeGen
+    }
   ],
   customSQLScripts: [
     {
