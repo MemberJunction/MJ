@@ -63,3 +63,42 @@ INNER JOIN
 LEFT OUTER JOIN
 	[${flyway:defaultSchema}].vwEntities re ON ef.RelatedEntityID = re.ID
 GO
+
+
+DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
+GO
+CREATE VIEW ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
+AS
+SELECT 
+	  e.ID as EntityID,
+	  e.Name as EntityName,
+    ef.ID as EntityFieldID,
+    ef.Name as EntityFieldName,
+    ef.GeneratedValidationFunctionName,
+    ef.GeneratedValidationFunctionDescription,
+    ef.GeneratedValidationFunctionCode,
+    ef.GeneratedValidationFunctionCheckConstraint,
+    sch.name AS SchemaName,
+    obj.name AS TableName,
+    col.name AS ColumnName,
+    cc.name AS ConstraintName,
+    cc.definition AS ConstraintDefinition
+FROM 
+    sys.check_constraints cc
+INNER JOIN 
+    sys.objects obj ON cc.parent_object_id = obj.object_id
+INNER JOIN 
+    sys.schemas sch ON obj.schema_id = sch.schema_id
+INNER JOIN 
+    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
+INNER JOIN
+	${flyway:defaultSchema}.Entity e
+	ON
+	e.SchemaName = sch.Name AND
+	e.BaseTable = obj.name
+INNER JOIN
+  ${flyway:defaultSchema}.EntityField ef
+  ON
+  e.ID = ef.EntityID AND
+  ef.Name = col.name
+GO
