@@ -92,7 +92,7 @@ export class SystemIntegrityBase {
 
     protected static async CheckEntityFieldSequencesInternal(ds: DataSource, filter: string): Promise<IntegrityCheckResult> {
         try {
-            const sSQL = `SELECT ID, Entity, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
+            const sSQL = `SELECT ID, Entity, SchemaName, BaseView, EntityID, Name, Sequence FROM [${mj_core_schema()}].[vwEntityFields] ${filter} ORDER BY Entity, Sequence`;
             const result = await ds.query(sSQL);
             if (!result || result.length === 0) {
                 throw new Error("No entity fields found");
@@ -126,6 +126,28 @@ export class SystemIntegrityBase {
                                     message += `Entity ${row.Entity} has a missing sequence number. Expected ${sequence}, but found ${field.Sequence} for field ${field.Name}\n`;
                                 }
                                 sequence++;
+                            }
+
+                            if (success) {
+                                // finally, check to see if the metadata sequence numbers match the physical order of the columns in the
+                                // underlying base view. This is critical for calling the spUpdate/spCreate procs correctly.
+                                // we will do this by SELECT TOP 1 * from the base view
+                                const entity = row.Entity;
+                                const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
+                                const sampleResult = await ds.query(sampleSQL);
+                                // now check the order of the columns in the result set relative to the 
+                                // fields array
+                                if (sampleResult && sampleResult.columns) {
+                                    const columns = Object.keys(sampleResult.columns);
+                                    let i = 0;
+                                    for (const field of fields) {
+                                        if (columns[i] !== field.Name) {
+                                            success = false;
+                                            message += `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view [${row.SchemaName}].[${row.BaseView}] for position ${i+1}. Expected ${field.Name} but found ${columns[i]}\n`;
+                                        }
+                                        i++;
+                                    }
+                                }
                             }
                         }
                         
