@@ -185,7 +185,7 @@ export class RunCodeGenBase {
         logStatus('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!entitySubClassGeneratorObject.generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir)) {
           logError('Error generating entity subclass code');
         }
       }
@@ -199,7 +199,7 @@ export class RunCodeGenBase {
         logStatus('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!entitySubClassGeneratorObject.generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir)) {
           logError('Error generating entity subclass code');
         }
       } else {

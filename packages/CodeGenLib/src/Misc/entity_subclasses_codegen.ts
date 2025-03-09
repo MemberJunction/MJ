@@ -6,18 +6,23 @@ import { RegisterClass } from '@memberjunction/global';
 import { logError, logStatus } from './status_logging';
 import { FieldValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema } from '../Config/config';
+import { SQLLogging } from './sql_logging';
+import { DataSource } from 'typeorm';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 @RegisterClass(EntitySubClassGeneratorBase)
 export class EntitySubClassGeneratorBase {
-  public generateAllEntitySubClasses(entities: EntityInfo[], directory: string): boolean {
+  public async generateAllEntitySubClasses(ds: DataSource, entities: EntityInfo[], directory: string): Promise<boolean> {
     try {
       const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
       const zodContent: string = sortedEntities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
-      const sContent = sortedEntities.map((e) => this.generateEntitySubClass(e, false)).join('');
+      let sContent: string = "";
+      for (const e of sortedEntities) {
+        sContent += await this.generateEntitySubClass(ds, e, false);
+      }
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${zodContent} \n ${sContent}`;
 
       makeDir(directory);
@@ -47,7 +52,7 @@ export const loadModule = () => {
    * @param entity
    * @param includeFileHeader
    */
-  public generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false): string {
+  public async generateEntitySubClass(ds: DataSource, entity: EntityInfo, includeFileHeader: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`);
       return '';
@@ -143,7 +148,7 @@ export const loadModule = () => {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
-    const validateFunction: string | null = this.LogAndGenerateValidateFunction(entity);
+    const validateFunction: string | null = await this.LogAndGenerateValidateFunction(ds, entity);
 
       let sRet: string = `
 
@@ -169,7 +174,7 @@ ${fields}
     }
   }
 
-  public LogAndGenerateValidateFunction(entity: EntityInfo): string | null {
+  public async LogAndGenerateValidateFunction(ds: DataSource, entity: EntityInfo): Promise<string | null> {
     // first generate the validate function
     const ret = this.GenerateValidateFunction(entity);
     if (ret && ret.code) {
@@ -183,7 +188,7 @@ ${fields}
         const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName.trim().toLowerCase());      
         if (f) {
           sSQL += `-- CHECK constraint for ${entity.Name}.${f.Name} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the EntityField table with the new generated validation function
-UPDATE [${mj_core_schema}].[EntityField] SET 
+UPDATE [${mj_core_schema()}].[EntityField] SET 
   GeneratedValidationFunctionCheckConstraint='${v.sourceCheckConstraint.replace(/'/g, "''")}', 
   GeneratedValidationFunctionCode='${v.functionText.replace(/'/g, "''")}',
   GeneratedValidationFunctionDescription='${v.functionDescription.replace(/'/g, "''")}'
@@ -196,6 +201,9 @@ WHERE
           logError(`Field ${v.fieldName} not found in entity ${entity.Name} for generated validation function.`);
         }
       }
+
+      // now Log and Execute the SQL
+      await SQLLogging.LogSQLAndExecute(ds, sSQL);
       return ret.code;
     }
     else {
