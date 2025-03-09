@@ -1,11 +1,12 @@
 import { DataSource } from "typeorm";
-import { logError } from "./status_logging";
+import { logError, logStatus } from "./status_logging";
 import { configInfo, mj_core_schema } from "../Config/config";
 
 
-export class IntegrityCheckResult {
-    public Success: boolean = false;
-    public Message: string | null = null;
+export type IntegrityCheckResult = {
+    Name: string;
+    Success: boolean;
+    Message: string;
 }
 
 export type RunIntegrityCheck = {
@@ -32,7 +33,7 @@ export class SystemIntegrityBase {
      * will be run. If false, all checks will be run.
      * @param ds 
      */
-    public static async RunIntegrityChecks(ds: DataSource, onlyEnabled: boolean): Promise<IntegrityCheckResult[]> {
+    public static async RunIntegrityChecks(ds: DataSource, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
         let results: IntegrityCheckResult[] = [];
         try {
             const runPromises = [];
@@ -44,13 +45,25 @@ export class SystemIntegrityBase {
             // async parallel run all the checks and then push the results into the results array
             const runResults = await Promise.all(runPromises);
             runResults.forEach(r => results.push(r));
- 
+
+            if (logResults) {
+                // log the results to the console
+                logStatus("Integrity check results:");
+                for (const result of results) {
+                    if (result.Success) {
+                        logStatus(`   Integrity check successful: ${result.Name}`);
+                    }
+                    else {
+                        logError(`   Integrity check FAILED: ${result.Name} - ${result.Message}`);
+                    }
+                }
+            }
             return results;
         }
         catch (e) {
             const message = `Error running integrity checks: ${e}`;
             logError(message);
-            results.push ({ Success: false, Message: message });
+            results.push ({ Success: false, Message: message, Name: "_" });
             return results;
         }
     }
@@ -64,7 +77,7 @@ export class SystemIntegrityBase {
      * @returns 
      */
     public static async CheckEntityFieldSequences(ds: DataSource): Promise<IntegrityCheckResult> {
-        return this.CheckEntityFieldSequencesInternal(ds, "");
+        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, "");
     }
 
     /**
@@ -74,7 +87,7 @@ export class SystemIntegrityBase {
      * @returns 
      */
     public static async CheckSinleEntityFieldSequences(ds: DataSource, entityName: string): Promise<IntegrityCheckResult> {
-        return this.CheckEntityFieldSequencesInternal(ds, `WHERE Entity='${entityName}'`);
+        return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, `WHERE Entity='${entityName}'`);
     }
 
     protected static async CheckEntityFieldSequencesInternal(ds: DataSource, filter: string): Promise<IntegrityCheckResult> {
@@ -101,7 +114,7 @@ export class SystemIntegrityBase {
                         if (duplicates.length > 0) {
                             success = false;
                             message += `Entity ${row.Entity} has duplicate Entity Field sequences:\n`;
-                            message += duplicates.map((d: any) => `   ${d.Name} (${d.Sequence})`).join("\n");
+                            message += duplicates.map((d: any) => `      * ${d.Name} (${d.Sequence})`).join("\n");
                             message += "\n";
                         }
                         else {
@@ -120,13 +133,13 @@ export class SystemIntegrityBase {
                     }                    
                 }
 
-                return { Success: success, Message: message };
+                return { Success: success, Message: message, Name: 'entityFieldsSequenceCheck' };
             }
         }
         catch (e) {
             const message = `Error checking entity field sequences: ${e}`;
             logError(message);
-            return { Success: false, Message: message };
+            return { Success: false, Message: message, Name: 'entityFieldsSequenceCheck' };
         }
     }
 }

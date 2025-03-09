@@ -1317,6 +1317,11 @@ export class ManageMetadataBase {
             // feature is enabled, so let's call the LLM to generate a function for us
             const ag = new AdvancedGeneration();
             const llm = ag.LLM;
+            if (!llm) {
+               // we weren't able to get an LLM instance, so log an error and return
+               logError('   >>> Error generating field validator function from check constraint. Unable to get an LLM instance.');
+               return returnResult;
+            }
             const prompt = ag.getPrompt('CheckConstraintParser');
             const result = await llm.ChatCompletion({
                messages: [

@@ -134,8 +134,15 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
         }
         else if (configInfo.advancedGeneration!.AIVendor && configInfo.advancedGeneration!.AIVendor.length > 0) {
             const AIVendorWithKeySuffix = configInfo.advancedGeneration!.AIVendor.toUpperCase() + 'LLM';
-            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, AIVendorWithKeySuffix, GetAIAPIKey(AIVendorWithKeySuffix))!;
-            return AdvancedGeneration._cachedLLM;    
+            const apiKey = GetAIAPIKey(AIVendorWithKeySuffix);
+            if (apiKey && apiKey.length > 0) {
+                AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, AIVendorWithKeySuffix, apiKey)!;
+                return AdvancedGeneration._cachedLLM;        
+            }
+            else {
+                LogError("AdvancedGeneration", `No API key found for AI vendor ${configInfo.advancedGeneration!.AIVendor}`);
+                return null!;
+            }
         }
         else {
             LogError("AdvancedGeneration", "No AI vendor specified in Configuration Settings under 'advancedGeneration.AIVendor'");
