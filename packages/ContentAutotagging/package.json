@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/content-autotagging",
-  "version": "2.29.1",
+  "version": "2.29.2",
   "description": "MemberJunction Content Autotagging Application",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -15,10 +15,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "2.29.1",
-    "@memberjunction/core": "2.29.1",
-    "@memberjunction/core-entities": "2.29.1",
-    "@memberjunction/global": "2.29.1",
+    "@memberjunction/ai": "2.29.2",
+    "@memberjunction/core": "2.29.2",
+    "@memberjunction/core-entities": "2.29.2",
+    "@memberjunction/global": "2.29.2",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "crypto": "^1.0.1",

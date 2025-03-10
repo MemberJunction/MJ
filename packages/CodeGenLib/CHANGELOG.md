@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.29.2
+
+### Patch Changes
+
+- 07bde92: New CodeGen Advanced Generation Functionality and supporting metadata schema changes
+- 598b9b5: Added physical column order check to determine if underlying base view matches the metadata's sequence in the Entity Field table
+- Updated dependencies [07bde92]
+- Updated dependencies [64aa7f0]
+- Updated dependencies [69c3505]
+  - @memberjunction/core@2.29.2
+  - @memberjunction/core-entities@2.29.2
+  - @memberjunction/sqlserver-dataprovider@2.29.2
+  - @memberjunction/actions@2.29.2
+  - @memberjunction/ai@2.29.2
+  - @memberjunction/ai-anthropic@2.29.2
+  - @memberjunction/ai-groq@2.29.2
+  - @memberjunction/ai-mistral@2.29.2
+  - @memberjunction/ai-openai@2.29.2
+  - @memberjunction/global@2.29.2
+
 ## 2.28.0
 
 ### Patch Changes

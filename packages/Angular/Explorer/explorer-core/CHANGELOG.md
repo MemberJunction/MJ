@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.29.2
+
+### Patch Changes
+
+- 64aa7f0: New query for 2.29.0 to get version history since we aren't using an entity for flyway data anymore. Improvements to query execution to support query execution by name as well as by ID, and general cleanup (code wasn't working before as query ID wasn't enclosed in quotes from days of INT ID types)
+- Updated dependencies [07bde92]
+- Updated dependencies [64aa7f0]
+- Updated dependencies [69c3505]
+  - @memberjunction/core@2.29.2
+  - @memberjunction/core-entities@2.29.2
+  - @memberjunction/ng-ask-skip@2.29.2
+  - @memberjunction/ng-auth-services@2.29.2
+  - @memberjunction/ng-base-forms@2.29.2
+  - @memberjunction/ng-compare-records@2.29.2
+  - @memberjunction/ng-entity-form-dialog@2.29.2
+  - @memberjunction/ng-explorer-settings@2.29.2
+  - @memberjunction/ng-record-changes@2.29.2
+  - @memberjunction/ng-shared@2.29.2
+  - @memberjunction/ng-user-view-grid@2.29.2
+  - @memberjunction/ng-user-view-properties@2.29.2
+  - @memberjunction/ng-container-directives@2.29.2
+  - @memberjunction/ng-file-storage@2.29.2
+  - @memberjunction/ng-query-grid@2.29.2
+  - @memberjunction/ng-record-selector@2.29.2
+  - @memberjunction/ng-resource-permissions@2.29.2
+  - @memberjunction/ng-skip-chat@2.29.2
+  - @memberjunction/communication-types@2.29.2
+  - @memberjunction/entity-communications-client@2.29.2
+  - @memberjunction/templates-base-types@2.29.2
+  - @memberjunction/ng-tabstrip@2.29.2
+  - @memberjunction/global@2.29.2
+
 ## 2.28.0
 
 ### Patch Changes

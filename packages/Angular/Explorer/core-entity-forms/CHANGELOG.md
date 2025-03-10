@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.29.2
+
+### Patch Changes
+
+- 07bde92: New CodeGen Advanced Generation Functionality and supporting metadata schema changes
+- Updated dependencies [07bde92]
+- Updated dependencies [64aa7f0]
+- Updated dependencies [69c3505]
+  - @memberjunction/core@2.29.2
+  - @memberjunction/core-entities@2.29.2
+  - @memberjunction/ng-explorer-core@2.29.2
+  - @memberjunction/ng-base-forms@2.29.2
+  - @memberjunction/ng-form-toolbar@2.29.2
+  - @memberjunction/ng-code-editor@2.29.2
+  - @memberjunction/ng-container-directives@2.29.2
+  - @memberjunction/ng-join-grid@2.29.2
+  - @memberjunction/ng-timeline@2.29.2
+  - @memberjunction/ng-tabstrip@2.29.2
+
 ## 2.28.0
 
 ### Patch Changes
