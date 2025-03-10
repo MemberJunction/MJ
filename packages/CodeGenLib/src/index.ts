@@ -7,6 +7,7 @@ export * from './Misc/entity_subclasses_codegen'
 export * from './Misc/action_subclasses_codegen';
 export * from './Misc/graphql_server_codegen'
 export * from './Misc/status_logging'
+export * from './Misc/system_integrity';
 export * from './Database/manage-metadata'
 export * from './Misc/runCommand'
 export * from './Database/sql_codegen'

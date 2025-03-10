@@ -19,12 +19,16 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.28.0",
     "@memberjunction/core": "2.28.0",
     "@memberjunction/actions": "2.28.0",
     "@memberjunction/core-entities": "2.28.0",
     "@memberjunction/global": "2.28.0",
     "@memberjunction/sqlserver-dataprovider": "2.28.0",
+    "@memberjunction/ai": "2.28.0",
+    "@memberjunction/ai-openai": "2.28.0",
+    "@memberjunction/ai-groq": "2.28.0",
+    "@memberjunction/ai-mistral": "2.28.0",
+    "@memberjunction/ai-anthropic": "2.28.0",
     "cosmiconfig": "9.0.0",
     "uuid": "^10.0.0",
     "mssql": "^11.0.1",

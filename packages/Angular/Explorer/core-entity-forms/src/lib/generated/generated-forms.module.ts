@@ -121,7 +121,6 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
-import { flyway_schema_historyFormComponent, Loadflyway_schema_historyFormComponent } from "./Entities/flyway_schema_history/flyway_schema_history.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
 import { IntegrationFormComponent, LoadIntegrationFormComponent } from "./Entities/Integration/integration.form.component";
 import { LibraryFormComponent, LoadLibraryFormComponent } from "./Entities/Library/library.form.component";
@@ -288,7 +287,6 @@ import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "
 import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 import { FileStorageProviderDetailsComponent, LoadFileStorageProviderDetailsComponent } from "./Entities/FileStorageProvider/sections/details.component"
 import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/sections/details.component"
-import { flyway_schema_historyDetailsComponent, Loadflyway_schema_historyDetailsComponent } from "./Entities/flyway_schema_history/sections/details.component"
 import { IntegrationURLFormatDetailsComponent, LoadIntegrationURLFormatDetailsComponent } from "./Entities/IntegrationURLFormat/sections/details.component"
 import { IntegrationDetailsComponent, LoadIntegrationDetailsComponent } from "./Entities/Integration/sections/details.component"
 import { LibraryDetailsComponent, LoadLibraryDetailsComponent } from "./Entities/Library/sections/details.component"
@@ -557,11 +555,11 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
-    flyway_schema_historyFormComponent,
     IntegrationURLFormatFormComponent,
     IntegrationFormComponent,
     LibraryFormComponent,
-    LibraryItemFormComponent],
+    LibraryItemFormComponent,
+    ListCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -588,7 +586,6 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
-    ListCategoryFormComponent,
     ListDetailFormComponent,
     ListFormComponent,
     OutputDeliveryTypeFormComponent,
@@ -607,7 +604,8 @@ declarations: [
     RecommendationRunFormComponent,
     RecommendationFormComponent,
     RecordChangeReplayRunFormComponent,
-    RecordChangeFormComponent],
+    RecordChangeFormComponent,
+    RecordMergeDeletionLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -634,7 +632,6 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
-    RecordMergeDeletionLogFormComponent,
     RecordMergeLogFormComponent,
     ReportCategoryFormComponent,
     ReportSnapshotFormComponent,
@@ -653,7 +650,8 @@ declarations: [
     TemplateCategoryFormComponent,
     TemplateContentTypeFormComponent,
     TemplateContentFormComponent,
-    TemplateParamFormComponent],
+    TemplateParamFormComponent,
+    TemplateFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -680,7 +678,6 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
-    TemplateFormComponent,
     UserApplicationEntityFormComponent,
     UserApplicationFormComponent,
     UserFavoriteFormComponent,
@@ -699,7 +696,8 @@ declarations: [
     WorkflowRunFormComponent,
     WorkflowFormComponent,
     WorkspaceItemFormComponent,
-    WorkspaceFormComponent],
+    WorkspaceFormComponent,
+    ActionAuthorizationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -726,7 +724,6 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
-    ActionAuthorizationDetailsComponent,
     ActionCategoryDetailsComponent,
     ActionContextTypeDetailsComponent,
     ActionContextDetailsComponent,
@@ -745,7 +742,8 @@ declarations: [
     AIAgentNoteTypeDetailsComponent,
     AIAgentNoteDetailsComponent,
     AIAgentRequestDetailsComponent,
-    AIAgentDetailsComponent],
+    AIAgentDetailsComponent,
+    AIModelActionDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -771,7 +769,6 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
-    AIModelActionDetailsComponent,
     AIModelTypeDetailsComponent,
     AIModelDetailsComponent,
     AIPromptCategoryDetailsComponent,
@@ -790,7 +787,8 @@ declarations: [
     CommunicationProviderMessageTypeDetailsComponent,
     CommunicationProviderDetailsComponent,
     CommunicationRunDetailsComponent,
-    CompanyDetailsComponent],
+    CompanyDetailsComponent,
+    CompanyIntegrationRecordMapDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -816,7 +814,6 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
-    CompanyIntegrationRecordMapDetailsComponent,
     CompanyIntegrationRunAPILogDetailsComponent,
     CompanyIntegrationRunDetailDetailsComponent,
     CompanyIntegrationRunDetailsComponent,
@@ -835,7 +832,8 @@ declarations: [
     ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
     DashboardCategoryDetailsComponent,
-    DashboardDetailsComponent],
+    DashboardDetailsComponent,
+    DataContextItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -861,7 +859,6 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
-    DataContextItemDetailsComponent,
     DataContextDetailsComponent,
     DatasetItemDetailsComponent,
     DatasetDetailsComponent,
@@ -880,7 +877,8 @@ declarations: [
     EntityUIComponent,
     EntityActionFilterDetailsComponent,
     EntityActionInvocationTypeDetailsComponent,
-    EntityActionInvocationDetailsComponent],
+    EntityActionInvocationDetailsComponent,
+    EntityActionParamDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -906,7 +904,6 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
-    EntityActionParamDetailsComponent,
     EntityActionDetailsComponent,
     EntityAIActionDetailsComponent,
     EntityCommunicationFieldDetailsComponent,
@@ -925,7 +922,8 @@ declarations: [
     ErrorLogDetailsComponent,
     ExplorerNavigationItemDetailsComponent,
     FileCategoryDetailsComponent,
-    FileEntityRecordLinkDetailsComponent],
+    FileEntityRecordLinkDetailsComponent,
+    FileStorageProviderDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -951,9 +949,7 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
-    FileStorageProviderDetailsComponent,
     FileDetailsComponent,
-    flyway_schema_historyDetailsComponent,
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
     LibraryDetailsComponent,
@@ -970,7 +966,9 @@ declarations: [
     QueryFieldDetailsComponent,
     QueryPermissionDetailsComponent,
     QueueTaskDetailsComponent,
-    QueueTypeDetailsComponent],
+    QueueTypeDetailsComponent,
+    QueueDetailsComponent,
+    RecommendationItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -996,8 +994,6 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
-    QueueDetailsComponent,
-    RecommendationItemDetailsComponent,
     RecommendationProviderDetailsComponent,
     RecommendationRunDetailsComponent,
     RecommendationDetailsComponent,
@@ -1015,7 +1011,9 @@ declarations: [
     RowLevelSecurityFilterDetailsComponent,
     ScheduledActionParamDetailsComponent,
     ScheduledActionDetailsComponent,
-    SchemaInfoDetailsComponent],
+    SchemaInfoDetailsComponent,
+    SkillDetailsComponent,
+    TaggedItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1041,8 +1039,6 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
-    SkillDetailsComponent,
-    TaggedItemDetailsComponent,
     TagDetailsComponent,
     TemplateCategoryDetailsComponent,
     TemplateContentTypeDetailsComponent,
@@ -1060,7 +1056,9 @@ declarations: [
     UserViewRunDetailsComponent,
     UserViewDetailsComponent,
     UserDetailsComponent,
-    VectorDatabaseDetailsComponent],
+    VectorDatabaseDetailsComponent,
+    VectorIndexDetailsComponent,
+    VersionInstallationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1086,8 +1084,6 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
-    VectorIndexDetailsComponent,
-    VersionInstallationDetailsComponent,
     WorkflowEngineDetailsComponent,
     WorkflowRunDetailsComponent,
     WorkflowDetailsComponent,
@@ -1242,7 +1238,6 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
-    Loadflyway_schema_historyFormComponent();
     LoadIntegrationURLFormatFormComponent();
     LoadIntegrationFormComponent();
     LoadLibraryFormComponent();
@@ -1409,7 +1404,6 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkDetailsComponent();
     LoadFileStorageProviderDetailsComponent();
     LoadFileDetailsComponent();
-    Loadflyway_schema_historyDetailsComponent();
     LoadIntegrationURLFormatDetailsComponent();
     LoadIntegrationDetailsComponent();
     LoadLibraryDetailsComponent();

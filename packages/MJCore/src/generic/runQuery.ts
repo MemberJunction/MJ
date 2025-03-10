@@ -2,8 +2,12 @@ import { MJGlobal } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
 
+/**
+ * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored
+ */
 export type RunQueryParams = {
-    QueryID: string
+    QueryID?: string
+    QueryName?: string
 }
 
 /**
