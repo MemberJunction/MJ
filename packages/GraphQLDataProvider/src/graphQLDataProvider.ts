@@ -288,13 +288,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         `;
     
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryName?: string } = { QueryName };
-        if (CategoryID !== undefined) {
-            variables.CategoryID = CategoryID;
-        }
-        if (CategoryName !== undefined) {
-            variables.CategoryName = CategoryName;
-        }
+        const variables = { QueryName, CategoryID, CategoryName };
     
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryDataByName) {
