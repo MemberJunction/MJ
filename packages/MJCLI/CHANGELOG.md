@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/cli
 
+## 2.29.2
+
+### Patch Changes
+
+- 7a9ee63: Adjust exports to avoid loading config during build
+- Updated dependencies [07bde92]
+- Updated dependencies [598b9b5]
+  - @memberjunction/codegen-lib@2.29.2
+
 ## 2.28.0
 
 ### Patch Changes

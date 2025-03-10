@@ -139,7 +139,6 @@ const advancedGenerationSchema = z.object({
   ]),
 });
 
-
 export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
 
 const integrityCheckConfigSchema = z.object({
@@ -175,7 +174,7 @@ const sqlOutputConfigSchema = z.object({
   /**
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
-  omitRecurringScriptsFromLog: z.boolean().default(false)
+  omitRecurringScriptsFromLog: z.boolean().default(false),
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
@@ -247,7 +246,7 @@ const configInfoSchema = z.object({
   advancedGeneration: advancedGenerationSchema.nullish(),
   integrityChecks: integrityCheckConfigSchema.default({
     enabled: true,
-    entityFieldsSequenceCheck: true
+    entityFieldsSequenceCheck: true,
   }),
   output: outputInfoSchema.array().default([
     { type: 'SQL', directory: '../../SQL Scripts/generated', appendOutputCode: true },
