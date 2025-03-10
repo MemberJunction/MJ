@@ -13,7 +13,7 @@ export type RunIntegrityCheck = {
     Name: string;
     Enabled: boolean;
     Run: (ds: DataSource) => Promise<IntegrityCheckResult>;
-}   
+}
 
 /**
  * This class has methods that can check various aspects of a MemberJunction installation's integrity. Code Gen will
@@ -23,7 +23,7 @@ export class SystemIntegrityBase {
     private static _integrityChecks: RunIntegrityCheck[] = [
         {
             Name: 'CheckEntityFieldSequences',
-            Enabled: configInfo.integrityChecks.enabled && configInfo.integrityChecks.entityFieldsSequenceCheck,
+            Enabled: configInfo.integrityChecks?.enabled && configInfo.integrityChecks.entityFieldsSequenceCheck,
             Run: SystemIntegrityBase.CheckEntityFieldSequences
         }
     ];
@@ -31,7 +31,7 @@ export class SystemIntegrityBase {
     /**
      * Runs integrity checks on the system. If onlyEnabled is true, then only checks that are enabled in the configuration
      * will be run. If false, all checks will be run.
-     * @param ds 
+     * @param ds
      */
     public static async RunIntegrityChecks(ds: DataSource, onlyEnabled: boolean, logResults: boolean = true): Promise<IntegrityCheckResult[]> {
         let results: IntegrityCheckResult[] = [];
@@ -68,13 +68,13 @@ export class SystemIntegrityBase {
         }
     }
 
-    
+
     /**
      * For a given entity, fields should be in sequence starting from 1. There should be no duplicate sequences within a given
      * entity. Invalidation of this could cause downstream issues with the system in particular with execution of Create/Update operations.
-     * 
-     * @param ds 
-     * @returns 
+     *
+     * @param ds
+     * @returns
      */
     public static async CheckEntityFieldSequences(ds: DataSource): Promise<IntegrityCheckResult> {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, "");
@@ -82,9 +82,9 @@ export class SystemIntegrityBase {
 
     /**
      * Checks the sequence of fields for a single entity. This is useful when you want to check a single entity at a time.
-     * @param ds 
-     * @param entityName 
-     * @returns 
+     * @param ds
+     * @param entityName
+     * @returns
      */
     public static async CheckSinleEntityFieldSequences(ds: DataSource, entityName: string): Promise<IntegrityCheckResult> {
         return SystemIntegrityBase.CheckEntityFieldSequencesInternal(ds, `WHERE Entity='${entityName}'`);
@@ -98,7 +98,7 @@ export class SystemIntegrityBase {
                 throw new Error("No entity fields found");
             }
             else {
-                // getting here means we check one entity at a time and build a message 
+                // getting here means we check one entity at a time and build a message
                 let success: boolean = true;
                 let message: string = "";
                 let lastEntity: string = "";
@@ -135,7 +135,7 @@ export class SystemIntegrityBase {
                                 const entity = row.Entity;
                                 const sampleSQL = `SELECT TOP 1 * FROM [${row.SchemaName}].[${row.BaseView}]`;
                                 const sampleResult = await ds.query(sampleSQL);
-                                // now check the order of the columns in the result set relative to the 
+                                // now check the order of the columns in the result set relative to the
                                 // fields array
                                 if (sampleResult && sampleResult.columns) {
                                     const columns = Object.keys(sampleResult.columns);
@@ -150,9 +150,9 @@ export class SystemIntegrityBase {
                                 }
                             }
                         }
-                        
+
                         lastEntity = row.Entity;
-                    }                    
+                    }
                 }
 
                 return { Success: success, Message: message, Name: 'entityFieldsSequenceCheck' };
