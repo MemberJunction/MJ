@@ -9,6 +9,9 @@ export class RunQueryResultType {
   QueryID: string;
 
   @Field()
+  QueryName: string;
+
+  @Field()
   Success: boolean;
 
   @Field()
@@ -32,6 +35,22 @@ export class ReportResolver {
     const result = await runQuery.RunQuery({ QueryID: QueryID });
     return {
       QueryID: QueryID,
+      QueryName: result.QueryName,
+      Success: result.Success,
+      Results: JSON.stringify(result.Results),
+      RowCount: result.RowCount,
+      ExecutionTime: result.ExecutionTime,
+      ErrorMessage: result.ErrorMessage,
+    };
+  }
+
+  @Query(() => RunQueryResultType)
+  async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string, @Ctx() {}: AppContext): Promise<RunQueryResultType> {
+    const runQuery = new RunQuery();
+    const result = await runQuery.RunQuery({ QueryName: QueryName });
+    return {
+      QueryID: result.QueryID,
+      QueryName: QueryName,
       Success: result.Success,
       Results: JSON.stringify(result.Results),
       RowCount: result.RowCount,
