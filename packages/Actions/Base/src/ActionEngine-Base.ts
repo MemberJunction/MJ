@@ -82,7 +82,7 @@ export class ActionResult {
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
     */
-   public LogEntry: ActionExecutionLogEntity;
+   public LogEntry?: ActionExecutionLogEntity;
 
    /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
@@ -113,8 +113,18 @@ export class ActionParam {
  * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
  */
 export class RunActionParams {
+   /**
+    * The action entity to be run.
+    */
    public Action: ActionEntity;
+   /**
+    * The user context for the action.
+    */
    public ContextUser: UserInfo;
+   /**
+    * Optional, if set to true, an ActionExecutionLogEntity will not be created for this action run.
+    */
+   public SkipActionLog?: boolean;
    /**
     * Optional, a list of filters that should be run before the action is executed.
     */
@@ -123,7 +133,18 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
+   /**
+    * Optional, additional parameters that can be passed to the action that are not defined in the metadata for the action.
+    */
+   public AdditionalParams?: Record<string, any>;
 }
+
+export type RunActionByNameParams = {
+   ActionName: string,
+   ContextUser: UserInfo,
+   SkipActionLog?: boolean,
+   AdditionalParams: Record<string, any>
+};
 
 
 /**

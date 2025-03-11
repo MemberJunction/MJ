@@ -1,9 +1,9 @@
-import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEntityServerEntity } from "./ActionEntity.server";
-import { ActionEngineBase, ActionResult, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, ActionEntityExtended, ActionResult, RunActionByNameParams, RunActionParams } from "@memberjunction/actions-base";
 
  
 
@@ -17,26 +17,9 @@ export class ActionEngineServer extends ActionEngineBase {
       return super.getInstance<ActionEngineServer>("ActionEngineServer");
    }
 
-    public async RunAction(params: RunActionParams): Promise<ActionResult> {
-      if (await this.ValidateInputs(params)) {
-         if (await this.RunFilters(params)) {
-            return await this.InternalRunAction(params);
-         }
-         else {
-            // filters indicated we should NOT run this action
-            const result: ActionResult = {
-               Success: true,
-               Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
-               LogEntry: null, // initially null
-               Params: [],
-               RunParams: params
-            };
-
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
-         }
-      }
-      else {
-         // input validation failed
+   public async RunAction(params: RunActionParams): Promise<ActionResult> {
+      const validInputs: boolean = await this.ValidateInputs(params);
+      if(!validInputs){
          return {
             Success: false,
             Message: "Input validation failed. This is a failure condition.",
@@ -45,7 +28,31 @@ export class ActionEngineServer extends ActionEngineBase {
             RunParams: params
          };
       }
-    }      
+
+      const filtersPassed: boolean = await this.RunFilters(params);
+      if(!filtersPassed){
+         // filters indicated we should NOT run this action
+         const result: ActionResult = {
+            Success: true,
+            Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
+            LogEntry: null, // initially null
+            Params: [],
+            RunParams: params
+         };
+
+         if(!params.SkipActionLog){
+            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         }
+      }
+
+      const runActionResult = await this.InternalRunAction(params);
+      return runActionResult;
+   }
+   
+   protected RunActionByName(params: RunActionByNameParams): Promise<ActionResult> {
+      const nameToLower: string = params.ActionName.trim().toLowerCase();
+      const action: ActionEntityExtended | undefined = this.Actions.find(a => a.Name.trim().toLowerCase() === nameToLower);
+   }
 
    /**
     * This method handles input validation. Subclasses can override this method to provide custom input validation.
@@ -81,7 +88,11 @@ export class ActionEngineServer extends ActionEngineBase {
       // this is where the actual action code will be implemented
       // first, let's get the right BaseAction derived sub-class for this particular action
       // using ClassFactory
-      const logEntry = await this.StartActionLog(params);
+      let logEntry: ActionExecutionLogEntity | undefined;
+      if(!params.SkipActionLog){
+         logEntry = await this.StartActionLog(params);
+      }
+
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
       if (!action) 
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
@@ -99,8 +110,12 @@ export class ActionEngineServer extends ActionEngineBase {
          Params: simpleResult.Params,
          Result: resultCodeEntity
       };
-      await this.EndActionLog(logEntry, params, result);
-      result.LogEntry = logEntry;
+
+      if(logEntry){
+         await this.EndActionLog(logEntry, params, result);
+         result.LogEntry = logEntry;
+      }
+
       return result;
    }
 
@@ -113,8 +128,14 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.StartedAt = new Date();
       logEntity.UserID = this.ContextUser.ID;
       logEntity.Params = JSON.stringify(params.Params); // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
-      if (saveRecord)
-         await logEntity.Save(); // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
+      
+      if (saveRecord){
+         // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
+         const saveResult: boolean = await logEntity.Save();
+         if(!saveResult){
+            LogError(`Failed to record start of action ${params.Action.Name}:`, undefined, logEntity.LatestResult);
+         }
+      }
 
       return logEntity;
    }
@@ -123,7 +144,12 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.EndedAt = new Date();
       logEntity.Params = JSON.stringify(params.Params);
       logEntity.ResultCode = result.Result?.ResultCode;
-      await logEntity.Save(); // save a second time to record the action ending
+      
+      // save a second time to record the action ending
+      const saveResult: boolean = await logEntity.Save();
+      if(!saveResult){
+         LogError(`Failed to record end of action ${params.Action.Name}:`, undefined, logEntity.LatestResult);
+      }
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
