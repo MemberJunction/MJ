@@ -14,7 +14,7 @@ import { ActionEngineBase, ActionResult, RunActionParams } from "@memberjunction
 export class ActionEngineServer extends ActionEngineBase {
 
    public static get Instance(): ActionEngineServer {
-      return <ActionEngineServer>super.Instance;
+      return super.getInstance<ActionEngineServer>("ActionEngineServer");
    }
 
     public async RunAction(params: RunActionParams): Promise<ActionResult> {
