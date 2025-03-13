@@ -172,6 +172,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 Subject: message.subject || '',
                 Body: contextData?.ReturnAsPlainTex ? this.HTMLConverter(message.body?.content || '') : message.body?.content || '',
                 ExternalSystemRecordID: message.id || '',
+                ThreadID: message.conversationId || ''
             };
         });
 
