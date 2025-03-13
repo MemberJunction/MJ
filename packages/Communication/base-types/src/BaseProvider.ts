@@ -164,6 +164,10 @@ export type GetMessageMessage = {
     ReplyTo?: string[];
     Subject?: string;
     ExternalSystemRecordID?: string;
+    /**
+     * The ID of the thread the message belongs to
+     */
+    ThreadID?: string;
 };
 
 export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {
