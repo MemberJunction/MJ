@@ -66,7 +66,8 @@ export abstract class EntityActionInvocationBase {
             returnValues.push(
                 {
                     Name: param.Name,
-                    Value: value
+                    Value: value,
+                    Type: param.Type
                 }
             );
         }

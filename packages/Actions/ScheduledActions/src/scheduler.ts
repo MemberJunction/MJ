@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { ScheduledActionEntityExtended, ScheduledActionParamEntity } from "@memberjunction/core-entities";
-import { ActionEntityExtended, ActionParam, ActionResult } from "@memberjunction/actions-base";
+import { ActionEntityExtended, ActionParam, ActionResult, RunActionParams } from "@memberjunction/actions-base";
 import * as cronParser from 'cron-parser';
 import { SafeJSONParse } from "@memberjunction/global";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
@@ -130,7 +130,8 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
             returnValues.push(
                 {
                     Name: param.Name,
-                    Value: value
+                    Value: value,
+                    Type: param.Type
                 }
             );
         }

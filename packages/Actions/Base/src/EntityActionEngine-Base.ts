@@ -37,7 +37,6 @@ export class EntityActionInvocationParams {
 }
 
 
-
 /**
  * Class that has the result of a complete action execution, returned by the Run method of the ActionEngine.
  */
@@ -59,8 +58,9 @@ export class EntityActionResult {
  
     /**
      * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
+     * Note that the log entry will be created 
      */
-    public LogEntry: ActionExecutionLogEntity;
+    public LogEntry?: ActionExecutionLogEntity;
  
     /**
      * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
