@@ -55,19 +55,23 @@ export class ActionEngineServer extends ActionEngineBase {
       return runActionResult;
    }
    
-   protected async RunActionByName(params: RunActionByNameParams): Promise<ActionResult> {
-      const nameToLower: string = params.ActionName.trim().toLowerCase();
-      const action: ActionEntityExtended | undefined = this.Actions.find(a => a.Name.trim().toLowerCase() === nameToLower);
+   /**
+    * Finds an action by the provided ID and runs it. This is a convenience method that can be used to run an action without having to first find/create an action entity object.
+    * Note that if no ActionParams are provided, the function will use the action params defined in the metadata.
+    */
+   public async RunActionByID(params: RunActionByNameParams): Promise<ActionResult> {
+      const action: ActionEntityExtended | undefined = this.Actions.find(a => a.ID === params.ActionID);
       if(!action){
-         throw new Error(`Action with name ${params.ActionName} not found in Metadata`);
+         throw new Error(`Action with ID ${params.ActionID} not found in Metadata`);
       }
 
       const actionParams: ActionParam[] = params.Params || this.GetActionParamsForAction(action);
       const runParams: RunActionParams = {
          Action: action,
          ContextUser: params.ContextUser,
-         Filters: [],
-         Params: actionParams
+         SkipActionLog: params.SkipActionLog,
+         Params: actionParams,
+         Filters: []
       };
 
       const actionResult = await this.RunAction(runParams);

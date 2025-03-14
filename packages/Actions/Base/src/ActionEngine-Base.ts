@@ -141,9 +141,9 @@ export class RunActionParams {
 
 export type RunActionByNameParams = {
    /**
-    * The name of the action to be run.
+    * The ID of the action to be run.
     */
-   ActionName: string,
+   ActionID: string,
    /**
     * The user context for the action.
     */
