@@ -50,14 +50,14 @@ export class ActionResultSimple {
    public ResultCode: string;
 
    /**
-    * Optional, additional information about the result of the action
-    */
-   public Message?: string;
-
-   /**
     * All parameters including inputs and outputs are provided here for convenience
     */
    public Params?: ActionParam[];
+
+   /**
+    * Optional, additional information about the result of the action
+    */
+   public Message?: string;
 }
 
 /**
@@ -107,6 +107,10 @@ export class ActionParam {
     * The value of the parameter. This can be any type of object.
     */
    public Value: any;
+   /**
+    * The type of the Action parameter. Input parameters are used to pass data into the action while output parameters are used to return data from the action.
+    */
+   public Type: 'Input' | 'Output' | 'Both';
 }
 
 /**
@@ -122,7 +126,7 @@ export class RunActionParams {
     */
    public ContextUser: UserInfo;
    /**
-    * Optional, if set to true, an ActionExecutionLogEntity will not be created for this action run.
+    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
     */
    public SkipActionLog?: boolean;
    /**
@@ -133,17 +137,26 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
-   /**
-    * Optional, additional parameters that can be passed to the action that are not defined in the metadata for the action.
-    */
-   public AdditionalParams?: Record<string, any>;
-}
+};
 
 export type RunActionByNameParams = {
+   /**
+    * The name of the action to be run.
+    */
    ActionName: string,
+   /**
+    * The user context for the action.
+    */
    ContextUser: UserInfo,
+   /**
+    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
+    */
    SkipActionLog?: boolean,
-   AdditionalParams: Record<string, any>
+   /**
+    * Optional, the input and output parameters as defined in the metadata for the action.
+    * Note that if none are provided, the default values defined in the Metadata will be used.
+    */
+   Params?: ActionParam[];
 };
 
 

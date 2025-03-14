@@ -1,9 +1,9 @@
 import { BaseEngine, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, SafeJSONParse } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEntityServerEntity } from "./ActionEntity.server";
-import { ActionEngineBase, ActionEntityExtended, ActionResult, RunActionByNameParams, RunActionParams } from "@memberjunction/actions-base";
+import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionByNameParams, RunActionParams } from "@memberjunction/actions-base";
 
  
 
@@ -20,13 +20,19 @@ export class ActionEngineServer extends ActionEngineBase {
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
       const validInputs: boolean = await this.ValidateInputs(params);
       if(!validInputs){
-         return {
+         const result: ActionResult = {
             Success: false,
             Message: "Input validation failed. This is a failure condition.",
             LogEntry: null,
-            Params: [],
+            Params: params.Params,
             RunParams: params
          };
+
+         if(!params.SkipActionLog){
+            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         }
+
+         return result;
       }
 
       const filtersPassed: boolean = await this.RunFilters(params);
@@ -36,7 +42,7 @@ export class ActionEngineServer extends ActionEngineBase {
             Success: true,
             Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
             LogEntry: null, // initially null
-            Params: [],
+            Params: params.Params,
             RunParams: params
          };
 
@@ -49,9 +55,59 @@ export class ActionEngineServer extends ActionEngineBase {
       return runActionResult;
    }
    
-   protected RunActionByName(params: RunActionByNameParams): Promise<ActionResult> {
+   protected async RunActionByName(params: RunActionByNameParams): Promise<ActionResult> {
       const nameToLower: string = params.ActionName.trim().toLowerCase();
       const action: ActionEntityExtended | undefined = this.Actions.find(a => a.Name.trim().toLowerCase() === nameToLower);
+      if(!action){
+         throw new Error(`Action with name ${params.ActionName} not found in Metadata`);
+      }
+
+      const runParams: RunActionParams = {
+         Action: action,
+         ContextUser: params.ContextUser,
+         Filters: [],
+         Params: this.GetActionParamsForAction(action),
+      };
+
+      const actionResult = await this.RunAction(runParams);
+      return actionResult;
+   }
+
+   protected GetActionParamsForAction(action: ActionEntityExtended): ActionParam[] {
+      const params: ActionParam[] = action.Params.map((param: ActionParamEntity) => {
+         let value: any = null;
+         switch (param.ValueType) {
+            case 'Scalar':
+               value = param.DefaultValue;
+               break;
+            case 'Simple Object':
+               const jsonValue = SafeJSONParse(param.DefaultValue);
+               if (jsonValue){
+                  value = jsonValue;
+               }
+               else{
+                  value = param.DefaultValue;
+               }
+               break;
+            case 'BaseEntity Sub-Class':
+            case 'Other':
+               value = param.DefaultValue;
+               break;
+            default:
+               LogError(`Unknown ValueType ${param.ValueType} for param ${param.Name} in action ${action.Name}`);
+               value = param.DefaultValue;
+               break;
+
+         }
+
+         return {
+            Name: param.Name,
+            Value: value,
+            Type: param.Type
+         }
+      });
+
+      return params;
    }
 
    /**
@@ -94,26 +150,26 @@ export class ActionEngineServer extends ActionEngineBase {
       }
 
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
-      if (!action) 
+      if (!action || action.constructor === BaseAction) {
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
       
       // we now have the action class for this particular action, so run it
-      const simpleResult = await action.Run(params);
+      const simpleResult: ActionResultSimple = await action.Run(params);
 
-      const resultCodeEntity = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
+      const resultCodeEntity: ActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
                                                             r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
       const result: ActionResult = {
          RunParams: params,
          Success: simpleResult.Success,
          Message: simpleResult.Message,
-         LogEntry: null,
+         LogEntry: logEntry,
          Params: simpleResult.Params,
          Result: resultCodeEntity
       };
 
       if(logEntry){
          await this.EndActionLog(logEntry, params, result);
-         result.LogEntry = logEntry;
       }
 
       return result;
@@ -127,7 +183,8 @@ export class ActionEngineServer extends ActionEngineBase {
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
       logEntity.UserID = this.ContextUser.ID;
-      logEntity.Params = JSON.stringify(params.Params); // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
+      // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
+      logEntity.Params = JSON.stringify(params.Params);
       
       if (saveRecord){
          // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
@@ -153,7 +210,8 @@ export class ActionEngineServer extends ActionEngineBase {
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
-      const logEntity = await this.StartActionLog(params, false); // don't do the initial save
+      // don't do the initial save
+      const logEntity: ActionExecutionLogEntity = await this.StartActionLog(params, false); 
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
    }
