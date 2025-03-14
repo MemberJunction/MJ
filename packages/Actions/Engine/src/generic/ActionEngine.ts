@@ -62,11 +62,12 @@ export class ActionEngineServer extends ActionEngineBase {
          throw new Error(`Action with name ${params.ActionName} not found in Metadata`);
       }
 
+      const actionParams: ActionParam[] = params.Params || this.GetActionParamsForAction(action);
       const runParams: RunActionParams = {
          Action: action,
          ContextUser: params.ContextUser,
          Filters: [],
-         Params: this.GetActionParamsForAction(action),
+         Params: actionParams
       };
 
       const actionResult = await this.RunAction(runParams);

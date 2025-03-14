@@ -153,8 +153,9 @@ export type RunActionByNameParams = {
     */
    SkipActionLog?: boolean,
    /**
-    * Optional, the input and output parameters as defined in the metadata for the action.
+    * Optional, input and output params to be passed to the action.
     * Note that if none are provided, the default values defined in the Metadata will be used.
+    * Otherwise you must provide all input parameters the action expects
     */
    Params?: ActionParam[];
 };
