@@ -1436,8 +1436,8 @@ GO
 CREATE VIEW __mj.vwEntityFieldsWithCheckConstraints
 AS
 SELECT 
-	  e.ID as EntityID,
-	  e.Name as EntityName,
+    e.ID as EntityID,
+	e.Name as EntityName,
     ef.ID as EntityFieldID,
     ef.Name as EntityFieldName,
     ef.GeneratedValidationFunctionName,
@@ -1455,14 +1455,14 @@ INNER JOIN
     sys.objects obj ON cc.parent_object_id = obj.object_id
 INNER JOIN 
     sys.schemas sch ON obj.schema_id = sch.schema_id
-INNER JOIN 
-    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
 INNER JOIN
 	__mj.Entity e
 	ON
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
-INNER JOIN
+LEFT OUTER JOIN 
+    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
+LEFT OUTER JOIN
   __mj.EntityField ef
   ON
   e.ID = ef.EntityID AND
