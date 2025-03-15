@@ -2530,12 +2530,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integ
 
 /***** new view for check constraints ****/
 
+GO
 
 DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
 GO
 CREATE VIEW ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
 AS
-WITH DistinctCodes AS (
 SELECT 
     e.ID as EntityID,
     e.Name as EntityName,
@@ -2550,12 +2550,7 @@ SELECT
     obj.name AS TableName,
     col.name AS ColumnName,
     cc.name AS ConstraintName,
-    cc.definition AS ConstraintDefinition,
-	ROW_NUMBER() OVER (
-        PARTITION BY
-          cc.name
-        ORDER BY cc.name
-    ) AS rn
+    cc.definition AS ConstraintDefinition 
 FROM 
     sys.check_constraints cc
 INNER JOIN 
@@ -2577,87 +2572,62 @@ LEFT OUTER JOIN -- left join since can have table level constraints
 LEFT OUTER JOIN
   ${flyway:defaultSchema}.vwGeneratedCodes gc 
   ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
-  (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
-  OR
-  (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
-)
-SELECT 
-    EntityID,
-    EntityName,
-    EntityFieldID,
-    EntityFieldName,
-    GeneratedCodeID,
-    GeneratedValidationFunctionName,
-    GeneratedValidationFunctionDescription,
-    GeneratedValidationFunctionCode,
-    GeneratedValidationFunctionCheckConstraint,
-    SchemaName,
-    TableName,
-    ColumnName,
-    ConstraintName,
-    ConstraintDefinition
-FROM DistinctCodes
-WHERE rn = 1 
-
-
-
-
+  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+        OR
+      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+  ) AND -- MUST MATCH Source=definition
+  cc.definition = gc.Source
 GO
   
 /**** NEW Generated Code *****/
+
+
 
 -- CHECK constraint for Communication Providers @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
                       VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([SupportsScheduledSending]<=[SupportsSending])', 'public ValidateSupportsScheduledSendingComparedToSupportsSending(result: ValidationResult) {
 	if (this.SupportsScheduledSending && !this.SupportsSending) {
-		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "If scheduled sending is supported, sending must also be supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
 	}
-}', 'This rule ensures that the option to schedule sending can never exceed the option to send, meaning if a feature supports sending, it must also support scheduling without being more than what sending allows.', 'ValidateSupportsScheduledSendingComparedToSupportsSending', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '43248F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn''t be able to send them on a schedule either.', 'ValidateSupportsScheduledSendingComparedToSupportsSending', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '43248F34-2837-EF11-86D4-6045BDEE16E6');
   
             
 
 -- CHECK constraint for Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([AllowRecordMerge]=(0) OR [AllowRecordMerge]=(1) AND [AllowDeleteAPI]=(1) AND [DeleteType]=''Soft'')', 'public ValidateAllowRecordMergeAgainstDeleteType(result: ValidationResult) {
-	if (this.AllowRecordMerge && (!this.AllowDeleteAPI || this.DeleteType !== ''Soft'')) {
-		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "If record merging is allowed, then deletion must be allowed and the delete type must be ''Soft''.", this.AllowRecordMerge, ValidationErrorType.Failure));
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([AllowRecordMerge]=(0) OR [AllowRecordMerge]=(1) AND [AllowDeleteAPI]=(1) AND [DeleteType]=''Soft'')', 'public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
+	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === ''Soft'')) {
+		result.Errors.push(new ValidationErrorInfo(''AllowRecordMerge'', ''Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.'', this.AllowRecordMerge, ValidationErrorType.Failure));
 	}
-}', 'This rule ensures that if record merging is allowed, then the option to delete must also be enabled and the delete type must be set to ''Soft''. The record merge can either allow or disallow merging, but if merging is allowed, the corresponding delete conditions must be satisfied.', 'ValidateAllowRecordMergeAgainstDeleteType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to ''Soft''.', 'ValidateAllowRecordMergeConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
   
             
 
 -- CHECK constraint for Entity Documents @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([PotentialMatchThreshold]<=[AbsoluteMatchThreshold] AND [PotentialMatchThreshold]>=(0) AND [PotentialMatchThreshold]<=(1) AND [AbsoluteMatchThreshold]>=(0) AND [AbsoluteMatchThreshold]<=(1))', 'public ValidatePotentialMatchThresholdComparedToAbsoluteMatchThreshold(result: ValidationResult) {
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([PotentialMatchThreshold]<=[AbsoluteMatchThreshold] AND [PotentialMatchThreshold]>=(0) AND [PotentialMatchThreshold]<=(1) AND [AbsoluteMatchThreshold]>=(0) AND [AbsoluteMatchThreshold]<=(1))', 'public ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result: ValidationResult) {
 	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
-		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be less than or equal to the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold cannot be greater than the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
 	}
 	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
-		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1, inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1 inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
 	}
 	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
-		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1, inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
 	}
-}', 'This rule ensures that the potential match threshold is always less than or equal to the absolute match threshold, and both thresholds must be between 0 and 1, inclusive.', 'ValidatePotentialMatchThresholdComparedToAbsoluteMatchThreshold', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '22248F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.', 'ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '22248F34-2837-EF11-86D4-6045BDEE16E6');
   
             
 
 -- CHECK constraint for Resource Permissions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([Type]=''Role'' AND [RoleID] IS NOT NULL AND [UserID] IS NULL OR [Type]=''User'' AND [UserID] IS NOT NULL AND [RoleID] IS NULL)', 'public ValidateRoleIdAndUserIdBasedOnType(result: ValidationResult) {
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([Type]=''Role'' AND [RoleID] IS NOT NULL AND [UserID] IS NULL OR [Type]=''User'' AND [UserID] IS NOT NULL AND [RoleID] IS NULL)', 'public ValidateUserTypeConstraints(result: ValidationResult) {
 	if (this.Type === ''Role'' && this.RoleID === null && this.UserID !== null) {
-		result.Errors.push(new ValidationErrorInfo("RoleID", "A Role must have a RoleID and cannot have a UserID.", this.RoleID, ValidationErrorType.Failure));
-	} 
-	else if (this.Type === ''Role'' && this.RoleID !== null && this.UserID === null) {
-		// Valid Case: Role with RoleID and no UserID
-	} 
-	else if (this.Type === ''User'' && this.UserID === null && this.RoleID !== null) {
-		result.Errors.push(new ValidationErrorInfo("UserID", "A User must have a UserID and cannot have a RoleID.", this.UserID, ValidationErrorType.Failure));
-	} 
-	else if (this.Type === ''User'' && this.UserID !== null && this.RoleID === null) {
-		// Valid Case: User with UserID and no RoleID
+		result.Errors.push(new ValidationErrorInfo("RoleID", "When the type is ''Role'', a RoleID must be provided and UserID must be null.", this.RoleID, ValidationErrorType.Failure));
+	} else if (this.Type === ''User'' && this.UserID === null && this.RoleID !== null) {
+		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is ''User'', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
 	}
-}', 'This rule enforces that for a resource, if the type is ''Role'', then a RoleID must be provided and UserID must be empty. Conversely, if the type is ''User'', then a UserID must be provided and RoleID must be empty.', 'ValidateRoleIdAndUserIdBasedOnType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '201852E1-4587-EF11-8473-6045BDF077EE');
+}', 'This rule ensures that when the type is set to ''Role'', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to ''User'', a user ID must be provided and the role ID must not be provided.', 'ValidateUserTypeConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '201852E1-4587-EF11-8473-6045BDF077EE');
   
             
 
@@ -2667,18 +2637,18 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 	if (this.EntityIDMax <= this.EntityIDMin) {
 		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
 	}
-}', 'This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps maintain a valid range for entity identification.', 'ValidateEntityIDMaxGreaterThanEntityIDMin', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.', 'ValidateEntityIDMaxGreaterThanEntityIDMin', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
   
             -- CHECK constraint for Schema Info @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([EntityIDMin]>(0) AND [EntityIDMax]>(0))', 'public ValidateEntityIDMinAndMaxGreaterThanZero(result: ValidationResult) {
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([EntityIDMin]>(0) AND [EntityIDMax]>(0))', 'public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
 	if (this.EntityIDMin <= 0) {
 		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
 	}
 	if (this.EntityIDMax <= 0) {
 		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
 	}
-}', 'This rule ensures that both the minimum and maximum entity IDs must be greater than zero when they are defined.', 'ValidateEntityIDMinAndMaxGreaterThanZero', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'This rule ensures that both the minimum and maximum entity IDs must be greater than zero.', 'ValidateEntityIDMinAndEntityIDMaxGreaterThanZero', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
   
             
 

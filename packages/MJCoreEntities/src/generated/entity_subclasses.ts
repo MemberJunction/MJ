@@ -12782,8 +12782,8 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
 
     /**
     * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
     * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
+    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
     * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.  
     * @public
     * @method
@@ -12791,23 +12791,11 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCostRank(result);
         this.ValidateSpeedRank(result);
+        this.ValidateCostRank(result);
         this.ValidatePowerRank(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCostRank(result: ValidationResult) {
-    	if (this.CostRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
-    	} 
     }
 
     /**
@@ -12820,6 +12808,18 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     	if (this.SpeedRank < 0) {
     		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
     	}
+    }
+
+    /**
+    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRank(result: ValidationResult) {
+    	if (this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
+    	} 
     }
 
     /**
@@ -15243,7 +15243,7 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
 
     /**
     * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the option to schedule sending can never exceed the option to send, meaning if a feature supports sending, it must also support scheduling without being more than what sending allows.  
+    * * Table-Level: This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.  
     * @public
     * @method
     * @override
@@ -15256,14 +15256,14 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
 
     /**
-    * This rule ensures that the option to schedule sending can never exceed the option to send, meaning if a feature supports sending, it must also support scheduling without being more than what sending allows.
+    * This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateSupportsScheduledSendingComparedToSupportsSending(result: ValidationResult) {
     	if (this.SupportsScheduledSending && !this.SupportsSending) {
-    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "If scheduled sending is supported, sending must also be supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
     	}
     }
 
@@ -20550,27 +20550,27 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
 
     /**
     * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if record merging is allowed, then the option to delete must also be enabled and the delete type must be set to 'Soft'. The record merge can either allow or disallow merging, but if merging is allowed, the corresponding delete conditions must be satisfied.  
+    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateAllowRecordMergeAgainstDeleteType(result);
+        this.ValidateAllowRecordMergeConstraints(result);
 
         return result;
     }
 
     /**
-    * This rule ensures that if record merging is allowed, then the option to delete must also be enabled and the delete type must be set to 'Soft'. The record merge can either allow or disallow merging, but if merging is allowed, the corresponding delete conditions must be satisfied.
+    * This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateAllowRecordMergeAgainstDeleteType(result: ValidationResult) {
-    	if (this.AllowRecordMerge && (!this.AllowDeleteAPI || this.DeleteType !== 'Soft')) {
-    		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "If record merging is allowed, then deletion must be allowed and the delete type must be 'Soft'.", this.AllowRecordMerge, ValidationErrorType.Failure));
+    public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
+    	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
+    		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
     	}
     }
 
@@ -22779,33 +22779,33 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
 
     /**
     * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the potential match threshold is always less than or equal to the absolute match threshold, and both thresholds must be between 0 and 1, inclusive.  
+    * * Table-Level: This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidatePotentialMatchThresholdComparedToAbsoluteMatchThreshold(result);
+        this.ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result);
 
         return result;
     }
 
     /**
-    * This rule ensures that the potential match threshold is always less than or equal to the absolute match threshold, and both thresholds must be between 0 and 1, inclusive.
+    * This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidatePotentialMatchThresholdComparedToAbsoluteMatchThreshold(result: ValidationResult) {
+    public ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result: ValidationResult) {
     	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be less than or equal to the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold cannot be greater than the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
     	}
     	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1, inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1 inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
     	}
     	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1, inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
     	}
     }
 
@@ -31096,36 +31096,29 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
 
     /**
     * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule enforces that for a resource, if the type is 'Role', then a RoleID must be provided and UserID must be empty. Conversely, if the type is 'User', then a UserID must be provided and RoleID must be empty.  
+    * * Table-Level: This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRoleIdAndUserIdBasedOnType(result);
+        this.ValidateUserTypeConstraints(result);
 
         return result;
     }
 
     /**
-    * This rule enforces that for a resource, if the type is 'Role', then a RoleID must be provided and UserID must be empty. Conversely, if the type is 'User', then a UserID must be provided and RoleID must be empty.
+    * This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateRoleIdAndUserIdBasedOnType(result: ValidationResult) {
+    public ValidateUserTypeConstraints(result: ValidationResult) {
     	if (this.Type === 'Role' && this.RoleID === null && this.UserID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("RoleID", "A Role must have a RoleID and cannot have a UserID.", this.RoleID, ValidationErrorType.Failure));
-    	} 
-    	else if (this.Type === 'Role' && this.RoleID !== null && this.UserID === null) {
-    		// Valid Case: Role with RoleID and no UserID
-    	} 
-    	else if (this.Type === 'User' && this.UserID === null && this.RoleID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "A User must have a UserID and cannot have a RoleID.", this.UserID, ValidationErrorType.Failure));
-    	} 
-    	else if (this.Type === 'User' && this.UserID !== null && this.RoleID === null) {
-    		// Valid Case: User with UserID and no RoleID
+    		result.Errors.push(new ValidationErrorInfo("RoleID", "When the type is 'Role', a RoleID must be provided and UserID must be null.", this.RoleID, ValidationErrorType.Failure));
+    	} else if (this.Type === 'User' && this.UserID === null && this.RoleID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is 'User', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
     	}
     }
 
@@ -32167,8 +32160,8 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
 
     /**
     * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps maintain a valid range for entity identification.
-    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero when they are defined.  
+    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.  
     * @public
     * @method
     * @override
@@ -32176,13 +32169,13 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
-        this.ValidateEntityIDMinAndMaxGreaterThanZero(result);
+        this.ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result);
 
         return result;
     }
 
     /**
-    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps maintain a valid range for entity identification.
+    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -32194,12 +32187,12 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     }
 
     /**
-    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero when they are defined.
+    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateEntityIDMinAndMaxGreaterThanZero(result: ValidationResult) {
+    public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
     	if (this.EntityIDMin <= 0) {
     		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
     	}

@@ -109,7 +109,7 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
 {
   "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
   "Code": "This is where you put the actual code in TypeScript INCLUDING the method signature, see above example. Don't include punctuation, quotes, markdown, or anything else. Just the code.",
-  "MethodName": "This is where you put JUST the method name you generated above"
+  "MethodName": "Name of method you generated in the Code property. MUST BE EXACT MATCH! IMPORTANT"
 }
 
 <SCHEMA INFORMATION>
