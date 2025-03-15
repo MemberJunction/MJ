@@ -142,12 +142,23 @@ export class RunCodeGenBase {
         else {
           logStatus('SQL output directory NOT found in config file, skipping...');
         }
-      } else {
+      } 
+      else {
         logMessage(
           'Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings',
           MJ.SeverityType.Warning,
           false
         );
+
+        // we skipped the database generation but we need to load generated code for validators from the database to ensure that we have them
+        // ready for later use.
+        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+        logStatus('Checking/Loading AI Generated Code from Metadata...');
+        const metadataSuccess = await manageMD.loadGeneratedCode(AppDataSource, currentUser);
+        if (!metadataSuccess) {
+          logError('ERROR checking/loading AI Generated Code from Metadata');
+          return; // FATAL ERROR - we can't continue
+        } 
       }
 
       const coreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
@@ -187,7 +198,7 @@ export class RunCodeGenBase {
         logStatus('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       }
@@ -201,7 +212,7 @@ export class RunCodeGenBase {
         logStatus('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       } else {

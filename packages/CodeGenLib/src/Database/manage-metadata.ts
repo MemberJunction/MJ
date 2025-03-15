@@ -543,7 +543,7 @@ export class ManageMetadataBase {
       if (!skipEntityFieldValues) {
          const step6StartTime: Date = new Date();
          logStatus(`      Starting to manage entity field values...`);
-         if (! await this.manageEntityFieldValues(ds, excludeSchemas, currentUser)) {
+         if (! await this.manageEntityFieldValuesAndValidatorFunctions(ds, excludeSchemas, currentUser, false)) {
             logError('Error managing entity field values');
             bSuccess = false;
          }
@@ -1222,7 +1222,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageEntityFieldValues(ds: DataSource, excludeSchemas: string[], currentUser: UserInfo): Promise<boolean> {
+   protected async manageEntityFieldValuesAndValidatorFunctions(ds: DataSource, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
       try  {
          // here we want to get all of the entity fields that have check constraints attached to them. For each field that has a check constraint, we want to
          // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
@@ -1247,19 +1247,27 @@ export class ManageMetadataBase {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
                const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
                if (parsedValues) {
-                  // flip the order of parsedValues because they come out in reverse order from SQL Server
-                  parsedValues.reverse();
+                  if (!skipDBUpdate) {
+                     // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
+                     // with the EntityFieldValues in the database.
 
-                  // we have parsed values from the check constraint, so sync them with the entity field values
-                  await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
+                     // 1st, flip the order of parsedValues because they come out in reverse order from SQL Server
+                     parsedValues.reverse();
 
-                  // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
-                  // check to see if the ValueListType is already set to "List", if not, update it
-                  const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
-                  const checkResult = await ds.query(sSQLCheck);
-                  if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
-                     const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
-                     await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                     // we have parsed values from the check constraint, so sync them with the entity field values
+                     await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
+
+                     // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
+                     // check to see if the ValueListType is already set to "List", if not, update it
+                     const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
+                     const checkResult = await ds.query(sSQLCheck);
+                     if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
+                        const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
+                        await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                     }
+                  }
+                  else {
+                     // we are skipping the DB update, nothing to do, eh?
                   }
                }
                else {
@@ -1269,7 +1277,7 @@ export class ManageMetadataBase {
                       configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
                      // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
                      // run this in parallel
-                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, currentUser));
+                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
                }
             }
@@ -1281,7 +1289,7 @@ export class ManageMetadataBase {
                configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
               // run this in parallel
-              generationPromises.push(this.runValidationGeneration(r, allEntityFields, currentUser));
+              generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
            }
          }
 
@@ -1295,8 +1303,24 @@ export class ManageMetadataBase {
       }
    }
 
-   private async runValidationGeneration(r: any, allEntityFields: any[], currentUser: UserInfo) {
-      const generatedFunction = await this.generateValidatorFunctionFromCheckConstraint(r, allEntityFields, currentUser);
+   /**
+    * This method will load all generated code from the database - this is intended to be used when you are bypassing managing the metadata.
+    * @param ds 
+    * @param currentUser 
+    */
+   public async loadGeneratedCode(ds: DataSource, currentUser: UserInfo): Promise<boolean> {
+      try {
+         // right now we're just doing validator functions which are handled here
+         return await this.manageEntityFieldValuesAndValidatorFunctions(ds, [], currentUser, true);
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
+   private async runValidationGeneration(r: any, allEntityFields: any[], generateNewCode: boolean, currentUser: UserInfo) {
+      const generatedFunction = await this.generateValidatorFunctionFromCheckConstraint(r, allEntityFields, currentUser, generateNewCode);
       if (generatedFunction?.success) {
          // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
          ManageMetadataBase._generatedValidators.push(generatedFunction);
@@ -1305,9 +1329,13 @@ export class ManageMetadataBase {
 
    /**
     * Generates a TypeScript field validator function from the text of a SQL CHECK constraint. 
+    * @param data - the data object containing the entity name, column name, and constraint definition
+    * @param allEntityFields - all of the entity fields in the system
+    * @param currentUser - the current user
+    * @param generateNewCode - a flag indicating whether or not to generate new code, this is set to false when we are just loading the generated code from the database.
     * @returns a data structure with the function text, function name, function description, and a success flag
     */
-   protected async generateValidatorFunctionFromCheckConstraint(data: any, allEntityFields: any[], currentUser: UserInfo): Promise<ValidatorResult> {
+   protected async generateValidatorFunctionFromCheckConstraint(data: any, allEntityFields: any[], currentUser: UserInfo, generateNewCode: boolean): Promise<ValidatorResult> {
       const entityName = data.EntityName;
       const fieldName = data.ColumnName;
       const constraintDefinition = data.ConstraintDefinition;
@@ -1336,7 +1364,7 @@ export class ManageMetadataBase {
       }
 
       try {
-         if (configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
+         if (generateNewCode && configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
             // feature is enabled, so let's call the LLM to generate a function for us
             const ag = new AdvancedGeneration();
             const llm = ag.LLM;
