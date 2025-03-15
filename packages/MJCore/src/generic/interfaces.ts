@@ -15,20 +15,37 @@ export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
     private _MJCoreSchemaName: string = '__mj';
-    private _data: any;
-    public get Data(): any {
+    private _data: Record<string, any>;
+    private _currentUserEmail: string = '';
+    
+    public get Data(): Record<string, any> {
         return this._data;
     }
+    
     public get IncludeSchemas(): string[] {
         return this._includeSchemas;
     }
+    
     public get MJCoreSchemaName(): string {
         return this._MJCoreSchemaName;
     }
+    
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: any, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
+
+    /**
+     * The email of the user this provider is to use. To be set by sub-classes.
+     */
+    public get CurrentUserEmail(): string {
+        return this._currentUserEmail;
+    }
+
+    public set CurrentUserEmail(value: string) {
+        this._currentUserEmail = value;
+    }
+
+    constructor(data: Record<string, any>, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
         this._data = data;
         this._MJCoreSchemaName = MJCoreScemaName;
         if (includeSchemas)

@@ -62,7 +62,6 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
 
-
     /**
      *
      * @param token Token is the JWT token that is used to authenticate the user with the server
@@ -73,6 +72,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
      * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server. 
+     * @param options optional, a record of additional fields that will be passed to the base config class
      */
     constructor(token: string,
                 url: string,
@@ -81,19 +81,23 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 MJCoreSchemaName?: string,
                 includeSchemas?: string[],
                 excludeSchemas?: string[],
-                mjAPIKey?: string) {
-        super(
-                {
-                    Token: token,
-                    URL: url,
-                    WSURL: wsurl,
-                    MJAPIKey: mjAPIKey,
-                    RefreshTokenFunction: refreshTokenFunction,
-                },
-                MJCoreSchemaName,
-                includeSchemas,
-                excludeSchemas
-            );
+                mjAPIKey?: string,
+                options?: Record<string, any>) {
+
+        let data: Record<string, any> = {
+            Token: token,
+            URL: url,
+            WSURL: wsurl,
+            MJAPIKey: mjAPIKey,
+            RefreshTokenFunction: refreshTokenFunction,
+        };
+        
+        if(options){
+            data = {...data, ...options};
+        }
+        
+        super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
+        this.CurrentUserEmail = options?.CurrentUserEmail;
     }
 }
 
@@ -206,6 +210,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             u.UserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
+    }
+
+    public LocalMetadataObsolete(type?: string): boolean {
+        const userEmail: string = this.ConfigData.CurrentUserEmail;
+        if(userEmail && this.CurrentUser){
+            const userEmailToLower: string = userEmail.toLowerCase().trim();
+            const currentUserEmailToLower: string = this.CurrentUser.Email.toLowerCase().trim();
+
+            if(userEmailToLower !== currentUserEmailToLower){
+                //Current user's email doesnt match the user's email found in the local metadata, 
+                //which means the user has changed since we last fetched the metadata
+                //so we need to refresh
+                return false;
+            }
+
+        }
+        
+        return super.LocalMetadataObsolete(type);
     }
 
 
