@@ -1,34 +1,41 @@
 import { EmbedTextParams, EmbedTextsParams, Embeddings, ModelUsage, EmbedTextResult, EmbedTextsResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
-import { MistralClient } from './mistralClient';
-import { EmbeddingResponse } from "../generic/mistral.types";
+import { Mistral } from "@mistralai/mistralai";
+import { EmbeddingRequest, EmbeddingResponse } from "@mistralai/mistralai/models/components";
 
 
 @RegisterClass(Embeddings, 'MistralEmbedding')
 export class MistralEmbedding extends Embeddings {
-    private _client: MistralClient;
-
-    constructor(apiKey: string) {
-        super(apiKey);
-        this._client = new MistralClient({ apiKey });
-    }
-
-    public get Client(): MistralClient { return this._client; }
+    private _client: Mistral;
+    
+        constructor(apiKey: string) {
+            super(apiKey);
+            this._client = new Mistral({
+                apiKey: apiKey
+            });
+        }
+    
+        public get Client(): Mistral {return this._client;}
 
     /**
      * Mistral AI embedding endpoint outputs vectors in 1024 dimensions
      */
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        const request: EmbeddingRequest = {
+            inputs: params.text,
+            model: params.model || "mistral-embed",
+        };
+
         params.model = params.model || "mistral-embed";
-        const response: EmbeddingResponse = await this.Client.embeddings(params.model, [params.text]);
+        const response: EmbeddingResponse = await this.Client.embeddings.create(request);
         let vector: number[] = [];
         if (response.data.length > 0){
             vector = response.data[0].embedding;
         }
         return {
-            object: response.object,
+            object: response.object as "object" | "list",
             model: response.model,
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, response.usage.completion_tokens),
+            ModelUsage: new ModelUsage(response.usage.promptTokens, response.usage.completionTokens),
             vector: vector
         };
     }
@@ -37,19 +44,24 @@ export class MistralEmbedding extends Embeddings {
      * Mistral AI embedding endpoint outputs vectors in 1024 dimensions
      */
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        
+        const request: EmbeddingRequest = {
+            inputs: params.texts,
+            model: params.model || "mistral-embed",
+        };
+
         params.model = params.model || "mistral-embed";
-        const response: EmbeddingResponse = await this.Client.embeddings(params.model, params.texts);
+        const response: EmbeddingResponse = await this.Client.embeddings.create(request);
         return {
-            object: response.object,
+            object: response.object as "object" | "list",
             model: response.model,
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, response.usage.completion_tokens),
+            ModelUsage: new ModelUsage(response.usage.promptTokens, response.usage.completionTokens),
             vectors: response.data.map((data) => data.embedding)
         }
     }
 
     public async GetEmbeddingModels(): Promise<any> {
-        let allModels = await this.Client.listModels();
-        allModels.data = allModels.data.filter((model) => model.id.toLowerCase().includes('embed'));
+        let allModels = await this.Client.models.list();
         return allModels;
     }
 }

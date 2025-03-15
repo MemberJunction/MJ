@@ -1,35 +1,56 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { MistralClient } from './mistralClient';
-import { ChatCompletionResponseChoice, ListModelsResponse } from '../generic/mistral.types';
+import { Mistral } from "@mistralai/mistralai";
+import { ChatCompletionChoice, ResponseFormat } from '@mistralai/mistralai/models/components';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
-    private _client: MistralClient;
+    private _client: Mistral;
+
     constructor(apiKey: string) {
         super(apiKey);
-        this._client = new MistralClient({ apiKey });
+        this._client = new Mistral({
+            apiKey: apiKey
+        });
     }
 
-    public get client(): MistralClient {return this._client;}
+    public get Client(): Mistral {return this._client;}
 
-    public async ChatCompletion(params: MistralChatParams): Promise<ChatResult>{
+    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
-        const chatResponse = await this.client.chat({
+
+        let responseFormat: ResponseFormat | undefined = undefined;
+        if (params.responseFormat) {
+            if(params.responseFormat === 'JSON') {
+                responseFormat = { type: "json_object" };
+            }
+        }
+
+        const chatResponse = await this.Client.chat.complete({
             model: params.model,
             messages: params.messages, 
-            max_tokens: params.maxOutputTokens,
-            response_format: params.responseFormat
+            maxTokens: params.maxOutputTokens,
+            responseFormat: responseFormat
         });
+
         const endTime = new Date();
 
-        let choices: ChatResultChoice[] = chatResponse.choices.map((choice: ChatCompletionResponseChoice) => {
+        let choices: ChatResultChoice[] = chatResponse.choices.map((choice: ChatCompletionChoice) => {
+            let content: string = "";
+
+            if(choice.message.content && typeof choice.message.content === 'string') {
+                content = choice.message.content;
+            }
+            else if(choice.message.content && Array.isArray(choice.message.content)) {
+                content = choice.message.content.join(' ');
+            }
+
             const res: ChatResultChoice = {
                 message: {
                     role: 'assistant',
-                    content: choice.message.content
+                    content: content
                 },
-                finish_reason: choice.finish_reason,
+                finish_reason: choice.finishReason,
                 index: choice.index
             };
             return res;
@@ -44,9 +65,9 @@ export class MistralLLM extends BaseLLM {
             data: {
                 choices: choices,
                 usage: {
-                    totalTokens: chatResponse.usage.total_tokens,
-                    promptTokens: chatResponse.usage.prompt_tokens,
-                    completionTokens: chatResponse.usage.completion_tokens
+                    totalTokens: chatResponse.usage.totalTokens,
+                    promptTokens: chatResponse.usage.promptTokens,
+                    completionTokens: chatResponse.usage.completionTokens
                 }
             },
             errorMessage: "",
@@ -62,19 +83,6 @@ export class MistralLLM extends BaseLLM {
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
     }
-
-    /**
-     * Returns a list of available models
-     * @returns {Promise<AvailableModelInfo>}
-     */
-    public async listModels(): Promise<ListModelsResponse> {
-        const listModelsResponse: ListModelsResponse = await this.client.listModels();
-        return listModelsResponse;
-    }
-}
-
-export class MistralChatParams extends ChatParams {
-    model: string;
 }
 
 export function LoadMistralLLM() {

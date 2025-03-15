@@ -21,7 +21,7 @@
   "dependencies": {
     "@memberjunction/ai": "2.29.2",
     "@memberjunction/global": "2.29.2",
-    "@mistralai/mistralai": "1.5.0",
-    "axios-retry": "^4.3.0"
+    "@mistralai/mistralai": "^1.5.0",
+    "axios-retry": "4.3.0"
   }
 }
