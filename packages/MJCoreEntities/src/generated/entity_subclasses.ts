@@ -32160,30 +32160,18 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
 
     /**
     * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
-    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.  
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
         this.ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result);
+        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
-    	if (this.EntityIDMax <= this.EntityIDMin) {
-    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -32198,6 +32186,18 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     	}
     	if (this.EntityIDMax <= 0) {
     		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
+    	if (this.EntityIDMax <= this.EntityIDMin) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
     	}
     }
 
