@@ -93,6 +93,22 @@ import { GeneratedCodeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="LinkedEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LinkedRecordPrimaryKey"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Category"
             Type="textbox"
             [EditMode]="EditMode"
@@ -101,6 +117,13 @@ import { GeneratedCodeEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="GeneratedByModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="LinkedEntity"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

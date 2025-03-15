@@ -2766,4 +2766,550 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGenerateCodeCategory] TO [cd
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGenerateCodeCategory] TO [cdp_Integration]
 
 
+/************* ALTER TABLE FOR GeneratedCode - missed two fields ************/
+
+-- Add new columns to the GeneratedCode table
+ALTER TABLE ${flyway:defaultSchema}.GeneratedCode
+ADD 
+    LinkedEntityID UNIQUEIDENTIFIER NULL,
+    LinkedRecordPrimaryKey NVARCHAR(MAX) NULL;
+GO
+
+-- Add foreign key constraint for LinkedEntityID
+ALTER TABLE ${flyway:defaultSchema}.GeneratedCode
+ADD CONSTRAINT FK_GeneratedCode_LinkedEntity FOREIGN KEY (LinkedEntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID);
+GO
+
+-- Add extended property for LinkedEntityID
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description', 
+    @value = 'Optional reference to an entity. Used for linking generated code to a specific entity/record.', 
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+    @level1type = N'Table',  @level1name = 'GeneratedCode',
+    @level2type = N'Column', @level2name = 'LinkedEntityID';
+GO
+
+-- Add extended property for LinkedRecordPrimaryKey
+EXEC sp_addextendedproperty 
+    @name = N'MS_Description', 
+    @value = 'Optional scalar or JSON representation of the primary key of the linked entity record. Can store UUID, INT, or composite keys. If non-scalar stored in MJ JSON format for Composite Keys', 
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+    @level1type = N'Table',  @level1name = 'GeneratedCode',
+    @level2type = N'Column', @level2name = 'LinkedRecordPrimaryKey';
+GO
+
+/****** METADATA FOR THE 2 ADDITIONAL FIELDS ********/
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'eabdd095-25b3-47da-b625-230f2190500a'  OR 
+               (EntityID = 'D4DA723A-17A4-4742-92DF-044BB9CBD6A7' AND Name = 'LinkedEntityID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'eabdd095-25b3-47da-b625-230f2190500a',
+            'D4DA723A-17A4-4742-92DF-044BB9CBD6A7', -- Entity: Generated Codes
+            13,
+            'LinkedEntityID',
+            'Linked Entity ID',
+            'Optional reference to an entity. Used for linking generated code to a specific entity/record.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            'E0238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '617d40cc-8f0d-41ec-9c66-d29277c00996'  OR 
+               (EntityID = 'D4DA723A-17A4-4742-92DF-044BB9CBD6A7' AND Name = 'LinkedRecordPrimaryKey')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '617d40cc-8f0d-41ec-9c66-d29277c00996',
+            'D4DA723A-17A4-4742-92DF-044BB9CBD6A7', -- Entity: Generated Codes
+            14,
+            'LinkedRecordPrimaryKey',
+            'Linked Record Primary Key',
+            'Optional scalar or JSON representation of the primary key of the linked entity record. Can store UUID, INT, or composite keys. If non-scalar stored in MJ JSON format for Composite Keys',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = 'de394880-9c6b-4af1-a6cd-e591845229cb'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('de394880-9c6b-4af1-a6cd-e591845229cb', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'D4DA723A-17A4-4742-92DF-044BB9CBD6A7', 'LinkedEntityID', 'One To Many', 1, 1, 'Generated Codes', 1);
+   END
+                              
+
+/* Index for Foreign Keys for GeneratedCode */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key CategoryID in table GeneratedCode
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID ON [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID]);
+
+-- Index for foreign key GeneratedByModelID in table GeneratedCode
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID ON [${flyway:defaultSchema}].[GeneratedCode] ([GeneratedByModelID]);
+
+-- Index for foreign key LinkedEntityID in table GeneratedCode
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_LinkedEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_LinkedEntityID ON [${flyway:defaultSchema}].[GeneratedCode] ([LinkedEntityID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID EABDD095-25B3-47DA-B625-230F2190500A */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='EABDD095-25B3-47DA-B625-230F2190500A',
+         @RelatedEntityNameFieldMap='LinkedEntity'
+
+/* Base View SQL for Generated Codes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: vwGeneratedCodes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      Generated Codes
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  GeneratedCode
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwGeneratedCodes]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwGeneratedCodes]
+AS
+SELECT
+    g.*,
+    GenerateCodeCategory_CategoryID.[Name] AS [Category],
+    AIModel_GeneratedByModelID.[Name] AS [GeneratedByModel],
+    Entity_LinkedEntityID.[Name] AS [LinkedEntity]
+FROM
+    [${flyway:defaultSchema}].[GeneratedCode] AS g
+INNER JOIN
+    [${flyway:defaultSchema}].[GenerateCodeCategory] AS GenerateCodeCategory_CategoryID
+  ON
+    [g].[CategoryID] = GenerateCodeCategory_CategoryID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS AIModel_GeneratedByModelID
+  ON
+    [g].[GeneratedByModelID] = AIModel_GeneratedByModelID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Entity] AS Entity_LinkedEntityID
+  ON
+    [g].[LinkedEntityID] = Entity_LinkedEntityID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGeneratedCodes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for Generated Codes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: Permissions for vwGeneratedCodes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGeneratedCodes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for Generated Codes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: spCreateGeneratedCode
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR GeneratedCode
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateGeneratedCode]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGeneratedCode]
+    @GeneratedAt datetimeoffset,
+    @CategoryID uniqueidentifier,
+    @GeneratedByModelID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @Source nvarchar(MAX),
+    @Status nvarchar(20),
+    @Language nvarchar(50),
+    @LinkedEntityID uniqueidentifier = '00000000-0000-0000-0000-000000000000',
+    @LinkedRecordPrimaryKey nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO
+    [${flyway:defaultSchema}].[GeneratedCode]
+        (
+            [GeneratedAt],
+            [CategoryID],
+            [GeneratedByModelID],
+            [Name],
+            [Description],
+            [Code],
+            [Source],
+            [Status],
+            [Language],
+            [LinkedEntityID],
+            [LinkedRecordPrimaryKey]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @GeneratedAt,
+            @CategoryID,
+            @GeneratedByModelID,
+            @Name,
+            @Description,
+            @Code,
+            @Source,
+            @Status,
+            @Language,
+            CASE @LinkedEntityID WHEN '00000000-0000-0000-0000-000000000000' THEN null ELSE @LinkedEntityID END,
+            @LinkedRecordPrimaryKey
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwGeneratedCodes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGeneratedCode] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for Generated Codes */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGeneratedCode] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for Generated Codes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: spUpdateGeneratedCode
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR GeneratedCode
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateGeneratedCode]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGeneratedCode]
+    @ID uniqueidentifier,
+    @GeneratedAt datetimeoffset,
+    @CategoryID uniqueidentifier,
+    @GeneratedByModelID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Code nvarchar(MAX),
+    @Source nvarchar(MAX),
+    @Status nvarchar(20),
+    @Language nvarchar(50),
+    @LinkedEntityID uniqueidentifier,
+    @LinkedRecordPrimaryKey nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GeneratedCode]
+    SET
+        [GeneratedAt] = @GeneratedAt,
+        [CategoryID] = @CategoryID,
+        [GeneratedByModelID] = @GeneratedByModelID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Code] = @Code,
+        [Source] = @Source,
+        [Status] = @Status,
+        [Language] = @Language,
+        [LinkedEntityID] = @LinkedEntityID,
+        [LinkedRecordPrimaryKey] = @LinkedRecordPrimaryKey
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwGeneratedCodes]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGeneratedCode] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the GeneratedCode table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateGeneratedCode
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGeneratedCode
+ON [${flyway:defaultSchema}].[GeneratedCode]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GeneratedCode]
+    SET
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[GeneratedCode] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for Generated Codes */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGeneratedCode] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for Generated Codes */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Generated Codes
+-- Item: spDeleteGeneratedCode
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR GeneratedCode
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteGeneratedCode]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGeneratedCode]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[GeneratedCode]
+    WHERE
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for Generated Codes */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integration]
+
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '57e4dc8d-da04-4af0-9ab3-fbb9c1888e89'  OR 
+               (EntityID = 'D4DA723A-17A4-4742-92DF-044BB9CBD6A7' AND Name = 'LinkedEntity')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '57e4dc8d-da04-4af0-9ab3-fbb9c1888e89',
+            'D4DA723A-17A4-4742-92DF-044BB9CBD6A7', -- Entity: Generated Codes
+            17,
+            'LinkedEntity',
+            'Linked Entity',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
 

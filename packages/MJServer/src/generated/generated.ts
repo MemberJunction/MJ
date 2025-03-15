@@ -897,6 +897,13 @@ export class GeneratedCode_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional reference to an entity. Used for linking generated code to a specific entity/record.`}) 
+    @MaxLength(16)
+    LinkedEntityID?: string;
+        
+    @Field({nullable: true, description: `Optional scalar or JSON representation of the primary key of the linked entity record. Can store UUID, INT, or composite keys. If non-scalar stored in MJ JSON format for Composite Keys`}) 
+    LinkedRecordPrimaryKey?: string;
+        
     @Field() 
     @MaxLength(510)
     Category: string;
@@ -904,6 +911,10 @@ export class GeneratedCode_ {
     @Field() 
     @MaxLength(100)
     GeneratedByModel: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    LinkedEntity?: string;
         
 }
 
@@ -938,6 +949,12 @@ export class CreateGeneratedCodeInput {
 
     @Field({ nullable: true })
     Language?: string;
+
+    @Field({ nullable: true })
+    LinkedEntityID: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordPrimaryKey: string | null;
 }
     
 
@@ -975,6 +992,12 @@ export class UpdateGeneratedCodeInput {
 
     @Field({ nullable: true })
     Language?: string;
+
+    @Field({ nullable: true })
+    LinkedEntityID?: string | null;
+
+    @Field({ nullable: true })
+    LinkedRecordPrimaryKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5439,6 +5462,9 @@ export class Entity_ {
     @Field(() => [QueryEntity_])
     QueryEntities_EntityIDArray: QueryEntity_[]; // Link to QueryEntities
     
+    @Field(() => [GeneratedCode_])
+    GeneratedCodes_LinkedEntityIDArray: GeneratedCode_[]; // Link to GeneratedCodes
+    
 }
 
 //****************************************************************************
@@ -6128,6 +6154,15 @@ export class EntityResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryEntities] WHERE [EntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Query Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Entities', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [GeneratedCode_])
+    async GeneratedCodes_LinkedEntityIDArray(@Root() entity_: Entity_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Generated Codes', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwGeneratedCodes] WHERE [LinkedEntityID]='${entity_.ID}' ` + this.getRowLevelSecurityWhereClause('Generated Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Generated Codes', await dataSource.query(sSQL));
         return result;
     }
         
