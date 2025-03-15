@@ -12,11 +12,11 @@ import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
+import { ActionEngineBase } from '@memberjunction/actions-base';
 
 const { mjCoreSchema } = configInfo;
 
@@ -245,11 +245,11 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
       const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-      await ActionEngineServer.Instance.Config(false, currentUser);
+      await ActionEngineBase.Instance.Config(false, currentUser); // this is inefficient as we have the server 
       if (coreActionsOutputDir) {
         logStatus('Generating CORE Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineServer.Instance.CoreActions, coreActionsOutputDir)))
+        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir)))
           logError('Error generating CORE Actions code');
       }
 
@@ -257,7 +257,7 @@ export class RunCodeGenBase {
       if (actionsOutputDir) {
         logStatus('Generating Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineServer.Instance.NonCoreActions, actionsOutputDir)))
+        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir)))
           logError('Error generating Actions code');
       } else logStatus('Actions output directory NOT found in config file, skipping...');
 
