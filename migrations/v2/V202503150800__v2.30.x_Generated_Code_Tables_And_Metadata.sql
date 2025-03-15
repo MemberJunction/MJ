@@ -2552,10 +2552,8 @@ SELECT
     cc.name AS ConstraintName,
     cc.definition AS ConstraintDefinition,
 	ROW_NUMBER() OVER (
-        PARTITION BY 
-            e.ID, 
-            COALESCE(ef.ID, e.ID), 
-            gc.ID
+        PARTITION BY
+          cc.name
         ORDER BY cc.name
     ) AS rn
 FROM 
