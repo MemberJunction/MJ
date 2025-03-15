@@ -121,7 +121,7 @@ import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Enti
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
 import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
-import { GenerateCodeCategoryFormComponent, LoadGenerateCodeCategoryFormComponent } from "./Entities/GenerateCodeCategory/generatecodecategory.form.component";
+import { GeneratedCodeCategoryFormComponent, LoadGeneratedCodeCategoryFormComponent } from "./Entities/GeneratedCodeCategory/generatedcodecategory.form.component";
 import { GeneratedCodeFormComponent, LoadGeneratedCodeFormComponent } from "./Entities/GeneratedCode/generatedcode.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
 import { IntegrationFormComponent, LoadIntegrationFormComponent } from "./Entities/Integration/integration.form.component";
@@ -289,7 +289,7 @@ import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "
 import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 import { FileStorageProviderDetailsComponent, LoadFileStorageProviderDetailsComponent } from "./Entities/FileStorageProvider/sections/details.component"
 import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/sections/details.component"
-import { GenerateCodeCategoryDetailsComponent, LoadGenerateCodeCategoryDetailsComponent } from "./Entities/GenerateCodeCategory/sections/details.component"
+import { GeneratedCodeCategoryDetailsComponent, LoadGeneratedCodeCategoryDetailsComponent } from "./Entities/GeneratedCodeCategory/sections/details.component"
 import { GeneratedCodeDetailsComponent, LoadGeneratedCodeDetailsComponent } from "./Entities/GeneratedCode/sections/details.component"
 import { IntegrationURLFormatDetailsComponent, LoadIntegrationURLFormatDetailsComponent } from "./Entities/IntegrationURLFormat/sections/details.component"
 import { IntegrationDetailsComponent, LoadIntegrationDetailsComponent } from "./Entities/Integration/sections/details.component"
@@ -559,7 +559,7 @@ declarations: [
     FileEntityRecordLinkFormComponent,
     FileStorageProviderFormComponent,
     FileFormComponent,
-    GenerateCodeCategoryFormComponent,
+    GeneratedCodeCategoryFormComponent,
     GeneratedCodeFormComponent,
     IntegrationURLFormatFormComponent,
     IntegrationFormComponent,
@@ -957,7 +957,7 @@ declarations: [
     FileEntityRecordLinkDetailsComponent,
     FileStorageProviderDetailsComponent,
     FileDetailsComponent,
-    GenerateCodeCategoryDetailsComponent,
+    GeneratedCodeCategoryDetailsComponent,
     GeneratedCodeDetailsComponent,
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
@@ -1247,7 +1247,7 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkFormComponent();
     LoadFileStorageProviderFormComponent();
     LoadFileFormComponent();
-    LoadGenerateCodeCategoryFormComponent();
+    LoadGeneratedCodeCategoryFormComponent();
     LoadGeneratedCodeFormComponent();
     LoadIntegrationURLFormatFormComponent();
     LoadIntegrationFormComponent();
@@ -1415,7 +1415,7 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkDetailsComponent();
     LoadFileStorageProviderDetailsComponent();
     LoadFileDetailsComponent();
-    LoadGenerateCodeCategoryDetailsComponent();
+    LoadGeneratedCodeCategoryDetailsComponent();
     LoadGeneratedCodeDetailsComponent();
     LoadIntegrationURLFormatDetailsComponent();
     LoadIntegrationDetailsComponent();

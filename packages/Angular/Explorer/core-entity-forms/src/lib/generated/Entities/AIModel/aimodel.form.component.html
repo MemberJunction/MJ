@@ -107,19 +107,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Generated Codes" [Visible]="record.IsSaved"> 
-                        Generated Codes
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','GeneratedByModelID')"  
-                            [NewRecordValues]="NewRecordValues('Generated Codes')"
-                            [AllowLoad]="IsCurrentTab('Generated Codes')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="AIAgent Models" [Visible]="record.IsSaved"> 
                         AIAgent Models
                     </mj-tab>
@@ -128,6 +115,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','ModelID')"  
                             [NewRecordValues]="NewRecordValues('AI Agent Models')"
                             [AllowLoad]="IsCurrentTab('AIAgent Models')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Generated Codes" [Visible]="record.IsSaved"> 
+                        Generated Codes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Generated Codes','GeneratedByModelID')"  
+                            [NewRecordValues]="NewRecordValues('Generated Codes')"
+                            [AllowLoad]="IsCurrentTab('Generated Codes')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

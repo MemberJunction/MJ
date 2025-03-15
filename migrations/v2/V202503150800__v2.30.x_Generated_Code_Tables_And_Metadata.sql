@@ -8,6 +8,12 @@ CREATE TABLE ${flyway:defaultSchema}.GeneratedCodeCategory (
 );
 GO
 
+-- CREATE Category for Validators
+INSERT INTO ${flyway:defaultSchema}.GeneratedCodeCategory (ID, Name,Description)
+VALUES ('EE2D433E-F36B-1410-8D9D-00021F8B792E', 'CodeGen: Validators','Generated Validation Code')
+
+GO
+
 -- Add extended properties for GenerateCodeCategory table
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
@@ -54,7 +60,34 @@ CREATE TABLE ${flyway:defaultSchema}.GeneratedCode (
 );
 GO
 
+-- MIGRATE Legacy MJ code from EntityField into new table
+INSERT INTO ${flyway:defaultSchema}.GeneratedCode (
+ID, GeneratedAt, CategoryID, GeneratedByModelID,
+Name, Description, Code, Source, 
+LinkedEntityID, 
+LinkedRecordPrimaryKey,
+Status, Language, ${flyway:defaultSchema}_CreatedAt, ${flyway:defaultSchema}_UpdatedAt
+)
+(
+SELECT ID, ${flyway:defaultSchema}_UpdatedAt, 'EE2D433E-F36B-1410-8D9D-00021F8B792E','E6A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+GeneratedValidationFunctionName, GeneratedValidationFunctionDescription, GeneratedValidationFunctionCode,GeneratedValidationFunctionCheckConstraint ,
+'DF238F34-2837-EF11-86D4-6045BDEE16E6', -- entity fields
+ID, -- entity field ID is the linkedprimarykey
+'Approved','TypeScript',${flyway:defaultSchema}_UpdatedAt, ${flyway:defaultSchema}_UpdatedAt
+FROM ${flyway:defaultSchema}.EntityField WHERE GeneratedValidationFunctionCode IS NOT NULL
+)
+-- now wipe out the legacy columns in the entity field table
+UPDATE 
+    ${flyway:defaultSchema}.EntityField
+SET
+	GeneratedValidationFunctionName = NULL, 
+	GeneratedValidationFunctionDescription = NULL, 
+	GeneratedValidationFunctionCode = NULL,
+	GeneratedValidationFunctionCheckConstraint =NULL 
+WHERE 
+    GeneratedValidationFunctionCode IS NOT NULL
 
+GO
 -- Add extended properties for GeneratedCode table
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', 
@@ -139,46 +172,6 @@ GO
 
 
 
-  
-/***** MODIFY THE BELOW VIEW TO RETURN TABLE LEVEL CHECK CONSTRAINTS *****/
-
-DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
-GO
-CREATE VIEW ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
-AS
-SELECT 
-    e.ID as EntityID,
-  	e.Name as EntityName,
-    ef.ID as EntityFieldID,
-    ef.Name as EntityFieldName,
-    ef.GeneratedValidationFunctionName,
-    ef.GeneratedValidationFunctionDescription,
-    ef.GeneratedValidationFunctionCode,
-    ef.GeneratedValidationFunctionCheckConstraint,
-    sch.name AS SchemaName,
-    obj.name AS TableName,
-    col.name AS ColumnName,
-    cc.name AS ConstraintName,
-    cc.definition AS ConstraintDefinition
-FROM 
-    sys.check_constraints cc
-INNER JOIN 
-    sys.objects obj ON cc.parent_object_id = obj.object_id
-INNER JOIN 
-    sys.schemas sch ON obj.schema_id = sch.schema_id
-INNER JOIN
-	${flyway:defaultSchema}.Entity e
-	ON
-	e.SchemaName = sch.Name AND
-	e.BaseTable = obj.name
-LEFT OUTER JOIN 
-    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
-LEFT OUTER JOIN
-  ${flyway:defaultSchema}.EntityField ef
-  ON
-  e.ID = ef.EntityID AND
-  ef.Name = col.name
-GO
 
 
 /**** --------------- GENERATED METADATA FOR THE ABOVE -------------------  ****/
@@ -2533,5 +2526,54 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integ
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integration]
 
+
+
+/***** new view for check constraints ****/
+
+  
+DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
+GO
+CREATE VIEW ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
+AS
+SELECT 
+    e.ID as EntityID,
+    e.Name as EntityName,
+    ef.ID as EntityFieldID,
+    ef.Name as EntityFieldName,
+  	gc.ID as GeneratedCodeID,
+	  gc.Name as GeneratedValidationFunctionName,
+	  gc.Description as GeneratedValidationFunctionDescription,
+    gc.Code as GeneratedValidationFunctionCode,
+    gc.Source as GeneratedValidationFunctionCheckConstraint,
+    sch.name AS SchemaName,
+    obj.name AS TableName,
+    col.name AS ColumnName,
+    cc.name AS ConstraintName,
+    cc.definition AS ConstraintDefinition
+FROM 
+    sys.check_constraints cc
+INNER JOIN 
+    sys.objects obj ON cc.parent_object_id = obj.object_id
+INNER JOIN 
+    sys.schemas sch ON obj.schema_id = sch.schema_id
+INNER JOIN
+	${flyway:defaultSchema}.Entity e
+	ON
+	e.SchemaName = sch.Name AND
+	e.BaseTable = obj.name
+LEFT OUTER JOIN -- left join since can have table level constraints
+    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
+LEFT OUTER JOIN -- left join since can have table level constraints
+  ${flyway:defaultSchema}.EntityField ef
+  ON
+  e.ID = ef.EntityID AND
+  ef.Name = col.name
+LEFT OUTER JOIN
+  ${flyway:defaultSchema}.vwGeneratedCodes gc 
+  ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
+  (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+  OR
+  (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+GO
 
 

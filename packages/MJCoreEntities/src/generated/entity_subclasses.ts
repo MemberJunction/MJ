@@ -6086,9 +6086,9 @@ export const FileSchema = z.object({
 export type FileEntityType = z.infer<typeof FileSchema>;
 
 /**
- * zod schema definition for the entity Generate Code Categories
+ * zod schema definition for the entity Generated Code Categories
  */
-export const GenerateCodeCategorySchema = z.object({
+export const GeneratedCodeCategorySchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -6106,7 +6106,7 @@ export const GenerateCodeCategorySchema = z.object({
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Generate Code Categories (vwGenerateCodeCategories.ID)
+        * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
     * * Description: Parent category ID, allowing for hierarchical categorization.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -6124,7 +6124,7 @@ export const GenerateCodeCategorySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
 });
 
-export type GenerateCodeCategoryEntityType = z.infer<typeof GenerateCodeCategorySchema>;
+export type GeneratedCodeCategoryEntityType = z.infer<typeof GeneratedCodeCategorySchema>;
 
 /**
  * zod schema definition for the entity Generated Codes
@@ -6145,7 +6145,7 @@ export const GeneratedCodeSchema = z.object({
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Generate Code Categories (vwGenerateCodeCategories.ID)
+        * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
     * * Description: Reference to the category of generated code.`),
     GeneratedByModelID: z.string().describe(`
         * * Field Name: GeneratedByModelID
@@ -6173,6 +6173,15 @@ export const GeneratedCodeSchema = z.object({
         * * Display Name: Source
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Source material used to generate the code, e.g., a SQL CHECK constraint.`),
+    LinkedEntityID: z.string().nullish().describe(`
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    LinkedRecordPrimaryKey: z.string().nullish().describe(`
+        * * Field Name: LinkedRecordPrimaryKey
+        * * Display Name: Linked Record Primary Key
+        * * SQL Data Type: nvarchar(MAX)`),
     Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
@@ -6209,17 +6218,6 @@ export const GeneratedCodeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    LinkedEntityID: z.string().nullish().describe(`
-        * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-    * * Description: Optional reference to an entity. Used for linking generated code to a specific entity/record.`),
-    LinkedRecordPrimaryKey: z.string().nullish().describe(`
-        * * Field Name: LinkedRecordPrimaryKey
-        * * Display Name: Linked Record Primary Key
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional scalar or JSON representation of the primary key of the linked entity record. Can store UUID, INT, or composite keys. If non-scalar stored in MJ JSON format for Composite Keys`),
     Category: z.string().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -6231,8 +6229,7 @@ export const GeneratedCodeSchema = z.object({
     LinkedEntity: z.string().nullish().describe(`
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type GeneratedCodeEntityType = z.infer<typeof GeneratedCodeSchema>;
@@ -12784,7 +12781,7 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
     * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
     * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.  
@@ -17993,7 +17990,7 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
-    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * UserRating: This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.  
     * @public
     * @method
@@ -25157,7 +25154,7 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     }
 
     /**
-    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * Sequence: This rule ensures that the sequence must be greater than zero.  
     * @public
     * @method
@@ -25862,25 +25859,25 @@ export class FileEntity extends BaseEntity<FileEntityType> {
 
 
 /**
- * Generate Code Categories - strongly typed entity sub-class
+ * Generated Code Categories - strongly typed entity sub-class
  * * Schema: __mj
- * * Base Table: GenerateCodeCategory
- * * Base View: vwGenerateCodeCategories
+ * * Base Table: GeneratedCodeCategory
+ * * Base View: vwGeneratedCodeCategories
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'Generate Code Categories')
-export class GenerateCodeCategoryEntity extends BaseEntity<GenerateCodeCategoryEntityType> {
+@RegisterClass(BaseEntity, 'Generated Code Categories')
+export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategoryEntityType> {
     /**
-    * Loads the Generate Code Categories record from the database
-    * @param ID: string - primary key value to load the Generate Code Categories record.
+    * Loads the Generated Code Categories record from the database
+    * @param ID: string - primary key value to load the Generated Code Categories record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof GenerateCodeCategoryEntity
+    * @memberof GeneratedCodeCategoryEntity
     * @method
     * @override
     */
@@ -25928,7 +25925,7 @@ export class GenerateCodeCategoryEntity extends BaseEntity<GenerateCodeCategoryE
     * * Field Name: ParentID
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Generate Code Categories (vwGenerateCodeCategories.ID)
+    * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
     * * Description: Parent category ID, allowing for hierarchical categorization.
     */
     get ParentID(): string | null {
@@ -26026,7 +26023,7 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     * * Field Name: CategoryID
     * * Display Name: Category ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Generate Code Categories (vwGenerateCodeCategories.ID)
+    * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
     * * Description: Reference to the category of generated code.
     */
     get CategoryID(): string {
@@ -26103,6 +26100,31 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     }
 
     /**
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get LinkedEntityID(): string | null {
+        return this.Get('LinkedEntityID');
+    }
+    set LinkedEntityID(value: string | null) {
+        this.Set('LinkedEntityID', value);
+    }
+
+    /**
+    * * Field Name: LinkedRecordPrimaryKey
+    * * Display Name: Linked Record Primary Key
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LinkedRecordPrimaryKey(): string | null {
+        return this.Get('LinkedRecordPrimaryKey');
+    }
+    set LinkedRecordPrimaryKey(value: string | null) {
+        this.Set('LinkedRecordPrimaryKey', value);
+    }
+
+    /**
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
@@ -26165,33 +26187,6 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     }
 
     /**
-    * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
-    * * Description: Optional reference to an entity. Used for linking generated code to a specific entity/record.
-    */
-    get LinkedEntityID(): string | null {
-        return this.Get('LinkedEntityID');
-    }
-    set LinkedEntityID(value: string | null) {
-        this.Set('LinkedEntityID', value);
-    }
-
-    /**
-    * * Field Name: LinkedRecordPrimaryKey
-    * * Display Name: Linked Record Primary Key
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Optional scalar or JSON representation of the primary key of the linked entity record. Can store UUID, INT, or composite keys. If non-scalar stored in MJ JSON format for Composite Keys
-    */
-    get LinkedRecordPrimaryKey(): string | null {
-        return this.Get('LinkedRecordPrimaryKey');
-    }
-    set LinkedRecordPrimaryKey(value: string | null) {
-        this.Set('LinkedRecordPrimaryKey', value);
-    }
-
-    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
@@ -26213,7 +26208,6 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     * * Field Name: LinkedEntity
     * * Display Name: Linked Entity
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
@@ -28975,7 +28969,7 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
-    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated field validators for this entity for the following fields: 
+    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * MatchProbability: This rule ensures that the match probability value is between 0 and 1, inclusive.  
     * @public
     * @method

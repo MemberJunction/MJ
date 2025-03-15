@@ -25,6 +25,7 @@
     "@memberjunction/global": "2.29.2",
     "@memberjunction/sqlserver-dataprovider": "2.29.2",
     "@memberjunction/ai": "2.29.2",
+    "@memberjunction/aiengine": "2.29.2",
     "@memberjunction/ai-openai": "2.29.2",
     "@memberjunction/ai-groq": "2.29.2",
     "@memberjunction/ai-mistral": "2.29.2",

@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { GenerateCodeCategoryEntity } from '@memberjunction/core-entities';
+import { GeneratedCodeCategoryEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Generate Code Categories.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Generated Code Categories.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-generatecodecategory-form-details',
+    selector: 'gen-generatedcodecategory-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -58,12 +58,12 @@ import { GenerateCodeCategoryEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class GenerateCodeCategoryDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: GenerateCodeCategoryEntity;
+export class GeneratedCodeCategoryDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: GeneratedCodeCategoryEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadGenerateCodeCategoryDetailsComponent() {
+export function LoadGeneratedCodeCategoryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
