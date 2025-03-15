@@ -109,13 +109,18 @@ RETURN THIS JSON FOR THE ABOVE INPUT:
 {
   "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
   "Code": "This is where you put the actual code in TypeScript INCLUDING the method signature, see above example. Don't include punctuation, quotes, markdown, or anything else. Just the code.",
-  "MethodName": "ValidateDeactivationDate"
+  "MethodName": "This is where you put JUST the method name you generated above"
 }
 
 <SCHEMA INFORMATION>
-Fields for this entity and their SQL types are:
+Fields for this entity and their SQL types are shown below. 
 \${ENTITY_FIELD_LIST}
+
+NOTE: PLEASE PLEASE PLEASE REMEMBER that for BIT types in SQL Server, they are boolean in TypeScript, DO NOT COMPARE THEM TO 0 or 1 or everything will break!!!!!!!!
 </SCHEMA INFORMATION>
+
+\${EXISTING_METHOD_NAME}
+
 `,
             userMessage: ""
         },
