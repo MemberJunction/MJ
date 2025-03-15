@@ -1235,6 +1235,9 @@ export class ManageMetadataBase {
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
          const allEntityFieldValues = await ds.query(efvSQL);
 
+         const efSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFields ORDER BY EntityID, Sequence`;
+         const allEntityFields = await ds.query(efSQL);
+
          const generationPromises = [];
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
@@ -1266,7 +1269,7 @@ export class ManageMetadataBase {
                       configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
                      // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
                      // run this in parallel
-                     generationPromises.push(this.runValidationGeneration(r, currentUser));
+                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, currentUser));
                   }
                }
             }
@@ -1278,7 +1281,7 @@ export class ManageMetadataBase {
                configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
               // run this in parallel
-              generationPromises.push(this.runValidationGeneration(r, currentUser));
+              generationPromises.push(this.runValidationGeneration(r, allEntityFields, currentUser));
            }
          }
 
@@ -1292,8 +1295,8 @@ export class ManageMetadataBase {
       }
    }
 
-   private async runValidationGeneration(r: any, currentUser: UserInfo) {
-      const generatedFunction = await this.generateValidatorFunctionFromCheckConstraint(r, currentUser);
+   private async runValidationGeneration(r: any, allEntityFields: any[], currentUser: UserInfo) {
+      const generatedFunction = await this.generateValidatorFunctionFromCheckConstraint(r, allEntityFields, currentUser);
       if (generatedFunction?.success) {
          // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
          ManageMetadataBase._generatedValidators.push(generatedFunction);
@@ -1302,12 +1305,9 @@ export class ManageMetadataBase {
 
    /**
     * Generates a TypeScript field validator function from the text of a SQL CHECK constraint. 
-    * @param entityName 
-    * @param fieldName 
-    * @param constraintDefinition 
     * @returns a data structure with the function text, function name, function description, and a success flag
     */
-   protected async generateValidatorFunctionFromCheckConstraint(data: any, currentUser: UserInfo): Promise<ValidatorResult> {
+   protected async generateValidatorFunctionFromCheckConstraint(data: any, allEntityFields: any[], currentUser: UserInfo): Promise<ValidatorResult> {
       const entityName = data.EntityName;
       const fieldName = data.ColumnName;
       const constraintDefinition = data.ConstraintDefinition;
@@ -1350,13 +1350,17 @@ export class ManageMetadataBase {
                                                              m.Vendor?.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase());
             if (!model)
                throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
-            
+
             const prompt = ag.getPrompt('CheckConstraintParser');
+            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}`).join('\n');
+            const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
+               ENTITY_FIELD_LIST: entityFieldListInfo
+            }); // prompt.systemPrompt.replace(/{{ENTITY_FIELD_LIST}}/g, entityFieldListInfo);
             const result = await llm.ChatCompletion({
                messages: [
                   {
                      role: 'system',
-                     content: prompt.systemPrompt
+                     content: markedUpSysPrompt
                   },
                   {
                      role: 'user',

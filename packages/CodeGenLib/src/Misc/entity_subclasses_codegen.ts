@@ -190,11 +190,12 @@ ${fields}
       for (const v of justGenerated) {
         // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
         const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
-        sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function`
+        sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
         const code = v.functionText.replace(/'/g, "''");
         const source = v.sourceCheckConstraint.replace(/'/g, "''");
         const description = v.functionDescription.replace(/'/g, "''");
         const name = v.functionName.replace(/'/g, "''");
+        const validatorCodeCategoryID = `(SELECT ID FROM ${mj_core_schema()}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators')`;
         if (v.generatedCodeId) {
           // need to update the existing record in the __mj.GeneratedCode table
           sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
@@ -202,14 +203,15 @@ ${fields}
                       Code='${code}',
                       Description='${description}',
                       Name='${name}',
-                      GeneratedAt=GETUTCDATE()
+                      GeneratedAt=GETUTCDATE(),
+                      GeneratedByModelID='${v.aiModelID}'
                    WHERE 
                       ID='${v.generatedCodeId}';`
         }
         else {
           // need to create a row inside the __mj.GeneratedCode table
-          sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                    VALUES (GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
+          sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
+                    VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
 
           `
         }
