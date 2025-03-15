@@ -1435,21 +1435,29 @@ DROP VIEW IF EXISTS __mj.vwEntityFieldsWithCheckConstraints
 GO
 CREATE VIEW __mj.vwEntityFieldsWithCheckConstraints
 AS
+WITH DistinctCodes AS (
 SELECT 
     e.ID as EntityID,
     e.Name as EntityName,
     ef.ID as EntityFieldID,
     ef.Name as EntityFieldName,
-	gc.ID as GeneratedCodeID,
-	gc.Name as GeneratedValidationFunctionName,
-	gc.Description as GeneratedValidationFunctionDescription,
+	  gc.ID as GeneratedCodeID,
+	  gc.Name as GeneratedValidationFunctionName,
+	  gc.Description as GeneratedValidationFunctionDescription,
     gc.Code as GeneratedValidationFunctionCode,
     gc.Source as GeneratedValidationFunctionCheckConstraint,
     sch.name AS SchemaName,
     obj.name AS TableName,
     col.name AS ColumnName,
     cc.name AS ConstraintName,
-    cc.definition AS ConstraintDefinition
+    cc.definition AS ConstraintDefinition,
+	ROW_NUMBER() OVER (
+        PARTITION BY 
+            e.ID, 
+            COALESCE(ef.ID, e.ID), 
+            gc.ID
+        ORDER BY cc.name
+    ) AS rn
 FROM 
     sys.check_constraints cc
 INNER JOIN 
@@ -1474,6 +1482,28 @@ LEFT OUTER JOIN
   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
   OR
   (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+)
+SELECT 
+    EntityID,
+    EntityName,
+    EntityFieldID,
+    EntityFieldName,
+    GeneratedCodeID,
+    GeneratedValidationFunctionName,
+    GeneratedValidationFunctionDescription,
+    GeneratedValidationFunctionCode,
+    GeneratedValidationFunctionCheckConstraint,
+    SchemaName,
+    TableName,
+    ColumnName,
+    ConstraintName,
+    ConstraintDefinition
+FROM DistinctCodes
+WHERE rn = 1 
+
+
+
+
 GO
 
 
