@@ -13,8 +13,9 @@ import { ActionEngineBase, ActionEntityExtended, ActionParam, ActionResult, Acti
  */
 export class ActionEngineServer extends ActionEngineBase {
 
+
    public static get Instance(): ActionEngineServer {
-      return super.getInstance<ActionEngineServer>("ActionEngineServer");
+      return super.getInstance<ActionEngineServer>("ActionEngineBase");
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
