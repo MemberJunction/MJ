@@ -50,14 +50,14 @@ export class ActionResultSimple {
    public ResultCode: string;
 
    /**
-    * Optional, additional information about the result of the action
-    */
-   public Message?: string;
-
-   /**
     * All parameters including inputs and outputs are provided here for convenience
     */
    public Params?: ActionParam[];
+
+   /**
+    * Optional, additional information about the result of the action
+    */
+   public Message?: string;
 }
 
 /**
@@ -82,7 +82,7 @@ export class ActionResult {
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
     */
-   public LogEntry: ActionExecutionLogEntity;
+   public LogEntry?: ActionExecutionLogEntity;
 
    /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
@@ -107,14 +107,28 @@ export class ActionParam {
     * The value of the parameter. This can be any type of object.
     */
    public Value: any;
+   /**
+    * The type of the Action parameter. Input parameters are used to pass data into the action while output parameters are used to return data from the action.
+    */
+   public Type: 'Input' | 'Output' | 'Both';
 }
 
 /**
  * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
  */
 export class RunActionParams {
+   /**
+    * The action entity to be run.
+    */
    public Action: ActionEntity;
+   /**
+    * The user context for the action.
+    */
    public ContextUser: UserInfo;
+   /**
+    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
+    */
+   public SkipActionLog?: boolean;
    /**
     * Optional, a list of filters that should be run before the action is executed.
     */
@@ -123,7 +137,28 @@ export class RunActionParams {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
-}
+};
+
+export type RunActionByNameParams = {
+   /**
+    * The ID of the action to be run.
+    */
+   ActionID: string,
+   /**
+    * The user context for the action.
+    */
+   ContextUser: UserInfo,
+   /**
+    * Optional, if true, an ActionExecutionLogEntity will not be created for this action run.
+    */
+   SkipActionLog?: boolean,
+   /**
+    * Optional, input and output params to be passed to the action.
+    * Note that if none are provided, the default values defined in the Metadata will be used.
+    * Otherwise you must provide all input parameters the action expects
+    */
+   Params?: ActionParam[];
+};
 
 
 /**
