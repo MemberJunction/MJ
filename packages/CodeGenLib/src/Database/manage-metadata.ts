@@ -1599,54 +1599,83 @@ export class ManageMetadataBase {
    protected async createNewEntityName(newEntity: any): Promise<string> {
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityNames')) {
-         // get the LLM for this entity
-         const chat = ag.LLM;
-         const prompt = ag.getPrompt('EntityNames')
-         const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
-         const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
-         const result = await chat.ChatCompletion({
-            model: ag.AIModel,
-            messages: [
-               {
-                  role: 'system',
-                  content: systemPrompt
-               },
-               {
-                  role: 'user',
-                  content: userMessage
-               }
-            ]
-         })
-         if (result?.success) {
-            const resultText = result?.data.choices[0].message.content;
-            try {
-               const structuredResult: EntityNameResult = JSON.parse(resultText);
-               if (structuredResult?.entityName) {
-                  return structuredResult.entityName;
-               }
-               else {
-                  console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
-                  return this.simpleNewEntityName(newEntity.TableName);
-               }
+         return this.newEntityNameWithAdvancedGeneration(ag, newEntity);
+      }
+      else {
+         return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
+      }
+   }
+
+   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any): Promise<string> {
+      // get the LLM for this entity
+      const chat = ag.LLM;
+      const prompt = ag.getPrompt('EntityNames')
+      const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
+      const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
+      const result = await chat.ChatCompletion({
+         model: ag.AIModel,
+         messages: [
+            {
+               role: 'system',
+               content: systemPrompt
+            },
+            {
+               role: 'user',
+               content: userMessage
             }
-            catch (e) {
-               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
-               return this.simpleNewEntityName(newEntity.TableName);
+         ]
+      })
+      if (result?.success) {
+         const resultText = result?.data.choices[0].message.content;
+         try {
+            const structuredResult: EntityNameResult = JSON.parse(resultText);
+            if (structuredResult?.entityName) {
+               return this.markupEntityName(newEntity.SchemaName, structuredResult.entityName);
+            }
+            else {
+               console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
+               return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
             }
          }
-         else {
-            console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
-            return this.simpleNewEntityName(newEntity.TableName);
+         catch (e) {
+            console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
+            return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
          }
       }
       else {
-         return this.simpleNewEntityName(newEntity.TableName);
+         console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
+         return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
    
-   protected simpleNewEntityName(tableName: string): string {
+   protected simpleNewEntityName(schemaName: string, tableName: string): string {
       const convertedTableName = convertCamelCaseToHaveSpaces(tableName);
-      return generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
+      const pluralName = generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
+      return this.markupEntityName(schemaName, pluralName);
+   }
+
+   /**
+    * Uses the optional NameRulesBySchema section of the newEntityDefaults section of the config object to auto prefix/suffix a given entity name
+    * @param schemaName 
+    * @param entityName 
+    */
+   protected markupEntityName(schemaName: string, entityName: string): string {
+      const rule = configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
+         let schemaNameToUse = r.SchemaName;
+         if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
+            // markup for this is to be replaced with the mj_core_schema() config
+            schemaNameToUse = mj_core_schema();
+         }
+         return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      if (rule) {
+         // found a matching rule, apply it
+         return rule.EntityNamePrefix + entityName + rule.EntityNameSuffix;
+      }
+      else {
+         // no matching rule, just return the entity name as is
+         return entityName;
+      }
    }
 
    protected createNewUUID(): string {
