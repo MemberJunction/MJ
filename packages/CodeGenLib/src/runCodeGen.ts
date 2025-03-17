@@ -12,11 +12,11 @@ import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './Misc/createNewUser';
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLLogging } from './Misc/sql_logging';
 import { SystemIntegrityBase } from './Misc/system_integrity';
+import { ActionEngineBase } from '@memberjunction/actions-base';
 
 const { mjCoreSchema } = configInfo;
 
@@ -120,7 +120,7 @@ export class RunCodeGenBase {
                 ****************************************************************************************/
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         logStatus('Managing Metadata...');
-        const metadataSuccess = await manageMD.manageMetadata(AppDataSource);
+        const metadataSuccess = await manageMD.manageMetadata(AppDataSource, currentUser);
         if (!metadataSuccess) {
           logError('ERROR managing metadata');
         } else {
@@ -134,7 +134,7 @@ export class RunCodeGenBase {
         const sqlOutputDir = outputDir('SQL', true);
         if (sqlOutputDir) {
           logStatus('Managing SQL Scripts and Execution...');
-          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir);
+          const sqlSuccess = await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir, currentUser);
           if (!sqlSuccess) {
             logError('Error managing SQL scripts and execution');
           }
@@ -142,12 +142,23 @@ export class RunCodeGenBase {
         else {
           logStatus('SQL output directory NOT found in config file, skipping...');
         }
-      } else {
+      } 
+      else {
         logMessage(
           'Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings',
           MJ.SeverityType.Warning,
           false
         );
+
+        // we skipped the database generation but we need to load generated code for validators from the database to ensure that we have them
+        // ready for later use.
+        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+        logStatus('Checking/Loading AI Generated Code from Metadata...');
+        const metadataSuccess = await manageMD.loadGeneratedCode(AppDataSource, currentUser);
+        if (!metadataSuccess) {
+          logError('ERROR checking/loading AI Generated Code from Metadata');
+          return; // FATAL ERROR - we can't continue
+        } 
       }
 
       const coreEntities = md.Entities.filter((e) => e.IncludeInAPI).filter(
@@ -187,7 +198,7 @@ export class RunCodeGenBase {
         logStatus('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       }
@@ -201,7 +212,7 @@ export class RunCodeGenBase {
         logStatus('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(AppDataSource, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
           logError('Error generating entity subclass code');
         }
       } else {
@@ -245,11 +256,11 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
       const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-      await ActionEngineServer.Instance.Config(false, currentUser);
+      await ActionEngineBase.Instance.Config(false, currentUser); // this is inefficient as we have the server 
       if (coreActionsOutputDir) {
         logStatus('Generating CORE Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineServer.Instance.CoreActions, coreActionsOutputDir)))
+        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir)))
           logError('Error generating CORE Actions code');
       }
 
@@ -257,7 +268,7 @@ export class RunCodeGenBase {
       if (actionsOutputDir) {
         logStatus('Generating Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
-        if (!(await actionsGenerator.generateActions(ActionEngineServer.Instance.NonCoreActions, actionsOutputDir)))
+        if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir)))
           logError('Error generating Actions code');
       } else logStatus('Actions output directory NOT found in config file, skipping...');
 
