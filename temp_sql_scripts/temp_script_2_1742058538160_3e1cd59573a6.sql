@@ -1,0 +1,12 @@
+EXEC sp_refreshview '__mj.vwAIAgentModels';
+EXEC sp_refreshview '__mj.vwEmployeeCompanyIntegrations';
+EXEC sp_refreshview '__mj.vwEmployeeRoles';
+EXEC sp_refreshview '__mj.vwEmployeeSkills';
+EXEC sp_refreshview '__mj.vwAIActions';
+EXEC sp_refreshview '__mj.vwQueueTasks';
+EXEC sp_refreshview '__mj.vwCompanyIntegrationRecordMaps';
+EXEC sp_refreshview '__mj.vwVectorIndexes';
+EXEC sp_refreshview '__mj.vwFileEntityRecordLinks';
+EXEC sp_refreshview '__mj.vwEntityCommunicationFields';
+EXEC sp_refreshview '__mj.vwContentTypes';
+EXEC sp_refreshview '__mj.vwGeneratedCodes';

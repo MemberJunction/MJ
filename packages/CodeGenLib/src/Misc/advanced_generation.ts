@@ -70,7 +70,7 @@ export class AdvancedGeneration {
     * Type: The type of error (ValidationErrorType.Failure or ValidationErrorType.Warning).
   NOTE: When you emit the TypeScript code into JSON, use multiline quotes with \` so that you can use nice formatting so the code is super easy to read and include comments if needed for more complex code. Also use a single tab to indent each line of the code as shown in the example below.
   NOTE: Make sure to escape any double quotes in the code with a backslash that you're putting into a string in the code, for example if you are including a double quote into the string, you should properly scape it - for example \\" 
-3. "MethodName": Provide the string here for the name of the method you created, use the pattern of Validate{FieldName} where FieldName is the name of the field that the constraint is for.
+3. "MethodName": Provide the string here for the name of the method you created, use the pattern of Validate{FieldName}{Against} where FieldName is the name of the field that the constraint is for and {Against} is a comparison - make sure Against is a brief, valid description of what the validation is doing so that way if we have more than one validator for a single field the method names are unique.
 
 **** IMPORTANT: If you return anything other than the JSON below, the system will break ***** 
 Here's an example of the JSON you should return for the following input:
@@ -84,21 +84,44 @@ ADD CONSTRAINT CHK_Customers_Deactivation CHECK (
 
 Here is example TypeScript code that you should return for the above input:
 
-    public ValidateDeactivationDate(result: ValidationResult) {
-        if (this.IsActive === 1 && this.DeactivationDate !== null) {
+    public ValidateDeactivationDateComparedToIsActiveFlag(result: ValidationResult) {
+        if (this.IsActive && this.DeactivationDate !== null) {
             result.Errors.push(new ValidationErrorInfo("DeactivationDate", "An active customer cannot have a deactivation date. This is an example of an escaped double quote \\", always escape double quotes you are putting into strings for the code you write.", this.DeactivationDate, ValidationErrorType.Failure));
         } 
-        else if (this.IsActive === 0 && this.DeactivationDate === null) {
+        else if (!this.IsActive && this.DeactivationDate === null) {
             result.Errors.push(new ValidationErrorInfo("DeactivationDate", "An inactive customer must have a deactivation date.", this.DeactivationDate, ValidationErrorType.Failure));
         }
     }
 
+<IMPORTANT>
+  CODING NOTE: In the above code notice that boolean values are not compared against 1/0 but directly. So for example you see 
+    if (this.IsActive) { 
+        // THIS IS GOOD CODE
+    }
+        // instead of 
+    if (this.IsActive === 1) {
+        // THIS IS BAD CODE
+    }
+    // This is because the IsActive field is a bit field in the database and is represented as a boolean in the TypeScript class so if you 
+    // attempted to compare it to 1/0 you would get a type error!!!! Don't do that, just compare it directly to true/false implicitly.
+</IMPORTANT>
 RETURN THIS JSON FOR THE ABOVE INPUT:
 {
   "Description": "This rule ensures that if a customer is marked as active, they cannot have a deactivation date. If a customer is marked as inactive, they must have a deactivation date.",
   "Code": "This is where you put the actual code in TypeScript INCLUDING the method signature, see above example. Don't include punctuation, quotes, markdown, or anything else. Just the code.",
-  "MethodName": "ValidateDeactivationDate"
-}`,
+  "MethodName": "Name of method you generated in the Code property. MUST BE EXACT MATCH! IMPORTANT"
+}
+
+<SCHEMA INFORMATION>
+Fields for this entity and their SQL types are shown below. 
+\${ENTITY_FIELD_LIST}
+
+NOTE: PLEASE PLEASE PLEASE REMEMBER that for BIT types in SQL Server, they are boolean in TypeScript, DO NOT COMPARE THEM TO 0 or 1 or everything will break!!!!!!!!
+</SCHEMA INFORMATION>
+
+\${EXISTING_METHOD_NAME}
+
+`,
             userMessage: ""
         },
     ];
