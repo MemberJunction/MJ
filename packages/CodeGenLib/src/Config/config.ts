@@ -203,6 +203,14 @@ const newEntityPermissionDefaultsSchema = z.object({
 
 export type NewEntityPermissionDefaults = z.infer<typeof newEntityPermissionDefaultsSchema>;
 
+
+export type EntityNameRulesBySchema = z.infer<typeof newEntityNameRulesBySchema>;
+const newEntityNameRulesBySchema = z.object({
+  SchemaName: z.string(),
+  EntityNamePrefix: z.string().default(''),
+  EntityNameSuffix: z.string().default(''),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -217,7 +225,10 @@ const newEntityDefaultsSchema = z.object({
   AddToApplicationWithSchemaName: z.boolean().default(true),
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
+  NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
 });
+
+
 
 export type NewEntityRelationshipDefaults = z.infer<typeof newEntityRelationshipDefaultsSchema>;
 const newEntityRelationshipDefaultsSchema = z.object({
