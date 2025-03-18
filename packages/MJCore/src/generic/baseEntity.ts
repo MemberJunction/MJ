@@ -791,8 +791,11 @@ export abstract class BaseEntity<T = unknown> {
         this._recordLoaded = false;
         this._Fields = [];
         if (this.EntityInfo) {
-            for (let field of this.EntityInfo.Fields) {
-                this.Fields.push(new EntityField(field));
+            for (const rawField of this.EntityInfo.Fields) {
+                const key = this.EntityInfo.Name + '.' + rawField.Name;
+                // support for sub-classes of the EntityField class
+                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
+                this.Fields.push(newField);
             }
         }
     }

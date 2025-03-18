@@ -100,8 +100,8 @@ const advancedGenerationFeatureSchema = z.object({
 export type AdvancedGeneration = z.infer<typeof advancedGenerationSchema>;
 const advancedGenerationSchema = z.object({
   enableAdvancedGeneration: z.boolean().default(true),
-  AIVendor: z.enum(['openai', 'anthropic', 'mistral']).default('openai'),
-  AIModel: z.string().default('gpt-4-1106-preview'),
+  AIVendor: z.enum(['openai', 'anthropic', 'mistral', 'groq']).default('openai'),
+  AIModel: z.string().default('gpt-4o'),
   features: advancedGenerationFeatureSchema.array().default([
     {
       name: 'EntityNames',
@@ -139,6 +139,13 @@ const advancedGenerationSchema = z.object({
   ]),
 });
 
+export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
+
+const integrityCheckConfigSchema = z.object({
+  enabled: z.boolean(),
+  entityFieldsSequenceCheck: z.boolean(),
+});
+
 export type SQLOutputConfig = z.infer<typeof sqlOutputConfigSchema>;
 
 const sqlOutputConfigSchema = z.object({
@@ -167,7 +174,7 @@ const sqlOutputConfigSchema = z.object({
   /**
    * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
    */
-  omitRecurringScriptsFromLog: z.boolean().default(false)
+  omitRecurringScriptsFromLog: z.boolean().default(false),
 });
 
 export type NewSchemaDefaults = z.infer<typeof newSchemaDefaultsSchema>;
@@ -196,6 +203,14 @@ const newEntityPermissionDefaultsSchema = z.object({
 
 export type NewEntityPermissionDefaults = z.infer<typeof newEntityPermissionDefaultsSchema>;
 
+
+export type EntityNameRulesBySchema = z.infer<typeof newEntityNameRulesBySchema>;
+const newEntityNameRulesBySchema = z.object({
+  SchemaName: z.string(),
+  EntityNamePrefix: z.string().default(''),
+  EntityNameSuffix: z.string().default(''),
+});
+
 const newEntityDefaultsSchema = z.object({
   TrackRecordChanges: z.boolean().default(true),
   AuditRecordAccess: z.boolean().default(false),
@@ -210,7 +225,10 @@ const newEntityDefaultsSchema = z.object({
   AddToApplicationWithSchemaName: z.boolean().default(true),
   IncludeFirstNFieldsAsDefaultInView: z.number().default(5),
   PermissionDefaults: newEntityPermissionDefaultsSchema,
+  NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
 });
+
+
 
 export type NewEntityRelationshipDefaults = z.infer<typeof newEntityRelationshipDefaultsSchema>;
 const newEntityRelationshipDefaultsSchema = z.object({
@@ -237,6 +255,10 @@ const configInfoSchema = z.object({
     },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
+  integrityChecks: integrityCheckConfigSchema.default({
+    enabled: true,
+    entityFieldsSequenceCheck: true,
+  }),
   output: outputInfoSchema.array().default([
     { type: 'SQL', directory: '../../SQL Scripts/generated', appendOutputCode: true },
     { type: 'Angular', directory: '../MJExplorer/src/app/generated', options: [{ name: 'maxComponentsPerModule', value: 20 }] },

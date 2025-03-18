@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core
 
+## 2.29.2
+
+### Patch Changes
+
+- 07bde92: New CodeGen Advanced Generation Functionality and supporting metadata schema changes
+- 64aa7f0: New query for 2.29.0 to get version history since we aren't using an entity for flyway data anymore. Improvements to query execution to support query execution by name as well as by ID, and general cleanup (code wasn't working before as query ID wasn't enclosed in quotes from days of INT ID types)
+- 69c3505: bumped package-lock for 2.280
+  - @memberjunction/global@2.29.2
+
 ## 2.28.0
 
 ### Minor Changes

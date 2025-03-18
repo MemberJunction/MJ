@@ -220,6 +220,7 @@ CREATE VIEW [__mj].vwEntityFields
 AS
 SELECT
 	ef.*,
+  __mj.GetProgrammaticName(REPLACE(ef.Name,' ','')) AS FieldCodeName,
 	e.Name Entity,
 	e.SchemaName,
 	e.BaseTable,
@@ -1435,33 +1436,46 @@ GO
 CREATE VIEW __mj.vwEntityFieldsWithCheckConstraints
 AS
 SELECT 
-	  e.ID as EntityID,
-	  e.Name as EntityName,
+    e.ID as EntityID,
+    e.Name as EntityName,
     ef.ID as EntityFieldID,
     ef.Name as EntityFieldName,
+	  gc.ID as GeneratedCodeID,
+	  gc.Name as GeneratedValidationFunctionName,
+	  gc.Description as GeneratedValidationFunctionDescription,
+    gc.Code as GeneratedValidationFunctionCode,
+    gc.Source as GeneratedValidationFunctionCheckConstraint,
     sch.name AS SchemaName,
     obj.name AS TableName,
     col.name AS ColumnName,
     cc.name AS ConstraintName,
-    cc.definition AS ConstraintDefinition
+    cc.definition AS ConstraintDefinition 
 FROM 
     sys.check_constraints cc
 INNER JOIN 
     sys.objects obj ON cc.parent_object_id = obj.object_id
 INNER JOIN 
     sys.schemas sch ON obj.schema_id = sch.schema_id
-INNER JOIN 
-    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
 INNER JOIN
 	__mj.Entity e
 	ON
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
-INNER JOIN
+LEFT OUTER JOIN -- left join since can have table level constraints
+    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
+LEFT OUTER JOIN -- left join since can have table level constraints
   __mj.EntityField ef
   ON
   e.ID = ef.EntityID AND
   ef.Name = col.name
+LEFT OUTER JOIN
+  __mj.vwGeneratedCodes gc 
+  ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
+  (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
+        OR
+      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+  ) AND -- MUST MATCH Source=definition
+  cc.definition = gc.Source
 GO
 
 

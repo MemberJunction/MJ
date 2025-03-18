@@ -9,6 +9,9 @@ export class RunQueryResultType {
   QueryID: string;
 
   @Field()
+  QueryName: string;
+
+  @Field()
   Success: boolean;
 
   @Field()
@@ -27,11 +30,47 @@ export class RunQueryResultType {
 @Resolver(RunQueryResultType)
 export class ReportResolver {
   @Query(() => RunQueryResultType)
-  async GetQueryData(@Arg('QueryID', () => String) QueryID: string, @Ctx() {}: AppContext): Promise<RunQueryResultType> {
+  async GetQueryData(@Arg('QueryID', () => String) QueryID: string, 
+                     @Ctx() context: AppContext,
+                     @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
+                     @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
     const runQuery = new RunQuery();
-    const result = await runQuery.RunQuery({ QueryID: QueryID });
+    const result = await runQuery.RunQuery(
+      { 
+        QueryID: QueryID,
+        CategoryID: CategoryID,
+        CategoryName: CategoryName 
+      }, 
+      context.userPayload.userRecord);
+    
     return {
       QueryID: QueryID,
+      QueryName: result.QueryName,
+      Success: result.Success,
+      Results: JSON.stringify(result.Results),
+      RowCount: result.RowCount,
+      ExecutionTime: result.ExecutionTime,
+      ErrorMessage: result.ErrorMessage,
+    };
+  }
+
+  @Query(() => RunQueryResultType)
+  async GetQueryDataByName(@Arg('QueryName', () => String) QueryName: string, 
+                           @Ctx() context: AppContext,
+                           @Arg('CategoryID', () => String, {nullable: true}) CategoryID?: string,
+                           @Arg('CategoryName', () => String, {nullable: true}) CategoryName?: string): Promise<RunQueryResultType> {
+    const runQuery = new RunQuery();
+    const result = await runQuery.RunQuery(
+      { 
+        QueryName: QueryName, 
+        CategoryID: CategoryID,
+        CategoryName: CategoryName
+      },
+      context.userPayload.userRecord);
+      
+    return {
+      QueryID: result.QueryID,
+      QueryName: QueryName,
       Success: result.Success,
       Results: JSON.stringify(result.Results),
       RowCount: result.RowCount,

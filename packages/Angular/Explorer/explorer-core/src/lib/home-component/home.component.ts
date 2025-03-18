@@ -1,7 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
-import { flyway_schema_historyEntityType } from '@memberjunction/core-entities';
+import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
@@ -35,44 +34,20 @@ export class HomeComponent extends BaseNavigationComponent {
   }
 
   private async getVersionString(): Promise<string> {
-    const rv: RunView = new RunView();
-    const md: Metadata = new Metadata();
-
-    const rvResult = await rv.RunView<flyway_schema_historyEntityType>({
-        EntityName: 'flyway _schema _histories',
-        OrderBy: "installed_on desc"
-    });
-
-    if(!rvResult.Success){
-        LogError("Error getting version string", undefined, rvResult.ErrorMessage);
+    const rq: RunQuery = new RunQuery();
+    const rqResult = await rq.RunQuery(
+      {
+        QueryName: 'Server Installed Version History', // Get the latest schema version in descending order
+        CategoryName: 'Admin'
+      }
+    );
+    
+    if(!rqResult.Success){
+        LogError("Error getting version string", undefined, rqResult.ErrorMessage);
         return "";
     }
 
-    const latestSchema = rvResult.Results[0];
-    let description: string | undefined = latestSchema.description;
-    if(description){
-        if(description[0] === 'v'){
-            description = description.substring(1);
-        }
-
-        let index: number = 0;
-        for(const char of description){
-            //if it is a number or a dot, keep going
-            if(char === '.' || (char >= '0' && char <= '9')){
-                index++;
-            }
-            else{
-              if(description[index - 1] === '.'){
-                index--;
-              }
-              break;
-            }
-        }
-
-        return `Version ${description.substring(0, index)}`;
-    }
-    else{
-        return `Version ${latestSchema.version}`;
-    }
+    const latestSchema = rqResult.Results[0];
+    return `Version ${latestSchema.Version}`;
   }
 }

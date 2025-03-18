@@ -265,28 +265,87 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // START ---- IRunQueryProvider
     /**************************************************************************/
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        if (params.QueryID) {
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryName, contextUser);
+        }
+        else if (params.QueryName) {
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryName, contextUser);
+        }
+        else {
+            throw new Error("No QueryID or QueryName provided to RunQuery");
+        }
+    }
+
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
         const query = gql`
-        query GetQueryDataQuery ($QueryID: String!) {
-            GetQueryData(QueryID: $QueryID) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryName: String) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+    
+        // Build the variables object, adding optional parameters if defined.
+        const variables: { QueryID: string; CategoryID?: string; CategoryName?: string } = { QueryID };
+        if (CategoryID !== undefined) {
+            variables.CategoryID = CategoryID;
+        }
+        if (CategoryName !== undefined) {
+            variables.CategoryName = CategoryName;
+        }
+    
+        const result = await this.ExecuteGQL(query, variables);
+        if (result && result.GetQueryData) {
+            return this.TransformQueryPayload(result.GetQueryData);
+        }
+    }
+    
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryName?: string, contextUser?: UserInfo): Promise<RunQueryResult> {
+        const query = gql`
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryName: String) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryName: $CategoryName) {
+                    ${this.QueryReturnFieldList}
+                }
+            }
+        `;
+    
+        // Build the variables object, adding optional parameters if defined.
+        const variables = { QueryName, CategoryID, CategoryName };
+    
+        const result = await this.ExecuteGQL(query, variables);
+        if (result && result.GetQueryDataByName) {
+            return this.TransformQueryPayload(result.GetQueryDataByName);
+        }
+    }
+
+    protected get QueryReturnFieldList(): string {
+        return `
                 Success
+                QueryID
+                QueryName
                 Results
                 RowCount
                 ExecutionTime
-                ErrorMessage
-            }
-        }`
-
-        const result = await this.ExecuteGQL(query, {QueryID: params.QueryID} );
-        if (result && result.GetQueryData)
-            return {
-                QueryID: params.QueryID,
-                Success: result.GetQueryData.Success,
-                Results: JSON.parse(result.GetQueryData.Results),
-                RowCount: result.GetQueryData.RowCount,
-                ExecutionTime: result.GetQueryData.ExecutionTime,
-                ErrorMessage: result.GetQueryData.ErrorMessage,
-            };
+                ErrorMessage`
     }
+    protected TransformQueryPayload(data: any): RunQueryResult {
+        try {
+            return {
+                QueryID: data.QueryID,
+                QueryName: data.QueryName,
+                Success: data.Success,
+                Results: JSON.parse(data.Results),
+                RowCount: data.RowCount,
+                ExecutionTime: data.ExecutionTime,
+                ErrorMessage: data.ErrorMessage,
+            };    
+        }
+        catch (e) {
+            LogError(`Error transforming query payload: ${e}`);
+            return null;
+        }
+    }
+
     /**************************************************************************/
     // END ---- IRunReportProvider
     /**************************************************************************/

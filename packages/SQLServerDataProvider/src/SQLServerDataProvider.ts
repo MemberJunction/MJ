@@ -233,7 +233,15 @@ export class SQLServerDataProvider
     try {
       const QueryID = params.QueryID;
       // run the sql and return the data
-      const sqlQuery = `SELECT SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ID =${QueryID}`;
+      let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
+      if (params.CategoryID) {
+        filter += ` AND CategoryID = '${params.CategoryID}'`; /* if CategoryID is provided, we add it to the filter */
+      }
+      if (params.CategoryName) {
+        filter += ` AND Category = '${params.CategoryName}'`; /* if CategoryName is provided, we add it to the filter */
+      }
+
+      const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
       const queryInfo = await this.ExecuteSQL(sqlQuery);
       if (queryInfo && queryInfo.length > 0) {
         const start = new Date().getTime();
@@ -243,25 +251,31 @@ export class SQLServerDataProvider
         if (result)
           return {
             Success: true,
-            QueryID: QueryID,
+            QueryID: queryInfo[0].ID,
+            QueryName: queryInfo[0].Name,
             Results: result,
             RowCount: result.length,
             ExecutionTime: end - start,
             ErrorMessage: '',
           };
         else
-          return {
-            Success: false,
-            QueryID: QueryID,
-            Results: [],
-            RowCount: 0,
-            ExecutionTime: end - start,
-            ErrorMessage: 'Error running query SQL',
-          };
-      } else return { Success: false, QueryID: QueryID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Query not found' };
-    } catch (e) {
+          throw new Error('Error running query SQL');
+      } 
+      else {
+        throw new Error('Query not found');
+      }
+    } 
+    catch (e) {
       LogError(e);
-      return { Success: false, QueryID: params.QueryID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: e.message };
+      return { 
+        Success: false, 
+        QueryID: params.QueryID,
+        QueryName: params.QueryName,
+        Results: [], 
+        RowCount: 0, 
+        ExecutionTime: 0, 
+        ErrorMessage: e.message 
+      };
     }
   }
   /**************************************************************************/

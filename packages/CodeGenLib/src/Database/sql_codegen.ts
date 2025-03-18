@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
 import { logError, logMessage, logStatus, logWarning } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -36,7 +36,7 @@ export class SQLCodeGenBase {
         return this._sqlUtilityObject;
     }
 
-    public async manageSQLScriptsAndExecution(ds: DataSource, entities: EntityInfo[], directory: string): Promise<boolean> {
+    public async manageSQLScriptsAndExecution(ds: DataSource, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             // STEP 1 - execute any custom SQL scripts for object creation that need to happen first - for example, if
             //          we have custom base views, need to have them defined before we do
@@ -104,7 +104,7 @@ export class SQLCodeGenBase {
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
             // we CAN skip the entity field values part because that wouldn't change from the first time we ran it
-            if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true, true)) {
+            if (! await manageMD.manageEntityFields(ds, configInfo.excludeSchemas, true, true, currentUser)) {
                 logError('Error managing entity fields');
                 return false;
             }

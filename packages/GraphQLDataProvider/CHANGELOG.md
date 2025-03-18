@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.29.2
+
+### Patch Changes
+
+- 64aa7f0: New query for 2.29.0 to get version history since we aren't using an entity for flyway data anymore. Improvements to query execution to support query execution by name as well as by ID, and general cleanup (code wasn't working before as query ID wasn't enclosed in quotes from days of INT ID types)
+- Updated dependencies [07bde92]
+- Updated dependencies [64aa7f0]
+- Updated dependencies [69c3505]
+  - @memberjunction/core@2.29.2
+  - @memberjunction/core-entities@2.29.2
+  - @memberjunction/global@2.29.2
+
 ## 2.28.0
 
 ### Patch Changes

@@ -6,7 +6,7 @@ import { GetGlobalObjectStore } from ".";
  * if the class has code imported into multiple execution paths (which is not optimal, of course, but can occur in some situations).
  */
 export abstract class BaseSingleton<T> {
-    private static _globalKeyPrefix: string = '___';
+    private static _globalKeyPrefix: string = '___SINGLETON__';
     private _globalKey: string;
     public get GlobalKey(): string {
         return this._globalKey;

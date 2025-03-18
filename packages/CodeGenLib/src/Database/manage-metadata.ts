@@ -1,16 +1,36 @@
 import { DataSource } from "typeorm";
 import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
-import { logError, logMessage, logStatus, logWarning } from "../Misc/status_logging";
+import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, stripTrailingChars } from "@memberjunction/global";
+import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
 import { SQLLogging } from "../Misc/sql_logging";
+import { AIEngine } from "@memberjunction/aiengine";
 
+
+export class ValidatorResult {
+   public entityName: string = "";
+   public fieldName?: string;
+   public sourceCheckConstraint: string = "";
+   public functionText: string = "";
+   public functionName: string = "";
+   public functionDescription: string = "";
+   /**
+    * The ID value in the Generated Codes entity that was created for this validator.
+    */
+   public generatedCodeId: string = "";
+   /**
+    * The ID for the AI Model that was used to generate the code
+    */
+   public aiModelID: string = "";
+   public wasGenerated: boolean = true;
+   public success: boolean = false;
+}
 
 /**
  * Base class for managing metadata within the CodeGen system. This class can be sub-classed to extend/override base class functionality. Make sure to use the RegisterClass decorator from the @memberjunction/global package
@@ -37,13 +57,20 @@ export class ManageMetadataBase {
    public static get modifiedEntityList(): string[] {
       return this._modifiedEntityList;
    }
+   private static _generatedValidators: ValidatorResult[] = [];
+   /**
+    * Globally scoped list of validators that have been generated during the metadata management process.
+    */
+   public static get generatedValidators(): ValidatorResult[] {
+      return this._generatedValidators;
+   }
 
    /**
     * Primary function to manage metadata within the CodeGen system. This function will call a series of sub-functions to manage the metadata.
     * @param ds - the DataSource object to use for querying and updating the database
     * @returns
     */
-   public async manageMetadata(ds: DataSource): Promise<boolean> {
+   public async manageMetadata(ds: DataSource, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata();
       const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
 
@@ -88,7 +115,7 @@ export class ManageMetadataBase {
       logStatus(`    > Recompiled base views in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
       start = new Date();
       logStatus('   Managing entity fields...');
-      if (! await this.manageEntityFields(ds, excludeSchemas, false, false)) {
+      if (! await this.manageEntityFields(ds, excludeSchemas, false, false, currentUser)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -465,7 +492,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas
     * @returns
     */
-   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -516,7 +543,7 @@ export class ManageMetadataBase {
       if (!skipEntityFieldValues) {
          const step6StartTime: Date = new Date();
          logStatus(`      Starting to manage entity field values...`);
-         if (! await this.manageEntityFieldValues(ds, excludeSchemas)) {
+         if (! await this.manageEntityFieldValuesAndValidatorFunctions(ds, excludeSchemas, currentUser, false)) {
             logError('Error managing entity field values');
             bSuccess = false;
          }
@@ -1195,7 +1222,7 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async manageEntityFieldValues(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   protected async manageEntityFieldValuesAndValidatorFunctions(ds: DataSource, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {
       try  {
          // here we want to get all of the entity fields that have check constraints attached to them. For each field that has a check constraint, we want to
          // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
@@ -1208,35 +1235,197 @@ export class ManageMetadataBase {
          const efvSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue`;
          const allEntityFieldValues = await ds.query(efvSQL);
 
-         // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
-         for (const r of result) {
+         const efSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFields ORDER BY EntityID, Sequence`;
+         const allEntityFields = await ds.query(efSQL);
+
+         const generationPromises = [];
+
+         const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
+         const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
+         for (const r of columnLevelResults) {
+            // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
                const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
                if (parsedValues) {
-                  // flip the order of parsedValues because they come out in reverse order from SQL Server
-                  parsedValues.reverse();
+                  if (!skipDBUpdate) {
+                     // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
+                     // with the EntityFieldValues in the database.
 
-                  // we have parsed values from the check constraint, so sync them with the entity field values
-                  await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
+                     // 1st, flip the order of parsedValues because they come out in reverse order from SQL Server
+                     parsedValues.reverse();
 
-                  // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
-                  // check to see if the ValueListType is already set to "List", if not, update it
-                  const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
-                  const checkResult = await ds.query(sSQLCheck);
-                  if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
-                     const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
-                     await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                     // we have parsed values from the check constraint, so sync them with the entity field values
+                     await this.syncEntityFieldValues(ds, r.EntityFieldID, parsedValues, allEntityFieldValues);
+
+                     // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
+                     // check to see if the ValueListType is already set to "List", if not, update it
+                     const sSQLCheck: string = `SELECT ValueListType FROM [${mj_core_schema()}].EntityField WHERE ID='${r.EntityFieldID}'`;
+                     const checkResult = await ds.query(sSQLCheck);
+                     if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
+                        const sSQL: string = `UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
+                        await this.LogSQLAndExecute(ds, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                     }
+                  }
+                  else {
+                     // we are skipping the DB update, nothing to do, eh?
+                  }
+               }
+               else {
+                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
+                  // attempt to use an LLM to do things fancier now
+                  if (configInfo.advancedGeneration?.enableAdvancedGeneration && 
+                      configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
+                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                     // run this in parallel
+                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
                }
             }
          }
 
+         // now for the table level constraints run the process for advanced generation
+         for (const r of tableLevelResults) {
+            if (configInfo.advancedGeneration?.enableAdvancedGeneration && 
+               configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
+              // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+              // run this in parallel
+              generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+           }
+         }
 
+         // await the completion of all generation promises here
+         await Promise.all(generationPromises);
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
+      }
+   }
+
+   /**
+    * This method will load all generated code from the database - this is intended to be used when you are bypassing managing the metadata.
+    * @param ds 
+    * @param currentUser 
+    */
+   public async loadGeneratedCode(ds: DataSource, currentUser: UserInfo): Promise<boolean> {
+      try {
+         // right now we're just doing validator functions which are handled here
+         return await this.manageEntityFieldValuesAndValidatorFunctions(ds, [], currentUser, true);
+      }
+      catch (e) {
+         logError(e as string);
+         return false;
+      }
+   }
+
+   private async runValidationGeneration(r: any, allEntityFields: any[], generateNewCode: boolean, currentUser: UserInfo) {
+      const generatedFunction = await this.generateValidatorFunctionFromCheckConstraint(r, allEntityFields, currentUser, generateNewCode);
+      if (generatedFunction?.success) {
+         // LLM was able to generate a function for us, so let's store it in the static array, will be used later when we emit the BaseEntity sub-class
+         ManageMetadataBase._generatedValidators.push(generatedFunction);
+      }   
+   }
+
+   /**
+    * Generates a TypeScript field validator function from the text of a SQL CHECK constraint. 
+    * @param data - the data object containing the entity name, column name, and constraint definition
+    * @param allEntityFields - all of the entity fields in the system
+    * @param currentUser - the current user
+    * @param generateNewCode - a flag indicating whether or not to generate new code, this is set to false when we are just loading the generated code from the database.
+    * @returns a data structure with the function text, function name, function description, and a success flag
+    */
+   protected async generateValidatorFunctionFromCheckConstraint(data: any, allEntityFields: any[], currentUser: UserInfo, generateNewCode: boolean): Promise<ValidatorResult> {
+      const entityName = data.EntityName;
+      const fieldName = data.ColumnName;
+      const constraintDefinition = data.ConstraintDefinition;
+      const generatedValidationFunctionName = data.GeneratedValidationFunctionName;
+      const generatedValidationFunctionDescription = data.GeneratedValidationFunctionDescription;
+      const generatedValidationFunctionCode = data.GeneratedValidationFunctionCode;
+      const generatedValidationFunctionCheckConstraint = data.GeneratedValidationFunctionCheckConstraint;
+
+      const returnResult = new ValidatorResult();
+      returnResult.success = false;
+      returnResult.entityName = entityName;
+      returnResult.fieldName = fieldName;
+      returnResult.generatedCodeId = data.GeneratedCodeID; // this came from the database, so we'll store it here for reference so we update the record later instead of creating a new one
+      returnResult.sourceCheckConstraint = constraintDefinition;
+      if (generatedValidationFunctionCheckConstraint === constraintDefinition) {
+         // in this situation, we have an EXACT match of the previous version of a CHECK constraint and what is now the CHECK constraint - meaning it hasn't changed
+         // in this situation if we have a generated function name, description, and code, we can just return that and not call the LLM
+         if (generatedValidationFunctionName && generatedValidationFunctionDescription && generatedValidationFunctionCode) {
+            returnResult.functionText = generatedValidationFunctionCode;
+            returnResult.functionName = generatedValidationFunctionName;
+            returnResult.functionDescription = generatedValidationFunctionDescription;
+            returnResult.wasGenerated = false; // we did NOT just generate this code, was already saved
+            returnResult.success = true;
+            return returnResult;
+         }
+      }
+
+      try {
+         if (generateNewCode && configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
+            // feature is enabled, so let's call the LLM to generate a function for us
+            const ag = new AdvancedGeneration();
+            const llm = ag.LLM;
+            if (!llm) {
+               // we weren't able to get an LLM instance, so log an error and return
+               logError('   >>> Error generating validator function from check constraint. Unable to get an LLM instance.');
+               return returnResult;
+            }
+            await AIEngine.Instance.Config(false, currentUser); // make sure metadata loaded
+            const model = AIEngine.Instance.Models.find(m => m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase() && 
+                                                             m.Vendor?.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase());
+            if (!model)
+               throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
+
+            const prompt = ag.getPrompt('CheckConstraintParser');
+            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}`).join('\n');
+            const existingMethodNameBlock = generatedValidationFunctionName ? `Existing Method Name: ${generatedValidationFunctionName}\n Please reuse this SAME method name for the new generation` : '';
+            const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
+               ENTITY_FIELD_LIST: entityFieldListInfo,
+               EXISTING_METHOD_NAME: existingMethodNameBlock
+            }); // prompt.systemPrompt.replace(/{{ENTITY_FIELD_LIST}}/g, entityFieldListInfo);
+            const result = await llm.ChatCompletion({
+               messages: [
+                  {
+                     role: 'system',
+                     content: markedUpSysPrompt
+                  },
+                  {
+                     role: 'user',
+                     content: `${constraintDefinition}`
+                  }
+               ],
+               model: ag.AIModel,
+               responseFormat: 'JSON'
+            });
+            if (result && result.success) {
+               const jsonResult = result.data.choices[0].message.content;
+               const structuredResult = <any>SafeJSONParse(jsonResult);
+               if (structuredResult?.Description && structuredResult?.Code && structuredResult?.MethodName) {
+                  returnResult.functionText = structuredResult.Code;
+                  returnResult.functionName = structuredResult.MethodName;
+                  returnResult.functionDescription = structuredResult.Description;
+                  returnResult.aiModelID = model.ID;
+
+                  returnResult.wasGenerated = true; // we just generated this code
+                  returnResult.success = true;
+               }
+               else {
+                  logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM returned invalid result.`);
+               }
+            }
+            else {
+               logError(`Error generating field validator function from check constraint for entity ${entityName} and field ${fieldName}. LLM call failed.`);
+            }
+         }
+      }
+      catch (e) {
+         logError(e as string);
+      }
+      finally {
+         return returnResult;
       }
    }
 
@@ -1410,54 +1599,83 @@ export class ManageMetadataBase {
    protected async createNewEntityName(newEntity: any): Promise<string> {
       const ag = new AdvancedGeneration();
       if (ag.featureEnabled('EntityNames')) {
-         // get the LLM for this entity
-         const chat = ag.LLM;
-         const prompt = ag.getPrompt('EntityNames')
-         const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
-         const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
-         const result = await chat.ChatCompletion({
-            model: ag.AIModel,
-            messages: [
-               {
-                  role: 'system',
-                  content: systemPrompt
-               },
-               {
-                  role: 'user',
-                  content: userMessage
-               }
-            ]
-         })
-         if (result?.success) {
-            const resultText = result?.data.choices[0].message.content;
-            try {
-               const structuredResult: EntityNameResult = JSON.parse(resultText);
-               if (structuredResult?.entityName) {
-                  return structuredResult.entityName;
-               }
-               else {
-                  console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
-                  return this.simpleNewEntityName(newEntity.TableName);
-               }
+         return this.newEntityNameWithAdvancedGeneration(ag, newEntity);
+      }
+      else {
+         return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
+      }
+   }
+
+   protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any): Promise<string> {
+      // get the LLM for this entity
+      const chat = ag.LLM;
+      const prompt = ag.getPrompt('EntityNames')
+      const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
+      const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
+      const result = await chat.ChatCompletion({
+         model: ag.AIModel,
+         messages: [
+            {
+               role: 'system',
+               content: systemPrompt
+            },
+            {
+               role: 'user',
+               content: userMessage
             }
-            catch (e) {
-               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
-               return this.simpleNewEntityName(newEntity.TableName);
+         ]
+      })
+      if (result?.success) {
+         const resultText = result?.data.choices[0].message.content;
+         try {
+            const structuredResult: EntityNameResult = JSON.parse(resultText);
+            if (structuredResult?.entityName) {
+               return this.markupEntityName(newEntity.SchemaName, structuredResult.entityName);
+            }
+            else {
+               console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
+               return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
             }
          }
-         else {
-            console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
-            return this.simpleNewEntityName(newEntity.TableName);
+         catch (e) {
+            console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
+            return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
          }
       }
       else {
-         return this.simpleNewEntityName(newEntity.TableName);
+         console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
+         return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
    
-   protected simpleNewEntityName(tableName: string): string {
+   protected simpleNewEntityName(schemaName: string, tableName: string): string {
       const convertedTableName = convertCamelCaseToHaveSpaces(tableName);
-      return generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
+      const pluralName = generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
+      return this.markupEntityName(schemaName, pluralName);
+   }
+
+   /**
+    * Uses the optional NameRulesBySchema section of the newEntityDefaults section of the config object to auto prefix/suffix a given entity name
+    * @param schemaName 
+    * @param entityName 
+    */
+   protected markupEntityName(schemaName: string, entityName: string): string {
+      const rule = configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
+         let schemaNameToUse = r.SchemaName;
+         if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
+            // markup for this is to be replaced with the mj_core_schema() config
+            schemaNameToUse = mj_core_schema();
+         }
+         return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
+      });
+      if (rule) {
+         // found a matching rule, apply it
+         return rule.EntityNamePrefix + entityName + rule.EntityNameSuffix;
+      }
+      else {
+         // no matching rule, just return the entity name as is
+         return entityName;
+      }
    }
 
    protected createNewUUID(): string {

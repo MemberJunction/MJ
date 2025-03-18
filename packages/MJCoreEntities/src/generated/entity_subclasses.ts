@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -2067,6 +2067,18 @@ export const CommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Whether or not the provider supports sending messages at a specific time`),
+    SupportsForwarding: z.boolean().describe(`
+        * * Field Name: SupportsForwarding
+        * * Display Name: Supports Forwarding
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Whether or not the provider supports forwarding messages to another recipient `),
+    SupportsReplying: z.boolean().describe(`
+        * * Field Name: SupportsReplying
+        * * Display Name: Supports Replying
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Whether or not the provider supports replying to messages`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -3096,8 +3108,7 @@ export const ConversationDetailSchema = z.object({
     User: z.string().nullish().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
@@ -5251,6 +5262,30 @@ export const EntityFieldSchema = z.object({
     *   * None
     *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
+    GeneratedValidationFunctionName: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionName
+        * * Display Name: Generated Validation Function Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise`),
+    GeneratedValidationFunctionDescription: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionDescription
+        * * Display Name: Generated Validation Function Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains a description for business users of what the validation function for this field does, if it exists`),
+    GeneratedValidationFunctionCode: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionCode
+        * * Display Name: Generated Validation Function Code
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.`),
+    GeneratedValidationFunctionCheckConstraint: z.string().nullish().describe(`
+        * * Field Name: GeneratedValidationFunctionCheckConstraint
+        * * Display Name: Generated Validation Function Check Constraint
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`),
+    FieldCodeName: z.string().nullish().describe(`
+        * * Field Name: FieldCodeName
+        * * Display Name: Field Code Name
+        * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -6051,50 +6086,28 @@ export const FileSchema = z.object({
 export type FileEntityType = z.infer<typeof FileSchema>;
 
 /**
- * zod schema definition for the entity Flyway _schema _histories
+ * zod schema definition for the entity Generated Code Categories
  */
-export const flyway_schema_historySchema = z.object({
-    installed_rank: z.number().describe(`
-        * * Field Name: installed_rank
-        * * Display Name: installed _rank
-        * * SQL Data Type: int`),
-    version: z.string().nullish().describe(`
-        * * Field Name: version
-        * * Display Name: version
-        * * SQL Data Type: nvarchar(50)`),
-    description: z.string().nullish().describe(`
-        * * Field Name: description
-        * * Display Name: description
-        * * SQL Data Type: nvarchar(200)`),
-    type: z.string().describe(`
-        * * Field Name: type
-        * * Display Name: type
-        * * SQL Data Type: nvarchar(20)`),
-    script: z.string().describe(`
-        * * Field Name: script
-        * * Display Name: script
-        * * SQL Data Type: nvarchar(1000)`),
-    checksum: z.number().nullish().describe(`
-        * * Field Name: checksum
-        * * Display Name: checksum
-        * * SQL Data Type: int`),
-    installed_by: z.string().describe(`
-        * * Field Name: installed_by
-        * * Display Name: installed _by
-        * * SQL Data Type: nvarchar(100)`),
-    installed_on: z.date().describe(`
-        * * Field Name: installed_on
-        * * Display Name: installed _on
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()`),
-    execution_time: z.number().describe(`
-        * * Field Name: execution_time
-        * * Display Name: execution _time
-        * * SQL Data Type: int`),
-    success: z.boolean().describe(`
-        * * Field Name: success
-        * * Display Name: success
-        * * SQL Data Type: bit`),
+export const GeneratedCodeCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentID: z.string().nullish().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
+    * * Description: Parent category ID, allowing for hierarchical categorization.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -6105,9 +6118,121 @@ export const flyway_schema_historySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Parent: z.string().nullish().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
 });
 
-export type flyway_schema_historyEntityType = z.infer<typeof flyway_schema_historySchema>;
+export type GeneratedCodeCategoryEntityType = z.infer<typeof GeneratedCodeCategorySchema>;
+
+/**
+ * zod schema definition for the entity Generated Codes
+ */
+export const GeneratedCodeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GeneratedAt: z.date().describe(`
+        * * Field Name: GeneratedAt
+        * * Display Name: Generated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+    * * Description: When the code was generated.`),
+    CategoryID: z.string().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
+    * * Description: Reference to the category of generated code.`),
+    GeneratedByModelID: z.string().describe(`
+        * * Field Name: GeneratedByModelID
+        * * Display Name: Generated By Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: AI model responsible for generating this code.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Descriptive name of the generated code.`),
+    Description: z.string().nullish().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the generated code.`),
+    Code: z.string().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The actual generated code.`),
+    Source: z.string().describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Source material used to generate the code, e.g., a SQL CHECK constraint.`),
+    LinkedEntityID: z.string().nullish().describe(`
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
+    LinkedRecordPrimaryKey: z.string().nullish().describe(`
+        * * Field Name: LinkedRecordPrimaryKey
+        * * Display Name: Linked Record Primary Key
+        * * SQL Data Type: nvarchar(MAX)`),
+    Status: z.union([z.literal('Pending'), z.literal('Approved'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Approved
+    *   * Rejected
+    * * Description: Status of the generated code, e.g., Pending, Approved, or Rejected.`),
+    Language: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Python'), z.literal('Other')]).describe(`
+        * * Field Name: Language
+        * * Display Name: Language
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: TypeScript
+    * * Value List Type: List
+    * * Possible Values 
+    *   * TypeScript
+    *   * SQL
+    *   * HTML
+    *   * CSS
+    *   * JavaScript
+    *   * Python
+    *   * Other
+    * * Description: Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Category: z.string().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)`),
+    GeneratedByModel: z.string().describe(`
+        * * Field Name: GeneratedByModel
+        * * Display Name: Generated By Model
+        * * SQL Data Type: nvarchar(50)`),
+    LinkedEntity: z.string().nullish().describe(`
+        * * Field Name: LinkedEntity
+        * * Display Name: Linked Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type GeneratedCodeEntityType = z.infer<typeof GeneratedCodeSchema>;
 
 /**
  * zod schema definition for the entity Integration URL Formats
@@ -12656,6 +12781,60 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
+    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
+    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSpeedRank(result);
+        this.ValidateCostRank(result);
+        this.ValidatePowerRank(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the speed rank must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRank(result: ValidationResult) {
+    	if (this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRank(result: ValidationResult) {
+    	if (this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
+    	} 
+    }
+
+    /**
+    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRank(result: ValidationResult) {
+    	if (this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -15063,6 +15242,32 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
 
     /**
+    * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSupportsScheduledSendingComparedToSupportsSending(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSupportsScheduledSendingComparedToSupportsSending(result: ValidationResult) {
+    	if (this.SupportsScheduledSending && !this.SupportsSending) {
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -15174,6 +15379,34 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
     set SupportsScheduledSending(value: boolean) {
         this.Set('SupportsScheduledSending', value);
+    }
+
+    /**
+    * * Field Name: SupportsForwarding
+    * * Display Name: Supports Forwarding
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports forwarding messages to another recipient 
+    */
+    get SupportsForwarding(): boolean {
+        return this.Get('SupportsForwarding');
+    }
+    set SupportsForwarding(value: boolean) {
+        this.Set('SupportsForwarding', value);
+    }
+
+    /**
+    * * Field Name: SupportsReplying
+    * * Display Name: Supports Replying
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports replying to messages
+    */
+    get SupportsReplying(): boolean {
+        return this.Get('SupportsReplying');
+    }
+    set SupportsReplying(value: boolean) {
+        this.Set('SupportsReplying', value);
     }
 }
 
@@ -17783,6 +18016,32 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * UserRating: This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserRating(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserRating(result: ValidationResult) {
+    	if (this.UserRating < 1 || this.UserRating > 10) {
+    		result.Errors.push(new ValidationErrorInfo('UserRating', 'The user rating must be between 1 and 10, inclusive.', this.UserRating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -17971,7 +18230,6 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string | null {
         return this.Get('User');
@@ -20291,6 +20549,32 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
 
     /**
+    * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAllowRecordMergeConstraints(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
+    	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
+    		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
@@ -22494,6 +22778,38 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     }
 
     /**
+    * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result: ValidationResult) {
+    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold cannot be greater than the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1 inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -23447,6 +23763,67 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set ValuesToPackWithSchema(value: 'Auto' | 'None' | 'All') {
         this.Set('ValuesToPackWithSchema', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionName
+    * * Display Name: Generated Validation Function Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise
+    */
+    get GeneratedValidationFunctionName(): string | null {
+        return this.Get('GeneratedValidationFunctionName');
+    }
+    set GeneratedValidationFunctionName(value: string | null) {
+        this.Set('GeneratedValidationFunctionName', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionDescription
+    * * Display Name: Generated Validation Function Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains a description for business users of what the validation function for this field does, if it exists
+    */
+    get GeneratedValidationFunctionDescription(): string | null {
+        return this.Get('GeneratedValidationFunctionDescription');
+    }
+    set GeneratedValidationFunctionDescription(value: string | null) {
+        this.Set('GeneratedValidationFunctionDescription', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionCode
+    * * Display Name: Generated Validation Function Code
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.
+    */
+    get GeneratedValidationFunctionCode(): string | null {
+        return this.Get('GeneratedValidationFunctionCode');
+    }
+    set GeneratedValidationFunctionCode(value: string | null) {
+        this.Set('GeneratedValidationFunctionCode', value);
+    }
+
+    /**
+    * * Field Name: GeneratedValidationFunctionCheckConstraint
+    * * Display Name: Generated Validation Function Check Constraint
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.
+    */
+    get GeneratedValidationFunctionCheckConstraint(): string | null {
+        return this.Get('GeneratedValidationFunctionCheckConstraint');
+    }
+    set GeneratedValidationFunctionCheckConstraint(value: string | null) {
+        this.Set('GeneratedValidationFunctionCheckConstraint', value);
+    }
+
+    /**
+    * * Field Name: FieldCodeName
+    * * Display Name: Field Code Name
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get FieldCodeName(): string | null {
+        return this.Get('FieldCodeName');
     }
 
     /**
@@ -24861,6 +25238,32 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     }
 
     /**
+    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Sequence: This rule ensures that the sequence must be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSequence(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the sequence must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSequence(result: ValidationResult) {
+    	if (this.Sequence <= 0) {
+    		result.Errors.push(new ValidationErrorInfo('Sequence', 'The sequence must be greater than zero.', this.Sequence, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -25540,150 +25943,80 @@ export class FileEntity extends BaseEntity<FileEntityType> {
 
 
 /**
- * Flyway _schema _histories - strongly typed entity sub-class
+ * Generated Code Categories - strongly typed entity sub-class
  * * Schema: __mj
- * * Base Table: flyway_schema_history
- * * Base View: vwFlyway_schema_histories
- * * Primary Key: installed_rank
+ * * Base Table: GeneratedCodeCategory
+ * * Base View: vwGeneratedCodeCategories
+ * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'Flyway _schema _histories')
-export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_historyEntityType> {
+@RegisterClass(BaseEntity, 'Generated Code Categories')
+export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategoryEntityType> {
     /**
-    * Loads the Flyway _schema _histories record from the database
-    * @param installed_rank: number - primary key value to load the Flyway _schema _histories record.
+    * Loads the Generated Code Categories record from the database
+    * @param ID: string - primary key value to load the Generated Code Categories record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof flyway_schema_historyEntity
+    * @memberof GeneratedCodeCategoryEntity
     * @method
     * @override
     */
-    public async Load(installed_rank: number, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
         const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'installed_rank', Value: installed_rank });
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
     }
 
     /**
-    * * Field Name: installed_rank
-    * * Display Name: installed _rank
-    * * SQL Data Type: int
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
     */
-    get installed_rank(): number {
-        return this.Get('installed_rank');
+    get ID(): string {
+        return this.Get('ID');
     }
 
     /**
-    * * Field Name: version
-    * * Display Name: version
-    * * SQL Data Type: nvarchar(50)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
-    get version(): string | null {
-        return this.Get('version');
+    get Name(): string {
+        return this.Get('Name');
     }
-    set version(value: string | null) {
-        this.Set('version', value);
+    set Name(value: string) {
+        this.Set('Name', value);
     }
 
     /**
-    * * Field Name: description
-    * * Display Name: description
-    * * SQL Data Type: nvarchar(200)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
-    get description(): string | null {
-        return this.Get('description');
+    get Description(): string | null {
+        return this.Get('Description');
     }
-    set description(value: string | null) {
-        this.Set('description', value);
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 
     /**
-    * * Field Name: type
-    * * Display Name: type
-    * * SQL Data Type: nvarchar(20)
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
+    * * Description: Parent category ID, allowing for hierarchical categorization.
     */
-    get type(): string {
-        return this.Get('type');
+    get ParentID(): string | null {
+        return this.Get('ParentID');
     }
-    set type(value: string) {
-        this.Set('type', value);
-    }
-
-    /**
-    * * Field Name: script
-    * * Display Name: script
-    * * SQL Data Type: nvarchar(1000)
-    */
-    get script(): string {
-        return this.Get('script');
-    }
-    set script(value: string) {
-        this.Set('script', value);
-    }
-
-    /**
-    * * Field Name: checksum
-    * * Display Name: checksum
-    * * SQL Data Type: int
-    */
-    get checksum(): number | null {
-        return this.Get('checksum');
-    }
-    set checksum(value: number | null) {
-        this.Set('checksum', value);
-    }
-
-    /**
-    * * Field Name: installed_by
-    * * Display Name: installed _by
-    * * SQL Data Type: nvarchar(100)
-    */
-    get installed_by(): string {
-        return this.Get('installed_by');
-    }
-    set installed_by(value: string) {
-        this.Set('installed_by', value);
-    }
-
-    /**
-    * * Field Name: installed_on
-    * * Display Name: installed _on
-    * * SQL Data Type: datetime
-    * * Default Value: getdate()
-    */
-    get installed_on(): Date {
-        return this.Get('installed_on');
-    }
-    set installed_on(value: Date) {
-        this.Set('installed_on', value);
-    }
-
-    /**
-    * * Field Name: execution_time
-    * * Display Name: execution _time
-    * * SQL Data Type: int
-    */
-    get execution_time(): number {
-        return this.Get('execution_time');
-    }
-    set execution_time(value: number) {
-        this.Set('execution_time', value);
-    }
-
-    /**
-    * * Field Name: success
-    * * Display Name: success
-    * * SQL Data Type: bit
-    */
-    get success(): boolean {
-        return this.Get('success');
-    }
-    set success(value: boolean) {
-        this.Set('success', value);
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
     }
 
     /**
@@ -25704,6 +26037,264 @@ export class flyway_schema_historyEntity extends BaseEntity<flyway_schema_histor
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+}
+
+
+/**
+ * Generated Codes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GeneratedCode
+ * * Base View: vwGeneratedCodes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'Generated Codes')
+export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
+    /**
+    * Loads the Generated Codes record from the database
+    * @param ID: string - primary key value to load the Generated Codes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof GeneratedCodeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: GeneratedAt
+    * * Display Name: Generated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: When the code was generated.
+    */
+    get GeneratedAt(): Date {
+        return this.Get('GeneratedAt');
+    }
+    set GeneratedAt(value: Date) {
+        this.Set('GeneratedAt', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Generated Code Categories (vwGeneratedCodeCategories.ID)
+    * * Description: Reference to the category of generated code.
+    */
+    get CategoryID(): string {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: GeneratedByModelID
+    * * Display Name: Generated By Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: AI model responsible for generating this code.
+    */
+    get GeneratedByModelID(): string {
+        return this.Get('GeneratedByModelID');
+    }
+    set GeneratedByModelID(value: string) {
+        this.Set('GeneratedByModelID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Descriptive name of the generated code.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the generated code.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The actual generated code.
+    */
+    get Code(): string {
+        return this.Get('Code');
+    }
+    set Code(value: string) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Source material used to generate the code, e.g., a SQL CHECK constraint.
+    */
+    get Source(): string {
+        return this.Get('Source');
+    }
+    set Source(value: string) {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+    */
+    get LinkedEntityID(): string | null {
+        return this.Get('LinkedEntityID');
+    }
+    set LinkedEntityID(value: string | null) {
+        this.Set('LinkedEntityID', value);
+    }
+
+    /**
+    * * Field Name: LinkedRecordPrimaryKey
+    * * Display Name: Linked Record Primary Key
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LinkedRecordPrimaryKey(): string | null {
+        return this.Get('LinkedRecordPrimaryKey');
+    }
+    set LinkedRecordPrimaryKey(value: string | null) {
+        this.Set('LinkedRecordPrimaryKey', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Approved
+    *   * Rejected
+    * * Description: Status of the generated code, e.g., Pending, Approved, or Rejected.
+    */
+    get Status(): 'Pending' | 'Approved' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Approved' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Language
+    * * Display Name: Language
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: TypeScript
+    * * Value List Type: List
+    * * Possible Values 
+    *   * TypeScript
+    *   * SQL
+    *   * HTML
+    *   * CSS
+    *   * JavaScript
+    *   * Python
+    *   * Other
+    * * Description: Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).
+    */
+    get Language(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Python' | 'Other' {
+        return this.Get('Language');
+    }
+    set Language(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Python' | 'Other') {
+        this.Set('Language', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string {
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: GeneratedByModel
+    * * Display Name: Generated By Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get GeneratedByModel(): string {
+        return this.Get('GeneratedByModel');
+    }
+
+    /**
+    * * Field Name: LinkedEntity
+    * * Display Name: Linked Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LinkedEntity(): string | null {
+        return this.Get('LinkedEntity');
     }
 }
 
@@ -28462,6 +29053,32 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
+    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * MatchProbability: This rule ensures that the match probability value is between 0 and 1, inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMatchProbability(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the match probability value is between 0 and 1, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMatchProbability(result: ValidationResult) {
+    	if (this.MatchProbability < 0 || this.MatchProbability > 1) {
+    		result.Errors.push(new ValidationErrorInfo('MatchProbability', 'The match probability must be between 0 and 1, inclusive.', this.MatchProbability, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -30478,6 +31095,34 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     }
 
     /**
+    * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserTypeConstraints(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserTypeConstraints(result: ValidationResult) {
+    	if (this.Type === 'Role' && this.RoleID === null && this.UserID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("RoleID", "When the type is 'Role', a RoleID must be provided and UserID must be null.", this.RoleID, ValidationErrorType.Failure));
+    	} else if (this.Type === 'User' && this.UserID === null && this.RoleID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is 'User', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -31511,6 +32156,49 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     */
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for Schema Info, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result);
+        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
+    	if (this.EntityIDMin <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
+    	}
+    	if (this.EntityIDMax <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
+    	if (this.EntityIDMax <= this.EntityIDMin) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
     }
 
     /**

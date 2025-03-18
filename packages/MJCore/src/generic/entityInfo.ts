@@ -340,9 +340,46 @@ export class EntityFieldInfo extends BaseInfo {
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.
     */
     ValuesToPackWithSchema: 'Auto' | 'None' | 'All' = 'Auto';
-    
+
+    /**
+     * * Field Name: GeneratedValidationFunctionName
+     * * Display Name: Generated Validation Function Name
+     * * SQL Data Type: nvarchar(255)
+     * * Default Value: null
+     * * Description: Contains the name of the generated field validation function, if it exists, null otherwise.
+     */
+    GeneratedValidationFunctionName: string | null = null;
+
+    /**
+     * * Field Name: GeneratedValidationFunctionDescription
+     * * Display Name: Generated Validation Function Description
+     * * SQL Data Type: nvarchar(max)
+     * * Default Value: null
+     * * Description: Contains a description for business users of what the validation function for this field does, if it exists.
+     */
+    GeneratedValidationFunctionDescription: string | null = null;
+
+    /**
+     * * Field Name: GeneratedValidationFunctionCode
+     * * Display Name: Generated Validation Function Code
+     * * SQL Data Type: nvarchar(max)
+     * * Default Value: null
+     * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.
+     */
+    GeneratedValidationFunctionCode: string | null = null;
+
+    /**
+     * * Field Name: GeneratedValidationFunctionCheckConstraint
+     * * Display Name: Generated Validation Function Check Constraint
+     * * SQL Data Type: nvarchar(max)
+     * * Default Value: null
+     * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.
+     */
+    GeneratedValidationFunctionCheckConstraint: string | null = null;
+
     
     // virtual fields - returned by the database VIEW
+    FieldCodeName: string =  null
     Entity: string = null 
     SchemaName: string = null
     BaseTable: string = null 
@@ -1160,10 +1197,10 @@ export type ValidationErrorType = typeof ValidationErrorType[keyof typeof Valida
 export class ValidationErrorInfo {
     Source: string
     Message: string
-    Value: string
+    Value: any
     Type: ValidationErrorType
 
-    constructor(Source: string, Message: string, Value: string, Type: ValidationErrorType = ValidationErrorType.Failure) {
+    constructor(Source: string, Message: string, Value: any, Type: ValidationErrorType = ValidationErrorType.Failure) {
         this.Source = Source;
         this.Message = Message;
         this.Value = Value;

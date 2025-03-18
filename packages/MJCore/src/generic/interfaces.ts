@@ -452,6 +452,7 @@ export interface IRunViewProvider {
 
 export type RunQueryResult = {
     QueryID: string;
+    QueryName: string;
     Success: boolean;
     Results: any[];
     RowCount: number;
