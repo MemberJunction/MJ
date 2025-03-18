@@ -48,6 +48,13 @@ const codegenConfig = {
         { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
       ],
     },
+    NameRulesBySchema: [ 
+      { 
+        SchemaName: '${mj_core_schema}', 
+        EntityNamePrefix: 'MJ: ',
+        EntityNameSuffix: '', 
+      },
+    ]
   },
   newEntityRelationshipDefaults: {
     AutomaticallyCreateRelationships: true,

@@ -219,7 +219,14 @@ export class SQLServerDataProvider
     try {
       const QueryID = params.QueryID;
       // run the sql and return the data
-      const filter = params.QueryID ? `ID='${params.QueryID}'` : `Name = '${params.QueryName}'`;
+      let filter = params.QueryID ? `ID = '${params.QueryID}'` : `Name = '${params.QueryName}'`;
+      if (params.CategoryID) {
+        filter += ` AND CategoryID = '${params.CategoryID}'`; /* if CategoryID is provided, we add it to the filter */
+      }
+      if (params.CategoryName) {
+        filter += ` AND Category = '${params.CategoryName}'`; /* if CategoryName is provided, we add it to the filter */
+      }
+
       const sqlQuery = `SELECT ID, Name, SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ${filter}`;
       const queryInfo = await this.ExecuteSQL(sqlQuery);
       if (queryInfo && queryInfo.length > 0) {

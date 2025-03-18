@@ -11,6 +11,7 @@ import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
 import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
 import { LoadAutotagAndVectorizeContentAction } from '@memberjunction/actions-content-autotag';
 
+
 LoadMistralEmbedding();
 LoadOpenAIEmbedding();
 LoadPineconeVectorDB();
@@ -88,12 +89,9 @@ app.get('/', async (req: any, res: any) => {
     }
 });
 
-app.listen(serverPort, () => 
-  {
-    LogStatus(`Server listening on port ${serverPort}!`),
-    autotagAndVectorize()
-    }
-);
+app.listen(serverPort, () => {
+        LogStatus(`Server listening on port ${serverPort}!`)
+});
 
 
 async function runWithOptions(options: string[]): Promise<boolean> {

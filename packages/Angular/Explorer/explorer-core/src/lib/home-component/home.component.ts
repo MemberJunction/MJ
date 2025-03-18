@@ -37,7 +37,8 @@ export class HomeComponent extends BaseNavigationComponent {
     const rq: RunQuery = new RunQuery();
     const rqResult = await rq.RunQuery(
       {
-        QueryName: '__mj: Server Installed Version History' // Get the latest schema version in descending order
+        QueryName: 'Server Installed Version History', // Get the latest schema version in descending order
+        CategoryName: 'Admin'
       }
     );
     
