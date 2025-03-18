@@ -58,6 +58,18 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
+     * The email of the user used during the instatiation of this provider. 
+     * This is primarily used to check if the user has changed since the last time the metadata was fetched
+     */
+    public get CurrentUserEmail(): string {
+        return this.Data.CurrentUserEmail;
+    }
+
+    public set CurrentUserEmail(value: string) {
+        this.Data.CurrentUserEmail = value;
+    }
+
+    /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
@@ -163,8 +175,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
      * @important If separateConnection is true, metadata for the provider will be loaded but will NOT affect the Metadata class/singleton. 
      * This is because the Metadata class is a singleton that binds to the first Config() call in the process where separateConnection is falsy. 
-     * @param configData 
-     * @param separateConnection 
+     * @param configData
+     * @param separateConnection
      * @returns 
      */
     public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
@@ -338,7 +350,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 RowCount: data.RowCount,
                 ExecutionTime: data.ExecutionTime,
                 ErrorMessage: data.ErrorMessage,
-            };    
+            };     
         }
         catch (e) {
             LogError(`Error transforming query payload: ${e}`);

@@ -89,12 +89,15 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     return this.Data.DataSource;
   }
 
+  get CurrentUserEmail(): string {
+    return this.Data.CurrentUserEmail;
+  }
+
   get CheckRefreshIntervalSeconds(): number {
     return this.Data.CheckRefreshIntervalSeconds;
   }
 
   /**
-   *
    * @param dataSource the TypeORM DataSource object that is used to connect to the SQL Server database
    * @param currentUserEmail the email of the current user, this is used to determine the permissions of the user
    * @param MJCoreSchemaName the name of the MJ Core schema, if it is not the default name of __mj
@@ -124,8 +127,6 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     }
 
     super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
-
-    this.CurrentUserEmail = currentUserEmail;
   }
 }
 
