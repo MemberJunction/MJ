@@ -1,4 +1,4 @@
-import { UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
@@ -129,7 +129,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
                 }
             }
      
-            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText);
+            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true);
             const result = await this.renderTemplateAsync(template, data); 
             return {
                 Success: true,
@@ -147,18 +147,63 @@ export class TemplateEngineServer extends TemplateEngineBase {
     }
 
     /**
+     * Simple rendering utilty method. Use this to render any valid Nunjucks Template within the Nunjucks environment created by the Template Engine
+     * without having to use the stored metadata (Templates/Template Contents/Template Params/etc) within the MJ database. This is useful when you have 
+     * a template that is stored elsewhere or dynamically created and you just want to render it with some data.
+     * @param templateText 
+     * @param data 
+     * @returns 
+     */
+    public async RenderTemplateSimple(templateText: string, data: any): Promise<TemplateRenderResult> {
+        try {
+            const template = this.createNunjucksTemplate(templateText);
+            const result = await this.renderTemplateAsync(template, data);
+            return {
+                Success: true,
+                Output: result,
+                Message: undefined
+            };
+        }
+        catch (e) {
+            LogError(e);
+            return {
+                Success: false,
+                Output: null,
+                Message: e.message
+            };
+        }
+    }
+
+    /**
      * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
      * If the templateContentId already had a template created, it will return that template from the cache.
-     * @param templateId 
+     * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
      * @param templateText 
+     * @param cacheTemplate - if true, the template will be cached, otherwise it will not be cached
      */
-    protected getNunjucksTemplate(templateContentId: string, templateText: string): any {
-        let template = this._templateCache.get(templateContentId);
-        if (!template) {
-            template = new nunjucks.Template(templateText, this._nunjucksEnv);
-            this._templateCache.set(templateContentId, template);
+    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean): any {
+        if (templateContentId && cacheTemplate) {
+            let template = this._templateCache.get(templateContentId);
+            if (!template) {
+                template = this.createNunjucksTemplate(templateText);
+                this._templateCache.set(templateContentId, template);
+            }
+            return template;    
         }
-        return template;
+        else {
+            // we don't have a template ID which means this is a dyanmic template, and so we don't want to do
+            // anything with the cache, we just create a new nunjucks template and return it
+            return this.createNunjucksTemplate(templateText);
+        }
+    }
+
+    /**
+     * Simple utility method to create a new Nunjucks template object and bind it to our Nunjucks environment.
+     * @param templateText 
+     * @returns 
+     */
+    protected createNunjucksTemplate(templateText: string): any {
+        return new nunjucks.Template(templateText, this._nunjucksEnv);
     }
 
     public ClearTemplateCache() {
