@@ -295,7 +295,7 @@ ${validationFunctions}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
-        let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullish()' : '');
+        let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
@@ -307,7 +307,7 @@ ${validationFunctions}`
 
           // finally, add the null type if it allows null
           if (e.AllowsNull) {
-            typeString += '.nullish()';
+            typeString += '.nullable()';
           }
         }
         let sRet: string = `    ${e.CodeName}: z.${typeString}.describe(\`\n${this.GenetateZodDescription(e)}\`),`;
