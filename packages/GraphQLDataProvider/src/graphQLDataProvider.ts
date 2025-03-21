@@ -58,10 +58,21 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
+     * The email of the user used during the instatiation of this provider. 
+     * This is primarily used to check if the user has changed since the last time the metadata was fetched
+     */
+    public get CurrentUserEmail(): string {
+        return this.Data.CurrentUserEmail;
+    }
+
+    public set CurrentUserEmail(value: string) {
+        this.Data.CurrentUserEmail = value;
+    }
+
+    /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
-
 
     /**
      *
@@ -73,6 +84,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
      * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server. 
+     * @param options optional, a record of additional fields that will be passed to the base config class
      */
     constructor(token: string,
                 url: string,
@@ -81,19 +93,23 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 MJCoreSchemaName?: string,
                 includeSchemas?: string[],
                 excludeSchemas?: string[],
-                mjAPIKey?: string) {
-        super(
-                {
-                    Token: token,
-                    URL: url,
-                    WSURL: wsurl,
-                    MJAPIKey: mjAPIKey,
-                    RefreshTokenFunction: refreshTokenFunction,
-                },
-                MJCoreSchemaName,
-                includeSchemas,
-                excludeSchemas
-            );
+                mjAPIKey?: string,
+                options?: Record<string, any>) {
+
+        let data: Record<string, any> = {
+            Token: token,
+            URL: url,
+            WSURL: wsurl,
+            MJAPIKey: mjAPIKey,
+            RefreshTokenFunction: refreshTokenFunction,
+        };
+        
+        if(options){
+            data = {...data, ...options};
+        }
+        
+        super(data, MJCoreSchemaName, includeSchemas, excludeSchemas);
+        this.CurrentUserEmail = options?.CurrentUserEmail;
     }
 }
 
@@ -159,8 +175,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
      * @important If separateConnection is true, metadata for the provider will be loaded but will NOT affect the Metadata class/singleton. 
      * This is because the Metadata class is a singleton that binds to the first Config() call in the process where separateConnection is falsy. 
-     * @param configData 
-     * @param separateConnection 
+     * @param configData
+     * @param separateConnection
      * @returns 
      */
     public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
@@ -206,6 +222,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             u.UserRoles_UserIDArray = roles;
             return new UserInfo(this, {...u, UserRoles: roles}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
+    }
+
+    public LocalMetadataObsolete(type?: string): boolean {
+        const userEmail: string = this.ConfigData.CurrentUserEmail;
+        if(userEmail && this.CurrentUser){
+            const userEmailToLower: string = userEmail.toLowerCase().trim();
+            const currentUserEmailToLower: string = this.CurrentUser.Email.toLowerCase().trim();
+
+            if(userEmailToLower !== currentUserEmailToLower){
+                //Current user's email doesnt match the user's email found in the local metadata, 
+                //which means the user has changed since we last fetched the metadata
+                //so we need to refresh
+                return false;
+            }
+
+        }
+        
+        return super.LocalMetadataObsolete(type);
     }
 
 
@@ -316,7 +350,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 RowCount: data.RowCount,
                 ExecutionTime: data.ExecutionTime,
                 ErrorMessage: data.ErrorMessage,
-            };    
+            };     
         }
         catch (e) {
             LogError(`Error transforming query payload: ${e}`);

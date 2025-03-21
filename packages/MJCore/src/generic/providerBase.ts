@@ -111,7 +111,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public async Config(data: ProviderConfigDataBase): Promise<boolean> {
         this._ConfigData = data;
-
+        
         if (this._refresh || await this.CheckToSeeIfRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
