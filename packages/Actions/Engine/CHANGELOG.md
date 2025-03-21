@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/actions
 
+## 2.30.0
+
+### Patch Changes
+
+- 8f71da0: Ensure ActionEngineServer instance returns correct instance
+- 63dc5a9: Action Engine Server Changes
+- Updated dependencies [a3ab749]
+- Updated dependencies [63dc5a9]
+  - @memberjunction/aiengine@2.30.0
+  - @memberjunction/core-entities@2.30.0
+  - @memberjunction/global@2.30.0
+  - @memberjunction/actions-base@2.30.0
+  - @memberjunction/doc-utils@2.30.0
+  - @memberjunction/ai@2.30.0
+  - @memberjunction/core@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes

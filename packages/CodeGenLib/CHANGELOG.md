@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.30.0
+
+### Minor Changes
+
+- a3ab749: Updated CodeGen for more generalized CHECK constraint validation function generation and built new metadata constructs to hold generated code for future needs as well.
+
+### Patch Changes
+
+- 90dd865: Implement prefix/suffix rules for new entity names by schema
+- Updated dependencies [97c69b4]
+- Updated dependencies [8f71da0]
+- Updated dependencies [a3ab749]
+- Updated dependencies [63dc5a9]
+  - @memberjunction/ai-mistral@2.30.0
+  - @memberjunction/actions@2.30.0
+  - @memberjunction/aiengine@2.30.0
+  - @memberjunction/core-entities@2.30.0
+  - @memberjunction/global@2.30.0
+  - @memberjunction/sqlserver-dataprovider@2.30.0
+  - @memberjunction/ai@2.30.0
+  - @memberjunction/ai-anthropic@2.30.0
+  - @memberjunction/ai-groq@2.30.0
+  - @memberjunction/ai-openai@2.30.0
+  - @memberjunction/core@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 2.30.0
+
+### Patch Changes
+
+- 63dc5a9: Action Engine Server Changes
+- Updated dependencies [8f71da0]
+- Updated dependencies [a3ab749]
+- Updated dependencies [63dc5a9]
+  - @memberjunction/actions@2.30.0
+  - @memberjunction/core-entities@2.30.0
+  - @memberjunction/global@2.30.0
+  - @memberjunction/core-actions@2.30.0
+  - @memberjunction/sqlserver-dataprovider@2.30.0
+  - @memberjunction/core@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes
