@@ -4,36 +4,34 @@ CREATE TABLE ${flyway:defaultSchema}.GeneratedCodeCategory (
     Name NVARCHAR(255) NOT NULL UNIQUE,
     Description NVARCHAR(MAX) NULL,
     ParentID UNIQUEIDENTIFIER NULL,
+    __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+    __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
     CONSTRAINT FK_GenerateCodeCategory_Parent FOREIGN KEY (ParentID) REFERENCES ${flyway:defaultSchema}.GeneratedCodeCategory(ID)
 );
-GO
 
 -- CREATE Category for Validators
 INSERT INTO ${flyway:defaultSchema}.GeneratedCodeCategory (ID, Name,Description)
 VALUES ('EE2D433E-F36B-1410-8D9D-00021F8B792E', 'CodeGen: Validators','Generated Validation Code')
 
-GO
 
 -- Add extended properties for GenerateCodeCategory table
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Categorization for generated code, including optional parent-child relationships.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Categorization for generated code, including optional parent-child relationships.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCodeCategory';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Parent category ID, allowing for hierarchical categorization.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Parent category ID, allowing for hierarchical categorization.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCodeCategory',
     @level2type = N'Column', @level2name = 'ParentID';
-GO
 
 -- Create the GeneratedCode Table
 CREATE TABLE ${flyway:defaultSchema}.GeneratedCode (
     ID UNIQUEIDENTIFIER DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
-    GeneratedAt DATETIMEOFFSET(7) NOT NULL DEFAULT GETUTCDATE(), 
+    GeneratedAt DATETIMEOFFSET(7) NOT NULL DEFAULT GETUTCDATE(),
     CategoryID UNIQUEIDENTIFIER NOT NULL,
     GeneratedByModelID UNIQUEIDENTIFIER NOT NULL, -- FKey to AIModel
     Name NVARCHAR(255) NOT NULL,
@@ -45,6 +43,9 @@ CREATE TABLE ${flyway:defaultSchema}.GeneratedCode (
 
     Status NVARCHAR(20) NOT NULL DEFAULT 'Pending',
     Language NVARCHAR(50) NOT NULL DEFAULT 'TypeScript',
+
+    __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+    __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
 
     -- Foreign Key Constraints
     CONSTRAINT FK_GeneratedCode_Category FOREIGN KEY (CategoryID) REFERENCES ${flyway:defaultSchema}.GeneratedCodeCategory(ID),
@@ -63,111 +64,100 @@ GO
 -- MIGRATE Legacy MJ code from EntityField into new table
 INSERT INTO ${flyway:defaultSchema}.GeneratedCode (
 ID, GeneratedAt, CategoryID, GeneratedByModelID,
-Name, Description, Code, Source, 
-LinkedEntityID, 
+Name, Description, Code, Source,
+LinkedEntityID,
 LinkedRecordPrimaryKey,
-Status, Language, ${flyway:defaultSchema}_CreatedAt, ${flyway:defaultSchema}_UpdatedAt
+Status, Language, __mj_CreatedAt, __mj_UpdatedAt
 )
 (
-SELECT ID, ${flyway:defaultSchema}_UpdatedAt, 'EE2D433E-F36B-1410-8D9D-00021F8B792E','E6A5CCEC-6A37-EF11-86D4-000D3A4E707E',
+SELECT ID, __mj_UpdatedAt, 'EE2D433E-F36B-1410-8D9D-00021F8B792E','E6A5CCEC-6A37-EF11-86D4-000D3A4E707E',
 GeneratedValidationFunctionName, GeneratedValidationFunctionDescription, GeneratedValidationFunctionCode,GeneratedValidationFunctionCheckConstraint ,
 'DF238F34-2837-EF11-86D4-6045BDEE16E6', -- entity fields
 ID, -- entity field ID is the linkedprimarykey
-'Approved','TypeScript',${flyway:defaultSchema}_UpdatedAt, ${flyway:defaultSchema}_UpdatedAt
+'Approved','TypeScript',__mj_UpdatedAt, __mj_UpdatedAt
 FROM ${flyway:defaultSchema}.EntityField WHERE GeneratedValidationFunctionCode IS NOT NULL
 )
 -- now wipe out the legacy columns in the entity field table
-UPDATE 
+UPDATE
     ${flyway:defaultSchema}.EntityField
 SET
-	GeneratedValidationFunctionName = NULL, 
-	GeneratedValidationFunctionDescription = NULL, 
+	GeneratedValidationFunctionName = NULL,
+	GeneratedValidationFunctionDescription = NULL,
 	GeneratedValidationFunctionCode = NULL,
-	GeneratedValidationFunctionCheckConstraint =NULL 
-WHERE 
+	GeneratedValidationFunctionCheckConstraint =NULL
+WHERE
     GeneratedValidationFunctionCode IS NOT NULL
 
-GO
 -- Add extended properties for GeneratedCode table
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Stores LLM-generated code snippets, tracking their source, category, and validation status.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Stores LLM-generated code snippets, tracking their source, category, and validation status.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode';
-GO
 
 -- Document non-key columns in GeneratedCode
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'When the code was generated.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'When the code was generated.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'GeneratedAt';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Reference to the category of generated code.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Reference to the category of generated code.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'CategoryID';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'AI model responsible for generating this code.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'AI model responsible for generating this code.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'GeneratedByModelID';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Descriptive name of the generated code.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Descriptive name of the generated code.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Name';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Optional description of the generated code.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Optional description of the generated code.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Description';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'The actual generated code.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'The actual generated code.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Code';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Source material used to generate the code, e.g., a SQL CHECK constraint.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Source material used to generate the code, e.g., a SQL CHECK constraint.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Source';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Status of the generated code, e.g., Pending, Approved, or Rejected.', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Status of the generated code, e.g., Pending, Approved, or Rejected.',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Status';
-GO
 
-EXEC sp_addextendedproperty 
-    @name = N'MS_Description', 
-    @value = 'Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).', 
-    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}', 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = 'Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).',
+    @level0type = N'Schema', @level0name = '${flyway:defaultSchema}',
     @level1type = N'Table',  @level1name = 'GeneratedCode',
     @level2type = N'Column', @level2name = 'Language';
-GO
 
 
 
@@ -215,7 +205,7 @@ GO
          , 1
          , 1000
       )
-   
+
 
 /* SQL generated to add new permission for entity Generated Code Categories for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
@@ -272,7 +262,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
          , 1
          , 1000
       )
-   
+
 
 /* SQL generated to add new permission for entity Generated Codes for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
@@ -289,23 +279,12 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
                                                    ('99288306-17a6-433d-bd9c-c4ee40df175a', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
-/* SQL text to add special date field ${flyway:defaultSchema}_CreatedAt to entity ${flyway:defaultSchema}.GeneratedCodeCategory */
-ALTER TABLE [${flyway:defaultSchema}].[GeneratedCodeCategory] ADD ${flyway:defaultSchema}_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
-
-/* SQL text to add special date field ${flyway:defaultSchema}_UpdatedAt to entity ${flyway:defaultSchema}.GeneratedCodeCategory */
-ALTER TABLE [${flyway:defaultSchema}].[GeneratedCodeCategory] ADD ${flyway:defaultSchema}_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
-
-/* SQL text to add special date field ${flyway:defaultSchema}_CreatedAt to entity ${flyway:defaultSchema}.GeneratedCode */
-ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema}_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
-
-/* SQL text to add special date field ${flyway:defaultSchema}_UpdatedAt to entity ${flyway:defaultSchema}.GeneratedCode */
-ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema}_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4491936c-4698-4395-9c8f-8320ea143af3'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '4491936c-4698-4395-9c8f-8320ea143af3'  OR
                (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -369,8 +348,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'e906784a-401a-4b56-8654-ba495cb30277'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'e906784a-401a-4b56-8654-ba495cb30277'  OR
                (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -434,8 +413,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '139430cd-cff8-4f91-a1ea-783eda9c31af'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '139430cd-cff8-4f91-a1ea-783eda9c31af'  OR
                (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -499,8 +478,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '538dfea0-694f-4319-9bfa-88d10059040f'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '538dfea0-694f-4319-9bfa-88d10059040f'  OR
                (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = 'ParentID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -564,9 +543,9 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '24395cd6-d0df-4cd0-9947-63a091a7c650'  OR 
-               (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = '${flyway:defaultSchema}_CreatedAt')
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '24395cd6-d0df-4cd0-9947-63a091a7c650'  OR
+               (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -602,7 +581,7 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
             '24395cd6-d0df-4cd0-9947-63a091a7c650',
             '49770E19-D6D0-485D-A03F-01C39FDFB6D1', -- Entity: Generated Code Categories
             5,
-            '${flyway:defaultSchema}_CreatedAt',
+            '__mj_CreatedAt',
             'Created At',
             NULL,
             'datetimeoffset',
@@ -629,9 +608,9 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'fdcb1595-8e49-43db-9207-a692568e7753'  OR 
-               (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = '${flyway:defaultSchema}_UpdatedAt')
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'fdcb1595-8e49-43db-9207-a692568e7753'  OR
+               (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -667,7 +646,7 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
             'fdcb1595-8e49-43db-9207-a692568e7753',
             '49770E19-D6D0-485D-A03F-01C39FDFB6D1', -- Entity: Generated Code Categories
             6,
-            '${flyway:defaultSchema}_UpdatedAt',
+            '__mj_UpdatedAt',
             'Updated At',
             NULL,
             'datetimeoffset',
@@ -694,8 +673,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4468b874-9e5d-435c-9ec5-c913530577b6'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '4468b874-9e5d-435c-9ec5-c913530577b6'  OR
                (EntityID = '49770E19-D6D0-485D-A03F-01C39FDFB6D1' AND Name = 'Parent')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -759,8 +738,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '16f223f3-d2b5-4282-87ff-5f446c721646'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '16f223f3-d2b5-4282-87ff-5f446c721646'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -824,8 +803,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ee29997d-6cae-4a6d-93f4-ac294d7a4db6'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'ee29997d-6cae-4a6d-93f4-ac294d7a4db6'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'GeneratedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -889,8 +868,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5d265465-7ebe-45a5-ab7a-20c558c0b7fa'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '5d265465-7ebe-45a5-ab7a-20c558c0b7fa'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'CategoryID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -954,8 +933,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ad60f2da-dcce-42a1-b567-3535633601f2'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'ad60f2da-dcce-42a1-b567-3535633601f2'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'GeneratedByModelID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1019,8 +998,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '45efa9bc-f491-4f92-95ed-b14a3c3e8fa3'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '45efa9bc-f491-4f92-95ed-b14a3c3e8fa3'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1084,8 +1063,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '6b8cc666-2e5b-49af-8965-05545b04a97b'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '6b8cc666-2e5b-49af-8965-05545b04a97b'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1149,8 +1128,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '12f2351d-170f-4a3a-bfbf-ec2d9c23ae37'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '12f2351d-170f-4a3a-bfbf-ec2d9c23ae37'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Code')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1214,8 +1193,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '84991ef6-687a-47f8-ab3d-bb0ecc06ed92'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '84991ef6-687a-47f8-ab3d-bb0ecc06ed92'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Source')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1279,8 +1258,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5d11079f-ff29-415c-851d-dd251c62699b'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '5d11079f-ff29-415c-851d-dd251c62699b'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'LinkedEntityID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1344,8 +1323,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3db72635-45e9-4c01-88fc-d097898f9f57'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '3db72635-45e9-4c01-88fc-d097898f9f57'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'LinkedRecordPrimaryKey')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1409,8 +1388,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f67ff28d-aef0-4e69-9c3e-e532ca963320'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'f67ff28d-aef0-4e69-9c3e-e532ca963320'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1474,8 +1453,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '995d0ace-2d0f-4a6a-8479-5a9a31e51506'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '995d0ace-2d0f-4a6a-8479-5a9a31e51506'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Language')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1539,9 +1518,9 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '2dbd9d8a-b699-4682-b9b1-927f1e9d55d3'  OR 
-               (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = '${flyway:defaultSchema}_CreatedAt')
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '2dbd9d8a-b699-4682-b9b1-927f1e9d55d3'  OR
+               (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1577,7 +1556,7 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
             '2dbd9d8a-b699-4682-b9b1-927f1e9d55d3',
             '99288306-17A6-433D-BD9C-C4EE40DF175A', -- Entity: Generated Codes
             13,
-            '${flyway:defaultSchema}_CreatedAt',
+            '__mj_CreatedAt',
             'Created At',
             NULL,
             'datetimeoffset',
@@ -1604,9 +1583,9 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd8e7a17f-2ce3-4592-9774-b431fea5444c'  OR 
-               (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = '${flyway:defaultSchema}_UpdatedAt')
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = 'd8e7a17f-2ce3-4592-9774-b431fea5444c'  OR
+               (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1642,7 +1621,7 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
             'd8e7a17f-2ce3-4592-9774-b431fea5444c',
             '99288306-17A6-433D-BD9C-C4EE40DF175A', -- Entity: Generated Codes
             14,
-            '${flyway:defaultSchema}_UpdatedAt',
+            '__mj_UpdatedAt',
             'Updated At',
             NULL,
             'datetimeoffset',
@@ -1669,8 +1648,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '9028641e-d035-4b51-9c8e-1d1af4bbca0e'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '9028641e-d035-4b51-9c8e-1d1af4bbca0e'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'Category')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1734,8 +1713,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '29c409c4-6886-49ce-8882-f20057bf7c6d'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '29c409c4-6886-49ce-8882-f20057bf7c6d'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'GeneratedByModel')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1799,8 +1778,8 @@ ALTER TABLE [${flyway:defaultSchema}].[GeneratedCode] ADD ${flyway:defaultSchema
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '580e1053-df96-46a1-a832-1c32b5520560'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '580e1053-df96-46a1-a832-1c32b5520560'  OR
                (EntityID = '99288306-17A6-433D-BD9C-C4EE40DF175A' AND Name = 'LinkedEntity')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1938,7 +1917,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                               VALUES ('fc98b3d7-2279-4b9e-9e3b-23ed1ff6123d', '49770E19-D6D0-485D-A03F-01C39FDFB6D1', '49770E19-D6D0-485D-A03F-01C39FDFB6D1', 'ParentID', 'One To Many', 1, 1, 'Generated Code Categories', 1);
    END
-                              
+
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
@@ -1948,7 +1927,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                               VALUES ('8abd6fa2-2b2f-4e84-abf1-6fe3bbb2e3cb', '49770E19-D6D0-485D-A03F-01C39FDFB6D1', '99288306-17A6-433D-BD9C-C4EE40DF175A', 'CategoryID', 'One To Many', 1, 1, 'Generated Codes', 1);
    END
-                              
+
 
 /* SQL text to create Entitiy Relationships */
 
@@ -1961,7 +1940,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                               VALUES ('baf6bb8f-b641-40c8-af19-37f5eb0581ca', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '99288306-17A6-433D-BD9C-C4EE40DF175A', 'LinkedEntityID', 'One To Many', 1, 1, 'Generated Codes', 2);
    END
-                              
+
 
 /* SQL text to create Entitiy Relationships */
 
@@ -1974,7 +1953,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
                               VALUES ('4dd95574-4146-46ed-a8ab-32cf5496e9da', 'FD238F34-2837-EF11-86D4-6045BDEE16E6', '99288306-17A6-433D-BD9C-C4EE40DF175A', 'GeneratedByModelID', 'One To Many', 1, 1, 'Generated Codes', 3);
    END
-                              
+
 
 /* Index for Foreign Keys for GeneratedCodeCategory */
 -----------------------------------------------------------------
@@ -1989,7 +1968,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCodeCategory_ParentID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCodeCategory_ParentID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCodeCategory]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCodeCategory_ParentID ON [${flyway:defaultSchema}].[GeneratedCodeCategory] ([ParentID]);
@@ -2031,7 +2010,7 @@ LEFT OUTER JOIN
     [g].[ParentID] = GeneratedCodeCategory_ParentID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwGeneratedCodeCategories] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for Generated Code Categories */
 -----------------------------------------------------------------
@@ -2088,7 +2067,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGeneratedCodeCategory] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for Generated Code Categories */
 
@@ -2136,7 +2115,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwGeneratedCodeCategories]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -2144,7 +2123,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGeneratedCodeCategory] TO [c
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the GeneratedCodeCategory table
+----- TRIGGER FOR __mj_UpdatedAt field for the GeneratedCodeCategory table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateGeneratedCodeCategory
 GO
@@ -2157,7 +2136,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[GeneratedCodeCategory]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[GeneratedCodeCategory] AS _organicTable
     INNER JOIN
@@ -2165,7 +2144,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for Generated Code Categories */
 
@@ -2205,7 +2184,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCodeCategory] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for Generated Code Categories */
 
@@ -2226,7 +2205,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCodeCategory] TO [c
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID ON [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID]);
@@ -2235,7 +2214,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_CategoryID ON [${flyway:defaultSchem
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID ON [${flyway:defaultSchema}].[GeneratedCode] ([GeneratedByModelID]);
@@ -2244,7 +2223,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_GeneratedByModelID ON [${flyway:defa
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_LinkedEntityID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GeneratedCode_LinkedEntityID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GeneratedCode]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GeneratedCode_LinkedEntityID ON [${flyway:defaultSchema}].[GeneratedCode] ([LinkedEntityID]);
@@ -2306,7 +2285,7 @@ LEFT OUTER JOIN
     [g].[LinkedEntityID] = Entity_LinkedEntityID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwGeneratedCodes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for Generated Codes */
 -----------------------------------------------------------------
@@ -2387,7 +2366,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGeneratedCode] TO [cdp_Developer], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for Generated Codes */
 
@@ -2451,7 +2430,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwGeneratedCodes]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -2459,7 +2438,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGeneratedCode] TO [cdp_Devel
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the GeneratedCode table
+----- TRIGGER FOR __mj_UpdatedAt field for the GeneratedCode table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateGeneratedCode
 GO
@@ -2472,7 +2451,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[GeneratedCode]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[GeneratedCode] AS _organicTable
     INNER JOIN
@@ -2480,7 +2459,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for Generated Codes */
 
@@ -2520,7 +2499,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGeneratedCode] TO [cdp_Integration]
-    
+
 
 /* spDelete Permissions for Generated Codes */
 
@@ -2536,7 +2515,7 @@ DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
 GO
 CREATE VIEW ${flyway:defaultSchema}.vwEntityFieldsWithCheckConstraints
 AS
-SELECT 
+SELECT
     e.ID as EntityID,
     e.Name as EntityName,
     ef.ID as EntityFieldID,
@@ -2550,12 +2529,12 @@ SELECT
     obj.name AS TableName,
     col.name AS ColumnName,
     cc.name AS ConstraintName,
-    cc.definition AS ConstraintDefinition 
-FROM 
+    cc.definition AS ConstraintDefinition
+FROM
     sys.check_constraints cc
-INNER JOIN 
+INNER JOIN
     sys.objects obj ON cc.parent_object_id = obj.object_id
-INNER JOIN 
+INNER JOIN
     sys.schemas sch ON obj.schema_id = sch.schema_id
 INNER JOIN
 	${flyway:defaultSchema}.Entity e
@@ -2570,15 +2549,15 @@ LEFT OUTER JOIN -- left join since can have table level constraints
   e.ID = ef.EntityID AND
   ef.Name = col.name
 LEFT OUTER JOIN
-  ${flyway:defaultSchema}.vwGeneratedCodes gc 
+  ${flyway:defaultSchema}.vwGeneratedCodes gc
   ON -- EITHER JOIN ON EntityField or Entity depending on which type of constraint we have here
   (   (ef.ID IS NOT NULL AND gc.LinkedEntity='Entity Fields' AND gc.LinkedRecordPrimaryKey=ef.ID)
         OR
-      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)   
+      (ef.ID IS NULL and gc.LinkedEntity='Entities' AND gc.LinkedRecordPrimaryKey=e.ID)
   ) AND -- MUST MATCH Source=definition
   cc.definition = gc.Source
 GO
-  
+
 /**** NEW Generated Code *****/
 
 
@@ -2590,8 +2569,8 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn''t be able to send them on a schedule either.', 'ValidateSupportsScheduledSendingComparedToSupportsSending', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '43248F34-2837-EF11-86D4-6045BDEE16E6');
-  
-            
+
+
 
 -- CHECK constraint for Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
@@ -2600,8 +2579,8 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo(''AllowRecordMerge'', ''Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.'', this.AllowRecordMerge, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to ''Soft''.', 'ValidateAllowRecordMergeConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
-  
-            
+
+
 
 -- CHECK constraint for Entity Documents @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
@@ -2616,8 +2595,8 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.', 'ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '22248F34-2837-EF11-86D4-6045BDEE16E6');
-  
-            
+
+
 
 -- CHECK constraint for Resource Permissions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
@@ -2628,8 +2607,8 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is ''User'', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that when the type is set to ''Role'', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to ''User'', a user ID must be provided and the role ID must not be provided.', 'ValidateUserTypeConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '201852E1-4587-EF11-8473-6045BDF077EE');
-  
-            
+
+
 
 -- CHECK constraint for Schema Info @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
@@ -2638,7 +2617,7 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.', 'ValidateEntityIDMaxGreaterThanEntityIDMin', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
-  
+
             -- CHECK constraint for Schema Info @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
                       VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '0AE8548E-30A6-4FBC-8F69-6344D0CBAF2D', GETUTCDATE(), 'TypeScript','Approved', '([EntityIDMin]>(0) AND [EntityIDMax]>(0))', 'public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
@@ -2649,6 +2628,4 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
 	}
 }', 'This rule ensures that both the minimum and maximum entity IDs must be greater than zero.', 'ValidateEntityIDMinAndEntityIDMaxGreaterThanZero', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '15248F34-2837-EF11-86D4-6045BDEE16E6');
-  
-            
 

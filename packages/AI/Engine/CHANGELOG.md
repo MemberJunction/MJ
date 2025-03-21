@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.30.0
+
+### Minor Changes
+
+- a3ab749: Updated CodeGen for more generalized CHECK constraint validation function generation and built new metadata constructs to hold generated code for future needs as well.
+
+### Patch Changes
+
+- Updated dependencies [a3ab749]
+  - @memberjunction/core-entities@2.30.0
+  - @memberjunction/global@2.30.0
+  - @memberjunction/ai@2.30.0
+  - @memberjunction/core@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes

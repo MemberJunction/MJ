@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-recommendations-rex
 
+## 2.30.0
+
+### Patch Changes
+
+- Updated dependencies [a3ab749]
+  - @memberjunction/global@2.30.0
+  - @memberjunction/ai-recommendations@2.30.0
+  - @memberjunction/ai@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 2.30.0
+
+### Patch Changes
+
+- 97c69b4: Update Mistral to use TS library
+- Updated dependencies [a3ab749]
+  - @memberjunction/global@2.30.0
+  - @memberjunction/ai@2.30.0
+
 ## 2.29.2
 
 ### Patch Changes
