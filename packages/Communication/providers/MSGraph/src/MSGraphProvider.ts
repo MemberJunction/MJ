@@ -56,30 +56,24 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                             address: message.To
                             }
                         }
-                    ]
+                    ],
+                    ccRecipients: message.CCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    }),
+                    bccRecipients: message.BCCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    })
                 },
                 saveToSentItems: 'false'
             };
-
-            if(message.CCRecipients){
-                sendMail.message.ccRecipients = message.CCRecipients.map((ccRecipient: string) => {
-                    return {
-                            emailAddress: {
-                            address: ccRecipient
-                        }
-                    };
-                });
-            }
-
-            if(message.BCCRecipients){
-                sendMail.message.bccRecipients = message.BCCRecipients.map((bccRecipient: string) => {
-                    return {
-                            emailAddress: {
-                            address: bccRecipient
-                        }
-                    };
-                });
-            }
     
             const sendMessagePath: string = `${Auth.ApiConfig.uri}/${user.id}/sendMail`;
             await Auth.GraphClient.api(sendMessagePath).post(sendMail);
