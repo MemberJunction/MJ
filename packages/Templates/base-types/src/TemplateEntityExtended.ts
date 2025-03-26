@@ -34,7 +34,9 @@ export class TemplateEntityExtended extends TemplateEntity {
      * @param type If provided, returns the highest priority content of the specified type
      * @returns 
      */
-    public GetHighestPriorityContent(type?: string): TemplateContentEntity {
+    public GetHighestPriorityContent(type?: string): TemplateContentEntity | null {
+        if(!this.Content || this.Content.length === 0) return null;
+
         if (type) {
             return this.Content.filter(c => c.Type.trim().toLowerCase() === type.trim().toLowerCase())
                 .sort((a, b) => a.Priority - b.Priority)[0];

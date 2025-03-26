@@ -64,7 +64,14 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
      * @param templateName 
      * @returns 
      */
-    public FindTemplate(templateName: string): TemplateEntityExtended {
+    public FindTemplate(templateName: string): TemplateEntityExtended | undefined {
         return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
+    }
+
+    /**
+     * Convenience method to find a template by ID
+     */
+    public FindTemplateByID(templateID: string): TemplateEntityExtended | undefined {
+        return this.Templates.find((t) => t.ID === templateID);
     }
 }

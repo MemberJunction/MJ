@@ -1,9 +1,9 @@
-import { LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, Metadata, RunView, RunViewParams, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
+import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase, TemplateParamData, RenderTemplateWithParamDataParams } from '@memberjunction/templates-base-types'
   
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
@@ -173,6 +173,156 @@ export class TemplateEngineServer extends TemplateEngineBase {
             };
         }
     }
+
+    public async RenderTemplateWithParamData(params: RenderTemplateWithParamDataParams): Promise<TemplateRenderResult> {
+        const template: TemplateEntityExtended | undefined = this.FindTemplateByID(params.TemplateID);
+        if(!template){
+            return {
+                Success: false,
+                Output: null,
+                Message: `Template not found with ID ${params.TemplateID}`
+            };
+        }
+
+        let templateContent: TemplateContentEntity | null = null;
+        if(params.TemplateContentID){
+            templateContent = template.Content.find((tc) => tc.ID === params.TemplateContentID) || null;
+        }
+        else{
+            templateContent = template.GetHighestPriorityContent();
+        }
+
+        if(!templateContent){
+            return {
+                Success: false,
+                Output: null,
+                Message: `No template content found for template ${template.ID}`
+            };
+        }
+
+        const md: Metadata = new Metadata();
+        const rv: RunView = new RunView();
+
+        const entity: EntityInfo = md.EntityByID(params.EntityID);
+        if(!entity){
+            return {
+                Success: false,
+                Output: null,
+                Message: `Entity not found with name ${params.EntityID}`
+            };
+        }
+
+        const runViewResults = await rv.RunView({
+            ...params.EntityRunViewParams,
+            EntityName: entity.Name,
+            ResultType: 'simple'
+        }, params.CurrentUser);
+
+        if(!runViewResults.Success){
+            return {
+                Success: false,
+                Output: null,
+                Message: runViewResults.ErrorMessage
+            };
+        }
+
+        const relatedData: TemplateParamData[] = await this.GetRelatedDataForTemplate(entity, runViewResults.Results, template, params.CurrentUser);
+        
+        const contextData: Record<string, any>[] = [];
+        for(const record of runViewResults.Results){
+            const data = await this.GetContextDataForTemplate(entity, record, template, relatedData);
+            contextData.push(data);
+        }
+
+        const renderResult = await this.RenderTemplate(template, templateContent, {}, params.ValidateParams);
+        return renderResult;
+    }
+
+    protected async GetRelatedDataForTemplate(entity: EntityInfo, records: Record<string, any>, template: TemplateEntityExtended, currentUser: UserInfo): Promise<TemplateParamData[]> {
+        const rv: RunView = new RunView(); 
+        const relatedData: TemplateParamData[] = [];
+
+        const runViewParams: RunViewParams[] = [];
+    
+        for(const templateParam of template.Params){
+            if(templateParam.Type !== 'Entity'){
+                continue;
+            }
+    
+            const relatedEntity: string = templateParam.Entity;
+            const relatedField: string = templateParam.LinkedParameterField;
+    
+            // construct a filter for the related field so that we constrain the results to just the record
+            const quotes: string = entity.FirstPrimaryKey.NeedsQuotes ? "'" : "";
+            let filter = `${relatedField} in (${records.map((record: Record<string, any>) => `${quotes}${record[entity.FirstPrimaryKey.Name]}${quotes}`).join(',')})`;
+            
+            if(templateParam.ExtraFilter){
+                filter = `(${filter}) AND (${templateParam.ExtraFilter})`;
+            }
+
+            //const finalFilter: string = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
+        
+            runViewParams.push({
+                EntityName: relatedEntity,
+                ExtraFilter: filter,
+                ResultType: 'simple'
+            });
+        }
+
+        const runViewResults = await rv.RunViews(runViewParams, currentUser);
+        for(const [index, runViewResult] of runViewResults.entries()){
+            const relatedEntity: string = template.Params[index].Entity;
+            if (runViewResult.Success) {
+                relatedData.push({
+                    ParamName: template.Params[index].Name,
+                    Data: runViewResult.Results
+                });
+            }
+            else {
+                LogError(`Error getting related data for entity ${relatedEntity}:`, undefined, runViewResult.ErrorMessage);
+            }
+        }
+
+        return relatedData;
+      }
+
+    protected async GetContextDataForTemplate(entity: EntityInfo, record: Record<string, any>[], template: TemplateEntityExtended, relatedData: TemplateParamData[]): Promise<Record<string, any>> {
+        const templateData: Record<string, any> = {};
+
+        for(const param of template.Params){
+          if(templateData[param.Name]){
+            continue;
+          }
+    
+          switch(param.Type){
+            case 'Record':
+                // this one is simple, we create a property by the provided name, and set the value to the record we are currently processing
+                templateData[param.Name] = record;
+                break;
+            case 'Entity':
+                // here we need to grab the related data from another entity and filter it down for the record we are current processing so it only shows the related data
+                // the metadata in the param tells us what we need to know
+                const paramData: TemplateParamData | undefined = relatedData.find((rd: TemplateParamData) => rd.ParamName === param.Name);
+                if(!paramData){
+                    LogError(`No related data found for param ${param.Name} in template ${template.ID}`);
+                    break;
+                }
+    
+                // now filter down the data in d to just this record and set the value of the context data to the filtered data
+                templateData[param.Name] = paramData.Data.filter((rdfr: Record<string, any>) => {
+                    rdfr[param.LinkedParameterField] === record[entity.FirstPrimaryKey.Name]
+                });
+                break;
+            case "Array":
+            case "Scalar":
+            case "Object":
+                // do nothing here, as we don't directly support these param types
+                LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
+                break;
+          }
+        }
+        return templateData;
+      }
 
     /**
      * This method is responsible for creating a new Nunjucks template, caching it, and returning it.
