@@ -43,7 +43,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 };
             }
     
-            const sendMail = {
+            const sendMail: Record<string, any> = {
                 message: {
                     subject: message.Subject,
                     body: {
@@ -56,7 +56,21 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                             address: message.To
                             }
                         }
-                    ]
+                    ],
+                    ccRecipients: message.CCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    }),
+                    bccRecipients: message.BCCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    })
                 },
                 saveToSentItems: 'false'
             };
@@ -90,7 +104,7 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 };
             }
 
-            const reply = {
+            let reply: Record<string, any> = {
                 message: {
                     toRecipients: [
                         {
@@ -98,7 +112,21 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                                 address: params.Message.To
                             }
                         }
-                    ]
+                    ],
+                    ccRecipients: params.Message.CCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    }),
+                    bccRecipients: params.Message.BCCRecipients?.map((recipient) => {
+                        return {
+                            emailAddress: {
+                                address: recipient
+                            }
+                        };
+                    })
                 },
                 comment: params.Message.ProcessedBody || params.Message.ProcessedHTMLBody
             };
@@ -204,13 +232,26 @@ export class MSGraphProvider extends BaseCommunicationProvider{
                 }
             }
 
-            const forward = {
+            const forward: Record<string, any> = {
                 comment: params.Message,
                 toRecipients: params.ToRecipients.map((recipient) => {
                     return {
                         emailAddress: {
-                            name: recipient.Name,
-                            address: recipient.Address
+                            address: recipient
+                        }
+                    };
+                }),
+                ccRecipients: params.CCRecipients?.map((recipient) => {
+                    return {
+                        emailAddress: {
+                            address: recipient
+                        }
+                    };
+                }),
+                bccRecipients: params.BCCRecipients?.map((recipient) => {
+                    return {
+                        emailAddress: {
+                            address: recipient
                         }
                     };
                 })

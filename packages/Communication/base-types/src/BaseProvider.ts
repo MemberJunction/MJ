@@ -51,6 +51,16 @@ export class Message {
     public To: string;
 
     /**
+     * Recipients to send a copy of the message to, typically an email address
+     */
+    public CCRecipients?: string[];
+
+    /**
+     * Recipients to send a copy of the message to without revealing their email addresses to the other recipients, typically an email address
+     */
+    public BCCRecipients?: string[];
+
+    /**
      * The date and time to send the message, if not provided the message will be sent immediately
      */
     public SendAt?: Date;
@@ -193,10 +203,17 @@ export type ForwardMessageParams = {
     /*
     * The recipients to forward the message to
     */
-    ToRecipients: {
-        Name: string,
-        Address: string;
-    }[];
+    ToRecipients: string[];
+
+    /*
+    * The recipients to send a copy of the forwarded message to
+    */
+    CCRecipients?: string[];
+
+    /*
+    * The recipients to send a blind copy of the forwarded message to
+    */
+    BCCRecipients?: string[];
 };
 
 export type ForwardMessageResult<T = Record<string, any>> = BaseMessageResult & {

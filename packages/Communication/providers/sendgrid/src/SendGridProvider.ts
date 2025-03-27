@@ -23,6 +23,8 @@ export class SendGridProvider extends BaseCommunicationProvider {
                 email: from,
                 name: message.FromName
             },
+            cc: message.CCRecipients,
+            bcc: message.BCCRecipients,
             subject: message.ProcessedSubject,
             text: message.ProcessedBody,
             html: message.ProcessedHTMLBody,
