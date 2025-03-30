@@ -1,4 +1,4 @@
-import { Metadata } from "@memberjunction/core";
+import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -66,13 +66,20 @@ _server.tool("get-all-entities", {}, async() => {
 })
 
 export async function runServer() {
-    // Start receiving messages on stdin and sending messages on stdout
-    const transport = new StdioServerTransport();
-    const dataSource = new DataSource(ormConfig);
-    await dataSource.initialize();
-      const config = new SQLServerProviderConfigData(dataSource, '', '__mj');
-    await setupSQLServerClient(config);
-    await _server.connect(transport);
+    try {
+        // Start receiving messages on stdin and sending messages on stdout
+        const transport = new StdioServerTransport();
+        const dataSource = new DataSource(ormConfig);
+        await dataSource.initialize();
+        console.log(ormConfig.database);
+        const config = new SQLServerProviderConfigData(dataSource, '', '__mj');
+        await setupSQLServerClient(config);
+        await _server.connect(transport);
+    }
+    catch (e) {
+        // Log the error but convert it to JSON and then dump to console
+        console.log(JSON.stringify(e));
+    }
 }
 
 runServer();
