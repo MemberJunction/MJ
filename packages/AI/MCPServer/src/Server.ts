@@ -1,22 +1,12 @@
 import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { FastMCP } from "fastmcp";
 import { DataSource } from "typeorm";
 import { z } from "zod";
 import { DataSourceOptions } from 'typeorm';
-import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate } from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerPort } from './config.js';
 
-// Create server instance
-const _server = new McpServer({
-    name: "MemberJunction",
-    version: "1.0.0",
-    capabilities: {
-      resources: {},
-      tools: {},
-    },
-});
-
+// Prepare ORM configuration
 const ormConfig = {
     type: 'mssql' as const,
     entities: [],
@@ -30,56 +20,88 @@ const ormConfig = {
     requestTimeout: configInfo.databaseSettings.requestTimeout,
     connectionTimeout: configInfo.databaseSettings.connectionTimeout,
     options: {},
-  };
-  if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
+};
+
+if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.trim().length > 0) {
     ormConfig.options = {
-      ...ormConfig.options,
-      instanceName: dbInstanceName,
+        ...ormConfig.options,
+        instanceName: dbInstanceName,
     };
-  }
-  if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
+}
+
+if (dbTrustServerCertificate !== null && dbTrustServerCertificate !== undefined) {
     ormConfig.options = {
-      ...ormConfig.options,
-      trustServerCertificate: dbTrustServerCertificate === 'Y',
+        ...ormConfig.options,
+        trustServerCertificate: dbTrustServerCertificate === 'Y',
     };
-  }
+}
 
-// Add an addition tool
-_server.tool("add",
-    { 
-        a: z.number(), 
-        b: z.number() 
-    },
-    async ({ a, b }) => ({
-      content: [{ type: "text", text: String(a + b) }]
-    })
-  );
+// Create FastMCP server instance
+const server = new FastMCP({
+    name: "MemberJunction",
+    version: "1.0.0"
+});
 
-_server.tool("get-all-entities", {}, async() => {
-    const md = new Metadata();
-        
-    return {
-        content: [
-            { type: "text", text: JSON.stringify(md.Entities) }
-        ]
-    }
-})
-
-export async function runServer() {
+// Initialize database and setup tools
+async function initializeServer() {
     try {
-        // Start receiving messages on stdin and sending messages on stdout
-        const transport = new StdioServerTransport();
+        // Initialize database connection
         const dataSource = new DataSource(ormConfig);
         await dataSource.initialize();
-        console.log(ormConfig.database);
+        console.log(`Connected to database: ${ormConfig.database}`);
+        
+        // Setup SQL Server client
         const config = new SQLServerProviderConfigData(dataSource, '', '__mj');
         await setupSQLServerClient(config);
-        await _server.connect(transport);
-    }
-    catch (e) {
-        // Log the error but convert it to JSON and then dump to console
-        console.log(JSON.stringify(e));
+        
+        // Define tools
+        server.addTool({
+            name: "add",
+            description: "Add two numbers together",
+            parameters: z.object({
+                a: z.number(),
+                b: z.number()
+            }),
+            execute: async ({ a, b }) => {
+                return String(a + b);
+            }
+        });
+
+        server.addTool({
+            name: "get-all-entities",
+            description: "Get all entities from the metadata",
+            parameters: z.object({}),
+            execute: async () => {
+                const md = new Metadata();
+                const output = JSON.stringify(md.Entities, null, 2);
+                return output;
+            }
+        });
+
+        // Configure server options
+        const serverOptions = {
+            transportType: "sse" as const,
+            sse: {
+                endpoint: "/mcp" as `/${string}`,
+                port: mcpServerPort
+            },
+            // Optional: Add auth configuration if needed
+            // auth: {
+            //   type: "basic",
+            //   username: "user",
+            //   password: "pass"
+            // }
+        };
+
+        // Start server with SSE transport
+        server.start(serverOptions);
+
+        console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
+        console.log(`Server endpoint available at: http://localhost:${mcpServerPort}/mcp`);
+    } catch (error) {
+        console.error("Failed to initialize MCP server:", error);
     }
 }
 
-runServer();
+// Run the server
+initializeServer();

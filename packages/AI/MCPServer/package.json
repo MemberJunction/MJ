@@ -4,13 +4,14 @@
   "description": "MemberJunction: Model Context Protocol (MCP) - Server Implementation",
   "type": "module",
   "bin": {
-    "MemberJunction": "./build/index.js"
+    "MemberJunction": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod 755 build/index.js"
+    "build": "tsc && chmod 755 dist/index.js",
+    "start": "node dist/index.js"
   },
   "files": [
-    "build"
+    "dist"
   ],
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -22,6 +23,7 @@
     "@modelcontextprotocol/sdk": "^1.8.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^16.4.1",
+    "fastmcp": "^1.20.5",
     "typeorm": "^0.3.20",
     "zod": "^3.23.8"
   },

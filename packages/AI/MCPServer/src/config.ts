@@ -64,6 +64,9 @@ const configInfoSchema = z.object({
     .transform((v) => (v ? 'Y' : 'N')),
   dbInstanceName: z.string().optional(),
   graphqlPort: z.coerce.number().default(4000),
+  
+  // MCP Server settings
+  mcpServerPort: z.coerce.number().optional().default(3100),
 
   ___codeGenAPIURL: z.string().optional(),
   ___codeGenAPIPort: z.coerce.number().optional().default(3999),
@@ -101,6 +104,7 @@ export const {
   dbTrustServerCertificate,
   dbInstanceName,
   graphqlPort,
+  mcpServerPort,
   ___codeGenAPIURL,
   ___codeGenAPIPort,
   ___codeGenAPISubmissionDelay,
