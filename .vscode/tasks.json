@@ -31,6 +31,18 @@
           }
         }
       }
+    },
+    {
+      "label": "build-mcp-server",
+      "type": "npm",
+      "script": "build",
+      "path": "packages/AI/MCPServer",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }
