@@ -1,10 +1,14 @@
-import { LogError, LogStatus, Metadata } from "@memberjunction/core";
-import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
-import { FastMCP } from "fastmcp";
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { FastMCP, Resource, ResourceResult } from "fastmcp";
 import { DataSource } from "typeorm";
 import { z } from "zod";
 import { DataSourceOptions } from 'typeorm';
-import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerPort } from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, mcpServerSettings } from './config.js';
+import { match } from "assert";
+
+
+const mcpServerPort = mcpServerSettings?.port || 3100;
 
 // Prepare ORM configuration
 const ormConfig = {
@@ -48,36 +52,28 @@ async function initializeServer() {
         // Initialize database connection
         const dataSource = new DataSource(ormConfig);
         await dataSource.initialize();
-        console.log(`Connected to database: ${ormConfig.database}`);
         
         // Setup SQL Server client
-        const config = new SQLServerProviderConfigData(dataSource, '', '__mj');
+        const config = new SQLServerProviderConfigData(dataSource, '', configInfo.mjCoreSchema);
         await setupSQLServerClient(config);
-        
-        // Define tools
-        server.addTool({
-            name: "add",
-            description: "Add two numbers together",
-            parameters: z.object({
-                a: z.number(),
-                b: z.number()
-            }),
-            execute: async ({ a, b }) => {
-                return String(a + b);
-            }
-        });
+        console.log("Database connection setup completed.");
 
-        server.addTool({
-            name: "get-all-entities",
-            description: "Get all entities from the metadata",
-            parameters: z.object({}),
-            execute: async () => {
+        server.addResource({
+            uri: "/get-all-entities",
+            name: "Get All Entities",
+            description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
+            mimeType: "application/json",
+            async load() {
                 const md = new Metadata();
                 const output = JSON.stringify(md.Entities, null, 2);
-                return output;
-            }
+                return { text: output };
+            }        
         });
 
+        const contextUser = UserCache.Instance.Users[0];
+        await loadTools(contextUser);
+        console.log("Tools loaded successfully.");
+        
         // Configure server options
         const serverOptions = {
             transportType: "sse" as const,
@@ -101,6 +97,319 @@ async function initializeServer() {
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
+}
+
+async function loadTools(contextUser: UserInfo) {
+    // use the config metadata to load up the tools requested
+    const tools = mcpServerSettings?.tools;
+
+    if (tools && tools.length > 0) {
+        const md = new Metadata();
+
+        // iterate through the tools and add them to the server
+        tools.forEach((tool) => {
+            const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
+            matchingEntities.forEach((entity) => {
+                if (tool.get) {
+                    addEntityGetTool(entity, contextUser);
+                }
+                if (tool.create) {
+                    addEntityCreateTool(entity, contextUser);
+                }
+                if (tool.update) {
+                    addEntityUpdateTool(entity, contextUser);
+                }
+                if (tool.delete) {
+                    addEntityDeleteTool(entity, contextUser);
+                }
+                if (tool.runView) {
+                    addEntityRunViewTool(entity, contextUser);
+                }
+            });
+        });
+    }
+}
+
+function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
+    const paramObject = z.object({
+        extraFilter: z.string().optional(),
+        orderBy: z.string().optional(),
+        fields: z.array(z.string()).optional(),
+    })
+    const toolConfig = {
+        name: `Run ${entity.Name} View`,
+        description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
+        parameters: paramObject,
+        async execute (props: any) {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: entity.Name,
+                ExtraFilter: props.extraFilter ? props.extraFilter : undefined,
+                OrderBy: props.orderBy ? props.orderBy : undefined,
+                Fields: props.fields ? props.fields : undefined,
+            }, contextUser);
+            return JSON.stringify(result);
+        }
+    };
+    server.addTool(toolConfig);
+}
+
+function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
+    // add a tool for getting records from the specified entity or wildcard
+    const paramObject = getEntityParamObject(entity, true, false, false);
+
+    const toolConfig = {
+        name: `Create ${entity.Name} Record`,
+        description: `Creates a new record in the ${entity.Name} entity`,
+        parameters: z.object(paramObject),
+        async execute (props: any) {
+            const md = new Metadata();
+            const record = await md.GetEntityObject(entity.Name, contextUser);
+            record.SetMany(props, true);
+            const success = await record.Save();
+            if (!success) {
+                return JSON.stringify({success, record: undefined, errorMessage: record.LatestResult.Message });
+            }
+            else {
+                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: undefined });
+            }
+        }
+    };
+    server.addTool(toolConfig);    
+}
+
+function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
+    const paramObject = getEntityParamObject(entity, true, true, true);
+
+    const toolConfig = {
+        name: `Update ${entity.Name} Record`,
+        description: `Updates the specified record in the ${entity.Name} entity`,
+        parameters: z.object(paramObject),
+        async execute (props: any) {
+            const md = new Metadata();
+            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const loaded = await record.InnerLoad(new CompositeKey(
+                // use the primary keys to load the record
+                entity.PrimaryKeys.map((pk) => {
+                    return {
+                        FieldName: pk.Name,
+                        Value: props[pk.Name]
+                    };
+                })
+            ));
+            if (loaded) {
+                // remove the primary keys from the props so we don't try to update them
+                const newProps = { ...props };
+                entity.PrimaryKeys.forEach((pk) => {
+                    delete newProps[pk.Name];
+                });
+                record.SetMany(newProps, true);
+                const success = await record.Save();
+                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: !success ? record.LatestResult.Message : undefined });
+            }
+            else {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
+            }
+        }
+    };
+    server.addTool(toolConfig);    
+}
+
+function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
+    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
+    const toolConfig = {
+        name: `Delete ${entity.Name} Record`,
+        description: `Deletes the specified record from the ${entity.Name} entity`,
+        parameters: z.object(pkeyParams),
+        async execute (props: any) {
+            const md = new Metadata();
+            const record = await md.GetEntityObject(entity.Name, contextUser);
+            const loaded = await record.InnerLoad(new CompositeKey(
+                // use the primary keys to load the record
+                entity.PrimaryKeys.map((pk) => {
+                    return {
+                        FieldName: pk.Name,
+                        Value: props[pk.Name]
+                    };
+                })
+            ));
+            if (loaded) {
+                const savedRecordJSON = await convertEntityObjectToJSON(record);
+                const success = await record.Delete();
+                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.Message : undefined });    
+            }
+            else {
+                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
+            }
+        }
+    };
+    server.addTool(toolConfig);
+}
+
+
+async function convertEntityObjectToJSON(record: BaseEntity) {
+    const output = await record.GetDataObjectJSON({
+        includeRelatedEntityData: false,
+        oldValues: false,
+        omitEmptyStrings: false,
+        omitNullValues: false,
+        excludeFields: [],
+        relatedEntityList: [],
+    });
+    return output;
+}
+
+function getEntityParamObject(entity: EntityInfo, excludeReadOnlyFields: boolean, includePrimaryKeys: boolean, nonPKeysOptional: boolean) {
+    const paramObject: { [key: string]: any } = {};
+    // add the updateable fields as arguments
+
+    entity.Fields.filter(f => {
+        if (f.IsPrimaryKey && includePrimaryKeys) {
+            return true;
+        }
+        else if (f.ReadOnly && excludeReadOnlyFields) {
+            return false;
+        }
+        else {
+            return true;
+        } 
+
+    }).forEach((f) => {
+        addSingleParamToObject(paramObject, f, f.IsPrimaryKey ? false : nonPKeysOptional);
+    })
+    return paramObject;
+}
+
+function addSingleParamToObject(theObject: any, field: EntityFieldInfo, optional: boolean){
+    let newParam: any;
+    switch (field.TSType) {
+        case 'Date':
+            newParam = z.date();
+            break;
+        case 'boolean':
+            newParam = z.boolean();
+            break;
+        case 'number':
+            newParam = z.number();
+            break;
+        case 'string':
+            // for strings, check to see if we have a list of entity field values and if so, create an enum otherwise just a regular string
+            if (field.ValueListTypeEnum === 'None' || field.EntityFieldValues.length === 0) {
+                newParam = z.string();
+            }
+            else {
+                // we have either a list only, or list + user input scenario so set that up for zod
+                const enumList = field.EntityFieldValues.map((v) => {
+                    return v.Value;
+                });
+                if (field.ValueListTypeEnum === 'List') {
+                    newParam = z.enum(enumList as [string, ...string[]]);
+                }
+                else {
+                    newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
+                }    
+            }
+            break;
+    }
+    if (optional) {
+        theObject[field.Name] = newParam.optional();
+    }
+    else {
+        theObject[field.Name] = newParam;
+    }
+}
+
+function getEntityPrimaryKeyParamsObject(entity: EntityInfo) {
+    // add a tool for getting records from the specified entity or wildcard
+    const paramObject: { [key: string]: any } = {};
+    // add the primary keys as arguments
+    entity.PrimaryKeys.forEach((pk) => {
+        addSingleParamToObject(paramObject, pk, false); 
+    })
+    return paramObject;
+}
+
+function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
+    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
+
+    const toolConfig = {
+        name: `Get ${entity.Name} Record`,
+        description: `Retrieves the specified record from the ${entity.Name} entity`,
+        parameters: z.object(pkeyParams),
+        async execute (props: any) {
+            const md = new Metadata();
+            const record = await md.GetEntityObject(entity.Name, contextUser);
+            await record.InnerLoad(new CompositeKey(
+                // use the primary keys to load the record
+                entity.PrimaryKeys.map((pk) => {
+                    return {
+                        FieldName: pk.Name,
+                        Value: props[pk.Name]
+                    };
+                })
+            ));
+            return await convertEntityObjectToJSON(record);
+        }
+    };
+    server.addTool(toolConfig);
+}
+function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: {
+    get: boolean;
+    create: boolean;
+    update: boolean;
+    delete: boolean;
+    runView: boolean;
+    entityName?: string | undefined;
+    schemaName?: string | undefined;
+}) {
+    const matchingEntities = allEntities.filter((entity) => {
+        const entityName = entity.Name;
+        const schemaName = entity.SchemaName;
+        const toolEntityName = tool.entityName?.trim().toLowerCase() || "*";
+        const toolSchemaName = tool.schemaName?.trim().toLowerCase() || "*";
+
+        // we support wildcards such as * which is all entities/schemas, *Partial which would be Partial is the ending of the string, or Partial* where Partial is the start of the string
+        // so we need to check for the conditions as follows: exact match, wildcard at the start, wildcard at the end, and wildcard only means always match and assign to two variables, schemaMatch
+        // first to scope the schema and then entityMatch if the schemaMatch is true
+        let schemaMatch = false;
+        let entityMatch = false;
+        if (toolSchemaName === "*") {
+            schemaMatch = true;
+        }
+        else if (toolSchemaName.startsWith("*") && toolSchemaName.endsWith("*")) {
+            schemaMatch = schemaName.toLowerCase().includes(toolSchemaName.slice(1, -1));
+        }
+        else if (toolSchemaName.endsWith("*")) {
+            schemaMatch = schemaName.toLowerCase().startsWith(toolSchemaName.slice(0, -1));
+        }
+        else if (toolSchemaName.startsWith("*")) {
+            schemaMatch = schemaName.toLowerCase().endsWith(toolSchemaName.slice(1));
+        }
+        else {
+            schemaMatch = schemaName.toLowerCase() === toolSchemaName;
+        }
+
+        if (schemaMatch) {
+            // if the schema matches, we can check the entity name, otherwise we don't bother since we don't care about the entity name
+            if (toolEntityName === "*") {
+                entityMatch = true;
+            }
+            else if (toolEntityName.startsWith("*") && toolEntityName.endsWith("*")) {
+                entityMatch = entityName.toLowerCase().includes(toolEntityName.slice(1, -1));
+            }
+            else if (toolEntityName.endsWith("*")) {
+                entityMatch = entityName.toLowerCase().startsWith(toolEntityName.slice(0, -1));
+            }
+            else if (toolEntityName.startsWith("*")) {
+                entityMatch = entityName.toLowerCase().endsWith(toolEntityName.slice(1));
+            }
+            else {
+                entityMatch = entityName.toLowerCase() === toolEntityName;
+            }
+        }
+        return schemaMatch && entityMatch;
+    });
+    return matchingEntities;
 }
 
 // Run the server
