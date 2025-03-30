@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/ai-mcp-server",
+  "version": "2.30.0",
+  "description": "MemberJunction: Model Context Protocol (MCP) - Server Implementation",
+  "type": "module",
+  "bin": {
+    "MemberJunction": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod 755 build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "2.30.0",
+    "@memberjunction/global": "2.30.0",
+    "@memberjunction/core-entities": "2.30.0",
+    "@memberjunction/sqlserver-dataprovider": "2.30.0",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "cosmiconfig": "9.0.0",
+    "dotenv": "^16.4.1",
+    "typeorm": "^0.3.20",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "ts-node-dev": "^2.0.0",  
+    "typescript": "^5.4.5"
+  }
+}
