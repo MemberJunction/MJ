@@ -63,7 +63,7 @@ async function initializeServer() {
         console.log("Database connection setup completed.");
 
         server.addTool({
-            name: "Get All Entities",
+            name: "Get_All_Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
             parameters: z.object({}),
             async execute() {
@@ -149,7 +149,7 @@ function addEntityRunViewTool(entity: EntityInfo, contextUser: UserInfo) {
         fields: z.array(z.string()).optional(),
     })
     const toolConfig = {
-        name: `Run ${entity.Name} View`,
+        name: `Run_${entity.ClassName}_View`,
         description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
         parameters: paramObject,
         async execute (props: any) {
@@ -171,7 +171,7 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
     const paramObject = getEntityParamObject(entity, true, false, false);
 
     const toolConfig = {
-        name: `Create ${entity.Name} Record`,
+        name: `Create_${entity.ClassName}_Record`,
         description: `Creates a new record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
         async execute (props: any) {
@@ -194,7 +194,7 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
     const paramObject = getEntityParamObject(entity, true, true, true);
 
     const toolConfig = {
-        name: `Update ${entity.Name} Record`,
+        name: `Update_${entity.ClassName}_Record`,
         description: `Updates the specified record in the ${entity.Name} entity`,
         parameters: z.object(paramObject),
         async execute (props: any) {
@@ -230,7 +230,7 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
 function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
     const toolConfig = {
-        name: `Delete ${entity.Name} Record`,
+        name: `Delete_${entity.ClassName}_Record`,
         description: `Deletes the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
         async execute (props: any) {
@@ -345,7 +345,7 @@ function addEntityGetTool(entity: EntityInfo, contextUser: UserInfo) {
     const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
 
     const toolConfig = {
-        name: `Get ${entity.Name} Record`,
+        name: `Get_${entity.ClassName}_Record`,
         description: `Retrieves the specified record from the ${entity.Name} entity`,
         parameters: z.object(pkeyParams),
         async execute (props: any) {
