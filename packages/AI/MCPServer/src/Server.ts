@@ -58,15 +58,13 @@ async function initializeServer() {
         await setupSQLServerClient(config);
         console.log("Database connection setup completed.");
 
-        server.addResource({
-            uri: "/get-all-entities",
+        server.addTool({
             name: "Get All Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
-            mimeType: "application/json",
-            async load() {
+            async execute() {
                 const md = new Metadata();
                 const output = JSON.stringify(md.Entities, null, 2);
-                return { text: output };
+                return output;
             }        
         });
 

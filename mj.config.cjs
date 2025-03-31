@@ -275,23 +275,11 @@ const mcpServerConfig = {
         schemaName: 'CRM',
         entityName: '*',
         get: true,
-        create: true,
-        update: true,
+        create: false,
+        update: false,
         delete: true,
         runView: true,
       },
-      {
-        schemaName: '__mj',
-        entityName: '*Entity*',
-        get: true,
-        runView: true,
-      },
-      {
-        schemaName: '__mj',
-        entityName: '*Entities*',
-        get: true,
-        runView: true,
-      }
     ]
   }
 }
