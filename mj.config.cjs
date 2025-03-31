@@ -270,13 +270,19 @@ const mcpServerConfig = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
-    tools: [
+    actionTools: [
+      {
+        actionName: 'NOT YET SUPPORTED',
+        actionCategory: '*',
+      }
+    ],
+    entityTools: [
       {
         schemaName: 'CRM',
         entityName: '*',
         get: true,
-        create: false,
-        update: false,
+        create: true,
+        update: true,
         delete: true,
         runView: true,
       },

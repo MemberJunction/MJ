@@ -49,6 +49,10 @@ const server = new FastMCP({
 // Initialize database and setup tools
 async function initializeServer() {
     try {
+        if (!mcpServerSettings?.enableMCPServer) {
+            console.log("MCP Server is disabled in the configuration.");
+            throw new Error("MCP Server is disabled in the configuration.");
+       }
         // Initialize database connection
         const dataSource = new DataSource(ormConfig);
         await dataSource.initialize();
@@ -61,6 +65,7 @@ async function initializeServer() {
         server.addTool({
             name: "Get All Entities",
             description: "Retrieves all Entities including entity fields and relationships, from the MemberJunction Metadata",
+            parameters: z.object({}),
             async execute() {
                 const md = new Metadata();
                 const output = JSON.stringify(md.Entities, null, 2);
@@ -69,7 +74,8 @@ async function initializeServer() {
         });
 
         const contextUser = UserCache.Instance.Users[0];
-        await loadTools(contextUser);
+        await loadEntityTools(contextUser);
+        await loadActionTools(contextUser);
         console.log("Tools loaded successfully.");
         
         // Configure server options
@@ -97,15 +103,23 @@ async function initializeServer() {
     }
 }
 
-async function loadTools(contextUser: UserInfo) {
-    // use the config metadata to load up the tools requested
-    const tools = mcpServerSettings?.tools;
+async function loadActionTools(contextUser: UserInfo) {
+    // not yet supported but don't throw log error unless the config has action tools in it
+    const actionTools = mcpServerSettings?.actionTools;
+    if (actionTools && actionTools.length > 0) {
+        console.warn("Action tools are not yet supported");
+    }
+}
 
-    if (tools && tools.length > 0) {
+async function loadEntityTools(contextUser: UserInfo) {
+    // use the config metadata to load up the tools requested
+    const entityTools = mcpServerSettings?.entityTools;
+
+    if (entityTools && entityTools.length > 0) {
         const md = new Metadata();
 
         // iterate through the tools and add them to the server
-        tools.forEach((tool) => {
+        entityTools.forEach((tool) => {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
                 if (tool.get) {

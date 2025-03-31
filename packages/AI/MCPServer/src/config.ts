@@ -15,7 +15,7 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyPassword: z.string().optional(),
 });
 
-const mcpServerToolInfoSchema = z.object({
+const mcpServerEntityToolInfoSchema = z.object({
   entityName: z.string().optional(),
   schemaName: z.string().optional(),
   get: z.boolean().optional().default(false),
@@ -25,9 +25,15 @@ const mcpServerToolInfoSchema = z.object({
   runView: z.boolean().optional().default(false),
 });
 
+const mcpServerActionToolInfoSchema = z.object({
+  actionName: z.string().optional(),
+  actionCategory: z.string().optional(),
+});
+
 const mcpServerInfoSchema = z.object({
   port: z.coerce.number().optional().default(3100),
-  tools: z.array(mcpServerToolInfoSchema).optional(),
+  entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
+  actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   enableMCPServer: z.boolean().optional().default(false),
 });
 
