@@ -1,3 +1,4 @@
+import { CompositeKey } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
 
 /**
@@ -834,3 +835,16 @@ export class SkipAPILearningCycleResponse {
      */
     requestChanges: SkipLearningCycleRequestChange[];
 }
+
+
+
+// define an interface that contains the available callback functions that a Skip HTML report might call in the parent.
+// these can include requesting a data refresh, or opening a specific entity record as well as other arbitrary event notifications
+export interface SkipHTMLReportCallbacks {
+    RefreshData: () => void;
+    OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
+    NotifyEvent: (eventName: string, eventData: any) => void;
+}
+
+// define the function signature for the initFunction which will take in a SkipData object and also an object that implements the SkipHTMLReportCallbacks interface
+export type SkipHTMLReportInitFunction = (data: SkipAPIAnalysisCompleteResponse, callbacks?: SkipHTMLReportCallbacks) => void;

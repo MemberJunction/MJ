@@ -10,56 +10,70 @@
             {{SkipData.userExplanation || 'No Explanation Provided'}}
         </div>
     </div>
-    <kendo-expansionpanel
-        *ngIf="IsChart"
+
+    <!-- Report Type is next -->
+    @if(IsChart) {
+      <kendo-expansionpanel
         [title]="'Chart'"
         [expanded]="ExpandAll"
         >
         <skip-dynamic-chart 
-            *ngIf="IsChart" 
             #theChart 
             [AutoResizeChart]="false"
             [SkipData]="SkipData" 
             style="display:block;">
         </skip-dynamic-chart>
-    </kendo-expansionpanel>                     
-    <kendo-expansionpanel
-        *ngIf="!IsChart"
-        [title]="'Table'"
-        [expanded]="ExpandAll"
-        mjSkipResize="true"
-    >
-        <skip-dynamic-grid *ngIf="!IsChart" 
-                        [GridHeight]="300"
-                        #theGrid [SkipData]="SkipData"
-                        ></skip-dynamic-grid>  
-    </kendo-expansionpanel>
-    <kendo-expansionpanel
-        *ngIf="SkipData?.analysis" 
-        [title]="'Analysis'"
-        [expanded]="ExpandAll"
-        >
-        <!-- <div class="analysis" *ngIf="SkipData.analysis">
-            {{SkipData.analysis}}
-        </div> -->
-        <markdown [data]="SkipData.analysis"></markdown>
-    </kendo-expansionpanel>                     
+      </kendo-expansionpanel>                     
+    }
+    @else if(IsTable) {
+      <kendo-expansionpanel
+          [title]="'Table'"
+          [expanded]="ExpandAll"
+          mjSkipResize="true"
+      >
+          <skip-dynamic-grid  
+                          [GridHeight]="300"
+                          #theGrid [SkipData]="SkipData"
+                          ></skip-dynamic-grid>  
+      </kendo-expansionpanel>
+    }
+    @else if (IsHTML) {
+      <kendo-expansionpanel
+          [title]="'Report'"
+          [expanded]="ExpandAll"
+          mjSkipResize="true"
+      >
+          <skip-dynamic-html-report
+                          #theHtmlReport [SkipData]="SkipData"
+                          ></skip-dynamic-html-report>  
+      </kendo-expansionpanel>
+    }
 
-  <kendo-dialog
-    title="Please confirm"
-    *ngIf="confirmCreateReportDialogOpen"
-    (close)="closeCreateReport('no')"
-    [minWidth]="250"
-    [width]="450"
-  >
-    <p style="margin: 30px; text-align: center;">
-      Would you like to create a new report from this conversation element? If you choose to continue you'll be notified when the report has been created.
-    </p>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="closeCreateReport('yes')" themeColor="primary">
-        Yes
-      </button>
-      <button kendoButton (click)="closeCreateReport('no')">No</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    @if (SkipData.analysis) {
+      <kendo-expansionpanel
+          [title]="'Analysis'"
+          [expanded]="ExpandAll"
+          >
+          <markdown [data]="SkipData.analysis"></markdown>
+      </kendo-expansionpanel>                     
+    }
+    
+  @if (confirmCreateReportDialogOpen) {
+    <kendo-dialog
+      title="Please confirm"
+      (close)="closeCreateReport('no')"
+      [minWidth]="250"
+      [width]="450"
+    >
+      <p style="margin: 30px; text-align: center;">
+        Would you like to create a new report from this conversation element? If you choose to continue you'll be notified when the report has been created.
+      </p>
+      <kendo-dialog-actions>
+        <button kendoButton (click)="closeCreateReport('yes')" themeColor="primary">
+          Yes
+        </button>
+        <button kendoButton (click)="closeCreateReport('no')">No</button>
+      </kendo-dialog-actions>
+    </kendo-dialog>
+  }
 } 
