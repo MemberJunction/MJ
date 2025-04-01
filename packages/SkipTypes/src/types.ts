@@ -62,7 +62,6 @@ export class MJAPISkipResult {
  */
 export class SkipSubProcessResponse {
     status: "success" | "error";
-    resultType: "data" | "plot" | "html" | null;
     /**
      * For result types of data, this is the data that was returned from the sub-process to show in the table
      */
@@ -655,6 +654,12 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * The data context that was passed in with the request, this is used to know the source data at the time the process was executed and for simple persistence.
      */
     dataContext: SimpleDataContext;
+    /**
+     * The type of report generated, data is a simple table, plot is a chart and html is a custom HTML report
+     * For data/plot types, the results will be server-generated and available in the executionResults property
+     * For html type, the executionResults will be null because the server generates an HTML report that is intended to run on the client.
+     */
+    resultType: "data" | "plot" | "html" | null;
     /**
      * The results of the execution of the sub-process to run the server-side script
      */
