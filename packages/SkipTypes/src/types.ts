@@ -900,6 +900,16 @@ export interface SkipHTMLReportCallbacks {
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
 
     /**
+     * This event should be raised by the HTML component whenever something changes within the component that should be tracked as a change in state
+     * that will persist. userState is any valid, simple JavaScript object, meaning it can have scalars, arrays, objects, etc, it must be an object that 
+     * can be serialized to JSON, but otherwise has no special requirements. The parent component will be responsible for tracking the user-specific states
+     * and passing them back to the HTML component each time it is loaded or if the user changes via the init function.
+     * @param userState 
+     * @returns 
+     */
+    UpdateUserState: (userState: any) => void;
+
+    /**
      * Used for any other type of event notification that an HTML Report might want to send to the parent component.
      * @param eventName 
      * @param eventData 
@@ -909,9 +919,12 @@ export interface SkipHTMLReportCallbacks {
 }
 
 /**
- * This is the function signature for the InitFunctionName that is passed into the HTML report. This function is called when the HTML report is loaded and is passed the data context and a set of callbacks that can be used to interact with the parent component.
+ * This is the function signature for the InitFunctionName that is passed into the HTML report. 
+ * This function is called when the HTML report is loaded and is passed the data context and a set of callbacks that can be used to interact with the parent component.
+ * userState is an optional parameter that can be used to pass in any state information that the parent component wants to provide to the HTML report that is specific
+ * to the CURRENT user. If the component modifies the userState, it should notify the parent component via the UserStateChanged event in the callbacks object so that the parent component can handle storage.
  */
-export type SkipHTMLReportInitFunction = (data: SimpleDataContext, callbacks?: SkipHTMLReportCallbacks) => void;
+export type SkipHTMLReportInitFunction = (data: SimpleDataContext, userState?: any, callbacks?: SkipHTMLReportCallbacks) => void;
 
 /**
  * This is a simple data context object that is passed into the SkipHTMLReportInitFunction, it contains a property for each of the data context items and typically are named

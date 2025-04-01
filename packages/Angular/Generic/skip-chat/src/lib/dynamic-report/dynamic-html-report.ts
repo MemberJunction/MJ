@@ -66,7 +66,8 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
             const initFunction = (window as any)[this.HTMLReportInitFunctionName];
             if (initFunction && this.SkipData?.dataContext) {
                 const castedFunction = initFunction as SkipHTMLReportInitFunction;
-                castedFunction(this.SkipData.dataContext, {
+                const userState = {};
+                castedFunction(this.SkipData.dataContext, userState, {
                     RefreshData: () => {
                         // this is a callback function that can be called from the HTML report to refresh data
                         console.log('HTML Report requested data refresh');
@@ -79,6 +80,11 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                             // bubble this up to our parent component as we don't directly open records in this component
                             this.DrillDownEvent.emit(new DrillDownInfo(entityId, key.ToURLSegment()));
                         }
+                    },
+                    UpdateUserState: (userState: any) => {
+                        // this is a callback function that can be called from the HTML report to update user state
+                        console.log('HTML Report updated user state:', userState);
+                        // need to implement this
                     },
                     NotifyEvent: (eventName: string, eventData: any) => {
                         // this is a callback function that can be called from the HTML report to notify an event
