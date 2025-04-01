@@ -1381,6 +1381,75 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetEntityRecordNames;
     }
 
+    /**
+     * Retrieves all of the data context data for the specified data context ID.
+     * @param dataContextID 
+     * @returns 
+     */
+    public async GetDataContextData(dataContextID: string) {
+        try {
+            const query = gql`query GetDataContextData ($DataContextID: String!) {
+                GetDataContextData(DataContextID: $DataContextID) {
+                    Success
+                    ErrorMessages
+                    Results
+                }
+            }`
+    
+            const data = await this.ExecuteGQL(query,  {DataContextID: dataContextID});
+            if (data && data.GetDataContextData) {
+                if (data.GetDataContextData.Success) {
+                    return data.GetDataContextData.Results.map((item: any) => {
+                        return JSON.parse(item);
+                    });
+                }
+                else {
+                    throw new Error(data.GetDataContextData.ErrorMessages.join(', '));
+                }
+            }
+            else {
+                throw new Error('GraphQL query failed');
+            }    
+        }
+        catch (e) {
+            LogError(e);
+            throw e;
+        }
+    }
+
+    /**
+     * Retrieves the data context item data for the specified data context item ID.
+     * @param dataContextItemID 
+     * @returns 
+     */
+    public async GetDataContextItemData(dataContextItemID: string) {
+        try {
+            const query = gql`query GetDataContextItemData ($DataContextItemID: String!) {
+                GetDataContextItemData(DataContextItemID: $DataContextItemID) {
+                    Success
+                    ErrorMessage
+                    Result
+                }
+            }`
+    
+            const data = await this.ExecuteGQL(query,  {DataContextItemID: dataContextItemID});
+            if (data && data.GetDataContextItemData) {
+                if (data.GetDataContextItemData.Success) {
+                    return JSON.parse(data.GetDataContextItemData.Result);
+                }
+                else {
+                    throw new Error(data.GetDataContextItemData.ErrorMessage);
+                }
+            }
+            else {
+                throw new Error('GraphQL query failed');
+            }    
+        }
+        catch (e) {
+            LogError(e);
+            throw e;
+        }
+    }
 
     /**
      * Static version of the ExecuteGQL method that will use the global instance of the GraphQLDataProvider and execute the specified query with the provided variables. 

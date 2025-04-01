@@ -1,5 +1,5 @@
 import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider, IRunViewProvider } from "@memberjunction/core";
-import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
+import { DataContextEntity, DataContextItemEntity, DataContextItemEntityType, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 /**
@@ -255,6 +255,51 @@ export class DataContextItem {
         }
     }
 
+    public async LoadMetadataFromEntityRecord(dataContextItem: DataContextItemEntity, provider: IMetadataProvider, contextUser: UserInfo) {
+        this.DataContextItemID = dataContextItem.ID;
+        this.Type = <"view" | "query" | "full_entity" | "sql" | "single_record">dataContextItem.Type;
+        switch (this.Type) {
+            case 'full_entity':
+                this.EntityID = dataContextItem.EntityID;  
+                break;
+            case 'single_record':
+                this.RecordID = dataContextItem.RecordID;  
+                this.EntityID = dataContextItem.EntityID;  
+                break;
+            case 'query':
+                this.QueryID = dataContextItem.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
+                const q = provider.Queries.find((q) => q.ID === this.QueryID);
+                this.RecordName = q?.Name;
+                this.SQL = q.SQL;
+                break;
+            case 'sql':
+                this.SQL = dataContextItem.SQL;  
+                break;
+            case 'view':
+                this.ViewID = dataContextItem.ViewID;
+                this.EntityID = dataContextItem.EntityID; // attempt to get this from the database, often will be null though
+                if (this.ViewID) {
+                    const v = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+                    await v.Load(this.ViewID);
+                    this.RecordName = v.Name;
+                    this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
+                    this.ViewEntity = v;
+                    this.SQL =  `SELECT * FROM [${v.ViewEntityInfo.SchemaName}].[${v.ViewEntityInfo.BaseView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
+                }
+                break;
+        }
+        if (this.EntityID) {
+            this.Entity = provider.Entities.find((e) => e.ID === this.EntityID);
+            this.EntityName = this.Entity.Name;
+            this.Fields = DataContext.MapEntityFieldsToDataContextFields(this.Entity);
+            if (this.Type === 'full_entity')
+                this.RecordName = this.EntityName;
+        }
+        if (dataContextItem.DataJSON && dataContextItem.DataJSON.length > 0) {
+            this.Data = JSON.parse(dataContextItem.DataJSON);
+        }
+    }
+
     /**
      * Loads the data context item data from a view. This method is called by the LoadData method if the type of the data context item is 'view'
      * @param contextUser 
@@ -391,6 +436,31 @@ export class DataContextItem {
         }
         catch (e) {
             this.DataLoadingError = `Error in DataContextItem.LoadFromQuery: ${e && e.message ? e.message : ''}`;
+            LogError(this.DataLoadingError);
+            return false;
+        }
+    }
+
+    /**
+     * If you already have the data loaded for an individual Data Context Item, you can load it into the object using this method. It is your responsibility to ensure
+     * that the data object is in the correct format for the DataContextItem object. This method will not validate the data object, it will just load it into the Data property of the object.
+     * @param dataObject 
+     * @returns 
+     */
+    public LoadDataFromObject(data: any[]): boolean {
+        try {
+            if (data) {
+                this.Data = data;
+                return true;
+            }
+            else {
+                this.DataLoadingError = `Error loading - data is null or undefined`;
+                LogError(this.DataLoadingError);
+                return false;
+            }
+        }
+        catch (e) {
+            this.DataLoadingError = `Error in DataContextItem.LoadFromDataObject: ${e && e.message ? e.message : ''}`;
             LogError(this.DataLoadingError);
             return false;
         }
@@ -537,56 +607,15 @@ export class DataContext {
             if (!this.ID)
                 throw new Error(`Data Context ID: ${DataContextID} not found`);
 
-            const result = await rv.RunView({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = '${DataContextID}'`}, contextUser);
+            const result = await rv.RunView<DataContextItemEntity>({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = '${DataContextID}'`}, contextUser);
             if (!result || !result.Success) 
               throw new Error(`Error running view to retrieve data context items for data context ID: ${DataContextID}`);
             else { 
                 const items = result.Results;
                 for (let i = 0; i < items.length; i++) {
-                    const r = <DataContextItemEntity>items[i];
+                    const r = items[i];
                     const item = this.AddDataContextItem();
-                    item.DataContextItemID = r.ID;
-                    item.Type = <"view" | "query" | "full_entity" | "sql" | "single_record">r.Type;
-                    switch (item.Type) {
-                        case 'full_entity':
-                            item.EntityID = r.EntityID;  
-                            break;
-                        case 'single_record':
-                            item.RecordID = r.RecordID;  
-                            item.EntityID = r.EntityID;  
-                            break;
-                        case 'query':
-                            item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
-                            const q = p.Queries.find((q) => q.ID === item.QueryID);
-                            item.RecordName = q?.Name;
-                            item.SQL = q.SQL;
-                            break;
-                        case 'sql':
-                            item.SQL = r.SQL;  
-                            break;
-                        case 'view':
-                            item.ViewID = r.ViewID;
-                            item.EntityID = r.EntityID; // attempt to get this from the database, often will be null though
-                            if (item.ViewID) {
-                                const v = await p.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
-                                await v.Load(item.ViewID);
-                                item.RecordName = v.Name;
-                                item.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
-                                item.ViewEntity = v;
-                                item.SQL =  `SELECT * FROM [${v.ViewEntityInfo.SchemaName}].[${v.ViewEntityInfo.BaseView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
-                            }
-                            break;
-                    }
-                    if (item.EntityID) {
-                        item.Entity = p.Entities.find((e) => e.ID === item.EntityID);
-                        item.EntityName = item.Entity.Name;
-                        item.Fields = this.MapEntityFieldsToDataContextFields(item.Entity);
-                        if (item.Type === 'full_entity')
-                            item.RecordName = item.EntityName;
-                    }
-                    if (r.DataJSON && r.DataJSON.length > 0) {
-                        item.Data = JSON.parse(r.DataJSON);
-                    }
+                    await item.LoadMetadataFromEntityRecord(r, p, contextUser);
                 }
             }
             return true;
@@ -597,7 +626,12 @@ export class DataContext {
         }
     }
 
-    protected MapEntityFieldsToDataContextFields(entity: EntityInfo): DataContextFieldInfo[] {
+    /**
+     * Utilty method to map an EntityInfo object's fields to the simpler DataContextFieldInfo object. This is used to simplify the data context item fields.
+     * @param entity 
+     * @returns 
+     */
+    public static MapEntityFieldsToDataContextFields(entity: EntityInfo): DataContextFieldInfo[] {
         return entity.Fields.map(f => {
             return {
                 Name: f.Name,
@@ -725,6 +759,36 @@ export class DataContext {
         }
         catch (e) {
             LogError(`Error in DataContext.LoadData: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * If you already have the data loaded for an entire Data Context you can pass it in as a two dimensional array.
+     * The first dimension is the Dataset Item and the second dimension is the array of rows for that given Dataset Item.
+     * YOU are responsible for ensuring the ORDER of the first dimension, for the sequence of the Dataset Items, matches the items in the metadata, 
+     * this method doesn't attempt to do any validation.
+     * @param data 
+     * @returns 
+     */
+    public LoadDataFromObject(data: any[][]): boolean {
+        try {
+            if (data && data.length > 0 && data.length === this.Items.length) {
+                let success = true;
+                for (let i = 0; i < this.Items.length; ++i) {
+                    const item = this.Items[i];
+                    const dataItem = data[i];
+                    success = success && item.LoadDataFromObject(dataItem);
+                }
+                return success;
+            }
+            else {
+                // invalid state either data is not provided, has no length or the length isn't a match for the # of items in the data context
+                throw new Error(`Error loading data from object - data is not valid. Data: ${JSON.stringify(data ? data : {})}`);
+            }
+        }
+        catch (e) {
+            LogError(e);
             return false;
         }
     }

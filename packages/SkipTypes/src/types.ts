@@ -1,3 +1,4 @@
+import { CompositeKey } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
 
 /**
@@ -61,10 +62,17 @@ export class MJAPISkipResult {
  */
 export class SkipSubProcessResponse {
     status: "success" | "error";
-    resultType: "data" | "plot" | "html" | null;
+    /**
+     * For result types of data, this is the data that was returned from the sub-process to show in the table
+     */
     tableData: any[] | null; // any array of objects
+    /**
+     * For result type of plot, this is the data that was returned from the sub-process to show in the plot
+     */
     plotData: { data: any[]; layout: any } | null; // Compatible with Plotly
-    htmlReport: string | null;
+    /**
+     * If the request failed, this is the error message that was returned from the sub-process.
+     */
     errorMessage: string | null;
 }
 
@@ -442,6 +450,9 @@ export class SkipAPIAgentNoteType {
 }
 
 
+/**
+ * Whenever an agent is interested in getting human-in-the-loop style feedback/approval, this type is used
+ */
 export class SkipAPIAgentRequest {
     /**
      * The unique identifier for the request
@@ -639,6 +650,19 @@ export class SkipAPIChatWithRecordResponse extends SkipAPIResponse {
  * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'analysis_complete'
  */
 export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
+    /**
+     * The data context that was passed in with the request, this is used to know the source data at the time the process was executed and for simple persistence.
+     */
+    dataContext: SimpleDataContext;
+    /**
+     * The type of report generated, data is a simple table, plot is a chart and html is a custom HTML report
+     * For data/plot types, the results will be server-generated and available in the executionResults property
+     * For html type, the executionResults will be null because the server generates an HTML report that is intended to run on the client.
+     */
+    resultType: "data" | "plot" | "html" | null;
+    /**
+     * The results of the execution of the sub-process to run the server-side script
+     */
     executionResults?: SkipSubProcessResponse | null;
     /**
      * A user-friendly explanation of what the report does
@@ -678,6 +702,24 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * to include these new data items so that they will be run and provided to Skip for future iterations/requests and for re-running reports as well.
      */
     newDataItems?: SkipDataRequest[];
+
+    /**
+     * For result type of html, this is the HTML that was returned from the sub-process to show in the HTML report
+     * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
+     * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
+     * as chosen by the container application.
+     */
+    htmlReport: string | null;
+    /**
+     * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
+     * function name that is used to initialize the HTML report. This function is called by the container application to initialize the 
+     * component and refresh its data as required.
+     * 
+     * Generally speaking, this function name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
+     * modified to be a valid JavaScript function name. The AI generates the function within its HTML with this name. 
+     * The function name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
+     */
+    htmlReportInitFunctionName: string | null;
 }
 
 /**
@@ -833,4 +875,48 @@ export class SkipAPILearningCycleResponse {
      * This array should be populated by the agent with any changes to requests - deleting existing requests that have not been responded to yet and for whatever reason are not relevant anymore, updating existing requests that haven't yet been responded to, and adding new requests to help the agent learn.
      */
     requestChanges: SkipLearningCycleRequestChange[];
+}
+
+
+
+/**
+ * This interface defines the available callback functions that a Skip HTML report might call in the parent.
+ */
+export interface SkipHTMLReportCallbacks {
+    /**
+     * The HTML Report can invoke this method in the callbacks object, when provided, to refresh the data context 
+     * and that will in turn result in the HTML Report's init function being called again with the new data context.
+     * @returns 
+     */
+    RefreshData: () => void;
+
+    /**
+     * If an action occurs inside an HTML Report where it would be desirable for the containing UI to open a specific 
+     * record, if supported, this event can be listened to and the container UI can then open the record.
+     * @param entityName 
+     * @param key 
+     * @returns 
+     */
+    OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
+
+    /**
+     * Used for any other type of event notification that an HTML Report might want to send to the parent component.
+     * @param eventName 
+     * @param eventData 
+     * @returns 
+     */
+    NotifyEvent: (eventName: string, eventData: any) => void;
+}
+
+/**
+ * This is the function signature for the InitFunctionName that is passed into the HTML report. This function is called when the HTML report is loaded and is passed the data context and a set of callbacks that can be used to interact with the parent component.
+ */
+export type SkipHTMLReportInitFunction = (data: SimpleDataContext, callbacks?: SkipHTMLReportCallbacks) => void;
+
+/**
+ * This is a simple data context object that is passed into the SkipHTMLReportInitFunction, it contains a property for each of the data context items and typically are named
+ * data_item_1, data_item_2, etc. The data context is a simple JavaScript object that contains properties that are in turn data objects which are typically arrays of things, but can be anything.
+ */
+export type SimpleDataContext = {
+    [key: string]: any;
 }
