@@ -3,7 +3,6 @@ import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import 'isomorphic-fetch';
 import { 
   CreatePreAuthUploadUrlPayload, 
   FileStorageBase, 

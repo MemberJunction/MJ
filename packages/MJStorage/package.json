@@ -37,7 +37,6 @@
     "@memberjunction/core-entities": "2.30.0",
     "@memberjunction/global": "2.30.0",
     "env-var": "^7.4.1",
-    "isomorphic-fetch": "^3.0.0",
     "mime-types": "^2.1.35"
   }
 }
