@@ -819,12 +819,12 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 
     async generateBaseView(ds: DataSource, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
-        const baseTableFirstChar: string = entity.BaseTable.charAt(0).toLowerCase();
+        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
         const relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(ds, entity.Fields);
-        const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity.Fields);
+        const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
         const permissions: string = this.generateViewPermissions(entity);
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
-    ${baseTableFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
+    ${classNameFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
         return `
 ------------------------------------------------------------
@@ -839,9 +839,9 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${baseTableFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
+    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${baseTableFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
 ${whereClause}GO${permissions}
     `
     }
@@ -857,13 +857,14 @@ ${whereClause}GO${permissions}
         return (sOutput == '' ? '' : '\n') + sOutput;
     }
 
-    protected generateBaseViewJoins(entityFields: EntityFieldInfo[]): string {
+    protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
+        const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
         for (let i: number = 0; i < entityFields.length; i++) {
             const ef: EntityFieldInfo = entityFields[i];
             if (ef.RelatedEntityID && ef.IncludeRelatedEntityNameFieldInBaseView && ef._RelatedEntityTableAlias) {
                 sOutput += sOutput == '' ? '' : '\n';
-                sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${ef.Entity.charAt(0).toLowerCase()}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
+                sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${'[' + ef.RelatedEntitySchemaName + '].'}[${ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable}] AS ${ef._RelatedEntityTableAlias}\n  ON\n    [${classNameFirstChar}].[${ef.Name}] = ${ef._RelatedEntityTableAlias}.[${ef.RelatedEntityFieldName}]`;
             }
         }
         return sOutput;

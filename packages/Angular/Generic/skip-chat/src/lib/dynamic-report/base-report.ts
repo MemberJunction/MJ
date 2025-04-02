@@ -87,17 +87,17 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
   public get IsChart(): boolean {
       if (!this.SkipData) 
           return false;
-      return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'plot';
+      return this.SkipData.resultType?.trim().toLowerCase() === 'plot';
   }
   public get IsTable(): boolean {
       if (!this.SkipData) 
           return false;
-      return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'table';
+      return this.SkipData.resultType?.trim().toLowerCase() === 'table';
   }
   public get IsHTML(): boolean {
       if (!this.SkipData) 
           return false;
-      return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'html';
+      return this.SkipData.resultType?.trim().toLowerCase() === 'html';
   }
 
   /**
@@ -162,10 +162,10 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       // do this via a single gql call to make it faster than doing operation via standard objects since it is a multi-step operation
       const mutation = `mutation CreateReportFromConversationDetailIDMutation ($ConversationDetailID: String!) {
           CreateReportFromConversationDetailID(ConversationDetailID: $ConversationDetailID) {
-          ReportID
-          ReportName
-          Success
-          ErrorMessage
+            ReportID
+            ReportName
+            Success
+            ErrorMessage
           }
       }`;
       const p = <GraphQLDataProvider>this.ProviderToUse;
@@ -230,6 +230,17 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       const newSkipData: SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
       this.SkipData.analysis = newSkipData.analysis; // update the analysis
       this.SkipData.executionResults = newSkipData.executionResults; // drives the chart/table bindings
+      this.SkipData.dataContext = newSkipData.dataContext; // drives the HTML report bindings
+
+      // make sure to push the techExplanation and userExplanation to the newSkipData object as that WILL NOT come back with that info from the original report
+      newSkipData.userExplanation = this.SkipData.userExplanation;
+      newSkipData.techExplanation = this.SkipData.techExplanation;
+      newSkipData.resultType = this.SkipData.resultType;  
+      newSkipData.responsePhase = this.SkipData.responsePhase; 
+      newSkipData.messages = this.SkipData.messages; // this is the array of messages that are used to create the report from the original message, we don't want message from the refresh, it is simple message
+      newSkipData.reportTitle = this.SkipData.reportTitle; // this is the title of the report, we don't want to change it
+      newSkipData.drillDown = this.SkipData.drillDown; // this is the drill down data, we don't want to change it
+      
       this.ReportEntity.Configuration = JSON.stringify(newSkipData);
 
       const saveResult: boolean = await this.ReportEntity.Save();

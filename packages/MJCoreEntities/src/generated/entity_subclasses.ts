@@ -27,7 +27,7 @@ export const ActionAuthorizationSchema = z.object({
         * * Display Name: Authorization ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -67,12 +67,12 @@ export const ActionCategorySchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the action category.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the action category.`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -98,7 +98,7 @@ export const ActionCategorySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -120,7 +120,7 @@ export const ActionContextTypeSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the context type.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -153,7 +153,7 @@ export const ActionContextSchema = z.object({
         * * Display Name: Action ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Actions (vwActions.ID)`),
-    ContextTypeID: z.string().nullish().describe(`
+    ContextTypeID: z.string().nullable().describe(`
         * * Field Name: ContextTypeID
         * * Display Name: Context Type ID
         * * SQL Data Type: uniqueidentifier
@@ -183,7 +183,7 @@ export const ActionContextSchema = z.object({
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
-    ContextType: z.string().nullish().describe(`
+    ContextType: z.string().nullable().describe(`
         * * Field Name: ContextType
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)`),
@@ -211,16 +211,16 @@ export const ActionExecutionLogSchema = z.object({
         * * SQL Data Type: datetime
         * * Default Value: getdate()
     * * Description: Timestamp of when the action started execution.`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime
     * * Description: Timestamp of when the action ended execution.`),
-    Params: z.string().nullish().describe(`
+    Params: z.string().nullable().describe(`
         * * Field Name: Params
         * * Display Name: Params
         * * SQL Data Type: nvarchar(MAX)`),
-    ResultCode: z.string().nullish().describe(`
+    ResultCode: z.string().nullable().describe(`
         * * Field Name: ResultCode
         * * Display Name: Result Code
         * * SQL Data Type: nvarchar(255)`),
@@ -229,7 +229,7 @@ export const ActionExecutionLogSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    RetentionPeriod: z.number().nullish().describe(`
+    RetentionPeriod: z.number().nullable().describe(`
         * * Field Name: RetentionPeriod
         * * Display Name: Retention Period
         * * SQL Data Type: int
@@ -269,7 +269,7 @@ export const ActionFilterSchema = z.object({
         * * Field Name: UserDescription
         * * Display Name: User Description
         * * SQL Data Type: nvarchar(MAX)`),
-    UserComments: z.string().nullish().describe(`
+    UserComments: z.string().nullable().describe(`
         * * Field Name: UserComments
         * * Display Name: User Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -277,7 +277,7 @@ export const ActionFilterSchema = z.object({
         * * Field Name: Code
         * * Display Name: Code
         * * SQL Data Type: nvarchar(MAX)`),
-    CodeExplanation: z.string().nullish().describe(`
+    CodeExplanation: z.string().nullable().describe(`
         * * Field Name: CodeExplanation
         * * Display Name: Code Explanation
         * * SQL Data Type: nvarchar(MAX)`),
@@ -314,7 +314,7 @@ export const ActionLibrarySchema = z.object({
         * * Display Name: Library ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)`),
-    ItemsUsed: z.string().nullish().describe(`
+    ItemsUsed: z.string().nullable().describe(`
         * * Field Name: ItemsUsed
         * * Display Name: Items Used
         * * SQL Data Type: nvarchar(MAX)
@@ -359,7 +359,7 @@ export const ActionParamSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    DefaultValue: z.string().nullish().describe(`
+    DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(MAX)`),
@@ -388,7 +388,7 @@ export const ActionParamSchema = z.object({
         * * Display Name: Is Array
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -439,7 +439,7 @@ export const ActionResultCodeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Indicates if the result code is a success or not. It is possible an action might have more than one failure condition/result code and same for success conditions.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -471,7 +471,7 @@ export const ActionSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -480,7 +480,7 @@ export const ActionSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(425)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -494,20 +494,20 @@ export const ActionSchema = z.object({
     *   * Generated
     *   * Custom
     * * Description: Generated or Custom. Generated means the UserPrompt is used to prompt an AI model to automatically create the code for the Action. Custom means that a custom class has been implemented that subclasses the BaseAction class. The custom class needs to use the @RegisterClass decorator and be included in the MJAPI (or other runtime environment) to be available for execution.`),
-    UserPrompt: z.string().nullish().describe(`
+    UserPrompt: z.string().nullable().describe(`
         * * Field Name: UserPrompt
         * * Display Name: User Prompt
         * * SQL Data Type: nvarchar(MAX)`),
-    UserComments: z.string().nullish().describe(`
+    UserComments: z.string().nullable().describe(`
         * * Field Name: UserComments
         * * Display Name: User Comments
         * * SQL Data Type: nvarchar(MAX)
     * * Description: User's comments not shared with the LLM.`),
-    Code: z.string().nullish().describe(`
+    Code: z.string().nullable().describe(`
         * * Field Name: Code
         * * Display Name: Code
         * * SQL Data Type: nvarchar(MAX)`),
-    CodeComments: z.string().nullish().describe(`
+    CodeComments: z.string().nullable().describe(`
         * * Field Name: CodeComments
         * * Display Name: Code Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -523,17 +523,17 @@ export const ActionSchema = z.object({
     *   * Approved
     *   * Pending
     * * Description: An action won't be usable until the code is approved.`),
-    CodeApprovalComments: z.string().nullish().describe(`
+    CodeApprovalComments: z.string().nullable().describe(`
         * * Field Name: CodeApprovalComments
         * * Display Name: Code Approval Comments
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional comments when an individual (or an AI) reviews and approves the code.`),
-    CodeApprovedByUserID: z.string().nullish().describe(`
+    CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
         * * Display Name: Code Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    CodeApprovedAt: z.date().nullish().describe(`
+    CodeApprovedAt: z.date().nullable().describe(`
         * * Field Name: CodeApprovedAt
         * * Display Name: Code Approved At
         * * SQL Data Type: datetime
@@ -550,7 +550,7 @@ export const ActionSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.`),
-    RetentionPeriod: z.number().nullish().describe(`
+    RetentionPeriod: z.number().nullable().describe(`
         * * Field Name: RetentionPeriod
         * * Display Name: Retention Period
         * * SQL Data Type: int
@@ -576,11 +576,11 @@ export const ActionSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
-    CodeApprovedByUser: z.string().nullish().describe(`
+    CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
         * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)`),
@@ -601,15 +601,15 @@ export const AIActionSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    DefaultPrompt: z.string().nullish().describe(`
+    DefaultPrompt: z.string().nullable().describe(`
         * * Field Name: DefaultPrompt
         * * Display Name: Default Prompt
         * * SQL Data Type: nvarchar(MAX)`),
-    DefaultModelID: z.string().nullish().describe(`
+    DefaultModelID: z.string().nullable().describe(`
         * * Field Name: DefaultModelID
         * * Display Name: Default Model ID
         * * SQL Data Type: uniqueidentifier
@@ -629,7 +629,7 @@ export const AIActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DefaultModel: z.string().nullish().describe(`
+    DefaultModel: z.string().nullable().describe(`
         * * Field Name: DefaultModel
         * * Display Name: Default Model
         * * SQL Data Type: nvarchar(50)`),
@@ -647,13 +647,13 @@ export const AIAgentActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
     * * Description: The unique identifier for each AI agent-action mapping. Serves as the primary key.`),
-    AgentID: z.string().nullish().describe(`
+    AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the unique identifier of the associated AI agent from the AIAgent table.`),
-    ActionID: z.string().nullish().describe(`
+    ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
         * * Display Name: Action ID
         * * SQL Data Type: uniqueidentifier
@@ -679,11 +679,11 @@ export const AIAgentActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Agent: z.string().nullish().describe(`
+    Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    Action: z.string().nullish().describe(`
+    Action: z.string().nullable().describe(`
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
@@ -713,7 +713,7 @@ export const AIAgentLearningCycleSchema = z.object({
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()
     * * Description: Timestamp indicating when the learning cycle started.`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetimeoffset
@@ -728,7 +728,7 @@ export const AIAgentLearningCycleSchema = z.object({
     *   * Complete
     *   * Failed
     * * Description: Status of the learning cycle (In-Progress, Complete, or Failed).`),
-    AgentSummary: z.string().nullish().describe(`
+    AgentSummary: z.string().nullable().describe(`
         * * Field Name: AgentSummary
         * * Display Name: Agent Summary
         * * SQL Data Type: nvarchar(MAX)
@@ -743,7 +743,7 @@ export const AIAgentLearningCycleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Agent: z.string().nullish().describe(`
+    Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
@@ -761,23 +761,23 @@ export const AIAgentModelSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
     * * Description: The unique identifier for each AI agent-model mapping. Serves as the primary key.`),
-    AgentID: z.string().nullish().describe(`
+    AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     * * Description: References the unique identifier of the associated AI agent from AIAgent table.`),
-    ModelID: z.string().nullish().describe(`
+    ModelID: z.string().nullable().describe(`
         * * Field Name: ModelID
         * * Display Name: Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
     * * Description: The unique identifier of the associated AI model.`),
-    Active: z.boolean().nullish().describe(`
+    Active: z.boolean().nullable().describe(`
         * * Field Name: Active
         * * Display Name: Active
         * * SQL Data Type: bit`),
-    Priority: z.number().nullish().describe(`
+    Priority: z.number().nullable().describe(`
         * * Field Name: Priority
         * * Display Name: Priority
         * * SQL Data Type: int
@@ -792,11 +792,11 @@ export const AIAgentModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Agent: z.string().nullish().describe(`
+    Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    Model: z.string().nullish().describe(`
+    Model: z.string().nullable().describe(`
         * * Field Name: Model
         * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
@@ -813,11 +813,11 @@ export const AIAgentNoteTypeSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    Name: z.string().nullish().describe(`
+    Name: z.string().nullable().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -844,17 +844,17 @@ export const AIAgentNoteSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    AgentID: z.string().nullish().describe(`
+    AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
-    AgentNoteTypeID: z.string().nullish().describe(`
+    AgentNoteTypeID: z.string().nullable().describe(`
         * * Field Name: AgentNoteTypeID
         * * Display Name: Agent Note Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)`),
-    Note: z.string().nullish().describe(`
+    Note: z.string().nullable().describe(`
         * * Field Name: Note
         * * Display Name: Note
         * * SQL Data Type: nvarchar(MAX)`),
@@ -877,21 +877,21 @@ export const AIAgentNoteSchema = z.object({
     *   * User
     *   * Global
     * * Description: Indicates the type of note, either User-specific or Global.`),
-    UserID: z.string().nullish().describe(`
+    UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User`),
-    Agent: z.string().nullish().describe(`
+    Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    AgentNoteType: z.string().nullish().describe(`
+    AgentNoteType: z.string().nullable().describe(`
         * * Field Name: AgentNoteType
         * * Display Name: Agent Note Type
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().nullish().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -920,7 +920,7 @@ export const AIAgentRequestSchema = z.object({
         * * Display Name: Requested At
         * * SQL Data Type: datetime
     * * Description: Timestamp when the request was made by the agent.`),
-    RequestForUserID: z.string().nullish().describe(`
+    RequestForUserID: z.string().nullable().describe(`
         * * Field Name: RequestForUserID
         * * Display Name: Request For User ID
         * * SQL Data Type: uniqueidentifier
@@ -942,23 +942,23 @@ export const AIAgentRequestSchema = z.object({
         * * Display Name: Request
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.`),
-    Response: z.string().nullish().describe(`
+    Response: z.string().nullable().describe(`
         * * Field Name: Response
         * * Display Name: Response
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Response provided by the human to the agent request.`),
-    ResponseByUserID: z.string().nullish().describe(`
+    ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
         * * Display Name: Response By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.`),
-    RespondedAt: z.date().nullish().describe(`
+    RespondedAt: z.date().nullable().describe(`
         * * Field Name: RespondedAt
         * * Display Name: Responded At
         * * SQL Data Type: datetime
     * * Description: Timestamp when the response was provided by the human.`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -973,15 +973,15 @@ export const AIAgentRequestSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Agent: z.string().nullish().describe(`
+    Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
-    RequestForUser: z.string().nullish().describe(`
+    RequestForUser: z.string().nullable().describe(`
         * * Field Name: RequestForUser
         * * Display Name: Request For User
         * * SQL Data Type: nvarchar(100)`),
-    ResponseByUser: z.string().nullish().describe(`
+    ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
         * * Display Name: Response By User
         * * SQL Data Type: nvarchar(100)`),
@@ -999,17 +999,17 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
     * * Description: The unique identifier for each AI agent. Serves as the primary key.`),
-    Name: z.string().nullish().describe(`
+    Name: z.string().nullable().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: The name of the AI agent.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: A detailed description of the AI agent.`),
-    LogoURL: z.string().nullish().describe(`
+    LogoURL: z.string().nullable().describe(`
         * * Field Name: LogoURL
         * * Display Name: Logo URL
         * * SQL Data Type: nvarchar(255)`),
@@ -1086,7 +1086,7 @@ export const AIModelTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1117,11 +1117,11 @@ export const AIModelSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Vendor: z.string().nullish().describe(`
+    Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
@@ -1130,7 +1130,7 @@ export const AIModelSchema = z.object({
         * * Display Name: AI Model Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)`),
-    PowerRank: z.number().nullish().describe(`
+    PowerRank: z.number().nullable().describe(`
         * * Field Name: PowerRank
         * * Display Name: Power Rank
         * * SQL Data Type: int
@@ -1141,15 +1141,15 @@ export const AIModelSchema = z.object({
         * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    DriverClass: z.string().nullish().describe(`
+    DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(100)`),
-    DriverImportPath: z.string().nullish().describe(`
+    DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
         * * SQL Data Type: nvarchar(255)`),
-    APIName: z.string().nullish().describe(`
+    APIName: z.string().nullable().describe(`
         * * Field Name: APIName
         * * Display Name: APIName
         * * SQL Data Type: nvarchar(100)
@@ -1164,24 +1164,24 @@ export const AIModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    SpeedRank: z.number().nullish().describe(`
+    SpeedRank: z.number().nullable().describe(`
         * * Field Name: SpeedRank
         * * Display Name: Speed Rank
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Optional column that ranks the speed of the AI model. Default is 0 and should be non-negative.`),
-    CostRank: z.number().nullish().describe(`
+    CostRank: z.number().nullable().describe(`
         * * Field Name: CostRank
         * * Display Name: Cost Rank
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Optional column that ranks the cost of the AI model. Default is 0 and should be non-negative.`),
-    ModelSelectionInsights: z.string().nullish().describe(`
+    ModelSelectionInsights: z.string().nullable().describe(`
         * * Field Name: ModelSelectionInsights
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
-    InputTokenLimit: z.number().nullish().describe(`
+    InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
         * * Display Name: Input Token Limit
         * * SQL Data Type: int
@@ -1213,13 +1213,13 @@ export const AIPromptCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Prompt Categories (vwAIPromptCategories.ID)
     * * Description: Parent category ID for hierarchical organization.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1233,7 +1233,7 @@ export const AIPromptCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -1254,7 +1254,7 @@ export const AIPromptTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1285,7 +1285,7 @@ export const AIPromptSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1295,7 +1295,7 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Templates (vwTemplates.ID)
     * * Description: Reference to the template used for the prompt.`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -1351,7 +1351,7 @@ export const AIPromptSchema = z.object({
     *   * JSON
     *   * ModelSpecific
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
-    ModelSpecificResponseFormat: z.string().nullish().describe(`
+    ModelSpecificResponseFormat: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseFormat
         * * Display Name: Model Specific Response Format
         * * SQL Data Type: nvarchar(MAX)
@@ -1360,7 +1360,7 @@ export const AIPromptSchema = z.object({
         * * Field Name: Template
         * * Display Name: Template
         * * SQL Data Type: nvarchar(255)`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
@@ -1403,7 +1403,7 @@ export const AIResultCacheSchema = z.object({
         * * Display Name: Prompt Text
         * * SQL Data Type: nvarchar(MAX)
     * * Description: The prompt text used to generate this result.`),
-    ResultText: z.string().nullish().describe(`
+    ResultText: z.string().nullable().describe(`
         * * Field Name: ResultText
         * * Display Name: Result Text
         * * SQL Data Type: nvarchar(MAX)
@@ -1417,7 +1417,7 @@ export const AIResultCacheSchema = z.object({
     *   * Active
     *   * Expired
     * * Description: The status of this result, indicating whether it is currently active or expired.`),
-    ExpiredOn: z.date().nullish().describe(`
+    ExpiredOn: z.date().nullable().describe(`
         * * Field Name: ExpiredOn
         * * Display Name: Expired On
         * * SQL Data Type: datetimeoffset
@@ -1491,15 +1491,15 @@ export const ApplicationEntitySchema = z.object({
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
         * * SQL Data Type: nvarchar(255)`),
-    EntityCodeName: z.string().nullish().describe(`
+    EntityCodeName: z.string().nullable().describe(`
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    EntityClassName: z.string().nullish().describe(`
+    EntityClassName: z.string().nullable().describe(`
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
         * * SQL Data Type: nvarchar(MAX)`),
-    EntityBaseTableCodeName: z.string().nullish().describe(`
+    EntityBaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1529,7 +1529,7 @@ export const ApplicationSettingSchema = z.object({
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1562,10 +1562,10 @@ export const ApplicationSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Icon: z.string().nullish().describe(`
+    Icon: z.string().nullable().describe(`
         * * Field Name: Icon
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(500)
@@ -1603,16 +1603,16 @@ export const AuditLogTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)`),
-    AuthorizationID: z.string().nullish().describe(`
+    AuthorizationID: z.string().nullable().describe(`
         * * Field Name: AuthorizationID
         * * Display Name: Authorization ID
         * * SQL Data Type: uniqueidentifier
@@ -1627,11 +1627,11 @@ export const AuditLogTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
-    Authorization: z.string().nullish().describe(`
+    Authorization: z.string().nullable().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)`),
@@ -1658,7 +1658,7 @@ export const AuditLogSchema = z.object({
         * * Display Name: Audit Log Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)`),
-    AuthorizationID: z.string().nullish().describe(`
+    AuthorizationID: z.string().nullable().describe(`
         * * Field Name: AuthorizationID
         * * Display Name: Authorization ID
         * * SQL Data Type: uniqueidentifier
@@ -1672,20 +1672,20 @@ export const AuditLogSchema = z.object({
     * * Possible Values 
     *   * Success
     *   * Failed`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Details: z.string().nullish().describe(`
+    Details: z.string().nullable().describe(`
         * * Field Name: Details
         * * Display Name: Details
         * * SQL Data Type: nvarchar(MAX)`),
-    EntityID: z.string().nullish().describe(`
+    EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    RecordID: z.string().nullish().describe(`
+    RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
         * * Display Name: Record
         * * SQL Data Type: nvarchar(450)`),
@@ -1707,11 +1707,11 @@ export const AuditLogSchema = z.object({
         * * Field Name: AuditLogType
         * * Display Name: Audit Log Type
         * * SQL Data Type: nvarchar(50)`),
-    Authorization: z.string().nullish().describe(`
+    Authorization: z.string().nullable().describe(`
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().nullish().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -1778,7 +1778,7 @@ export const AuthorizationSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -1798,7 +1798,7 @@ export const AuthorizationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
     * * Description: When set to 1, Audit Log records are created whenever this authorization is invoked for a user`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -1812,7 +1812,7 @@ export const AuthorizationSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
@@ -1851,7 +1851,7 @@ export const CommunicationBaseMessageTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Indicates if HTML content is supported.`),
-    MaxBytes: z.number().nullish().describe(`
+    MaxBytes: z.number().nullable().describe(`
         * * Field Name: MaxBytes
         * * Display Name: Max Bytes
         * * SQL Data Type: int
@@ -1889,7 +1889,7 @@ export const CommunicationLogSchema = z.object({
         * * Display Name: Communication Provider Message Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Communication Provider Message Types (vwCommunicationProviderMessageTypes.ID)`),
-    CommunicationRunID: z.string().nullish().describe(`
+    CommunicationRunID: z.string().nullable().describe(`
         * * Field Name: CommunicationRunID
         * * Display Name: Communication Run ID
         * * SQL Data Type: uniqueidentifier
@@ -1920,12 +1920,12 @@ export const CommunicationLogSchema = z.object({
     *   * Complete
     *   * Failed
     * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).`),
-    MessageContent: z.string().nullish().describe(`
+    MessageContent: z.string().nullable().describe(`
         * * Field Name: MessageContent
         * * Display Name: Message Content
         * * SQL Data Type: nvarchar(MAX)
     * * Description: The content of the logged message.`),
-    ErrorMessage: z.string().nullish().describe(`
+    ErrorMessage: z.string().nullable().describe(`
         * * Field Name: ErrorMessage
         * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
@@ -1985,7 +1985,7 @@ export const CommunicationProviderMessageTypeSchema = z.object({
     *   * Disabled
     *   * Active
     * * Description: The status of the provider message type (Disabled or Active).`),
-    AdditionalAttributes: z.string().nullish().describe(`
+    AdditionalAttributes: z.string().nullable().describe(`
         * * Field Name: AdditionalAttributes
         * * Display Name: Additional Attributes
         * * SQL Data Type: nvarchar(MAX)
@@ -2025,7 +2025,7 @@ export const CommunicationProviderSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -2117,19 +2117,19 @@ export const CommunicationRunSchema = z.object({
     *   * Complete
     *   * Failed
     * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).`),
-    StartedAt: z.date().nullish().describe(`
+    StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
-    ErrorMessage: z.string().nullish().describe(`
+    ErrorMessage: z.string().nullable().describe(`
         * * Field Name: ErrorMessage
         * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)
@@ -2166,14 +2166,14 @@ export const CompanySchema = z.object({
     Description: z.string().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(200)`),
-    Website: z.string().nullish().describe(`
+    Website: z.string().nullable().describe(`
         * * Field Name: Website
         * * SQL Data Type: nvarchar(100)`),
-    LogoURL: z.string().nullish().describe(`
+    LogoURL: z.string().nullable().describe(`
         * * Field Name: LogoURL
         * * Display Name: Logo URL
         * * SQL Data Type: nvarchar(500)`),
-    Domain: z.string().nullish().describe(`
+    Domain: z.string().nullable().describe(`
         * * Field Name: Domain
         * * Display Name: Domain
         * * SQL Data Type: nvarchar(255)`),
@@ -2259,7 +2259,7 @@ export const CompanyIntegrationRunAPILogSchema = z.object({
         * * Display Name: Is Success
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    RequestMethod: z.union([z.literal('GET'), z.literal('POST'), z.literal('PUT'), z.literal('DELETE'), z.literal('PATCH'), z.literal('HEAD'), z.literal('OPTIONS')]).nullish().describe(`
+    RequestMethod: z.union([z.literal('GET'), z.literal('POST'), z.literal('PUT'), z.literal('DELETE'), z.literal('PATCH'), z.literal('HEAD'), z.literal('OPTIONS')]).nullable().describe(`
         * * Field Name: RequestMethod
         * * Display Name: Request Method
         * * SQL Data Type: nvarchar(12)
@@ -2272,10 +2272,10 @@ export const CompanyIntegrationRunAPILogSchema = z.object({
     *   * PATCH
     *   * HEAD
     *   * OPTIONS`),
-    URL: z.string().nullish().describe(`
+    URL: z.string().nullable().describe(`
         * * Field Name: URL
         * * SQL Data Type: nvarchar(MAX)`),
-    Parameters: z.string().nullish().describe(`
+    Parameters: z.string().nullable().describe(`
         * * Field Name: Parameters
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
@@ -2340,11 +2340,11 @@ export const CompanyIntegrationRunDetailSchema = z.object({
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    RunStartedAt: z.date().nullish().describe(`
+    RunStartedAt: z.date().nullable().describe(`
         * * Field Name: RunStartedAt
         * * Display Name: Run Started At
         * * SQL Data Type: datetime`),
-    RunEndedAt: z.date().nullish().describe(`
+    RunEndedAt: z.date().nullable().describe(`
         * * Field Name: RunEndedAt
         * * Display Name: Run Ended At
         * * SQL Data Type: datetime`),
@@ -2370,11 +2370,11 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Display Name: RunByUser ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    StartedAt: z.date().nullish().describe(`
+    StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
@@ -2382,7 +2382,7 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Field Name: TotalRecords
         * * Display Name: Total Records
         * * SQL Data Type: int`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
@@ -2407,12 +2407,12 @@ export const CompanyIntegrationRunSchema = z.object({
     *   * Success
     *   * Failed
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
-    ErrorLog: z.string().nullish().describe(`
+    ErrorLog: z.string().nullable().describe(`
         * * Field Name: ErrorLog
         * * Display Name: Error Log
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional error log information for the integration run.`),
-    ConfigData: z.string().nullish().describe(`
+    ConfigData: z.string().nullable().describe(`
         * * Field Name: ConfigData
         * * Display Name: Config Data
         * * SQL Data Type: nvarchar(MAX)
@@ -2451,26 +2451,26 @@ export const CompanyIntegrationSchema = z.object({
         * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)`),
-    IsActive: z.boolean().nullish().describe(`
+    IsActive: z.boolean().nullable().describe(`
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit`),
-    AccessToken: z.string().nullish().describe(`
+    AccessToken: z.string().nullable().describe(`
         * * Field Name: AccessToken
         * * Display Name: Access Token
         * * SQL Data Type: nvarchar(255)`),
-    RefreshToken: z.string().nullish().describe(`
+    RefreshToken: z.string().nullable().describe(`
         * * Field Name: RefreshToken
         * * Display Name: Refresh Token
         * * SQL Data Type: nvarchar(255)`),
-    TokenExpirationDate: z.date().nullish().describe(`
+    TokenExpirationDate: z.date().nullable().describe(`
         * * Field Name: TokenExpirationDate
         * * Display Name: Token Expiration Date
         * * SQL Data Type: datetime`),
-    APIKey: z.string().nullish().describe(`
+    APIKey: z.string().nullable().describe(`
         * * Field Name: APIKey
         * * SQL Data Type: nvarchar(255)`),
-    ExternalSystemID: z.string().nullish().describe(`
+    ExternalSystemID: z.string().nullable().describe(`
         * * Field Name: ExternalSystemID
         * * Display Name: ExternalSystem
         * * SQL Data Type: nvarchar(100)`),
@@ -2479,15 +2479,15 @@ export const CompanyIntegrationSchema = z.object({
         * * Display Name: Is External System Read Only
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    ClientID: z.string().nullish().describe(`
+    ClientID: z.string().nullable().describe(`
         * * Field Name: ClientID
         * * Display Name: Client
         * * SQL Data Type: nvarchar(255)`),
-    ClientSecret: z.string().nullish().describe(`
+    ClientSecret: z.string().nullable().describe(`
         * * Field Name: ClientSecret
         * * Display Name: Client Secret
         * * SQL Data Type: nvarchar(255)`),
-    CustomAttribute1: z.string().nullish().describe(`
+    CustomAttribute1: z.string().nullable().describe(`
         * * Field Name: CustomAttribute1
         * * Display Name: Custom Attribute 1
         * * SQL Data Type: nvarchar(255)`),
@@ -2507,23 +2507,23 @@ export const CompanyIntegrationSchema = z.object({
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * SQL Data Type: nvarchar(100)`),
-    DriverClassName: z.string().nullish().describe(`
+    DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
         * * Display Name: Driver Class Name
         * * SQL Data Type: nvarchar(100)`),
-    DriverImportPath: z.string().nullish().describe(`
+    DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
         * * SQL Data Type: nvarchar(100)`),
-    LastRunID: z.string().nullish().describe(`
+    LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
         * * Display Name: LastRun
         * * SQL Data Type: uniqueidentifier`),
-    LastRunStartedAt: z.date().nullish().describe(`
+    LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
         * * Display Name: Last Run Started At
         * * SQL Data Type: datetime`),
-    LastRunEndedAt: z.date().nullish().describe(`
+    LastRunEndedAt: z.date().nullable().describe(`
         * * Field Name: LastRunEndedAt
         * * Display Name: Last Run Ended At
         * * SQL Data Type: datetime`),
@@ -2544,7 +2544,7 @@ export const ContentFileTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    FileExtension: z.string().nullish().describe(`
+    FileExtension: z.string().nullable().describe(`
         * * Field Name: FileExtension
         * * Display Name: File Extension
         * * SQL Data Type: nvarchar(255)`),
@@ -2594,7 +2594,7 @@ export const ContentItemAttributeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentItem: z.string().nullish().describe(`
+    ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item
         * * SQL Data Type: nvarchar(250)`),
@@ -2630,7 +2630,7 @@ export const ContentItemTagSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Item: z.string().nullish().describe(`
+    Item: z.string().nullable().describe(`
         * * Field Name: Item
         * * Display Name: Item
         * * SQL Data Type: nvarchar(250)`),
@@ -2652,11 +2652,11 @@ export const ContentItemSchema = z.object({
         * * Display Name: Content Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)`),
-    Name: z.string().nullish().describe(`
+    Name: z.string().nullable().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(250)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -2675,7 +2675,7 @@ export const ContentItemSchema = z.object({
         * * Display Name: Content File Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Content File Types (vwContentFileTypes.ID)`),
-    Checksum: z.string().nullish().describe(`
+    Checksum: z.string().nullable().describe(`
         * * Field Name: Checksum
         * * Display Name: Checksum
         * * SQL Data Type: nvarchar(100)`),
@@ -2683,7 +2683,7 @@ export const ContentItemSchema = z.object({
         * * Field Name: URL
         * * Display Name: URL
         * * SQL Data Type: nvarchar(2000)`),
-    Text: z.string().nullish().describe(`
+    Text: z.string().nullable().describe(`
         * * Field Name: Text
         * * Display Name: Text
         * * SQL Data Type: nvarchar(MAX)`),
@@ -2697,7 +2697,7 @@ export const ContentItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentSource: z.string().nullish().describe(`
+    ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source
         * * SQL Data Type: nvarchar(255)`),
@@ -2731,19 +2731,19 @@ export const ContentProcessRunSchema = z.object({
         * * Display Name: Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Content Sources (vwContentSources.ID)`),
-    StartTime: z.date().nullish().describe(`
+    StartTime: z.date().nullable().describe(`
         * * Field Name: StartTime
         * * Display Name: Start Time
         * * SQL Data Type: datetime`),
-    EndTime: z.date().nullish().describe(`
+    EndTime: z.date().nullable().describe(`
         * * Field Name: EndTime
         * * Display Name: End Time
         * * SQL Data Type: datetime`),
-    Status: z.string().nullish().describe(`
+    Status: z.string().nullable().describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(100)`),
-    ProcessedItems: z.number().nullish().describe(`
+    ProcessedItems: z.number().nullable().describe(`
         * * Field Name: ProcessedItems
         * * Display Name: Processed Items
         * * SQL Data Type: int`),
@@ -2757,7 +2757,7 @@ export const ContentProcessRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Source: z.string().nullish().describe(`
+    Source: z.string().nullable().describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(255)`),
@@ -2797,7 +2797,7 @@ export const ContentSourceParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ContentSource: z.string().nullish().describe(`
+    ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source
         * * SQL Data Type: nvarchar(255)`),
@@ -2818,15 +2818,15 @@ export const ContentSourceTypeParamSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Type: z.string().nullish().describe(`
+    Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
-    DefaultValue: z.string().nullish().describe(`
+    DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(MAX)`),
@@ -2861,7 +2861,7 @@ export const ContentSourceTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(1000)`),
@@ -2888,7 +2888,7 @@ export const ContentSourceSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    Name: z.string().nullish().describe(`
+    Name: z.string().nullable().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
@@ -2958,7 +2958,7 @@ export const ContentTypeAttributeSchema = z.object({
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(MAX)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -2989,7 +2989,7 @@ export const ContentTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3038,7 +3038,7 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Conversation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)`),
-    ExternalID: z.string().nullish().describe(`
+    ExternalID: z.string().nullable().describe(`
         * * Field Name: ExternalID
         * * Display Name: External ID
         * * SQL Data Type: nvarchar(100)`),
@@ -3056,7 +3056,7 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: Message
         * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)`),
-    Error: z.string().nullish().describe(`
+    Error: z.string().nullable().describe(`
         * * Field Name: Error
         * * Display Name: Error
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3075,37 +3075,37 @@ export const ConversationDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    UserRating: z.number().nullish().describe(`
+    UserRating: z.number().nullable().describe(`
         * * Field Name: UserRating
         * * Display Name: User Rating
         * * SQL Data Type: int
     * * Description: This column is used to capture user feedback as a rating scale. The scale ranges from 1 to 10, where 1 might represent thumbs down, and 10 might represent thumbs up or the highest rating in a star-based scale.`),
-    UserFeedback: z.string().nullish().describe(`
+    UserFeedback: z.string().nullable().describe(`
         * * Field Name: UserFeedback
         * * Display Name: User Feedback
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column is used to store user text feedback about a given AI response, describing what they liked or disliked.`),
-    ReflectionInsights: z.string().nullish().describe(`
+    ReflectionInsights: z.string().nullable().describe(`
         * * Field Name: ReflectionInsights
         * * Display Name: Reflection Insights
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`),
-    SummaryOfEarlierConversation: z.string().nullish().describe(`
+    SummaryOfEarlierConversation: z.string().nullable().describe(`
         * * Field Name: SummaryOfEarlierConversation
         * * Display Name: Summary Of Earlier Conversation
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
-    UserID: z.string().nullish().describe(`
+    UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
-    Conversation: z.string().nullish().describe(`
+    Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
-    User: z.string().nullish().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -3127,15 +3127,15 @@ export const ConversationSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    ExternalID: z.string().nullish().describe(`
+    ExternalID: z.string().nullable().describe(`
         * * Field Name: ExternalID
         * * Display Name: External ID
         * * SQL Data Type: nvarchar(500)`),
-    Name: z.string().nullish().describe(`
+    Name: z.string().nullable().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3149,16 +3149,16 @@ export const ConversationSchema = z.object({
         * * Display Name: Is Archived
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    LinkedEntityID: z.string().nullish().describe(`
+    LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    LinkedRecordID: z.string().nullish().describe(`
+    LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
         * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)`),
-    DataContextID: z.string().nullish().describe(`
+    DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
@@ -3177,11 +3177,11 @@ export const ConversationSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    LinkedEntity: z.string().nullish().describe(`
+    LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)`),
-    DataContext: z.string().nullish().describe(`
+    DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
@@ -3202,11 +3202,11 @@ export const DashboardCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -3226,7 +3226,7 @@ export const DashboardCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
@@ -3251,7 +3251,7 @@ export const DashboardSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3260,7 +3260,7 @@ export const DashboardSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -3283,7 +3283,7 @@ export const DashboardSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
@@ -3317,37 +3317,37 @@ export const DataContextItemSchema = z.object({
     *   * single_record
     *   * full_entity
     * * Description: The type of the item, either "view", "query", "full_entity", "single_record", or "sql"`),
-    ViewID: z.string().nullish().describe(`
+    ViewID: z.string().nullable().describe(`
         * * Field Name: ViewID
         * * Display Name: View ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User Views (vwUserViews.ID)`),
-    QueryID: z.string().nullish().describe(`
+    QueryID: z.string().nullable().describe(`
         * * Field Name: QueryID
         * * Display Name: Query ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Queries (vwQueries.ID)`),
-    EntityID: z.string().nullish().describe(`
+    EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    RecordID: z.string().nullish().describe(`
+    RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
         * * Display Name: Record ID
         * * SQL Data Type: nvarchar(450)
     * * Description: The Primary Key value for the record, only used when Type='single_record'`),
-    SQL: z.string().nullish().describe(`
+    SQL: z.string().nullable().describe(`
         * * Field Name: SQL
         * * Display Name: SQL
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Only used when Type=sql`),
-    DataJSON: z.string().nullish().describe(`
+    DataJSON: z.string().nullable().describe(`
         * * Field Name: DataJSON
         * * Display Name: Data JSON
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.`),
-    LastRefreshedAt: z.date().nullish().describe(`
+    LastRefreshedAt: z.date().nullable().describe(`
         * * Field Name: LastRefreshedAt
         * * Display Name: Last Refreshed At
         * * SQL Data Type: datetime
@@ -3362,7 +3362,7 @@ export const DataContextItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3370,15 +3370,15 @@ export const DataContextItemSchema = z.object({
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
-    View: z.string().nullish().describe(`
+    View: z.string().nullable().describe(`
         * * Field Name: View
         * * Display Name: View
         * * SQL Data Type: nvarchar(100)`),
-    Query: z.string().nullish().describe(`
+    Query: z.string().nullable().describe(`
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().nullish().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -3399,7 +3399,7 @@ export const DataContextSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3408,7 +3408,7 @@ export const DataContextSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    LastRefreshedAt: z.date().nullish().describe(`
+    LastRefreshedAt: z.date().nullable().describe(`
         * * Field Name: LastRefreshedAt
         * * Display Name: Last Refreshed At
         * * SQL Data Type: datetime`),
@@ -3458,7 +3458,7 @@ export const DatasetItemSchema = z.object({
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    WhereClause: z.string().nullish().describe(`
+    WhereClause: z.string().nullable().describe(`
         * * Field Name: WhereClause
         * * Display Name: Where Clause
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3466,7 +3466,7 @@ export const DatasetItemSchema = z.object({
         * * Field Name: DateFieldToCheck
         * * Display Name: Date Field To Check
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3480,7 +3480,7 @@ export const DatasetItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Columns: z.string().nullish().describe(`
+    Columns: z.string().nullable().describe(`
         * * Field Name: Columns
         * * Display Name: Columns
         * * SQL Data Type: nvarchar(MAX)
@@ -3510,7 +3510,7 @@ export const DatasetSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3582,7 +3582,7 @@ export const DuplicateRunDetailMatchSchema = z.object({
     *   * Rejected
     *   * Approved
     *   * Pending`),
-    RecordMergeLogID: z.string().nullish().describe(`
+    RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
         * * Display Name: Record Merge Log ID
         * * SQL Data Type: uniqueidentifier
@@ -3645,12 +3645,12 @@ export const DuplicateRunDetailSchema = z.object({
     *   * Skipped
     *   * Complete
     *   * Pending`),
-    SkippedReason: z.string().nullish().describe(`
+    SkippedReason: z.string().nullable().describe(`
         * * Field Name: SkippedReason
         * * Display Name: Skipped Reason
         * * SQL Data Type: nvarchar(MAX)
     * * Description: If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped`),
-    MatchErrorMessage: z.string().nullish().describe(`
+    MatchErrorMessage: z.string().nullable().describe(`
         * * Field Name: MatchErrorMessage
         * * Display Name: Match Error Message
         * * SQL Data Type: nvarchar(MAX)
@@ -3666,7 +3666,7 @@ export const DuplicateRunDetailSchema = z.object({
     *   * Complete
     *   * Pending
     *   * Not Applicable`),
-    MergeErrorMessage: z.string().nullish().describe(`
+    MergeErrorMessage: z.string().nullable().describe(`
         * * Field Name: MergeErrorMessage
         * * Display Name: Merge Error Message
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3713,7 +3713,7 @@ export const DuplicateRunSchema = z.object({
         * * Display Name: Started At
         * * SQL Data Type: datetime
         * * Default Value: getdate()`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
@@ -3727,11 +3727,11 @@ export const DuplicateRunSchema = z.object({
     *   * Rejected
     *   * Approved
     *   * Pending`),
-    ApprovalComments: z.string().nullish().describe(`
+    ApprovalComments: z.string().nullable().describe(`
         * * Field Name: ApprovalComments
         * * Display Name: Approval Comments
         * * SQL Data Type: nvarchar(MAX)`),
-    ApprovedByUserID: z.string().nullish().describe(`
+    ApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: ApprovedByUserID
         * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
@@ -3747,7 +3747,7 @@ export const DuplicateRunSchema = z.object({
     *   * Complete
     *   * In Progress
     *   * Pending`),
-    ProcessingErrorMessage: z.string().nullish().describe(`
+    ProcessingErrorMessage: z.string().nullable().describe(`
         * * Field Name: ProcessingErrorMessage
         * * Display Name: Processing Error Message
         * * SQL Data Type: nvarchar(MAX)`),
@@ -3773,7 +3773,7 @@ export const DuplicateRunSchema = z.object({
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)`),
-    ApprovedByUser: z.string().nullish().describe(`
+    ApprovedByUser: z.string().nullable().describe(`
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
@@ -3922,18 +3922,18 @@ export const EmployeeSchema = z.object({
         * * Display Name: Company ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Companies (vwCompanies.ID)`),
-    SupervisorID: z.string().nullish().describe(`
+    SupervisorID: z.string().nullable().describe(`
         * * Field Name: SupervisorID
         * * Display Name: Supervisor ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)`),
-    Title: z.string().nullish().describe(`
+    Title: z.string().nullable().describe(`
         * * Field Name: Title
         * * SQL Data Type: nvarchar(50)`),
     Email: z.string().describe(`
         * * Field Name: Email
         * * SQL Data Type: nvarchar(100)`),
-    Phone: z.string().nullish().describe(`
+    Phone: z.string().nullable().describe(`
         * * Field Name: Phone
         * * SQL Data Type: nvarchar(20)`),
     Active: z.boolean().describe(`
@@ -3950,23 +3950,23 @@ export const EmployeeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    FirstLast: z.string().nullish().describe(`
+    FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
         * * SQL Data Type: nvarchar(81)`),
-    Supervisor: z.string().nullish().describe(`
+    Supervisor: z.string().nullable().describe(`
         * * Field Name: Supervisor
         * * Display Name: Supervisor
         * * SQL Data Type: nvarchar(81)`),
-    SupervisorFirstName: z.string().nullish().describe(`
+    SupervisorFirstName: z.string().nullable().describe(`
         * * Field Name: SupervisorFirstName
         * * Display Name: Supervisor First Name
         * * SQL Data Type: nvarchar(30)`),
-    SupervisorLastName: z.string().nullish().describe(`
+    SupervisorLastName: z.string().nullable().describe(`
         * * Field Name: SupervisorLastName
         * * Display Name: Supervisor Last Name
         * * SQL Data Type: nvarchar(50)`),
-    SupervisorEmail: z.string().nullish().describe(`
+    SupervisorEmail: z.string().nullable().describe(`
         * * Field Name: SupervisorEmail
         * * Display Name: Supervisor Email
         * * SQL Data Type: nvarchar(100)`),
@@ -3982,7 +3982,7 @@ export const EntitySchema = z.object({
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -3990,11 +3990,11 @@ export const EntitySchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    NameSuffix: z.string().nullish().describe(`
+    NameSuffix: z.string().nullable().describe(`
         * * Field Name: NameSuffix
         * * Display Name: Name Suffix
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     AutoUpdateDescription: z.boolean().describe(`
@@ -4092,7 +4092,7 @@ export const EntitySchema = z.object({
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    FullTextCatalog: z.string().nullish().describe(`
+    FullTextCatalog: z.string().nullable().describe(`
         * * Field Name: FullTextCatalog
         * * Display Name: Full Text Catalog
         * * SQL Data Type: nvarchar(255)`),
@@ -4101,7 +4101,7 @@ export const EntitySchema = z.object({
         * * Display Name: Full Text Catalog Generated
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    FullTextIndex: z.string().nullish().describe(`
+    FullTextIndex: z.string().nullable().describe(`
         * * Field Name: FullTextIndex
         * * Display Name: Full Text Index
         * * SQL Data Type: nvarchar(255)`),
@@ -4110,7 +4110,7 @@ export const EntitySchema = z.object({
         * * Display Name: Full Text Index Generated
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    FullTextSearchFunction: z.string().nullish().describe(`
+    FullTextSearchFunction: z.string().nullable().describe(`
         * * Field Name: FullTextSearchFunction
         * * Display Name: Full Text Search Function
         * * SQL Data Type: nvarchar(255)`),
@@ -4119,20 +4119,20 @@ export const EntitySchema = z.object({
         * * Display Name: Full Text Search Function Generated
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    UserViewMaxRows: z.number().nullish().describe(`
+    UserViewMaxRows: z.number().nullable().describe(`
         * * Field Name: UserViewMaxRows
         * * Display Name: User View Max Rows
         * * SQL Data Type: int
         * * Default Value: 1000`),
-    spCreate: z.string().nullish().describe(`
+    spCreate: z.string().nullable().describe(`
         * * Field Name: spCreate
         * * Display Name: spCreate
         * * SQL Data Type: nvarchar(255)`),
-    spUpdate: z.string().nullish().describe(`
+    spUpdate: z.string().nullable().describe(`
         * * Field Name: spUpdate
         * * Display Name: spUpdate
         * * SQL Data Type: nvarchar(255)`),
-    spDelete: z.string().nullish().describe(`
+    spDelete: z.string().nullable().describe(`
         * * Field Name: spDelete
         * * Display Name: spDelete
         * * SQL Data Type: nvarchar(255)`),
@@ -4173,7 +4173,7 @@ export const EntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft`),
-    spMatch: z.string().nullish().describe(`
+    spMatch: z.string().nullable().describe(`
         * * Field Name: spMatch
         * * Display Name: sp Match
         * * SQL Data Type: nvarchar(255)
@@ -4193,20 +4193,20 @@ export const EntitySchema = z.object({
         * * Display Name: User Form Generated
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    EntityObjectSubclassName: z.string().nullish().describe(`
+    EntityObjectSubclassName: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassName
         * * Display Name: Entity Object Subclass Name
         * * SQL Data Type: nvarchar(255)`),
-    EntityObjectSubclassImport: z.string().nullish().describe(`
+    EntityObjectSubclassImport: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassImport
         * * Display Name: Entity Object Subclass Import
         * * SQL Data Type: nvarchar(255)`),
-    PreferredCommunicationField: z.string().nullish().describe(`
+    PreferredCommunicationField: z.string().nullable().describe(`
         * * Field Name: PreferredCommunicationField
         * * Display Name: Preferred Communication Field
         * * SQL Data Type: nvarchar(255)
     * * Description: Used to specify a field within the entity that in turn contains the field name that will be used for record-level communication preferences. For example in a hypothetical entity called Contacts, say there is a field called PreferredComm and that field had possible values of Email1, SMS, and Phone, and those value in turn corresponded to field names in the entity. Each record in the Contacts entity could have a specific preference for which field would be used for communication. The MJ Communication Framework will use this information when available, as a priority ahead of the data in the Entity Communication Fields entity which is entity-level and not record-level.`),
-    Icon: z.string().nullish().describe(`
+    Icon: z.string().nullable().describe(`
         * * Field Name: Icon
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(500)
@@ -4221,7 +4221,7 @@ export const EntitySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ScopeDefault: z.string().nullish().describe(`
+    ScopeDefault: z.string().nullable().describe(`
         * * Field Name: ScopeDefault
         * * Display Name: Scope Default
         * * SQL Data Type: nvarchar(100)
@@ -4254,32 +4254,32 @@ export const EntitySchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: The number of rows to pack when RowsToPackWithSchema is set to Sample, based on the designated sampling method. Defaults to 0.`),
-    RowsToPackSampleOrder: z.string().nullish().describe(`
+    RowsToPackSampleOrder: z.string().nullable().describe(`
         * * Field Name: RowsToPackSampleOrder
         * * Display Name: Rows To Pack Sample Order
         * * SQL Data Type: nvarchar(MAX)
     * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
-    CodeName: z.string().nullish().describe(`
+    CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    ClassName: z.string().nullish().describe(`
+    ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(MAX)`),
-    BaseTableCodeName: z.string().nullish().describe(`
+    BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentEntity: z.string().nullish().describe(`
+    ParentEntity: z.string().nullable().describe(`
         * * Field Name: ParentEntity
         * * Display Name: Parent Entity
         * * SQL Data Type: nvarchar(255)`),
-    ParentBaseTable: z.string().nullish().describe(`
+    ParentBaseTable: z.string().nullable().describe(`
         * * Field Name: ParentBaseTable
         * * Display Name: Parent Base Table
         * * SQL Data Type: nvarchar(255)`),
-    ParentBaseView: z.string().nullish().describe(`
+    ParentBaseView: z.string().nullable().describe(`
         * * Field Name: ParentBaseView
         * * Display Name: Parent Base View
         * * SQL Data Type: nvarchar(255)`),
@@ -4350,7 +4350,7 @@ export const EntityActionInvocationTypeSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the invocation type such as Record Created/Updated/etc.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -4452,12 +4452,12 @@ export const EntityActionParamSchema = z.object({
     *   * Script
     *   * Entity Field
     * * Description: Type of the value, which can be Static, Entity Object, or Script.`),
-    Value: z.string().nullish().describe(`
+    Value: z.string().nullable().describe(`
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Value of the parameter, used only when ValueType is Static or Script. When value is Script, any valid JavaScript code can be provided. The script will have access to an object called EntityActionContext. This object will have a property called EntityObject on it that will contain the BaseEntity derived sub-class with the current data for the entity object this action is operating against. The script must provide the parameter value to the EntityActionContext.result property. This scripting capabilty is designed for very small and simple code, for anything of meaningful complexity, create a sub-class instead.`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -4560,7 +4560,7 @@ export const EntityAIActionSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Prompt: z.string().nullish().describe(`
+    Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(MAX)`),
@@ -4586,7 +4586,7 @@ export const EntityAIActionSchema = z.object({
     * * Possible Values 
     *   * entity
     *   * field`),
-    OutputField: z.string().nullish().describe(`
+    OutputField: z.string().nullable().describe(`
         * * Field Name: OutputField
         * * Display Name: Output Field
         * * SQL Data Type: nvarchar(50)`),
@@ -4595,12 +4595,12 @@ export const EntityAIActionSchema = z.object({
         * * Display Name: Skip If Output Field Not Empty
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    OutputEntityID: z.string().nullish().describe(`
+    OutputEntityID: z.string().nullable().describe(`
         * * Field Name: OutputEntityID
         * * Display Name: Output Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -4626,7 +4626,7 @@ export const EntityAIActionSchema = z.object({
         * * Field Name: AIAction
         * * Display Name: AIAction
         * * SQL Data Type: nvarchar(50)`),
-    OutputEntity: z.string().nullish().describe(`
+    OutputEntity: z.string().nullable().describe(`
         * * Field Name: OutputEntity
         * * Display Name: Output Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -4733,11 +4733,11 @@ export const EntityDocumentRunSchema = z.object({
         * * Display Name: Entity Document ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)`),
-    StartedAt: z.date().nullish().describe(`
+    StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
@@ -4792,7 +4792,7 @@ export const EntityDocumentSettingSchema = z.object({
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -4827,7 +4827,7 @@ export const EntityDocumentTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -4960,11 +4960,11 @@ export const EntityFieldValueSchema = z.object({
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(255)`),
-    Code: z.string().nullish().describe(`
+    Code: z.string().nullable().describe(`
         * * Field Name: Code
         * * Display Name: Code
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5016,12 +5016,12 @@ export const EntityFieldSchema = z.object({
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field within the database table`),
-    DisplayName: z.string().nullish().describe(`
+    DisplayName: z.string().nullable().describe(`
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
     * * Description: A user friendly alternative to the field name`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Descriptive text explaining the purpose of the field`),
@@ -5043,7 +5043,7 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Indicates if the field must have unique values within the entity.`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
@@ -5052,15 +5052,15 @@ export const EntityFieldSchema = z.object({
         * * Field Name: Type
         * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)`),
-    Length: z.number().nullish().describe(`
+    Length: z.number().nullable().describe(`
         * * Field Name: Length
         * * SQL Data Type: int
     * * Description: SQL data length (auto maintained by CodeGen)`),
-    Precision: z.number().nullish().describe(`
+    Precision: z.number().nullable().describe(`
         * * Field Name: Precision
         * * SQL Data Type: int
     * * Description: SQL precision (auto maintained by CodeGen)`),
-    Scale: z.number().nullish().describe(`
+    Scale: z.number().nullable().describe(`
         * * Field Name: Scale
         * * SQL Data Type: int
     * * Description: SQL scale (auto maintained by CodeGen)`),
@@ -5070,7 +5070,7 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
     * * Description: Does the column allow null or not (auto maintained by CodeGen)`),
-    DefaultValue: z.string().nullish().describe(`
+    DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(255)
@@ -5092,7 +5092,7 @@ export const EntityFieldSchema = z.object({
     *   * List
     *   * ListOrUserEntry
     * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
-    ExtendedType: z.union([z.literal('Email'), z.literal('URL'), z.literal('Tel'), z.literal('SMS'), z.literal('Geo'), z.literal('WhatsApp'), z.literal('FaceTime'), z.literal('Skype'), z.literal('SIP'), z.literal('MSTeams'), z.literal('ZoomMtg'), z.literal('Other'), z.literal('Code')]).nullish().describe(`
+    ExtendedType: z.union([z.literal('Email'), z.literal('URL'), z.literal('Tel'), z.literal('SMS'), z.literal('Geo'), z.literal('WhatsApp'), z.literal('FaceTime'), z.literal('Skype'), z.literal('SIP'), z.literal('MSTeams'), z.literal('ZoomMtg'), z.literal('Other'), z.literal('Code')]).nullable().describe(`
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
@@ -5112,7 +5112,7 @@ export const EntityFieldSchema = z.object({
     *   * Other
     *   * Code
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`),
-    CodeType: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).nullish().describe(`
+    CodeType: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).nullable().describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
         * * SQL Data Type: nvarchar(50)
@@ -5131,12 +5131,12 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If set to 1, this field will be included by default in any new view created by a user.`),
-    ViewCellTemplate: z.string().nullish().describe(`
+    ViewCellTemplate: z.string().nullable().describe(`
         * * Field Name: ViewCellTemplate
         * * Display Name: View Cell Template
         * * SQL Data Type: nvarchar(MAX)
     * * Description: NULL`),
-    DefaultColumnWidth: z.number().nullish().describe(`
+    DefaultColumnWidth: z.number().nullable().describe(`
         * * Field Name: DefaultColumnWidth
         * * Display Name: Default Column Width
         * * SQL Data Type: int
@@ -5165,7 +5165,7 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.`),
-    UserSearchParamFormatAPI: z.string().nullish().describe(`
+    UserSearchParamFormatAPI: z.string().nullable().describe(`
         * * Field Name: UserSearchParamFormatAPI
         * * Display Name: User Search Param Format API
         * * SQL Data Type: nvarchar(500)
@@ -5199,12 +5199,12 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.`),
-    RelatedEntityID: z.string().nullish().describe(`
+    RelatedEntityID: z.string().nullable().describe(`
         * * Field Name: RelatedEntityID
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    RelatedEntityFieldName: z.string().nullish().describe(`
+    RelatedEntityFieldName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityFieldName
         * * Display Name: Related Entity Field Name
         * * SQL Data Type: nvarchar(255)
@@ -5215,7 +5215,7 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
     * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field`),
-    RelatedEntityNameFieldMap: z.string().nullish().describe(`
+    RelatedEntityNameFieldMap: z.string().nullable().describe(`
         * * Field Name: RelatedEntityNameFieldMap
         * * Display Name: Related Entity Name Field Map
         * * SQL Data Type: nvarchar(255)`),
@@ -5225,7 +5225,7 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Search
     * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown`),
-    EntityIDFieldName: z.string().nullish().describe(`
+    EntityIDFieldName: z.string().nullable().describe(`
         * * Field Name: EntityIDFieldName
         * * Display Name: Entity IDField Name
         * * SQL Data Type: nvarchar(100)
@@ -5240,7 +5240,7 @@ export const EntityFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ScopeDefault: z.string().nullish().describe(`
+    ScopeDefault: z.string().nullable().describe(`
         * * Field Name: ScopeDefault
         * * Display Name: Scope Default
         * * SQL Data Type: nvarchar(100)
@@ -5262,27 +5262,27 @@ export const EntityFieldSchema = z.object({
     *   * None
     *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
-    GeneratedValidationFunctionName: z.string().nullish().describe(`
+    GeneratedValidationFunctionName: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionName
         * * Display Name: Generated Validation Function Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Contains the name of the generated field validation function, if it exists, null otherwise`),
-    GeneratedValidationFunctionDescription: z.string().nullish().describe(`
+    GeneratedValidationFunctionDescription: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionDescription
         * * Display Name: Generated Validation Function Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Contains a description for business users of what the validation function for this field does, if it exists`),
-    GeneratedValidationFunctionCode: z.string().nullish().describe(`
+    GeneratedValidationFunctionCode: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionCode
         * * Display Name: Generated Validation Function Code
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.`),
-    GeneratedValidationFunctionCheckConstraint: z.string().nullish().describe(`
+    GeneratedValidationFunctionCheckConstraint: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionCheckConstraint
         * * Display Name: Generated Validation Function Check Constraint
         * * SQL Data Type: nvarchar(MAX)
     * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`),
-    FieldCodeName: z.string().nullish().describe(`
+    FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5301,35 +5301,35 @@ export const EntityFieldSchema = z.object({
         * * Field Name: BaseView
         * * Display Name: Base View
         * * SQL Data Type: nvarchar(255)`),
-    EntityCodeName: z.string().nullish().describe(`
+    EntityCodeName: z.string().nullable().describe(`
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    EntityClassName: z.string().nullish().describe(`
+    EntityClassName: z.string().nullable().describe(`
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
         * * SQL Data Type: nvarchar(MAX)`),
-    RelatedEntity: z.string().nullish().describe(`
+    RelatedEntity: z.string().nullable().describe(`
         * * Field Name: RelatedEntity
         * * Display Name: Related Entity
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntitySchemaName: z.string().nullish().describe(`
+    RelatedEntitySchemaName: z.string().nullable().describe(`
         * * Field Name: RelatedEntitySchemaName
         * * Display Name: Related Entity Schema Name
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntityBaseTable: z.string().nullish().describe(`
+    RelatedEntityBaseTable: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseTable
         * * Display Name: Related Entity Base Table
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntityBaseView: z.string().nullish().describe(`
+    RelatedEntityBaseView: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseView
         * * Display Name: Related Entity Base View
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntityCodeName: z.string().nullish().describe(`
+    RelatedEntityCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    RelatedEntityClassName: z.string().nullish().describe(`
+    RelatedEntityClassName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5375,22 +5375,22 @@ export const EntityPermissionSchema = z.object({
         * * Display Name: Can Delete
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    ReadRLSFilterID: z.string().nullish().describe(`
+    ReadRLSFilterID: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilterID
         * * Display Name: Read RLSFilter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
-    CreateRLSFilterID: z.string().nullish().describe(`
+    CreateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilterID
         * * Display Name: Create RLSFilter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
-    UpdateRLSFilterID: z.string().nullish().describe(`
+    UpdateRLSFilterID: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilterID
         * * Display Name: Update RLSFilter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)`),
-    DeleteRLSFilterID: z.string().nullish().describe(`
+    DeleteRLSFilterID: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilterID
         * * Display Name: Delete RLSFilter ID
         * * SQL Data Type: uniqueidentifier
@@ -5413,23 +5413,23 @@ export const EntityPermissionSchema = z.object({
         * * Field Name: RoleName
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)`),
-    RoleSQLName: z.string().nullish().describe(`
+    RoleSQLName: z.string().nullable().describe(`
         * * Field Name: RoleSQLName
         * * Display Name: Role SQLName
         * * SQL Data Type: nvarchar(250)`),
-    CreateRLSFilter: z.string().nullish().describe(`
+    CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
         * * Display Name: Create RLSFilter
         * * SQL Data Type: nvarchar(100)`),
-    ReadRLSFilter: z.string().nullish().describe(`
+    ReadRLSFilter: z.string().nullable().describe(`
         * * Field Name: ReadRLSFilter
         * * Display Name: Read RLSFilter
         * * SQL Data Type: nvarchar(100)`),
-    UpdateRLSFilter: z.string().nullish().describe(`
+    UpdateRLSFilter: z.string().nullable().describe(`
         * * Field Name: UpdateRLSFilter
         * * Display Name: Update RLSFilter
         * * SQL Data Type: nvarchar(100)`),
-    DeleteRLSFilter: z.string().nullish().describe(`
+    DeleteRLSFilter: z.string().nullable().describe(`
         * * Field Name: DeleteRLSFilter
         * * Display Name: Delete RLSFilter
         * * SQL Data Type: nvarchar(100)`),
@@ -5460,7 +5460,7 @@ export const EntityRecordDocumentSchema = z.object({
         * * Display Name: Entity Document ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)`),
-    DocumentText: z.string().nullish().describe(`
+    DocumentText: z.string().nullable().describe(`
         * * Field Name: DocumentText
         * * Display Name: Document Text
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5469,11 +5469,11 @@ export const EntityRecordDocumentSchema = z.object({
         * * Display Name: Vector Index ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Vector Indexes (vwVectorIndexes.ID)`),
-    VectorID: z.string().nullish().describe(`
+    VectorID: z.string().nullable().describe(`
         * * Field Name: VectorID
         * * Display Name: Vector ID
         * * SQL Data Type: nvarchar(50)`),
-    VectorJSON: z.string().nullish().describe(`
+    VectorJSON: z.string().nullable().describe(`
         * * Field Name: VectorJSON
         * * Display Name: Vector JSON
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5520,7 +5520,7 @@ export const EntityRelationshipDisplayComponentSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5590,7 +5590,7 @@ export const EntityRelationshipSchema = z.object({
     * * Possible Values 
     *   * One To Many
     *   * Many To Many`),
-    EntityKeyField: z.string().nullish().describe(`
+    EntityKeyField: z.string().nullable().describe(`
         * * Field Name: EntityKeyField
         * * Display Name: Entity Key Field
         * * SQL Data Type: nvarchar(255)`),
@@ -5598,15 +5598,15 @@ export const EntityRelationshipSchema = z.object({
         * * Field Name: RelatedEntityJoinField
         * * Display Name: Related Entity Join Field
         * * SQL Data Type: nvarchar(255)`),
-    JoinView: z.string().nullish().describe(`
+    JoinView: z.string().nullable().describe(`
         * * Field Name: JoinView
         * * Display Name: Join View
         * * SQL Data Type: nvarchar(255)`),
-    JoinEntityJoinField: z.string().nullish().describe(`
+    JoinEntityJoinField: z.string().nullable().describe(`
         * * Field Name: JoinEntityJoinField
         * * Display Name: Join Entity Join Field
         * * SQL Data Type: nvarchar(255)`),
-    JoinEntityInverseJoinField: z.string().nullish().describe(`
+    JoinEntityInverseJoinField: z.string().nullable().describe(`
         * * Field Name: JoinEntityInverseJoinField
         * * Display Name: Join Entity Inverse Join Field
         * * SQL Data Type: nvarchar(255)`),
@@ -5625,7 +5625,7 @@ export const EntityRelationshipSchema = z.object({
     * * Possible Values 
     *   * After Field Tabs
     *   * Before Field Tabs`),
-    DisplayName: z.string().nullish().describe(`
+    DisplayName: z.string().nullable().describe(`
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
@@ -5641,22 +5641,22 @@ export const EntityRelationshipSchema = z.object({
     *   * Custom
     *   * None
     * * Description: When Related Entity Icon - uses the icon from the related entity, if one exists. When Custom, uses the value in the DisplayIcon field in this record, and when None, no icon is displayed`),
-    DisplayIcon: z.string().nullish().describe(`
+    DisplayIcon: z.string().nullable().describe(`
         * * Field Name: DisplayIcon
         * * Display Name: Display Icon
         * * SQL Data Type: nvarchar(255)
     * * Description: If specified, the icon `),
-    DisplayUserViewID: z.string().nullish().describe(`
+    DisplayUserViewID: z.string().nullable().describe(`
         * * Field Name: DisplayUserViewID
         * * Display Name: Display User View ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: User Views (vwUserViews.ID)`),
-    DisplayComponentID: z.string().nullish().describe(`
+    DisplayComponentID: z.string().nullable().describe(`
         * * Field Name: DisplayComponentID
         * * Display Name: Display Component ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)`),
-    DisplayComponentConfiguration: z.string().nullish().describe(`
+    DisplayComponentConfiguration: z.string().nullable().describe(`
         * * Field Name: DisplayComponentConfiguration
         * * Display Name: Display Component Configuration
         * * SQL Data Type: nvarchar(MAX)
@@ -5700,19 +5700,19 @@ export const EntityRelationshipSchema = z.object({
         * * Field Name: RelatedEntityBaseView
         * * Display Name: Related Entity Base View
         * * SQL Data Type: nvarchar(255)`),
-    RelatedEntityClassName: z.string().nullish().describe(`
+    RelatedEntityClassName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
         * * SQL Data Type: nvarchar(MAX)`),
-    RelatedEntityCodeName: z.string().nullish().describe(`
+    RelatedEntityCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    RelatedEntityBaseTableCodeName: z.string().nullish().describe(`
+    RelatedEntityBaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseTableCodeName
         * * Display Name: Related Entity Base Table Code Name
         * * SQL Data Type: nvarchar(MAX)`),
-    DisplayUserViewName: z.string().nullish().describe(`
+    DisplayUserViewName: z.string().nullable().describe(`
         * * Field Name: DisplayUserViewName
         * * Display Name: Display User View Name
         * * SQL Data Type: nvarchar(100)`),
@@ -5742,7 +5742,7 @@ export const EntitySettingSchema = z.object({
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5772,34 +5772,34 @@ export const ErrorLogSchema = z.object({
         * * Field Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    CompanyIntegrationRunID: z.string().nullish().describe(`
+    CompanyIntegrationRunID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)`),
-    CompanyIntegrationRunDetailID: z.string().nullish().describe(`
+    CompanyIntegrationRunDetailID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationRunDetailID
         * * Display Name: CompanyIntegrationRunDetail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)`),
-    Code: z.string().nullish().describe(`
+    Code: z.string().nullable().describe(`
         * * Field Name: Code
         * * SQL Data Type: nchar(20)`),
-    Message: z.string().nullish().describe(`
+    Message: z.string().nullable().describe(`
         * * Field Name: Message
         * * SQL Data Type: nvarchar(MAX)`),
-    CreatedBy: z.string().nullish().describe(`
+    CreatedBy: z.string().nullable().describe(`
         * * Field Name: CreatedBy
         * * Display Name: Created By
         * * SQL Data Type: nvarchar(50)
         * * Default Value: suser_name()`),
-    Status: z.string().nullish().describe(`
+    Status: z.string().nullable().describe(`
         * * Field Name: Status
         * * SQL Data Type: nvarchar(10)`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * SQL Data Type: nvarchar(20)`),
-    Details: z.string().nullish().describe(`
+    Details: z.string().nullable().describe(`
         * * Field Name: Details
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
@@ -5859,17 +5859,17 @@ export const ExplorerNavigationItemSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Controls if the item is shown in the left navigation drawer in the MJ Explorer app or not.`),
-    IconCSSClass: z.string().nullish().describe(`
+    IconCSSClass: z.string().nullable().describe(`
         * * Field Name: IconCSSClass
         * * Display Name: Icon CSSClass
         * * SQL Data Type: nvarchar(100)
     * * Description: Optional, CSS class for an icon to be displayed with the navigation item`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the navigation item, shown to the user on hover or in larger displays`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -5901,12 +5901,12 @@ export const FileCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -5920,7 +5920,7 @@ export const FileCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -5986,7 +5986,7 @@ export const FileStorageProviderSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6035,11 +6035,11 @@ export const FileSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(500)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -6049,11 +6049,11 @@ export const FileSchema = z.object({
         * * Display Name: Provider ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)`),
-    ContentType: z.string().nullish().describe(`
+    ContentType: z.string().nullable().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type
         * * SQL Data Type: nvarchar(50)`),
-    ProviderKey: z.string().nullish().describe(`
+    ProviderKey: z.string().nullable().describe(`
         * * Field Name: ProviderKey
         * * Display Name: Provider Key
         * * SQL Data Type: nvarchar(500)`),
@@ -6073,7 +6073,7 @@ export const FileSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
@@ -6098,11 +6098,11 @@ export const GeneratedCodeCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -6118,7 +6118,7 @@ export const GeneratedCodeCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -6158,7 +6158,7 @@ export const GeneratedCodeSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Descriptive name of the generated code.`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -6173,12 +6173,12 @@ export const GeneratedCodeSchema = z.object({
         * * Display Name: Source
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Source material used to generate the code, e.g., a SQL CHECK constraint.`),
-    LinkedEntityID: z.string().nullish().describe(`
+    LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    LinkedRecordPrimaryKey: z.string().nullish().describe(`
+    LinkedRecordPrimaryKey: z.string().nullable().describe(`
         * * Field Name: LinkedRecordPrimaryKey
         * * Display Name: Linked Record Primary Key
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6226,7 +6226,7 @@ export const GeneratedCodeSchema = z.object({
         * * Field Name: GeneratedByModel
         * * Display Name: Generated By Model
         * * SQL Data Type: nvarchar(50)`),
-    LinkedEntity: z.string().nullish().describe(`
+    LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -6256,7 +6256,7 @@ export const IntegrationURLFormatSchema = z.object({
         * * Field Name: URLFormat
         * * SQL Data Type: nvarchar(500)
     * * Description: The URL Format for the given integration including the ability to include markup with fields from the integration`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6274,11 +6274,11 @@ export const IntegrationURLFormatSchema = z.object({
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
-    NavigationBaseURL: z.string().nullish().describe(`
+    NavigationBaseURL: z.string().nullable().describe(`
         * * Field Name: NavigationBaseURL
         * * Display Name: Navigation Base URL
         * * SQL Data Type: nvarchar(500)`),
-    FullURLFormat: z.string().nullish().describe(`
+    FullURLFormat: z.string().nullable().describe(`
         * * Field Name: FullURLFormat
         * * Display Name: Full URLFormat
         * * SQL Data Type: nvarchar(1000)`),
@@ -6293,18 +6293,18 @@ export const IntegrationSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(255)`),
-    NavigationBaseURL: z.string().nullish().describe(`
+    NavigationBaseURL: z.string().nullable().describe(`
         * * Field Name: NavigationBaseURL
         * * Display Name: Navigation Base URL
         * * SQL Data Type: nvarchar(500)`),
-    ClassName: z.string().nullish().describe(`
+    ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
         * * Display Name: Class Name
         * * SQL Data Type: nvarchar(100)`),
-    ImportPath: z.string().nullish().describe(`
+    ImportPath: z.string().nullable().describe(`
         * * Field Name: ImportPath
         * * Display Name: Import Path
         * * SQL Data Type: nvarchar(100)`),
@@ -6349,7 +6349,7 @@ export const LibrarySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6364,12 +6364,12 @@ export const LibrarySchema = z.object({
     *   * Active
     *   * Disabled
     * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.`),
-    TypeDefinitions: z.string().nullish().describe(`
+    TypeDefinitions: z.string().nullable().describe(`
         * * Field Name: TypeDefinitions
         * * Display Name: Type Definitions
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Code showing the types and functions defined in the library to be used for reference by humans and AI`),
-    SampleCode: z.string().nullish().describe(`
+    SampleCode: z.string().nullable().describe(`
         * * Field Name: SampleCode
         * * Display Name: Sample Code
         * * SQL Data Type: nvarchar(MAX)
@@ -6450,11 +6450,11 @@ export const ListCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -6474,7 +6474,7 @@ export const ListCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
@@ -6532,7 +6532,7 @@ export const ListDetailSchema = z.object({
     *   * Error
     *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.`),
-    AdditionalData: z.string().nullish().describe(`
+    AdditionalData: z.string().nullable().describe(`
         * * Field Name: AdditionalData
         * * Display Name: Additional Data
         * * SQL Data Type: nvarchar(MAX)
@@ -6556,7 +6556,7 @@ export const ListSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     EntityID: z.string().describe(`
@@ -6569,16 +6569,16 @@ export const ListSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: List Categories (vwListCategories.ID)`),
-    ExternalSystemRecordID: z.string().nullish().describe(`
+    ExternalSystemRecordID: z.string().nullable().describe(`
         * * Field Name: ExternalSystemRecordID
         * * Display Name: External System Record ID
         * * SQL Data Type: nvarchar(100)`),
-    CompanyIntegrationID: z.string().nullish().describe(`
+    CompanyIntegrationID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: uniqueidentifier
@@ -6601,13 +6601,113 @@ export const ListSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Report User States
+ */
+export const ReportUserStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ReportID: z.string().describe(`
+        * * Field Name: ReportID
+        * * Display Name: Report ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Reports (vwReports.ID)
+        * * Default Value: null`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Default Value: null`),
+    ReportState: z.string().nullable().describe(`
+        * * Field Name: ReportState
+        * * Display Name: Report State
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
+    * * Description: JSON serialized state of user interaction with the report`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ReportUserStateEntityType = z.infer<typeof ReportUserStateSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Report Versions
+ */
+export const ReportVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ReportID: z.string().describe(`
+        * * Field Name: ReportID
+        * * Display Name: Report ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Reports (vwReports.ID)
+        * * Default Value: null`),
+    VersionNumber: z.number().describe(`
+        * * Field Name: VersionNumber
+        * * Display Name: Version Number
+        * * SQL Data Type: int
+        * * Default Value: null
+    * * Description: Report version number, sequential per report starting at 1`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+    * * Description: Name of this report version`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
+    * * Description: Description of this report version`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: null
+    * * Description: JSON configuration of report structure, layout and logic`),
+    DataContextUpdated: z.boolean().describe(`
+        * * Field Name: DataContextUpdated
+        * * Display Name: Data Context Updated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Indicates if the data context was updated in this version`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
 
 /**
  * zod schema definition for the entity Output Delivery Types
@@ -6622,7 +6722,7 @@ export const OutputDeliveryTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6653,11 +6753,11 @@ export const OutputFormatTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    DisplayFormat: z.string().nullish().describe(`
+    DisplayFormat: z.string().nullable().describe(`
         * * Field Name: DisplayFormat
         * * Display Name: Display Format
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6688,7 +6788,7 @@ export const OutputTriggerTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6719,32 +6819,32 @@ export const QuerySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)`),
-    UserQuestion: z.string().nullish().describe(`
+    UserQuestion: z.string().nullable().describe(`
         * * Field Name: UserQuestion
         * * Display Name: User Question
         * * SQL Data Type: nvarchar(MAX)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    SQL: z.string().nullish().describe(`
+    SQL: z.string().nullable().describe(`
         * * Field Name: SQL
         * * Display Name: SQL
         * * SQL Data Type: nvarchar(MAX)`),
-    TechnicalDescription: z.string().nullish().describe(`
+    TechnicalDescription: z.string().nullable().describe(`
         * * Field Name: TechnicalDescription
         * * Display Name: Technical Description
         * * SQL Data Type: nvarchar(MAX)`),
-    OriginalSQL: z.string().nullish().describe(`
+    OriginalSQL: z.string().nullable().describe(`
         * * Field Name: OriginalSQL
         * * Display Name: Original SQL
         * * SQL Data Type: nvarchar(MAX)`),
-    Feedback: z.string().nullish().describe(`
+    Feedback: z.string().nullable().describe(`
         * * Field Name: Feedback
         * * Display Name: Feedback
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6759,13 +6859,13 @@ export const QuerySchema = z.object({
     *   * Approved
     *   * Rejected
     *   * Expired`),
-    QualityRank: z.number().nullish().describe(`
+    QualityRank: z.number().nullable().describe(`
         * * Field Name: QualityRank
         * * Display Name: Quality Rank
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Value indicating the quality of the query, higher values mean a better quality`),
-    ExecutionCostRank: z.number().nullish().describe(`
+    ExecutionCostRank: z.number().nullable().describe(`
         * * Field Name: ExecutionCostRank
         * * Display Name: Execution Cost Rank
         * * SQL Data Type: int
@@ -6780,7 +6880,7 @@ export const QuerySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)`),
@@ -6801,12 +6901,12 @@ export const QueryCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6825,7 +6925,7 @@ export const QueryCategorySchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
@@ -6899,7 +6999,7 @@ export const QueryFieldSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6917,12 +7017,12 @@ export const QueryFieldSchema = z.object({
         * * Display Name: SQLFull Type
         * * SQL Data Type: nvarchar(100)
     * * Description: The full SQL type for the field, for example datetime or nvarchar(10) etc.`),
-    SourceEntityID: z.string().nullish().describe(`
+    SourceEntityID: z.string().nullable().describe(`
         * * Field Name: SourceEntityID
         * * Display Name: Source Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    SourceFieldName: z.string().nullish().describe(`
+    SourceFieldName: z.string().nullable().describe(`
         * * Field Name: SourceFieldName
         * * Display Name: Source Field Name
         * * SQL Data Type: nvarchar(255)`),
@@ -6931,7 +7031,7 @@ export const QueryFieldSchema = z.object({
         * * Display Name: Is Computed
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    ComputationDescription: z.string().nullish().describe(`
+    ComputationDescription: z.string().nullable().describe(`
         * * Field Name: ComputationDescription
         * * Display Name: Computation Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6940,7 +7040,7 @@ export const QueryFieldSchema = z.object({
         * * Display Name: Is Summary
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    SummaryDescription: z.string().nullish().describe(`
+    SummaryDescription: z.string().nullable().describe(`
         * * Field Name: SummaryDescription
         * * Display Name: Summary Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -6958,7 +7058,7 @@ export const QueryFieldSchema = z.object({
         * * Field Name: Query
         * * Display Name: Query
         * * SQL Data Type: nvarchar(255)`),
-    SourceEntity: z.string().nullish().describe(`
+    SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -7031,31 +7131,31 @@ export const QueueTaskSchema = z.object({
     *   * In Progress
     *   * Completed
     *   * Failed`),
-    StartedAt: z.date().nullish().describe(`
+    StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
-    Data: z.string().nullish().describe(`
+    Data: z.string().nullable().describe(`
         * * Field Name: Data
         * * Display Name: Data
         * * SQL Data Type: nvarchar(MAX)`),
-    Options: z.string().nullish().describe(`
+    Options: z.string().nullable().describe(`
         * * Field Name: Options
         * * Display Name: Options
         * * SQL Data Type: nvarchar(MAX)`),
-    Output: z.string().nullish().describe(`
+    Output: z.string().nullable().describe(`
         * * Field Name: Output
         * * Display Name: Output
         * * SQL Data Type: nvarchar(MAX)`),
-    ErrorMessage: z.string().nullish().describe(`
+    ErrorMessage: z.string().nullable().describe(`
         * * Field Name: ErrorMessage
         * * Display Name: Error Message
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7090,7 +7190,7 @@ export const QueueTypeSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7098,7 +7198,7 @@ export const QueueTypeSchema = z.object({
         * * Field Name: DriverClass
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(100)`),
-    DriverImportPath: z.string().nullish().describe(`
+    DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
         * * SQL Data Type: nvarchar(200)`),
@@ -7134,7 +7234,7 @@ export const QueueSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7148,47 +7248,47 @@ export const QueueSchema = z.object({
         * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    ProcessPID: z.number().nullish().describe(`
+    ProcessPID: z.number().nullable().describe(`
         * * Field Name: ProcessPID
         * * Display Name: Process PID
         * * SQL Data Type: int`),
-    ProcessPlatform: z.string().nullish().describe(`
+    ProcessPlatform: z.string().nullable().describe(`
         * * Field Name: ProcessPlatform
         * * Display Name: Process Platform
         * * SQL Data Type: nvarchar(30)`),
-    ProcessVersion: z.string().nullish().describe(`
+    ProcessVersion: z.string().nullable().describe(`
         * * Field Name: ProcessVersion
         * * Display Name: Process Version
         * * SQL Data Type: nvarchar(15)`),
-    ProcessCwd: z.string().nullish().describe(`
+    ProcessCwd: z.string().nullable().describe(`
         * * Field Name: ProcessCwd
         * * Display Name: Process Cwd
         * * SQL Data Type: nvarchar(100)`),
-    ProcessIPAddress: z.string().nullish().describe(`
+    ProcessIPAddress: z.string().nullable().describe(`
         * * Field Name: ProcessIPAddress
         * * Display Name: Process IPAddress
         * * SQL Data Type: nvarchar(50)`),
-    ProcessMacAddress: z.string().nullish().describe(`
+    ProcessMacAddress: z.string().nullable().describe(`
         * * Field Name: ProcessMacAddress
         * * Display Name: Process Mac Address
         * * SQL Data Type: nvarchar(50)`),
-    ProcessOSName: z.string().nullish().describe(`
+    ProcessOSName: z.string().nullable().describe(`
         * * Field Name: ProcessOSName
         * * Display Name: Process OSName
         * * SQL Data Type: nvarchar(25)`),
-    ProcessOSVersion: z.string().nullish().describe(`
+    ProcessOSVersion: z.string().nullable().describe(`
         * * Field Name: ProcessOSVersion
         * * Display Name: Process OSVersion
         * * SQL Data Type: nvarchar(10)`),
-    ProcessHostName: z.string().nullish().describe(`
+    ProcessHostName: z.string().nullable().describe(`
         * * Field Name: ProcessHostName
         * * Display Name: Process Host Name
         * * SQL Data Type: nvarchar(50)`),
-    ProcessUserID: z.string().nullish().describe(`
+    ProcessUserID: z.string().nullable().describe(`
         * * Field Name: ProcessUserID
         * * Display Name: Process User ID
         * * SQL Data Type: nvarchar(25)`),
-    ProcessUserName: z.string().nullish().describe(`
+    ProcessUserName: z.string().nullable().describe(`
         * * Field Name: ProcessUserName
         * * Display Name: Process User Name
         * * SQL Data Type: nvarchar(50)`),
@@ -7239,7 +7339,7 @@ export const RecommendationItemSchema = z.object({
         * * Display Name: Destination Entity Record ID
         * * SQL Data Type: nvarchar(450)
     * * Description: The record ID of the destination entity`),
-    MatchProbability: z.number().nullish().describe(`
+    MatchProbability: z.number().nullable().describe(`
         * * Field Name: MatchProbability
         * * Display Name: Match Probability
         * * SQL Data Type: decimal(18, 15)
@@ -7275,7 +7375,7 @@ export const RecommendationProviderSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7312,7 +7412,7 @@ export const RecommendationRunSchema = z.object({
         * * Display Name: Start Date
         * * SQL Data Type: datetime
     * * Description: The start date of the recommendation run`),
-    EndDate: z.date().nullish().describe(`
+    EndDate: z.date().nullable().describe(`
         * * Field Name: EndDate
         * * Display Name: End Date
         * * SQL Data Type: datetime
@@ -7329,7 +7429,7 @@ export const RecommendationRunSchema = z.object({
     *   * Canceled
     *   * Error
     * * Description: The status of the recommendation run`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7416,7 +7516,7 @@ export const RecordChangeReplayRunSchema = z.object({
         * * Display Name: Started At
         * * SQL Data Type: datetime
     * * Description: Timestamp when the replay run started`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime
@@ -7529,21 +7629,21 @@ export const RecordChangeSchema = z.object({
     *   * Complete
     *   * Error
     * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error`),
-    ErrorLog: z.string().nullish().describe(`
+    ErrorLog: z.string().nullable().describe(`
         * * Field Name: ErrorLog
         * * Display Name: Error Log
         * * SQL Data Type: nvarchar(MAX)`),
-    ReplayRunID: z.string().nullish().describe(`
+    ReplayRunID: z.string().nullable().describe(`
         * * Field Name: ReplayRunID
         * * Display Name: Replay Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Record Change Replay Runs (vwRecordChangeReplayRuns.ID)`),
-    IntegrationID: z.string().nullish().describe(`
+    IntegrationID: z.string().nullable().describe(`
         * * Field Name: IntegrationID
         * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Integrations (vwIntegrations.ID)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
     CreatedAt: z.date().describe(`
@@ -7564,7 +7664,7 @@ export const RecordChangeSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Integration: z.string().nullish().describe(`
+    Integration: z.string().nullable().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
@@ -7600,7 +7700,7 @@ export const RecordMergeDeletionLogSchema = z.object({
     *   * Pending
     *   * Complete
     *   * Error`),
-    ProcessingLog: z.string().nullish().describe(`
+    ProcessingLog: z.string().nullable().describe(`
         * * Field Name: ProcessingLog
         * * Display Name: Processing Log
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7651,7 +7751,7 @@ export const RecordMergeLogSchema = z.object({
     *   * Pending
     *   * Approved
     *   * Rejected`),
-    ApprovedByUserID: z.string().nullish().describe(`
+    ApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: ApprovedByUserID
         * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
@@ -7671,15 +7771,15 @@ export const RecordMergeLogSchema = z.object({
         * * Display Name: Processing Started At
         * * SQL Data Type: datetime
         * * Default Value: getdate()`),
-    ProcessingEndedAt: z.date().nullish().describe(`
+    ProcessingEndedAt: z.date().nullable().describe(`
         * * Field Name: ProcessingEndedAt
         * * Display Name: Processing Ended At
         * * SQL Data Type: datetime`),
-    ProcessingLog: z.string().nullish().describe(`
+    ProcessingLog: z.string().nullable().describe(`
         * * Field Name: ProcessingLog
         * * Display Name: Processing Log
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -7701,7 +7801,7 @@ export const RecordMergeLogSchema = z.object({
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User
         * * SQL Data Type: nvarchar(100)`),
-    ApprovedByUser: z.string().nullish().describe(`
+    ApprovedByUser: z.string().nullable().describe(`
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
@@ -7722,11 +7822,11 @@ export const ReportCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -7746,7 +7846,7 @@ export const ReportCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
@@ -7816,11 +7916,11 @@ export const ReportSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -7840,49 +7940,49 @@ export const ReportSchema = z.object({
     *   * None
     *   * Specific
     *   * Everyone`),
-    ConversationID: z.string().nullish().describe(`
+    ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversations (vwConversations.ID)`),
-    ConversationDetailID: z.string().nullish().describe(`
+    ConversationDetailID: z.string().nullable().describe(`
         * * Field Name: ConversationDetailID
         * * Display Name: Conversation Detail ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)`),
-    DataContextID: z.string().nullish().describe(`
+    DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)`),
-    Configuration: z.string().nullish().describe(`
+    Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)`),
-    OutputTriggerTypeID: z.string().nullish().describe(`
+    OutputTriggerTypeID: z.string().nullable().describe(`
         * * Field Name: OutputTriggerTypeID
         * * Display Name: Output Trigger Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)`),
-    OutputFormatTypeID: z.string().nullish().describe(`
+    OutputFormatTypeID: z.string().nullable().describe(`
         * * Field Name: OutputFormatTypeID
         * * Display Name: Output Format Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)`),
-    OutputDeliveryTypeID: z.string().nullish().describe(`
+    OutputDeliveryTypeID: z.string().nullable().describe(`
         * * Field Name: OutputDeliveryTypeID
         * * Display Name: Output Delivery Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)`),
-    OutputFrequency: z.string().nullish().describe(`
+    OutputFrequency: z.string().nullable().describe(`
         * * Field Name: OutputFrequency
         * * Display Name: Output Frequency
         * * SQL Data Type: nvarchar(50)`),
-    OutputTargetEmail: z.string().nullish().describe(`
+    OutputTargetEmail: z.string().nullable().describe(`
         * * Field Name: OutputTargetEmail
         * * Display Name: Output Target Email
         * * SQL Data Type: nvarchar(255)`),
-    OutputWorkflowID: z.string().nullish().describe(`
+    OutputWorkflowID: z.string().nullable().describe(`
         * * Field Name: OutputWorkflowID
         * * Display Name: Output Workflow ID
         * * SQL Data Type: uniqueidentifier
@@ -7897,7 +7997,7 @@ export const ReportSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)`),
@@ -7905,27 +8005,27 @@ export const ReportSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    Conversation: z.string().nullish().describe(`
+    Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
-    DataContext: z.string().nullish().describe(`
+    DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
-    OutputTriggerType: z.string().nullish().describe(`
+    OutputTriggerType: z.string().nullable().describe(`
         * * Field Name: OutputTriggerType
         * * Display Name: Output Trigger Type
         * * SQL Data Type: nvarchar(255)`),
-    OutputFormatType: z.string().nullish().describe(`
+    OutputFormatType: z.string().nullable().describe(`
         * * Field Name: OutputFormatType
         * * Display Name: Output Format Type
         * * SQL Data Type: nvarchar(255)`),
-    OutputDeliveryType: z.string().nullish().describe(`
+    OutputDeliveryType: z.string().nullable().describe(`
         * * Field Name: OutputDeliveryType
         * * Display Name: Output Delivery Type
         * * SQL Data Type: nvarchar(255)`),
-    OutputWorkflow: z.string().nullish().describe(`
+    OutputWorkflow: z.string().nullable().describe(`
         * * Field Name: OutputWorkflow
         * * Display Name: Output Workflow
         * * SQL Data Type: nvarchar(100)`),
@@ -7960,7 +8060,7 @@ export const ResourceLinkSchema = z.object({
         * * Display Name: Resource Record ID
         * * SQL Data Type: nvarchar(255)
     * * Description: ID of the specific resource being linked`),
-    FolderID: z.string().nullish().describe(`
+    FolderID: z.string().nullable().describe(`
         * * Field Name: FolderID
         * * Display Name: Folder ID
         * * SQL Data Type: nvarchar(255)
@@ -8016,27 +8116,27 @@ export const ResourcePermissionSchema = z.object({
     *   * Role
     *   * User
     * * Description: The level of sharing either Role or User`),
-    StartSharingAt: z.date().nullish().describe(`
+    StartSharingAt: z.date().nullable().describe(`
         * * Field Name: StartSharingAt
         * * Display Name: Start Sharing At
         * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing starts`),
-    EndSharingAt: z.date().nullish().describe(`
+    EndSharingAt: z.date().nullable().describe(`
         * * Field Name: EndSharingAt
         * * Display Name: End Sharing At
         * * SQL Data Type: datetimeoffset
     * * Description: Optional: Date when sharing ends`),
-    RoleID: z.string().nullish().describe(`
+    RoleID: z.string().nullable().describe(`
         * * Field Name: RoleID
         * * Display Name: Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Roles (vwRoles.ID)`),
-    UserID: z.string().nullish().describe(`
+    UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    PermissionLevel: z.union([z.literal('View'), z.literal('Edit'), z.literal('Owner')]).nullish().describe(`
+    PermissionLevel: z.union([z.literal('View'), z.literal('Edit'), z.literal('Owner')]).nullable().describe(`
         * * Field Name: PermissionLevel
         * * Display Name: Permission Level
         * * SQL Data Type: nvarchar(20)
@@ -8072,11 +8172,11 @@ export const ResourcePermissionSchema = z.object({
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
-    Role: z.string().nullish().describe(`
+    Role: z.string().nullable().describe(`
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
-    User: z.string().nullish().describe(`
+    User: z.string().nullable().describe(`
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
@@ -8101,15 +8201,15 @@ export const ResourceTypeSchema = z.object({
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Icon: z.string().nullish().describe(`
+    Icon: z.string().nullable().describe(`
         * * Field Name: Icon
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(100)`),
-    EntityID: z.string().nullish().describe(`
+    EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
@@ -8124,17 +8224,17 @@ export const ResourceTypeSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CategoryEntityID: z.string().nullish().describe(`
+    CategoryEntityID: z.string().nullable().describe(`
         * * Field Name: CategoryEntityID
         * * Display Name: Category Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
     * * Description: Nullable foreign key to the ID column in Entities entity, representing the category entity. ASSUMPTION: If provided, the assumption is there is a self-referencing/recursive foreign key establishing a hierarchy within the Category Entity, commonly called ParentID, but it can be named anything.`),
-    Entity: z.string().nullish().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
-    CategoryEntity: z.string().nullish().describe(`
+    CategoryEntity: z.string().nullable().describe(`
         * * Field Name: CategoryEntity
         * * Display Name: Category Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -8153,16 +8253,16 @@ export const RoleSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the role`),
-    DirectoryID: z.string().nullish().describe(`
+    DirectoryID: z.string().nullable().describe(`
         * * Field Name: DirectoryID
         * * Display Name: Directory ID
         * * SQL Data Type: nvarchar(250)
     * * Description: The unique ID of the role in the directory being used for authentication, for example an ID in Azure.`),
-    SQLName: z.string().nullish().describe(`
+    SQLName: z.string().nullable().describe(`
         * * Field Name: SQLName
         * * SQL Data Type: nvarchar(250)
     * * Description: The name of the role in the database, this is used for auto-generating permission statements by CodeGen`),
@@ -8193,11 +8293,11 @@ export const RowLevelSecurityFilterSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    FilterText: z.string().nullish().describe(`
+    FilterText: z.string().nullable().describe(`
         * * Field Name: FilterText
         * * Display Name: Filter Text
         * * SQL Data Type: nvarchar(MAX)`),
@@ -8242,11 +8342,11 @@ export const ScheduledActionParamSchema = z.object({
     * * Possible Values 
     *   * Static
     *   * SQL Statement`),
-    Value: z.string().nullish().describe(`
+    Value: z.string().nullable().describe(`
         * * Field Name: Value
         * * Display Name: Value
         * * SQL Data Type: nvarchar(MAX)`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -8285,7 +8385,7 @@ export const ScheduledActionSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -8311,7 +8411,7 @@ export const ScheduledActionSchema = z.object({
     *   * Yearly
     *   * Custom
     * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)`),
-    CronExpression: z.string().nullish().describe(`
+    CronExpression: z.string().nullable().describe(`
         * * Field Name: CronExpression
         * * Display Name: Cron Expression
         * * SQL Data Type: nvarchar(100)
@@ -8333,27 +8433,27 @@ export const ScheduledActionSchema = z.object({
     *   * Disabled
     *   * Expired
     * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)`),
-    IntervalDays: z.number().nullish().describe(`
+    IntervalDays: z.number().nullable().describe(`
         * * Field Name: IntervalDays
         * * Display Name: Interval Days
         * * SQL Data Type: int
     * * Description: Interval in days for the scheduled action`),
-    DayOfWeek: z.string().nullish().describe(`
+    DayOfWeek: z.string().nullable().describe(`
         * * Field Name: DayOfWeek
         * * Display Name: Day Of Week
         * * SQL Data Type: nvarchar(20)
     * * Description: Day of the week for the scheduled action`),
-    DayOfMonth: z.number().nullish().describe(`
+    DayOfMonth: z.number().nullable().describe(`
         * * Field Name: DayOfMonth
         * * Display Name: Day Of Month
         * * SQL Data Type: int
     * * Description: Day of the month for the scheduled action`),
-    Month: z.string().nullish().describe(`
+    Month: z.string().nullable().describe(`
         * * Field Name: Month
         * * Display Name: Month
         * * SQL Data Type: nvarchar(20)
     * * Description: Month for the scheduled action`),
-    CustomCronExpression: z.string().nullish().describe(`
+    CustomCronExpression: z.string().nullable().describe(`
         * * Field Name: CustomCronExpression
         * * Display Name: Custom Cron Expression
         * * SQL Data Type: nvarchar(255)`),
@@ -8400,7 +8500,7 @@ export const SchemaInfoSchema = z.object({
         * * Field Name: EntityIDMax
         * * Display Name: Entity IDMax
         * * SQL Data Type: int`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)`),
@@ -8429,7 +8529,7 @@ export const SkillSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
@@ -8444,7 +8544,7 @@ export const SkillSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
@@ -8510,7 +8610,7 @@ export const TagSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -8519,7 +8619,7 @@ export const TagSchema = z.object({
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -8533,7 +8633,7 @@ export const TagSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -8555,12 +8655,12 @@ export const TemplateCategorySchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template category`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template category`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -8580,7 +8680,7 @@ export const TemplateCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
@@ -8606,7 +8706,7 @@ export const TemplateContentTypeSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template content type`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -8659,7 +8759,7 @@ export const TemplateContentSchema = z.object({
         * * Display Name: Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Content Types (vwTemplateContentTypes.ID)`),
-    TemplateText: z.string().nullish().describe(`
+    TemplateText: z.string().nullable().describe(`
         * * Field Name: TemplateText
         * * Display Name: Template Text
         * * SQL Data Type: nvarchar(MAX)
@@ -8716,7 +8816,7 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the parameter`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -8734,7 +8834,7 @@ export const TemplateParamSchema = z.object({
     *   * Record
     *   * Entity
     * * Description: Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.`),
-    DefaultValue: z.string().nullish().describe(`
+    DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(MAX)
@@ -8744,27 +8844,27 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Is Required
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    LinkedParameterName: z.string().nullish().describe(`
+    LinkedParameterName: z.string().nullable().describe(`
         * * Field Name: LinkedParameterName
         * * Display Name: Linked Parameter Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Only used when Type=Entity, this is used to link an Entity parameter with another parameter so that the rows in the Entity parameter can be filtered automatically based on the FKEY relationship between the Record and this Entity parameter. For example, if the Entity-based parameter is for an entity like Activities and there is another parameter of type Record for an entity like Contacts, in that situation the Activities Parameter would point to the Contacts parameter as the LinkedParameterName because we would filter down the Activities in each template render to only those linked to the Contact.`),
-    LinkedParameterField: z.string().nullish().describe(`
+    LinkedParameterField: z.string().nullable().describe(`
         * * Field Name: LinkedParameterField
         * * Display Name: Linked Parameter Field
         * * SQL Data Type: nvarchar(500)
     * * Description: If the LinkedParameterName is specified, this is an optional setting to specify the field within the LinkedParameter that will be used for filtering. This is only needed if there is more than one foreign key relationship between the Entity parameter and the Linked parameter, or if there is no defined foreign key in the database between the two entities.`),
-    ExtraFilter: z.string().nullish().describe(`
+    ExtraFilter: z.string().nullable().describe(`
         * * Field Name: ExtraFilter
         * * Display Name: Extra Filter
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Only used when Type = Entity, used to specify an optional filter to reduce the set of rows that are returned for each of the templates being rendered.`),
-    EntityID: z.string().nullish().describe(`
+    EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    RecordID: z.string().nullish().describe(`
+    RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
         * * Display Name: Record ID
         * * SQL Data Type: nvarchar(2000)
@@ -8779,7 +8879,7 @@ export const TemplateParamSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    OrderBy: z.string().nullish().describe(`
+    OrderBy: z.string().nullable().describe(`
         * * Field Name: OrderBy
         * * Display Name: Order By
         * * SQL Data Type: nvarchar(MAX)
@@ -8788,7 +8888,7 @@ export const TemplateParamSchema = z.object({
         * * Field Name: Template
         * * Display Name: Template
         * * SQL Data Type: nvarchar(255)`),
-    Entity: z.string().nullish().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -8810,17 +8910,17 @@ export const TemplateSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
     * * Description: Name of the template`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Template Categories (vwTemplateCategories.ID)`),
-    UserPrompt: z.string().nullish().describe(`
+    UserPrompt: z.string().nullable().describe(`
         * * Field Name: UserPrompt
         * * Display Name: User Prompt
         * * SQL Data Type: nvarchar(MAX)
@@ -8830,12 +8930,12 @@ export const TemplateSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    ActiveAt: z.date().nullish().describe(`
+    ActiveAt: z.date().nullable().describe(`
         * * Field Name: ActiveAt
         * * Display Name: Active At
         * * SQL Data Type: datetime
     * * Description: Optional, if provided, this template will not be available for use until the specified date. Requires IsActive to be set to 1`),
-    DisabledAt: z.date().nullish().describe(`
+    DisabledAt: z.date().nullable().describe(`
         * * Field Name: DisabledAt
         * * Display Name: Disabled At
         * * SQL Data Type: datetime
@@ -8856,7 +8956,7 @@ export const TemplateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Category: z.string().nullish().describe(`
+    Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)`),
@@ -9026,20 +9126,20 @@ export const UserNotificationSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
-    Title: z.string().nullish().describe(`
+    Title: z.string().nullable().describe(`
         * * Field Name: Title
         * * Display Name: Title
         * * SQL Data Type: nvarchar(255)`),
-    Message: z.string().nullish().describe(`
+    Message: z.string().nullable().describe(`
         * * Field Name: Message
         * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)`),
-    ResourceTypeID: z.string().nullish().describe(`
+    ResourceTypeID: z.string().nullable().describe(`
         * * Field Name: ResourceTypeID
         * * Display Name: Resource Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)`),
-    ResourceConfiguration: z.string().nullish().describe(`
+    ResourceConfiguration: z.string().nullable().describe(`
         * * Field Name: ResourceConfiguration
         * * Display Name: Resource Configuration
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9048,7 +9148,7 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Unread
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    ReadAt: z.date().nullish().describe(`
+    ReadAt: z.date().nullable().describe(`
         * * Field Name: ReadAt
         * * Display Name: Read At
         * * SQL Data Type: datetime`),
@@ -9062,7 +9162,7 @@ export const UserNotificationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResourceRecordID: z.string().nullish().describe(`
+    ResourceRecordID: z.string().nullable().describe(`
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
         * * SQL Data Type: uniqueidentifier`),
@@ -9070,7 +9170,7 @@ export const UserNotificationSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
-    ResourceType: z.string().nullish().describe(`
+    ResourceType: z.string().nullable().describe(`
         * * Field Name: ResourceType
         * * Display Name: Resource Type
         * * SQL Data Type: nvarchar(255)`),
@@ -9133,7 +9233,7 @@ export const UserRecordLogSchema = z.object({
         * * Field Name: UserName
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
-    UserFirstLast: z.string().nullish().describe(`
+    UserFirstLast: z.string().nullable().describe(`
         * * Field Name: UserFirstLast
         * * Display Name: User First Last
         * * SQL Data Type: nvarchar(101)`),
@@ -9141,11 +9241,11 @@ export const UserRecordLogSchema = z.object({
         * * Field Name: UserEmail
         * * Display Name: User Email
         * * SQL Data Type: nvarchar(100)`),
-    UserSupervisor: z.string().nullish().describe(`
+    UserSupervisor: z.string().nullable().describe(`
         * * Field Name: UserSupervisor
         * * Display Name: User Supervisor
         * * SQL Data Type: nvarchar(81)`),
-    UserSupervisorEmail: z.string().nullish().describe(`
+    UserSupervisorEmail: z.string().nullable().describe(`
         * * Field Name: UserSupervisorEmail
         * * Display Name: User Supervisor Email
         * * SQL Data Type: nvarchar(100)`),
@@ -9207,11 +9307,11 @@ export const UserViewCategorySchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullish().describe(`
+    ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
@@ -9236,7 +9336,7 @@ export const UserViewCategorySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Parent: z.string().nullish().describe(`
+    Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
@@ -9356,10 +9456,10 @@ export const UserViewSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    CategoryID: z.string().nullish().describe(`
+    CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: uniqueidentifier
@@ -9374,11 +9474,11 @@ export const UserViewSchema = z.object({
         * * Display Name: Is Default
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    GridState: z.string().nullish().describe(`
+    GridState: z.string().nullable().describe(`
         * * Field Name: GridState
         * * Display Name: Grid State
         * * SQL Data Type: nvarchar(MAX)`),
-    FilterState: z.string().nullish().describe(`
+    FilterState: z.string().nullable().describe(`
         * * Field Name: FilterState
         * * Display Name: Filter State
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9392,19 +9492,19 @@ export const UserViewSchema = z.object({
         * * Display Name: Smart Filter Enabled
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    SmartFilterPrompt: z.string().nullish().describe(`
+    SmartFilterPrompt: z.string().nullable().describe(`
         * * Field Name: SmartFilterPrompt
         * * Display Name: Smart Filter Prompt
         * * SQL Data Type: nvarchar(MAX)`),
-    SmartFilterWhereClause: z.string().nullish().describe(`
+    SmartFilterWhereClause: z.string().nullable().describe(`
         * * Field Name: SmartFilterWhereClause
         * * Display Name: Smart Filter Where Clause
         * * SQL Data Type: nvarchar(MAX)`),
-    SmartFilterExplanation: z.string().nullish().describe(`
+    SmartFilterExplanation: z.string().nullable().describe(`
         * * Field Name: SmartFilterExplanation
         * * Display Name: Smart Filter Explanation
         * * SQL Data Type: nvarchar(MAX)`),
-    WhereClause: z.string().nullish().describe(`
+    WhereClause: z.string().nullable().describe(`
         * * Field Name: WhereClause
         * * Display Name: Where Clause
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9413,7 +9513,7 @@ export const UserViewSchema = z.object({
         * * Display Name: Custom Where Clause
         * * SQL Data Type: bit
         * * Default Value: 0`),
-    SortState: z.string().nullish().describe(`
+    SortState: z.string().nullable().describe(`
         * * Field Name: SortState
         * * Display Name: Sort State
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9431,7 +9531,7 @@ export const UserViewSchema = z.object({
         * * Field Name: UserName
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
-    UserFirstLast: z.string().nullish().describe(`
+    UserFirstLast: z.string().nullable().describe(`
         * * Field Name: UserFirstLast
         * * Display Name: User First Last
         * * SQL Data Type: nvarchar(101)`),
@@ -9466,15 +9566,15 @@ export const UserSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    FirstName: z.string().nullish().describe(`
+    FirstName: z.string().nullable().describe(`
         * * Field Name: FirstName
         * * Display Name: First Name
         * * SQL Data Type: nvarchar(50)`),
-    LastName: z.string().nullish().describe(`
+    LastName: z.string().nullable().describe(`
         * * Field Name: LastName
         * * Display Name: Last Name
         * * SQL Data Type: nvarchar(50)`),
-    Title: z.string().nullish().describe(`
+    Title: z.string().nullable().describe(`
         * * Field Name: Title
         * * Display Name: Title
         * * SQL Data Type: nvarchar(50)`),
@@ -9498,16 +9598,16 @@ export const UserSchema = z.object({
         * * Display Name: Linked Record Type
         * * SQL Data Type: nchar(10)
         * * Default Value: None`),
-    LinkedEntityID: z.string().nullish().describe(`
+    LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)`),
-    LinkedEntityRecordID: z.string().nullish().describe(`
+    LinkedEntityRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityRecordID
         * * Display Name: Linked Entity Record ID
         * * SQL Data Type: nvarchar(450)`),
-    EmployeeID: z.string().nullish().describe(`
+    EmployeeID: z.string().nullable().describe(`
         * * Field Name: EmployeeID
         * * Display Name: Employee
         * * SQL Data Type: uniqueidentifier
@@ -9522,27 +9622,27 @@ export const UserSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    FirstLast: z.string().nullish().describe(`
+    FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
         * * SQL Data Type: nvarchar(101)`),
-    EmployeeFirstLast: z.string().nullish().describe(`
+    EmployeeFirstLast: z.string().nullable().describe(`
         * * Field Name: EmployeeFirstLast
         * * Display Name: Employee First Last
         * * SQL Data Type: nvarchar(81)`),
-    EmployeeEmail: z.string().nullish().describe(`
+    EmployeeEmail: z.string().nullable().describe(`
         * * Field Name: EmployeeEmail
         * * Display Name: Employee Email
         * * SQL Data Type: nvarchar(100)`),
-    EmployeeTitle: z.string().nullish().describe(`
+    EmployeeTitle: z.string().nullable().describe(`
         * * Field Name: EmployeeTitle
         * * Display Name: Employee Title
         * * SQL Data Type: nvarchar(50)`),
-    EmployeeSupervisor: z.string().nullish().describe(`
+    EmployeeSupervisor: z.string().nullable().describe(`
         * * Field Name: EmployeeSupervisor
         * * Display Name: Employee Supervisor
         * * SQL Data Type: nvarchar(81)`),
-    EmployeeSupervisorEmail: z.string().nullish().describe(`
+    EmployeeSupervisorEmail: z.string().nullable().describe(`
         * * Field Name: EmployeeSupervisorEmail
         * * Display Name: Employee Supervisor Email
         * * SQL Data Type: nvarchar(100)`),
@@ -9563,15 +9663,15 @@ export const VectorDatabaseSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    DefaultURL: z.string().nullish().describe(`
+    DefaultURL: z.string().nullable().describe(`
         * * Field Name: DefaultURL
         * * Display Name: Default URL
         * * SQL Data Type: nvarchar(255)`),
-    ClassKey: z.string().nullish().describe(`
+    ClassKey: z.string().nullable().describe(`
         * * Field Name: ClassKey
         * * Display Name: Class Key
         * * SQL Data Type: nvarchar(100)`),
@@ -9602,7 +9702,7 @@ export const VectorIndexSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9659,7 +9759,7 @@ export const VersionInstallationSchema = z.object({
         * * Field Name: PatchVersion
         * * Display Name: Patch Version
         * * SQL Data Type: int`),
-    Type: z.union([z.literal('New'), z.literal('Upgrade')]).nullish().describe(`
+    Type: z.union([z.literal('New'), z.literal('Upgrade')]).nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
@@ -9685,12 +9785,12 @@ export const VersionInstallationSchema = z.object({
     *   * Complete
     *   * Failed
     * * Description: Pending, Complete, Failed`),
-    InstallLog: z.string().nullish().describe(`
+    InstallLog: z.string().nullable().describe(`
         * * Field Name: InstallLog
         * * Display Name: Install Log
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Any logging that was saved from the installation process`),
-    Comments: z.string().nullish().describe(`
+    Comments: z.string().nullable().describe(`
         * * Field Name: Comments
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
@@ -9705,7 +9805,7 @@ export const VersionInstallationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CompleteVersion: z.string().nullish().describe(`
+    CompleteVersion: z.string().nullable().describe(`
         * * Field Name: CompleteVersion
         * * Display Name: Complete Version
         * * SQL Data Type: nvarchar(302)`),
@@ -9724,7 +9824,7 @@ export const WorkflowEngineSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     DriverPath: z.string().describe(`
@@ -9770,7 +9870,7 @@ export const WorkflowRunSchema = z.object({
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime`),
-    EndedAt: z.date().nullish().describe(`
+    EndedAt: z.date().nullable().describe(`
         * * Field Name: EndedAt
         * * Display Name: Ended At
         * * SQL Data Type: datetime`),
@@ -9784,7 +9884,7 @@ export const WorkflowRunSchema = z.object({
     *   * In Progress
     *   * Complete
     *   * Failed`),
-    Results: z.string().nullish().describe(`
+    Results: z.string().nullable().describe(`
         * * Field Name: Results
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
@@ -9820,7 +9920,7 @@ export const WorkflowSchema = z.object({
     Name: z.string().describe(`
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     WorkflowEngineID: z.string().describe(`
@@ -9838,7 +9938,7 @@ export const WorkflowSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields`),
-    AutoRunIntervalUnits: z.union([z.literal('Years'), z.literal('Months'), z.literal('Weeks'), z.literal('Days'), z.literal('Hours'), z.literal('Minutes')]).nullish().describe(`
+    AutoRunIntervalUnits: z.union([z.literal('Years'), z.literal('Months'), z.literal('Weeks'), z.literal('Days'), z.literal('Hours'), z.literal('Minutes')]).nullable().describe(`
         * * Field Name: AutoRunIntervalUnits
         * * Display Name: Auto Run Interval Units
         * * SQL Data Type: nvarchar(20)
@@ -9851,12 +9951,12 @@ export const WorkflowSchema = z.object({
     *   * Hours
     *   * Minutes
     * * Description: Minutes, Hours, Days, Weeks, Months, Years`),
-    AutoRunInterval: z.number().nullish().describe(`
+    AutoRunInterval: z.number().nullable().describe(`
         * * Field Name: AutoRunInterval
         * * Display Name: Auto Run Interval
         * * SQL Data Type: int
     * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.`),
-    SubclassName: z.string().nullish().describe(`
+    SubclassName: z.string().nullable().describe(`
         * * Field Name: SubclassName
         * * Display Name: Subclass Name
         * * SQL Data Type: nvarchar(200)
@@ -9871,7 +9971,7 @@ export const WorkflowSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    AutoRunIntervalMinutes: z.number().nullish().describe(`
+    AutoRunIntervalMinutes: z.number().nullable().describe(`
         * * Field Name: AutoRunIntervalMinutes
         * * Display Name: Auto Run Interval Minutes
         * * SQL Data Type: int`),
@@ -9892,7 +9992,7 @@ export const WorkspaceItemSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9906,7 +10006,7 @@ export const WorkspaceItemSchema = z.object({
         * * Display Name: Resource Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)`),
-    ResourceRecordID: z.string().nullish().describe(`
+    ResourceRecordID: z.string().nullable().describe(`
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
         * * SQL Data Type: nvarchar(2000)`),
@@ -9914,7 +10014,7 @@ export const WorkspaceItemSchema = z.object({
         * * Field Name: Sequence
         * * Display Name: Sequence
         * * SQL Data Type: int`),
-    Configuration: z.string().nullish().describe(`
+    Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)`),
@@ -9953,7 +10053,7 @@ export const WorkspaceSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullish().describe(`
+    Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
@@ -27272,6 +27372,280 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+}
+
+
+/**
+ * MJ: Report User States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ReportUserState
+ * * Base View: vwReportUserStates
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Report User States')
+export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType> {
+    /**
+    * Loads the MJ: Report User States record from the database
+    * @param ID: string - primary key value to load the MJ: Report User States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ReportUserStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ReportID
+    * * Display Name: Report ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Reports (vwReports.ID)
+    * * Default Value: null
+    */
+    get ReportID(): string {
+        return this.Get('ReportID');
+    }
+    set ReportID(value: string) {
+        this.Set('ReportID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Default Value: null
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: ReportState
+    * * Display Name: Report State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    * * Description: JSON serialized state of user interaction with the report
+    */
+    get ReportState(): string | null {
+        return this.Get('ReportState');
+    }
+    set ReportState(value: string | null) {
+        this.Set('ReportState', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Report Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ReportVersion
+ * * Base View: vwReportVersions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Report Versions')
+export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
+    /**
+    * Loads the MJ: Report Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Report Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ReportVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionNumberGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ReportID
+    * * Display Name: Report ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Reports (vwReports.ID)
+    * * Default Value: null
+    */
+    get ReportID(): string {
+        return this.Get('ReportID');
+    }
+    set ReportID(value: string) {
+        this.Set('ReportID', value);
+    }
+
+    /**
+    * * Field Name: VersionNumber
+    * * Display Name: Version Number
+    * * SQL Data Type: int
+    * * Default Value: null
+    * * Description: Report version number, sequential per report starting at 1
+    */
+    get VersionNumber(): number {
+        return this.Get('VersionNumber');
+    }
+    set VersionNumber(value: number) {
+        this.Set('VersionNumber', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    * * Description: Name of this report version
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    * * Description: Description of this report version
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: null
+    * * Description: JSON configuration of report structure, layout and logic
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: DataContextUpdated
+    * * Display Name: Data Context Updated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates if the data context was updated in this version
+    */
+    get DataContextUpdated(): boolean {
+        return this.Get('DataContextUpdated');
+    }
+    set DataContextUpdated(value: boolean) {
+        this.Set('DataContextUpdated', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
