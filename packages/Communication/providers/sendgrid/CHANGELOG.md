@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/communication-sendgrid
 
+## 2.31.0
+
+### Patch Changes
+
+- 0899b8b: Add CC and BCC fields to Message class
+- Updated dependencies [0899b8b]
+  - @memberjunction/communication-types@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.31.0
+
+### Patch Changes
+
+- 67c0b7f: First version of MCP server for MJ and removed unneeded file from AIEngine project
+  - @memberjunction/ai@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes

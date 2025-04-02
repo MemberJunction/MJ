@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.31.0
+
+### Patch Changes
+
+- 566d2f0: Added UpdateUserState to event raising options for HTML Components we host for Skip generated HTML components.
+- 7862d2a: Prepare for HTML Report Type
+- f3bf773: SkipTypes - further cleanup to normalize for HTML Report that won't use a sub process
+- Updated dependencies [f3bf773]
+  - @memberjunction/data-context@2.31.0
+  - @memberjunction/core-entities@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/server
 
+## 2.31.0
+
+### Minor Changes
+
+- 946b64e: Added new metadata for Report Versions and Report User States, added plumbing for them and various bug fixes
+
+### Patch Changes
+
+- f3bf773: SkipTypes - further cleanup to normalize for HTML Report that won't use a sub process
+- Updated dependencies [566d2f0]
+- Updated dependencies [67c0b7f]
+- Updated dependencies [7862d2a]
+- Updated dependencies [b86a75d]
+- Updated dependencies [f3bf773]
+  - @memberjunction/skip-types@2.31.0
+  - @memberjunction/aiengine@2.31.0
+  - @memberjunction/templates@2.31.0
+  - @memberjunction/graphql-dataprovider@2.31.0
+  - @memberjunction/data-context@2.31.0
+  - @memberjunction/data-context-server@2.31.0
+  - @memberjunction/ai-vectors-pinecone@2.31.0
+  - @memberjunction/actions@2.31.0
+  - @memberjunction/queue@2.31.0
+  - @memberjunction/sqlserver-dataprovider@2.31.0
+  - @memberjunction/core-actions@2.31.0
+  - @memberjunction/external-change-detection@2.31.0
+  - @memberjunction/entity-communications-server@2.31.0
+  - @memberjunction/ai@2.31.0
+  - @memberjunction/ai-mistral@2.31.0
+  - @memberjunction/ai-openai@2.31.0
+  - @memberjunction/doc-utils@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+  - @memberjunction/storage@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes
