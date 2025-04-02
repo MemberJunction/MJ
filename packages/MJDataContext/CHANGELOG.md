@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/data-context
 
+## 2.31.0
+
+### Patch Changes
+
+- f3bf773: SkipTypes - further cleanup to normalize for HTML Report that won't use a sub process
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/templates
 
+## 2.31.0
+
+### Patch Changes
+
+- b86a75d: Support for simple template rendering where templates are not stored in the database.
+- Updated dependencies [67c0b7f]
+  - @memberjunction/aiengine@2.31.0
+  - @memberjunction/ai@2.31.0
+  - @memberjunction/ai-groq@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+  - @memberjunction/templates-base-types@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

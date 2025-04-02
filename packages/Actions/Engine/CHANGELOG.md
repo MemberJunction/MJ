@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/actions
 
+## 2.31.0
+
+### Patch Changes
+
+- Updated dependencies [67c0b7f]
+  - @memberjunction/aiengine@2.31.0
+  - @memberjunction/ai@2.31.0
+  - @memberjunction/actions-base@2.31.0
+  - @memberjunction/doc-utils@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

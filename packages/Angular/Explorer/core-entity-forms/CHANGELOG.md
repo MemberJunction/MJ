@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.31.0
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@2.31.0
+- @memberjunction/ng-form-toolbar@2.31.0
+- @memberjunction/ng-base-forms@2.31.0
+- @memberjunction/ng-join-grid@2.31.0
+- @memberjunction/ng-timeline@2.31.0
+- @memberjunction/ng-code-editor@2.31.0
+- @memberjunction/ng-container-directives@2.31.0
+- @memberjunction/ng-tabstrip@2.31.0
+- @memberjunction/core@2.31.0
+- @memberjunction/core-entities@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

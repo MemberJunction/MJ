@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.31.0
+
+### Minor Changes
+
+- 946b64e: Added new metadata for Report Versions and Report User States, added plumbing for them and various bug fixes
+
+### Patch Changes
+
+- 45a552e: Update Entity Types to output correct nullable types
+- Updated dependencies [67c0b7f]
+  - @memberjunction/aiengine@2.31.0
+  - @memberjunction/actions@2.31.0
+  - @memberjunction/sqlserver-dataprovider@2.31.0
+  - @memberjunction/ai@2.31.0
+  - @memberjunction/ai-anthropic@2.31.0
+  - @memberjunction/ai-groq@2.31.0
+  - @memberjunction/ai-mistral@2.31.0
+  - @memberjunction/ai-openai@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes

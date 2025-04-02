@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.31.0
+
+### Patch Changes
+
+- 0899b8b: Add CC and BCC fields to Message class
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+  - @memberjunction/templates-base-types@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

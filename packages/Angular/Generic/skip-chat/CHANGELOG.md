@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.31.0
+
+### Minor Changes
+
+- 946b64e: Added new metadata for Report Versions and Report User States, added plumbing for them and various bug fixes
+
+### Patch Changes
+
+- 566d2f0: Added UpdateUserState to event raising options for HTML Components we host for Skip generated HTML components.
+- 7862d2a: Prepare for HTML Report Type
+- f3bf773: SkipTypes - further cleanup to normalize for HTML Report that won't use a sub process
+- Updated dependencies [566d2f0]
+- Updated dependencies [7862d2a]
+- Updated dependencies [f3bf773]
+  - @memberjunction/skip-types@2.31.0
+  - @memberjunction/graphql-dataprovider@2.31.0
+  - @memberjunction/data-context@2.31.0
+  - @memberjunction/ng-notifications@2.31.0
+  - @memberjunction/ng-resource-permissions@2.31.0
+  - @memberjunction/ng-base-types@2.31.0
+  - @memberjunction/ng-container-directives@2.31.0
+  - @memberjunction/ng-data-context@2.31.0
+  - @memberjunction/core@2.31.0
+  - @memberjunction/core-entities@2.31.0
+  - @memberjunction/global@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes
