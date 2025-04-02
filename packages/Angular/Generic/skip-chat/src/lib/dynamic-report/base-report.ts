@@ -84,20 +84,26 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       return this.SkipData?.tableDataColumns || [];
   }
 
+  protected get ResultType(): string {
+    // support for legacy format where the resultType was within executionResults and for the new location at the root of SkipData
+    let rt = this.SkipData?.resultType?.trim().toLowerCase();
+    if (!rt) {
+      // we don't have the new format, so check for legacy location
+      const executionResults = this.SkipData?.executionResults as any; // becuase new type does NOT have resultType on executionResults as it was moved
+      if (executionResults) {
+        rt = executionResults.resultType?.trim().toLowerCase();
+      }
+    }
+    return rt || '';
+  }
   public get IsChart(): boolean {
-      if (!this.SkipData) 
-          return false;
-      return this.SkipData.resultType?.trim().toLowerCase() === 'plot';
+    return this.ResultType === 'plot';
   }
   public get IsTable(): boolean {
-      if (!this.SkipData) 
-          return false;
-      return this.SkipData.resultType?.trim().toLowerCase() === 'table';
+    return this.ResultType === 'table';
   }
   public get IsHTML(): boolean {
-      if (!this.SkipData) 
-          return false;
-      return this.SkipData.resultType?.trim().toLowerCase() === 'html';
+    return this.ResultType === 'html';
   }
 
   /**
