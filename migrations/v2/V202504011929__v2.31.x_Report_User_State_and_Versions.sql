@@ -1748,3 +1748,694 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
   
             
 
+---- MORE CODE GEN ----- 
+
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '037b2e85-2834-4052-aa6f-f6870dde0b53'  OR 
+               (EntityID = '4A4C2EE1-BFDD-434E-9A03-6F6C2384D01F' AND Name = 'Report')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '037b2e85-2834-4052-aa6f-f6870dde0b53',
+            '4A4C2EE1-BFDD-434E-9A03-6F6C2384D01F', -- Entity: MJ: Report User States
+            7,
+            'Report',
+            'Report',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1c327adb-fe15-4662-87db-74aced132059'  OR 
+               (EntityID = '4A4C2EE1-BFDD-434E-9A03-6F6C2384D01F' AND Name = 'User')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1c327adb-fe15-4662-87db-74aced132059',
+            '4A4C2EE1-BFDD-434E-9A03-6F6C2384D01F', -- Entity: MJ: Report User States
+            8,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '168eb427-6eec-4b92-98d4-aa669f6275a4'  OR 
+               (EntityID = '9516058D-9729-48EC-B0B8-E91A8221FC8F' AND Name = 'Report')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '168eb427-6eec-4b92-98d4-aa669f6275a4',
+            '9516058D-9729-48EC-B0B8-E91A8221FC8F', -- Entity: MJ: Report Versions
+            10,
+            'Report',
+            'Report',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* Index for Foreign Keys for ReportUserState */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ReportID in table ReportUserState
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ReportUserState_ReportID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ReportUserState]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ReportUserState_ReportID ON [${flyway:defaultSchema}].[ReportUserState] ([ReportID]);
+
+-- Index for foreign key UserID in table ReportUserState
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ReportUserState_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ReportUserState]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ReportUserState_UserID ON [${flyway:defaultSchema}].[ReportUserState] ([UserID]);
+
+/* Base View SQL for MJ: Report User States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: vwReportUserStates
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Report User States
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ReportUserState
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwReportUserStates]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwReportUserStates]
+AS
+SELECT
+    r.*,
+    Report_ReportID.[Name] AS [Report],
+    User_UserID.[Name] AS [User]
+FROM
+    [${flyway:defaultSchema}].[ReportUserState] AS r
+INNER JOIN
+    [${flyway:defaultSchema}].[Report] AS Report_ReportID
+  ON
+    [r].[ReportID] = Report_ReportID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReportUserStates] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Report User States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: Permissions for vwReportUserStates
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReportUserStates] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Report User States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: spCreateReportUserState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ReportUserState
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateReportUserState]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateReportUserState]
+    @ReportID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @ReportState nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO
+    [${flyway:defaultSchema}].[ReportUserState]
+        (
+            [ReportID],
+            [UserID],
+            [ReportState]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ReportID,
+            @UserID,
+            @ReportState
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwReportUserStates] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReportUserState] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Report User States */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReportUserState] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Report User States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: spUpdateReportUserState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ReportUserState
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateReportUserState]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateReportUserState]
+    @ID uniqueidentifier,
+    @ReportID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @ReportState nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ReportUserState]
+    SET
+        [ReportID] = @ReportID,
+        [UserID] = @UserID,
+        [ReportState] = @ReportState
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwReportUserStates]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReportUserState] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ReportUserState table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateReportUserState
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateReportUserState
+ON [${flyway:defaultSchema}].[ReportUserState]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ReportUserState]
+    SET
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ReportUserState] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Report User States */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReportUserState] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Report User States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report User States
+-- Item: spDeleteReportUserState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ReportUserState
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteReportUserState]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteReportUserState]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ReportUserState]
+    WHERE
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportUserState] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Report User States */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportUserState] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for ReportVersion */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ReportID in table ReportVersion
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ReportVersion_ReportID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ReportVersion]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ReportVersion_ReportID ON [${flyway:defaultSchema}].[ReportVersion] ([ReportID]);
+
+/* Base View SQL for MJ: Report Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: vwReportVersions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Report Versions
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ReportVersion
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwReportVersions]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwReportVersions]
+AS
+SELECT
+    r.*,
+    Report_ReportID.[Name] AS [Report]
+FROM
+    [${flyway:defaultSchema}].[ReportVersion] AS r
+INNER JOIN
+    [${flyway:defaultSchema}].[Report] AS Report_ReportID
+  ON
+    [r].[ReportID] = Report_ReportID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReportVersions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Report Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: Permissions for vwReportVersions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReportVersions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Report Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: spCreateReportVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ReportVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateReportVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateReportVersion]
+    @ReportID uniqueidentifier,
+    @VersionNumber int,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Configuration nvarchar(MAX),
+    @DataContextUpdated bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO
+    [${flyway:defaultSchema}].[ReportVersion]
+        (
+            [ReportID],
+            [VersionNumber],
+            [Name],
+            [Description],
+            [Configuration],
+            [DataContextUpdated]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @ReportID,
+            @VersionNumber,
+            @Name,
+            @Description,
+            @Configuration,
+            @DataContextUpdated
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwReportVersions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReportVersion] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Report Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReportVersion] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Report Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: spUpdateReportVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ReportVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateReportVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateReportVersion]
+    @ID uniqueidentifier,
+    @ReportID uniqueidentifier,
+    @VersionNumber int,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Configuration nvarchar(MAX),
+    @DataContextUpdated bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ReportVersion]
+    SET
+        [ReportID] = @ReportID,
+        [VersionNumber] = @VersionNumber,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Configuration] = @Configuration,
+        [DataContextUpdated] = @DataContextUpdated
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwReportVersions]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReportVersion] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ReportVersion table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateReportVersion
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateReportVersion
+ON [${flyway:defaultSchema}].[ReportVersion]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ReportVersion]
+    SET
+        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ReportVersion] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Report Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReportVersion] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Report Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Report Versions
+-- Item: spDeleteReportVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ReportVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteReportVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteReportVersion]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ReportVersion]
+    WHERE
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportVersion] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Report Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportVersion] TO [cdp_Integration]
+
+
+

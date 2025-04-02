@@ -29628,6 +29628,14 @@ export class ReportUserState_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Report: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
 }
 
 //****************************************************************************
@@ -29642,7 +29650,7 @@ export class CreateReportUserStateInput {
     UserID?: string;
 
     @Field({ nullable: true })
-    ReportState?: string | null;
+    ReportState: string | null;
 }
     
 
@@ -32327,6 +32335,10 @@ export class ReportVersion_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Report: string;
+        
 }
 
 //****************************************************************************
@@ -32344,10 +32356,10 @@ export class CreateReportVersionInput {
     Name?: string;
 
     @Field({ nullable: true })
-    Description?: string | null;
+    Description: string | null;
 
     @Field({ nullable: true })
-    Configuration?: string | null;
+    Configuration: string | null;
 
     @Field(() => Boolean, { nullable: true })
     DataContextUpdated?: boolean;

@@ -6622,19 +6622,16 @@ export const ReportUserStateSchema = z.object({
         * * Field Name: ReportID
         * * Display Name: Report ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Reports (vwReports.ID)
-        * * Default Value: null`),
+        * * Related Entity/Foreign Key: Reports (vwReports.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Users (vwUsers.ID)
-        * * Default Value: null`),
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
     ReportState: z.string().nullable().describe(`
         * * Field Name: ReportState
         * * Display Name: Report State
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: JSON serialized state of user interaction with the report`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -6646,6 +6643,16 @@ export const ReportUserStateSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Report: z.string().describe(`
+        * * Field Name: Report
+        * * Display Name: Report
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type ReportUserStateEntityType = z.infer<typeof ReportUserStateSchema>;
@@ -6663,31 +6670,26 @@ export const ReportVersionSchema = z.object({
         * * Field Name: ReportID
         * * Display Name: Report ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: Reports (vwReports.ID)
-        * * Default Value: null`),
+        * * Related Entity/Foreign Key: Reports (vwReports.ID)`),
     VersionNumber: z.number().describe(`
         * * Field Name: VersionNumber
         * * Display Name: Version Number
         * * SQL Data Type: int
-        * * Default Value: null
     * * Description: Report version number, sequential per report starting at 1`),
     Name: z.string().describe(`
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
     * * Description: Name of this report version`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: Description of this report version`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: JSON configuration of report structure, layout and logic`),
     DataContextUpdated: z.boolean().describe(`
         * * Field Name: DataContextUpdated
@@ -6705,6 +6707,11 @@ export const ReportVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Report: z.string().describe(`
+        * * Field Name: Report
+        * * Display Name: Report
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
@@ -27420,7 +27427,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Display Name: Report ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Reports (vwReports.ID)
-    * * Default Value: null
     */
     get ReportID(): string {
         return this.Get('ReportID');
@@ -27434,7 +27440,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Users (vwUsers.ID)
-    * * Default Value: null
     */
     get UserID(): string {
         return this.Get('UserID');
@@ -27447,7 +27452,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: ReportState
     * * Display Name: Report State
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: JSON serialized state of user interaction with the report
     */
     get ReportState(): string | null {
@@ -27475,6 +27479,26 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Report
+    * * Display Name: Report
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Report(): string {
+        return this.Get('Report');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
@@ -27510,6 +27534,8 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
 
     /**
     * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
     * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.  
     * @public
     * @method
@@ -27518,8 +27544,34 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateVersionNumberGreaterThanZero(result);
+        this.ValidateVersionNumberGreaterThanZero(result);
+        this.ValidateVersionNumberGreaterThanZero(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -27549,7 +27601,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Display Name: Report ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Reports (vwReports.ID)
-    * * Default Value: null
     */
     get ReportID(): string {
         return this.Get('ReportID');
@@ -27562,7 +27613,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: VersionNumber
     * * Display Name: Version Number
     * * SQL Data Type: int
-    * * Default Value: null
     * * Description: Report version number, sequential per report starting at 1
     */
     get VersionNumber(): number {
@@ -27576,7 +27626,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Name
     * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     * * Description: Name of this report version
     */
     get Name(): string {
@@ -27590,7 +27639,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Description
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: Description of this report version
     */
     get Description(): string | null {
@@ -27604,7 +27652,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: JSON configuration of report structure, layout and logic
     */
     get Configuration(): string | null {
@@ -27646,6 +27693,16 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Report
+    * * Display Name: Report
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
+    */
+    get Report(): string {
+        return this.Get('Report');
     }
 }
 
