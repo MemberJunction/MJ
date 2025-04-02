@@ -27534,8 +27534,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
 
     /**
     * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
-    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
     * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.  
     * @public
     * @method
@@ -27544,34 +27542,8 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateVersionNumberGreaterThanZero(result);
-        this.ValidateVersionNumberGreaterThanZero(result);
-        this.ValidateVersionNumberGreaterThanZero(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.VersionNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.VersionNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
-    	}
     }
 
     /**
