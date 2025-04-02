@@ -90,9 +90,14 @@ export class ReportEntity_Server extends ReportEntity  {
                                 console.warn('ReportEntity_Server.Save(): Using version number 1 for new report version');
                             }
                         }
+                        reportVersion.Name = this.Name; // copy current name to the new version
+                        reportVersion.Description = this.Description; // copy current description to the new version
                         reportVersion.VersionNumber = newVersionNumber;
                         reportVersion.Configuration = JSON.stringify(this.Configuration);
                         success = success && await reportVersion.Save();
+                        if (!success) {
+                            console.error('ReportEntity_Server.Save(): Error saving report version\n' + reportVersion.LatestResult.Message);
+                        }
                     }
 
                     if (createSnapshot) {
