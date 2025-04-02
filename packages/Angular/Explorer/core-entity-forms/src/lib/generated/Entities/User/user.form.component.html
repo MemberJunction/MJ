@@ -458,6 +458,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Report User States" [Visible]="record.IsSaved"> 
+                        MJ: Report User States
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Report User States','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Report User States')"
+                            [AllowLoad]="IsCurrentTab('MJ: Report User States')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AI Agent Notes" [Visible]="record.IsSaved"> 
                         AI Agent Notes
                     </mj-tab>

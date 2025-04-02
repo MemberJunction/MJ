@@ -96,7 +96,9 @@ export class SimpleEntityFieldOutputType {
     MaxLength: number;
 }
 
-
+/**
+ * General purpose resolver for fetching different kinds of data payloads for SYSTEM users only.
+ */
 export class GetDataResolver {
     /**
      * This query will sync the specified items with the existing system. Items will be processed in order and the results of each operation will be returned in the Results array within the return value.

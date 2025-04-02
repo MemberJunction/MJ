@@ -116,3 +116,4 @@ packages/MJAPI/.env-remote
 mj.config.js
 mj.config.ts
 *.local
+packages/AI/MCPServer/build/Server.js

@@ -1,5 +1,6 @@
 /** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
 /** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
+/** @import { ConfigInfo as MCPServerConfig } from "./packages/AI/MCPServer/src/config" */
 /** @import { MJConfig } from "./packages/MJCLI/src/config" */
 
 /** @type {CodeGenConfig} */
@@ -264,10 +265,36 @@ const mjServerConfig = {
   },
 };
 
+/** @type {MCPServerConfig} */
+const mcpServerConfig = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    actionTools: [
+      {
+        actionName: 'NOT YET SUPPORTED',
+        actionCategory: '*',
+      }
+    ],
+    entityTools: [
+      {
+        schemaName: 'CRM',
+        entityName: '*',
+        get: true,
+        create: true,
+        update: true,
+        delete: true,
+        runView: true,
+      },
+    ]
+  }
+}
+
 /** @type {CodeGenConfig & MJConfig & MJServerConfig} */
 const config = {
   ...codegenConfig,
   ...mjServerConfig,
+  ...mcpServerConfig,
 
   /**
    * Shared Configuration and Environment Variables

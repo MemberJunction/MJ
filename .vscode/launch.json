@@ -4,6 +4,19 @@
     {
       "type": "node",
       "request": "launch",
+      "name": "MCPServer",
+      "cwd": "${workspaceFolder}/packages/AI/MCPServer",
+      "preLaunchTask": "build-mcp-server",
+      "program": "${workspaceFolder}/packages/AI/MCPServer/dist/index.js",
+      "outFiles": ["${workspaceFolder}/packages/AI/MCPServer/dist/**/*.js"],
+      "sourceMaps": true,
+      "smartStep": true,
+      "console": "integratedTerminal",
+      "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
       "name": "Scheduled Actions Server",
       "envFile": "${workspaceFolder}/packages/Actions/ScheduledActionsServer/.env",
       "cwd": "${workspaceFolder}/packages/Actions/ScheduledActionsServer",
