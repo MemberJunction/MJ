@@ -3,11 +3,51 @@ export type CreatePreAuthUploadUrlPayload = {
   ProviderKey?: string | undefined;
 };
 
+export type StorageObjectMetadata = {
+  name: string;
+  path: string;
+  fullPath: string;
+  size: number;
+  contentType: string;
+  lastModified: Date;
+  isDirectory: boolean;
+  etag?: string;
+  cacheControl?: string;
+  customMetadata?: Record<string, string>;
+};
+
+export type StorageListResult = {
+  objects: StorageObjectMetadata[];
+  prefixes: string[];
+};
+
+/**
+ * Error thrown when a method is not supported by a storage provider
+ */
+export class UnsupportedOperationError extends Error {
+  constructor(methodName: string, providerName: string) {
+    super(`Operation '${methodName}' is not supported by the ${providerName} provider`);
+    this.name = 'UnsupportedOperationError';
+  }
+}
+
 /**
  * Represents an abstract base class for file storage. Provides methods for creating pre-authorized upload and download URLs, as well as deleting objects. This
  * interface is implemented in specific driver classes for each storage provider.
  */
 export abstract class FileStorageBase {
+  /**
+   * The name of this storage provider, used in error messages
+   */
+  protected abstract readonly providerName: string;
+  
+  /**
+   * Helper method to throw an UnsupportedOperationError
+   * @param methodName The name of the method that is not supported
+   */
+  protected throwUnsupportedOperationError(methodName: string): never {
+    throw new UnsupportedOperationError(methodName, this.providerName);
+  }
   /**
    * This method is designed to generate a pre-authenticated URL for uploading files to a storage provider. It abstracts over different storage providers,
    * allowing for a unified interface to obtain upload URLs, regardless of the underlying provider's specifics. The method takes the name of the file (or
@@ -144,4 +184,105 @@ export abstract class FileStorageBase {
    * deletion process.
    */
   public abstract DeleteObject(objectName: string): Promise<boolean>;
+
+  /**
+   * Lists objects in a storage provider's system with the given prefix path.
+   * 
+   * This method returns a list of objects and prefixes (directories) under the specified path.
+   * The method supports a hierarchical directory-like structure through the use of prefixes
+   * that can represent "folders" within the storage.
+   * 
+   * @param prefix - The path prefix to list objects from. Use "/" for the root, or paths like "documents/" 
+   *                 for specific directories.
+   * @param delimiter - The character used to group keys. Typically "/" is used to simulate directory structure.
+   *                    Defaults to "/".
+   * @returns A Promise that resolves to a StorageListResult containing both objects and prefixes (directories).
+   */
+  public abstract ListObjects(prefix: string, delimiter?: string): Promise<StorageListResult>;
+
+  /**
+   * Creates a directory in the storage system.
+   * 
+   * For storage systems that don't natively support directories, this may create a zero-byte object with 
+   * a trailing delimiter to simulate a directory. For systems with native directory support, this will 
+   * create an actual directory.
+   * 
+   * @param directoryPath - The path of the directory to create. Should end with a delimiter (typically "/").
+   * @returns A Promise that resolves to a boolean indicating success.
+   */
+  public abstract CreateDirectory(directoryPath: string): Promise<boolean>;
+
+  /**
+   * Deletes a directory and optionally all of its contents recursively.
+   * 
+   * @param directoryPath - The path of the directory to delete.
+   * @param recursive - If true, deletes all contents recursively. If false and the directory is not empty, 
+   *                    the operation will fail. Defaults to false.
+   * @returns A Promise that resolves to a boolean indicating success.
+   */
+  public abstract DeleteDirectory(directoryPath: string, recursive?: boolean): Promise<boolean>;
+
+  /**
+   * Retrieves metadata for a specific object without downloading its contents.
+   * 
+   * @param objectName - The name of the object to retrieve metadata for.
+   * @returns A Promise that resolves to a StorageObjectMetadata object containing the metadata.
+   *          If the object does not exist, the promise will be rejected.
+   */
+  public abstract GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata>;
+
+  /**
+   * Downloads an object's content as a Buffer.
+   * 
+   * @param objectName - The name of the object to download.
+   * @returns A Promise that resolves to a Buffer containing the object's data.
+   *          If the object does not exist, the promise will be rejected.
+   */
+  public abstract GetObject(objectName: string): Promise<Buffer>;
+
+  /**
+   * Uploads object data to the storage provider.
+   * 
+   * This is a direct upload method that doesn't use a pre-authorized URL.
+   * 
+   * @param objectName - The name to assign to the uploaded object.
+   * @param data - The Buffer containing the data to upload.
+   * @param contentType - Optional MIME type of the content.
+   * @param metadata - Optional custom metadata to associate with the object.
+   * @returns A Promise that resolves to a boolean indicating success.
+   */
+  public abstract PutObject(
+    objectName: string, 
+    data: Buffer, 
+    contentType?: string, 
+    metadata?: Record<string, string>
+  ): Promise<boolean>;
+
+  /**
+   * Copies an object within the storage system.
+   * 
+   * Unlike MoveObject which removes the source object, this creates a copy while
+   * leaving the original intact.
+   * 
+   * @param sourceObjectName - The name of the object to copy.
+   * @param destinationObjectName - The name to assign to the copied object.
+   * @returns A Promise that resolves to a boolean indicating success.
+   */
+  public abstract CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean>;
+
+  /**
+   * Checks if an object exists in the storage system.
+   * 
+   * @param objectName - The name of the object to check.
+   * @returns A Promise that resolves to a boolean indicating if the object exists.
+   */
+  public abstract ObjectExists(objectName: string): Promise<boolean>;
+
+  /**
+   * Checks if a directory exists in the storage system.
+   * 
+   * @param directoryPath - The path of the directory to check.
+   * @returns A Promise that resolves to a boolean indicating if the directory exists.
+   */
+  public abstract DirectoryExists(directoryPath: string): Promise<boolean>;
 }
