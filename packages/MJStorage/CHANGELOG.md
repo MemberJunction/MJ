@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.32.2
+
+### Patch Changes
+
+- 3788339: Revised box.com implementation for using API directly
+  - @memberjunction/core@2.32.2
+  - @memberjunction/core-entities@2.32.2
+  - @memberjunction/global@2.32.2
+
 ## 2.32.1
 
 ### Patch Changes
