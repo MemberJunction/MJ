@@ -4,5 +4,6 @@ export * from './drivers/GoogleFileStorage';
 export * from './drivers/GoogleDriveFileStorage';
 export * from './drivers/SharePointFileStorage';
 export * from './drivers/DropboxFileStorage';
+export * from './drivers/BoxFileStorage';
 export * from './generic/FileStorageBase';
 export * from './util';
