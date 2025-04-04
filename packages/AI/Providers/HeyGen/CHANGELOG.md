@@ -1,5 +1,16 @@
 # @memberjunction/ai-heygen
 
+## 2.32.0
+
+### Minor Changes
+
+- 186702d: Added AI Models for HeyGen/ElevenLabs
+
+### Patch Changes
+
+- @memberjunction/ai@2.32.0
+- @memberjunction/global@2.32.0
+
 ## 2.31.0
 
 ### Patch Changes

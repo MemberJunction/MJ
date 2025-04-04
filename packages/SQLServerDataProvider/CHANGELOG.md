@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.32.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.32.0
+- @memberjunction/aiengine@2.32.0
+- @memberjunction/ai-vector-dupe@2.32.0
+- @memberjunction/actions@2.32.0
+- @memberjunction/core@2.32.0
+- @memberjunction/core-entities@2.32.0
+- @memberjunction/global@2.32.0
+- @memberjunction/queue@2.32.0
+
 ## 2.31.0
 
 ### Patch Changes

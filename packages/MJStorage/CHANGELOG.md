@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/storage
 
+## 2.32.0
+
+### Minor Changes
+
+- 0d01e52: Migration file for new FileStorageProvider records
+
+### Patch Changes
+
+- 59b6f89: New provider level functionality and new proviers
+  - @memberjunction/core@2.32.0
+  - @memberjunction/core-entities@2.32.0
+  - @memberjunction/global@2.32.0
+
 ## 2.31.0
 
 ### Patch Changes

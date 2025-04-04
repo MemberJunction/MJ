@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-form-dialog",
-  "version": "2.31.0",
+  "version": "2.32.0",
   "description": "MemberJunction: Dialog component that is able to display a form for display and/or editing for any record from any entity in MemberJunction.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.31.0",
-    "@memberjunction/global": "2.31.0",
-    "@memberjunction/core": "2.31.0",
-    "@memberjunction/ng-container-directives": "2.31.0",
-    "@memberjunction/ng-shared": "2.31.0",
-    "@memberjunction/ng-base-forms": "2.31.0",
+    "@memberjunction/core-entities": "2.32.0",
+    "@memberjunction/global": "2.32.0",
+    "@memberjunction/core": "2.32.0",
+    "@memberjunction/ng-container-directives": "2.32.0",
+    "@memberjunction/ng-shared": "2.32.0",
+    "@memberjunction/ng-base-forms": "2.32.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "tslib": "^2.3.0"
