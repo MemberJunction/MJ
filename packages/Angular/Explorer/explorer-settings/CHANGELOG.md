@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.32.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.32.1
+- @memberjunction/ng-entity-form-dialog@2.32.1
+- @memberjunction/ng-entity-permissions@2.32.1
+- @memberjunction/ng-shared@2.32.1
+- @memberjunction/ng-user-view-grid@2.32.1
+- @memberjunction/ng-container-directives@2.32.1
+- @memberjunction/ng-simple-record-list@2.32.1
+- @memberjunction/ng-tabstrip@2.32.1
+- @memberjunction/core@2.32.1
+- @memberjunction/core-entities@2.32.1
+- @memberjunction/global@2.32.1
+
 ## 2.32.0
 
 ### Patch Changes

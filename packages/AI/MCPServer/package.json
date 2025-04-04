@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-mcp-server",
-  "version": "2.32.0",
+  "version": "2.32.1",
   "description": "MemberJunction: Model Context Protocol (MCP) - Server Implementation",
   "type": "module",
   "bin": {
@@ -16,10 +16,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "2.32.0",
-    "@memberjunction/global": "2.32.0",
-    "@memberjunction/core-entities": "2.32.0",
-    "@memberjunction/sqlserver-dataprovider": "2.32.0",
+    "@memberjunction/core": "2.32.1",
+    "@memberjunction/global": "2.32.1",
+    "@memberjunction/core-entities": "2.32.1",
+    "@memberjunction/sqlserver-dataprovider": "2.32.1",
     "@modelcontextprotocol/sdk": "^1.8.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "^16.4.1",

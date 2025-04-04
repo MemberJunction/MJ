@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-auth-services
 
+## 2.32.1
+
+### Patch Changes
+
+- @memberjunction/core@2.32.1
+
 ## 2.32.0
 
 ### Patch Changes

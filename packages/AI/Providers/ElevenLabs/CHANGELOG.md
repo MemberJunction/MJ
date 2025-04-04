@@ -1,5 +1,12 @@
 # @memberjunction/ai-elevenlabs
 
+## 2.32.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.32.1
+- @memberjunction/global@2.32.1
+
 ## 2.32.0
 
 ### Minor Changes

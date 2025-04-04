@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/entity-communications-client
 
+## 2.32.1
+
+### Patch Changes
+
+- @memberjunction/entity-communications-base@2.32.1
+- @memberjunction/graphql-dataprovider@2.32.1
+- @memberjunction/core@2.32.1
+- @memberjunction/core-entities@2.32.1
+- @memberjunction/global@2.32.1
+
 ## 2.32.0
 
 ### Patch Changes

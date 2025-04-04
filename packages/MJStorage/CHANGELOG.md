@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.32.1
+
+### Patch Changes
+
+- 7f4a5b8: Removed Box storage provider to avoid typing bug that prevented Docker image build
+  - @memberjunction/core@2.32.1
+  - @memberjunction/core-entities@2.32.1
+  - @memberjunction/global@2.32.1
+
 ## 2.32.0
 
 ### Minor Changes
