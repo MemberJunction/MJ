@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, ObjectType, Query } from "type-graphql";
-import { AppContext } from "../types";
+import { AppContext } from "../types.js";
 import { DataContext } from "@memberjunction/data-context";
-import { GetReadOnlyDataSource } from "../util";
+import { GetReadOnlyDataSource } from "../util.js";
 import { Metadata } from "@memberjunction/core";
 import { DataContextItemEntity } from "@memberjunction/core-entities";
 
