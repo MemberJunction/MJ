@@ -23,6 +23,7 @@ import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communi
 import { CommunicationEngineBase, Message } from '@memberjunction/communication-types';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
+import { GraphQLActionClient } from '@memberjunction/graphql-dataprovider';
 
 
 export type GridRowClickedEvent = {
@@ -1092,8 +1093,78 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
    * @param action 
    */
   public async doEntityAction(action: EntityActionEntity) {
-    // temporarily just display a message with Sharedservice
-    SharedService.Instance.CreateSimpleNotification(`Action: ${action.Action} was clicked. Invocation is not yet implemented`, 'info', 2500);
+    try {
+      // Get the currently selected record if we have one
+      if (!this._entityInfo) {
+        SharedService.Instance.CreateSimpleNotification("Unable to determine entity information", "error", 3000);
+        return;
+      }
+
+      // Check if we have selected rows
+      const selectedItems = this.selectedKeys?.length > 0 
+        ? this.selectedKeys.map(key => this.viewData[key]) 
+        : null;
+
+      // Get reference to data provider and create ActionClient
+      const md = new Metadata();
+      
+      // Since we can't access provider directly with typing, use a temporary any cast
+      const provider = (md as any)._provider;
+      const actionClient = new GraphQLActionClient(provider);
+      
+      // Determine the invocation type based on selection
+      let invocationType = 'View'; // Default to View invocation type
+      let entityObject = null;
+      let result = null;
+
+      // If we have selected records, use SingleRecord type for the first selected record
+      if (selectedItems && selectedItems.length > 0) {
+        invocationType = 'SingleRecord';
+        
+        // Get the entity object for the first selected record
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, selectedItems[0]);
+        
+        entityObject = await md.GetEntityObject(this._entityInfo.Name);
+        await entityObject.InnerLoad(compositeKey);
+      }
+      
+      // Run the entity action
+      if (invocationType === 'SingleRecord' && entityObject) {
+        const params: any = {
+          EntityAction: action,
+          InvocationType: { Name: invocationType },
+          EntityObject: entityObject,
+          ContextUser: md.CurrentUser
+        };
+        result = await actionClient.RunEntityAction(params);
+      } else if (invocationType === 'View') {
+        const params: any = {
+          EntityAction: action,
+          InvocationType: { Name: invocationType },
+          ViewID: this.ViewID,
+          ContextUser: md.CurrentUser
+        };
+        result = await actionClient.RunEntityAction(params);
+      }
+
+      if (result) {
+        if (result.Success) {
+          SharedService.Instance.CreateSimpleNotification(`Action ${action.Action} executed successfully`, "success", 3000);
+          
+          // Refresh the grid if needed
+          if (this.Params) {
+            this.Refresh(this.Params);
+          }
+        } else {
+          SharedService.Instance.CreateSimpleNotification(`Error executing action: ${result.Message}`, "error", 5000);
+        }
+      }
+    } catch (e) {
+      const error = e as Error;
+      LogError(`Error invoking entity action: ${error}`);
+      SharedService.Instance.CreateSimpleNotification(`Error invoking action: ${error.message}`, "error", 5000);
+    }
   }
 
 
