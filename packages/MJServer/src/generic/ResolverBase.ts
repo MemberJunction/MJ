@@ -396,7 +396,17 @@ export class ResolverBase {
         return result;
       } else return null;
     } catch (err) {
-      console.log(err);
+      // Fix #9: Improved error handling with structured logging
+      const error = err as Error;
+      LogError({
+        service: 'RunView',
+        operation: 'RunViewGenericInternal',
+        error: error.message,
+        entityName: viewInfo?.Entity,
+        errorType: error.constructor.name,
+        // Only include stack trace for non-validation errors
+        stack: error.message?.includes('not found in metadata') ? undefined : error.stack
+      });
       throw err;
     }
   }
@@ -474,7 +484,16 @@ export class ResolverBase {
 
       return runViewResults;
     } catch (err) {
-      console.log(err);
+      // Fix #9: Structured error logging with less verbosity
+      const error = err as Error;
+      LogError({
+        service: 'RunView',
+        operation: 'RunViewsGenericInternal',
+        error: error.message,
+        errorType: error.constructor.name,
+        // Only include stack trace for non-validation errors
+        stack: error.message?.includes('not found in metadata') ? undefined : error.stack
+      });
       throw err;
     }
   }
