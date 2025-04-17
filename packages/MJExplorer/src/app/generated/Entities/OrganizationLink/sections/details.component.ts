@@ -19,8 +19,8 @@ import { OrganizationLinkEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="CRMAccountID"
-            Type="textbox"
+            FieldName="MembershipCompanyID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -28,8 +28,8 @@ import { OrganizationLinkEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MainGreatPlainsCustomerID"
-            Type="textbox"
+            FieldName="EventsOrganizationID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -37,8 +37,8 @@ import { OrganizationLinkEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="MembershipGreatPlainsCustomerID"
-            Type="textbox"
+            FieldName="EducationCompanyID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
             LinkComponentType="Search"
@@ -46,28 +46,37 @@ import { OrganizationLinkEntity } from 'mj_generatedentities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OrganizationName"
-            Type="textarea"
+            FieldName="CommunityCompanyID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="CategoryName"
-            Type="textbox"
-            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="CreatedAt"
-            Type="textbox"
+            Type="datepicker"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
             FieldName="UpdatedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

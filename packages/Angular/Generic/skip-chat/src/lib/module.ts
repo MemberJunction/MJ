@@ -17,11 +17,10 @@ import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 
 /*********************************************/
-// Plotly
-import { PlotlyViaCDNModule } from 'angular-plotly.js';
-PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'    
+import { PlotlyModule } from 'angular-plotly.js';
+import * as Plotly from 'plotly.js-dist-min';
 
+PlotlyModule.plotlyjs = Plotly;
 
 /*********************************************/
 // Markdown
@@ -67,7 +66,7 @@ import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-re
     DropDownsModule,
     GridModule,
     ButtonsModule,
-    PlotlyViaCDNModule,
+    PlotlyModule,
     DataContextModule,
     OverlayModule,
     ExcelExportModule,

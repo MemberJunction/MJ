@@ -1,7 +1,7 @@
 import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { GetEntityNameFromSchemaAndViewString, Metadata, RunView } from '@memberjunction/core';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
-import { PlotlyComponent } from 'angular-plotly.js';
+import { PlotlyModule } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
 import { DrillDownInfo } from '../drill-down-info';
 import { InvokeManualResize } from '@memberjunction/global';
@@ -34,7 +34,7 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
     @Input() AutoResizeChart: boolean = false
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
-    @ViewChild('plotlyPlot') plotlyPlot!: PlotlyComponent;
+    @ViewChild('plotlyPlot') plotlyPlot!: PlotlyModule;
     @ViewChild('plotContainer') plotContainer!: ElementRef;
 
     private resizeObserver: ResizeObserver | undefined;
@@ -137,9 +137,76 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
     }
     set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
         this._skipData = d;
+        console.log(d)
         if (d) {
             this.plotData = d.executionResults?.plotData?.data;
-            this.plotLayout = d.executionResults?.plotData?.layout;
+            
+            this.plotLayout = {
+              ...this.plotLayout = d.executionResults?.plotData?.layout, // Preserve existing layout properties
+              plot_bgcolor: '#f8f9fa',
+              font: {
+                family: 'Roboto, sans-serif',
+                size: 12,
+                color: '#000'             
+              },
+              colorway: [
+                "#6EBBE4", // original
+                "#4DAEE0", // cooler medium blue
+                "#389FD5", // stronger sky blue
+                "#1B91CB", // modern vibrant blue
+                "#007BC1", // deep ocean blue
+                "#0069AC", // navy-leaning blue
+                "#2B87C9", // saturated cool blue
+                "#5DA5D7", // balanced, web-safe vibe
+                "#7AC3EA", // light, modern feel
+                "#A2D8F2", // pale cyan blue
+                "#CBE9F8", // softest cool tint
+                "#E6F4FB"  // whisper blue (background-worthy)
+              ],
+              margin: {
+                l: 40,
+                r: 40,
+                t: 120,
+                b: 120  // Give more space at the bottom if labels are long
+              },
+              title: {
+                text: d.executionResults?.plotData?.layout?.title || d.executionResults?.plotData?.layout?.title.text,
+                font: {
+                  family: 'Roboto, sans-serif',
+                  size: 24,
+                  color: '#0076B6'
+                }
+              },
+              xaxis: {
+                title: {
+                  text: d.executionResults?.plotData?.layout?.xaxis?.title || d.executionResults?.plotData?.layout?.xaxis?.title.text,
+                  font: {
+                    color: '#0076B6',
+                    size: 18,
+                  }
+                },
+                automargin: true,
+                tickangle: 45,
+                ticklabelposition: 'outside',
+                tickpadding: 20,
+              },
+              yaxis: {
+                title: {
+                  text: d.executionResults?.plotData?.layout?.yaxis?.title || d.executionResults?.plotData?.layout?.yaxis?.title.text,
+                  font: {
+                    color: '#0076B6',
+                    size: 18,
+                  }
+                },
+                automargin: true,
+                ticklabelposition: 'outside',
+                tickpadding: 20 
+              },
+              legend: {
+                x: 1, // Position legend to the far right
+                xanchor: 'left'
+              }
+            };
             if (this.plotLayout) {
               if (this.plotLayout.height === undefined || this.plotLayout.height === null || this.plotLayout.height === 0)
                 this.plotLayout.height = this.defaultPlotHeight;

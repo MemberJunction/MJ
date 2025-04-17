@@ -681,7 +681,7 @@ export class ExplorerNavigationItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Code Categories
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Categorization for generated code, including optional parent-child relationships.` })
 export class GeneratedCodeCategory_ {
     @Field() 
     @MaxLength(16)
@@ -4859,16 +4859,16 @@ export class CreateEntityFieldInput {
     ValuesToPackWithSchema?: string;
 
     @Field({ nullable: true })
-    GeneratedValidationFunctionName: string | null;
+    GeneratedValidationFunctionName?: string | null;
 
     @Field({ nullable: true })
-    GeneratedValidationFunctionDescription: string | null;
+    GeneratedValidationFunctionDescription?: string | null;
 
     @Field({ nullable: true })
-    GeneratedValidationFunctionCode: string | null;
+    GeneratedValidationFunctionCode?: string | null;
 
     @Field({ nullable: true })
-    GeneratedValidationFunctionCheckConstraint: string | null;
+    GeneratedValidationFunctionCheckConstraint?: string | null;
 }
     
 
@@ -6308,14 +6308,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
-    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
+    
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -6757,15 +6757,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -6781,6 +6772,15 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
@@ -29381,7 +29381,7 @@ export class ResourceLinkResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Agent Requests
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Table to log AI Agent requests, responses, and their statuses.` })
 export class AIAgentRequest_ {
     @Field({description: `Primary key for the AIAgentRequest table, uniquely identifies each record.`}) 
     @MaxLength(16)
@@ -29603,7 +29603,7 @@ export class AIAgentRequestResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report User States
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Tracks individual user state within interactive reports` })
 export class ReportUserState_ {
     @Field() 
     @MaxLength(16)
@@ -31884,7 +31884,7 @@ export class ContentItemTagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Generated Codes
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores LLM-generated code snippets, tracking their source, category, and validation status.` })
 export class GeneratedCode_ {
     @Field() 
     @MaxLength(16)
@@ -32301,7 +32301,7 @@ export class AIAgentLearningCycleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Report Versions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: `Stores iterations of report logic, structure, and layout changes` })
 export class ReportVersion_ {
     @Field() 
     @MaxLength(16)
