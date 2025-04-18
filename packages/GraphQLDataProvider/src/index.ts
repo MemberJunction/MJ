@@ -5,3 +5,4 @@ export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
+export { GraphQLActionClient } from './graphQLActionClient';
