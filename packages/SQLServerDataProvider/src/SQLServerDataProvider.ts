@@ -571,13 +571,8 @@ export class SQLServerDataProvider
   }
 
   public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-    const results: RunViewResult<T>[] = [];
-    for (const p of params) {
-      const result = await this.RunView<T>(p, contextUser);
-      results.push(result);
-    }
-
-    return results;
+    const promises = params.map(p => this.RunView<T>(p, contextUser));
+    return Promise.all(promises);
   }
 
   protected validateUserProvidedSQLClause(clause: string): boolean {
@@ -2459,18 +2454,17 @@ export class SQLServerDataProvider
   }
 
   public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
-    const result: EntityRecordNameResult[] = [];
-    for (let i = 0; i < info.length; i++) {
-      const r = await this.GetEntityRecordName(info[i].EntityName, info[i].CompositeKey);
-      result.push({
-        EntityName: info[i].EntityName,
-        CompositeKey: info[i].CompositeKey,
+    const promises = info.map(async (item) => {
+      const r = await this.GetEntityRecordName(item.EntityName, item.CompositeKey);
+      return {
+        EntityName: item.EntityName,
+        CompositeKey: item.CompositeKey,
         RecordName: r,
         Success: r ? true : false,
         Status: r ? 'Success' : 'Error',
-      });
-    }
-    return result;
+      };
+    });
+    return Promise.all(promises);
   }
 
   public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {

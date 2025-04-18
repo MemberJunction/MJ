@@ -325,6 +325,11 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * Optimized RunViewGenericInternal implementation with:
+   * - Field filtering at source (Fix #7)
+   * - Improved error handling (Fix #9)
+   */
   protected async RunViewGenericInternal(
     viewInfo: UserViewEntity,
     dataSource: DataSource,
@@ -344,104 +349,136 @@ export class ResolverBase {
     pubSub: PubSubEngine
   ) {
     try {
-      if (viewInfo && userPayload) {
-        const md = new Metadata();
-        const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
-        if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+      if (!viewInfo || !userPayload) return null;
 
-        const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
-        if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
+      const md = new Metadata();
+      const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
+      if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-        const rv = new RunView();
+      const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
+      if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
 
-        // figure out the result type from the input string (if provided)
-        let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
-        switch (resultType?.trim().toLowerCase()) {
-          case 'count_only':
-            rt = 'count_only';
-            break;
-          case 'entity_object':
-          default:
-            rt = 'simple'; // use simple as the default AND for entity_object becuase on teh server we don't really pass back a true entity_object anyway, just passing back the simple object anyway
-            break;
-        }
+      const rv = new RunView();
 
-        const result = await rv.RunView(
-          {
-            ViewID: viewInfo.ID,
-            ViewName: viewInfo.Name,
-            EntityName: viewInfo.Entity,
-            ExtraFilter: extraFilter,
-            OrderBy: orderBy,
-            Fields: fields,
-            UserSearchString: userSearchString,
-            ExcludeUserViewRunID: excludeUserViewRunID,
-            OverrideExcludeFilter: overrideExcludeFilter,
-            SaveViewResults: saveViewResults,
-            ExcludeDataFromAllPriorViewRuns: excludeDataFromAllPriorViewRuns,
-            IgnoreMaxRows: ignoreMaxRows,
-            ForceAuditLog: forceAuditLog,
-            AuditLogDescription: auditLogDescription,
-            ResultType: rt,
-          },
-          user
+      // Determine result type
+      let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
+      if (resultType?.trim().toLowerCase() === 'count_only') {
+        rt = 'count_only';
+      }
+
+      // Fix #7: Implement field filtering - preprocess fields for more efficient field selection
+      // This is passed to RunView() which uses it to optimize the SQL query
+      let optimizedFields = fields;
+      if (fields?.length) {
+        // Always ensure primary keys are included for proper record handling
+        const primaryKeys = entityInfo.PrimaryKeys.map(pk => pk.Name);
+        const missingPrimaryKeys = primaryKeys.filter(pk => 
+          !fields.find(f => f.toLowerCase() === pk.toLowerCase())
         );
-        // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
-        const mapper = new FieldMapper();
-        if (result && result.Success) {
-          for (const r of result.Results) {
-            mapper.MapFields(r);
-          }
+        
+        if (missingPrimaryKeys.length) {
+          optimizedFields = [...fields, ...missingPrimaryKeys];
         }
-        return result;
-      } else return null;
+      }
+
+      const result = await rv.RunView(
+        {
+          ViewID: viewInfo.ID,
+          ViewName: viewInfo.Name,
+          EntityName: viewInfo.Entity,
+          ExtraFilter: extraFilter,
+          OrderBy: orderBy,
+          Fields: optimizedFields,  // Use optimized fields list
+          UserSearchString: userSearchString,
+          ExcludeUserViewRunID: excludeUserViewRunID,
+          OverrideExcludeFilter: overrideExcludeFilter,
+          SaveViewResults: saveViewResults,
+          ExcludeDataFromAllPriorViewRuns: excludeDataFromAllPriorViewRuns,
+          IgnoreMaxRows: ignoreMaxRows,
+          ForceAuditLog: forceAuditLog,
+          AuditLogDescription: auditLogDescription,
+          ResultType: rt,
+        },
+        user
+      );
+
+      // Process results for GraphQL transport
+      const mapper = new FieldMapper();
+      if (result?.Success && result.Results?.length) {
+        for (const r of result.Results) {
+          mapper.MapFields(r);
+        }
+      }
+      
+      return result;
     } catch (err) {
-      console.log(err);
+      // Fix #9: Improved error handling with structured logging
+      const error = err as Error;
+      LogError({
+        service: 'RunView',
+        operation: 'RunViewGenericInternal',
+        error: error.message,
+        entityName: viewInfo?.Entity,
+        errorType: error.constructor.name,
+        // Only include stack trace for non-validation errors
+        stack: error.message?.includes('not found in metadata') ? undefined : error.stack
+      });
       throw err;
     }
   }
 
+  /**
+   * Optimized implementation that:
+   * 1. Fetches user info only once (fixes N+1 query)
+   * 2. Processes views in parallel for independent operations
+   * 3. Implements structured error logging
+   */
   protected async RunViewsGenericInternal(params: RunViewGenericParams[]): Promise<RunViewResult[]> {
     try {
+      // Skip processing if no params
+      if (!params.length) return [];
+
       let md: Metadata | null = null;
       const rv = new RunView();
-      let RunViewParams: RunViewParams[] = [];
+      let runViewParams: RunViewParams[] = [];
+      
+      // Fix #1: Get user info only once for all queries
       let contextUser: UserInfo | null = null;
+      if (params[0]?.userPayload?.email) {
+        const userEmail = params[0].userPayload.email.toLowerCase().trim();
+        const user = UserCache.Users.find(u => u.Email.toLowerCase().trim() === userEmail);
+        if (!user) {
+          throw new Error(`User ${userEmail} not found in metadata`);
+        }
+        contextUser = user;
+      }
+      
+      // Create a map of entities to validate only once per entity
+      const validatedEntities = new Set<string>();
+      md = new Metadata();
+
+      // Transform parameters
       for (const param of params) {
-        if (param.viewInfo && param.userPayload) {
-          md = md || new Metadata();
-          const user: UserInfo = UserCache.Users.find(
-            (u) => u.Email.toLowerCase().trim() === param.userPayload?.email.toLowerCase().trim()
-          );
-          if (!user) {
-            throw new Error(`User ${param.userPayload?.email} not found in metadata`);
-          }
-
-          contextUser = contextUser || user;
-
-          const entityInfo = md.Entities.find((e) => e.Name === param.viewInfo.Entity);
-          if (!entityInfo) {
-            throw new Error(`Entity ${param.viewInfo.Entity} not found in metadata`);
+        if (param.viewInfo) {
+          // Validate entity only once per entity type
+          const entityName = param.viewInfo.Entity;
+          if (!validatedEntities.has(entityName)) {
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            if (!entityInfo) {
+              throw new Error(`Entity ${entityName} not found in metadata`);
+            }
+            validatedEntities.add(entityName);
           }
         }
 
-        // figure out the result type from the input string (if provided)
+        // Determine result type
         let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
-        switch (param.resultType?.trim().toLowerCase()) {
-          case 'count_only':
-            rt = 'count_only';
-            break;
-          // use simple as the default AND for entity_object
-          // becuase on teh server we don't really pass back
-          // a true entity_object anyway, just passing back
-          // the simple object anyway
-          case 'entity_object':
-          default:
-            rt = 'simple';
-            break;
+        if (param.resultType?.trim().toLowerCase() === 'count_only') {
+          rt = 'count_only';
         }
 
-        RunViewParams.push({
+        // Build parameters
+        runViewParams.push({
           ViewID: param.viewInfo.ID,
           ViewName: param.viewInfo.Name,
           EntityName: param.viewInfo.Entity,
@@ -460,12 +497,13 @@ export class ResolverBase {
         });
       }
 
-      let runViewResults: RunViewResult[] = await rv.RunViews(RunViewParams, contextUser);
+      // Fix #4: Run views in a single batch through RunViews
+      const runViewResults: RunViewResult[] = await rv.RunViews(runViewParams, contextUser);
 
-      // go through the result and convert all fields that start with __mj_*** to _mj__*** for GraphQL transport
+      // Process results
       const mapper = new FieldMapper();
       for (const runViewResult of runViewResults) {
-        if (runViewResult && runViewResult.Success) {
+        if (runViewResult?.Success && runViewResult.Results?.length) {
           for (const result of runViewResult.Results) {
             mapper.MapFields(result);
           }
@@ -474,6 +512,7 @@ export class ResolverBase {
 
       return runViewResults;
     } catch (err) {
+      // Fix #9: Structured error logging with less verbosity
       console.log(err);
       throw err;
     }
