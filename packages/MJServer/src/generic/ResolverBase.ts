@@ -513,15 +513,7 @@ export class ResolverBase {
       return runViewResults;
     } catch (err) {
       // Fix #9: Structured error logging with less verbosity
-      const error = err as Error;
-      LogError({
-        service: 'RunView',
-        operation: 'RunViewsGenericInternal',
-        error: error.message,
-        errorType: error.constructor.name,
-        // Only include stack trace for non-validation errors
-        stack: error.message?.includes('not found in metadata') ? undefined : error.stack
-      });
+      console.log(err);
       throw err;
     }
   }
