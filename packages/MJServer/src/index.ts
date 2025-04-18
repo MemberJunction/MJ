@@ -7,6 +7,7 @@ import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { default as BodyParser } from 'body-parser';
+import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
 import express from 'express';
 import { default as fg } from 'fast-glob';
@@ -190,6 +191,27 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
 
   const apolloServer = buildApolloServer({ schema }, { httpServer, serverCleanup });
   await apolloServer.start();
+  
+  // Fix #8: Add compression for better throughput performance
+  app.use(compression({
+    // Don't compress responses smaller than 1KB
+    threshold: 1024,
+    // Skip compression for images, videos, and other binary files
+    filter: (req, res) => {
+      if (req.headers['content-type']) {
+        const contentType = req.headers['content-type'];
+        if (contentType.includes('image/') || 
+            contentType.includes('video/') ||
+            contentType.includes('audio/') ||
+            contentType.includes('application/octet-stream')) {
+          return false;
+        }
+      }
+      return compression.filter(req, res);
+    },
+    // High compression level (good balance between CPU and compression ratio)
+    level: 6
+  }));
 
   app.use(
     graphqlRootPath,
