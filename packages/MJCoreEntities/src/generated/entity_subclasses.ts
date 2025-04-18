@@ -5266,31 +5266,26 @@ export const EntityFieldSchema = z.object({
         * * Field Name: GeneratedValidationFunctionName
         * * Display Name: Generated Validation Function Name
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
     * * Description: Contains the name of the generated field validation function, if it exists, null otherwise`),
     GeneratedValidationFunctionDescription: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionDescription
         * * Display Name: Generated Validation Function Description
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: Contains a description for business users of what the validation function for this field does, if it exists`),
     GeneratedValidationFunctionCode: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionCode
         * * Display Name: Generated Validation Function Code
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.`),
     GeneratedValidationFunctionCheckConstraint: z.string().nullable().describe(`
         * * Field Name: GeneratedValidationFunctionCheckConstraint
         * * Display Name: Generated Validation Function Check Constraint
         * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null
     * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
-        * * SQL Data Type: nvarchar(MAX)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -6522,20 +6517,13 @@ export const ListDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Complete'), z.literal('Error'), z.literal('Other'), z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Complete'), z.literal('Error'), z.literal('Other')]).describe(`
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Disabled'), z.literal('Rejected'), z.literal('Complete'), z.literal('Error'), z.literal('Other')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(30)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Active
-    *   * Disabled
-    *   * Rejected
-    *   * Complete
-    *   * Error
-    *   * Other
     *   * Pending
     *   * Active
     *   * Disabled
@@ -6658,11 +6646,13 @@ export const ReportUserStateSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null`),
 });
 
 export type ReportUserStateEntityType = z.infer<typeof ReportUserStateSchema>;
@@ -6720,7 +6710,8 @@ export const ReportVersionSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null`),
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
@@ -12350,7 +12341,6 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
  * * Schema: __mj
  * * Base Table: AIAgentRequest
  * * Base View: vwAIAgentRequests
- * * @description Table to log AI Agent requests, responses, and their statuses.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -12895,6 +12885,60 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.
+    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSpeedRank(result);
+        this.ValidateCostRank(result);
+        this.ValidatePowerRank(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the speed rank must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRank(result: ValidationResult) {
+    	if (this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRank(result: ValidationResult) {
+    	if (this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
+    	} 
+    }
+
+    /**
+    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRank(result: ValidationResult) {
+    	if (this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -15302,6 +15346,32 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSupportsScheduledSendingComparedToSupportsSending(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSupportsScheduledSendingComparedToSupportsSending(result: ValidationResult) {
+    	if (this.SupportsScheduledSending && !this.SupportsSending) {
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -18053,6 +18123,32 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * UserRating: This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserRating(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserRating(result: ValidationResult) {
+    	if (this.UserRating < 1 || this.UserRating > 10) {
+    		result.Errors.push(new ValidationErrorInfo('UserRating', 'The user rating must be between 1 and 10, inclusive.', this.UserRating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -20560,6 +20656,32 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
 
     /**
+    * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAllowRecordMergeConstraints(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
+    	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
+    		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
@@ -22763,6 +22885,38 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     }
 
     /**
+    * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result: ValidationResult) {
+    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold cannot be greater than the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1 inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -23722,7 +23876,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: GeneratedValidationFunctionName
     * * Display Name: Generated Validation Function Name
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     * * Description: Contains the name of the generated field validation function, if it exists, null otherwise
     */
     get GeneratedValidationFunctionName(): string | null {
@@ -23736,7 +23889,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: GeneratedValidationFunctionDescription
     * * Display Name: Generated Validation Function Description
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: Contains a description for business users of what the validation function for this field does, if it exists
     */
     get GeneratedValidationFunctionDescription(): string | null {
@@ -23750,7 +23902,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: GeneratedValidationFunctionCode
     * * Display Name: Generated Validation Function Code
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.
     */
     get GeneratedValidationFunctionCode(): string | null {
@@ -23764,7 +23915,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: GeneratedValidationFunctionCheckConstraint
     * * Display Name: Generated Validation Function Check Constraint
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.
     */
     get GeneratedValidationFunctionCheckConstraint(): string | null {
@@ -23778,7 +23928,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
-    * * Default Value: null
     */
     get FieldCodeName(): string | null {
         return this.Get('FieldCodeName');
@@ -25196,6 +25345,32 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     }
 
     /**
+    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Sequence: This rule ensures that the sequence must be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSequence(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the sequence must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSequence(result: ValidationResult) {
+    	if (this.Sequence <= 0) {
+    		result.Errors.push(new ValidationErrorInfo('Sequence', 'The sequence must be greater than zero.', this.Sequence, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -25879,7 +26054,6 @@ export class FileEntity extends BaseEntity<FileEntityType> {
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
  * * Base View: vwGeneratedCodeCategories
- * * @description Categorization for generated code, including optional parent-child relationships.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -25988,7 +26162,6 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
  * * Schema: __mj
  * * Base Table: GeneratedCode
  * * Base View: vwGeneratedCodes
- * * @description Stores LLM-generated code snippets, tracking their source, category, and validation status.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -27003,19 +27176,12 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     *   * Complete
     *   * Error
     *   * Other
-    *   * Pending
-    *   * Active
-    *   * Disabled
-    *   * Rejected
-    *   * Complete
-    *   * Error
-    *   * Other
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
-    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' | 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {
+    get Status(): 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' {
         return this.Get('Status');
     }
-    set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other' | 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other') {
+    set Status(value: 'Pending' | 'Active' | 'Disabled' | 'Rejected' | 'Complete' | 'Error' | 'Other') {
         this.Set('Status', value);
     }
 
@@ -27222,7 +27388,6 @@ export class ListEntity extends BaseEntity<ListEntityType> {
  * * Schema: __mj
  * * Base Table: ReportUserState
  * * Base View: vwReportUserStates
- * * @description Tracks individual user state within interactive reports
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -27320,6 +27485,7 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');
@@ -27329,6 +27495,7 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
+    * * Default Value: null
     */
     get User(): string {
         return this.Get('User');
@@ -27341,7 +27508,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
  * * Schema: __mj
  * * Base Table: ReportVersion
  * * Base View: vwReportVersions
- * * @description Stores iterations of report logic, structure, and layout changes
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -27364,6 +27530,32 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionNumberGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -27479,6 +27671,7 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
+    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');
@@ -29260,6 +29453,32 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     */
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for Recommendation Items, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * MatchProbability: This rule ensures that the match probability value is between 0 and 1, inclusive.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMatchProbability(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the match probability value is between 0 and 1, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMatchProbability(result: ValidationResult) {
+    	if (this.MatchProbability < 0 || this.MatchProbability > 1) {
+    		result.Errors.push(new ValidationErrorInfo('MatchProbability', 'The match probability must be between 0 and 1, inclusive.', this.MatchProbability, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -31279,6 +31498,34 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     }
 
     /**
+    * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserTypeConstraints(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserTypeConstraints(result: ValidationResult) {
+    	if (this.Type === 'Role' && this.RoleID === null && this.UserID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("RoleID", "When the type is 'Role', a RoleID must be provided and UserID must be null.", this.RoleID, ValidationErrorType.Failure));
+    	} else if (this.Type === 'User' && this.UserID === null && this.RoleID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is 'User', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -32312,6 +32559,49 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     */
     public async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for Schema Info, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result);
+        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
+    	if (this.EntityIDMin <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
+    	}
+    	if (this.EntityIDMax <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
+    	if (this.EntityIDMax <= this.EntityIDMin) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
     }
 
     /**
