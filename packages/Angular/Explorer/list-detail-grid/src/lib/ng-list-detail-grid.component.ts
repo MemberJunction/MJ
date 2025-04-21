@@ -435,29 +435,34 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
           Object.assign(dataItem, formGroup.value);
   
           const md = new Metadata();
-          // JONATHAN - TO DO
-          // @JS-BC - PLEASE FIX
-          alert('Jonathan fix this code where pkey and below are using a SINGLE valued primary key, must support multi-valued keys everywhere - COMMENTED OUT BROKEN STUFF FOR YOU TO FIX')
-//          const pkey = this._entityInfo.PrimaryKey.Name;
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
+          let compositeKey: CompositeKey = new CompositeKey();
+          compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
+
           if (this.EditMode === "Save") {
-            let compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
             record = await md.GetEntityObject(this._entityInfo.Name);
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
-            // if (!bSaved)
-            //   this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
+            if (!bSaved) {
+              this.CreateSimpleNotification("Error saving record: " + compositeKey.ToString(), 'error', 5000)
+            }
           }
           else {
-            // JONATHAN - FIX THIS HERE TOO - SAME ISSUE AS ABOVE
-            // record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
-            if (!record) { // haven't edited this one before 
+            record = this._pendingRecords.find((r: GridPendingRecordItem) => {
+              // compare each field in the r.record object with the same fields from data Item
+              for (const k of r.record.PrimaryKeys) {
+                if (r.record.Get(k.Name) !== dataItem[k.Name]) {
+                  return false; // not the same record
+                }                
+              }
+              // if we get here, all pkeys matches in the above loop
+              return true;
+            })?.record;
+            if (!record) { 
+              // haven't edited this record before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
-              let compositeKey: CompositeKey = new CompositeKey();
-              compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
               await record.InnerLoad(compositeKey);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 
