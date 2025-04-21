@@ -22,7 +22,10 @@
                         (valueChange)="onViewChange($event)" [(ngModel)]="selectedView">
                     </kendo-dropdownlist>
                 </kendo-label>
-                <kendo-loader *ngIf="selectedEntity && !Views.length" type="converging-spinner"></kendo-loader>
+                <kendo-loader *ngIf="selectedEntity && !Views.length && showloader" type="converging-spinner"></kendo-loader>
+                <div *ngIf="selectedEntity && !Views.length && !showloader" class="no-views-message">
+                    No views available for this entity
+                </div>
             </ng-container>
             <ng-container *ngSwitchCase="'Reports'">
                 <kendo-label text="Reports" *ngIf="Reports.length">
@@ -31,14 +34,17 @@
                         (valueChange)="onViewChange($event)" [(ngModel)]="selectedReport">
                     </kendo-dropdownlist>
                 </kendo-label>
-                <kendo-loader *ngIf="!Reports.length" type="converging-spinner"></kendo-loader>
+                <kendo-loader *ngIf="!Reports.length && showloader" type="converging-spinner"></kendo-loader>
+                <div *ngIf="!Reports.length && !showloader" class="no-items-message">
+                    No reports available
+                </div>
             </ng-container>
         </div>
     </div>
     <div class="k-actions k-actions-end popup-actions customBtn">
-        <button fillMode="outline" themeColor="info" kendoButton (click)="addItem()">
+        <button themeColor="info" kendoButton (click)="addItem()">
             <span class="fa-solid fa-check"></span> Add
         </button>
-        <button themeColor="info" kendoButton (click)="closeDialog()">Cancel</button>
+        <button themeColor="info" kendoButton fillMode="outline" (click)="closeDialog()">Cancel</button>
     </div>
 </kendo-window>
