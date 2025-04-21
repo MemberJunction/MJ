@@ -24,10 +24,17 @@
                             @if(i === 0 && (AllowDelete || AllowEdit)) {
                                 <span>
                                     @if (AllowEdit) {
-                                        <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)"></span>
+                                        <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)" title="Edit"></span>
+                                    }
+                                    @if (AllowCustomAction) {
+                                        <span 
+                                            class="fa-solid {{getCustomActionIcon(r)}} icon" 
+                                            (click)="performCustomAction($event, r)" 
+                                            title="{{getCustomActionTooltip(r)}}"
+                                        ></span>
                                     }
                                     @if (AllowDelete) {
-                                        <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)"></span>
+                                        <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)" title="Delete"></span>
                                     }
                                 </span>    
                             }
@@ -65,6 +72,25 @@
     <kendo-dialog-actions>
         <button kendoButton (click)="closeDeleteDialog('Yes')"  themeColor="primary">Yes</button>
         <button kendoButton (click)="closeDeleteDialog('No')">No</button>
+    </kendo-dialog-actions>
+</kendo-dialog>
+}
+
+@if(customActionDialogVisible && AllowCustomAction) {
+<kendo-dialog
+    [title]="CustomActionDialogTitle" 
+    [width]="450"
+    [height]="200"
+    (close)="closeCustomActionDialog('No')" >
+    <div>
+        {{ CustomActionDialogMessage.replace('{{recordName}}', getRecordName(customActionItem!)) }}
+        @if(CustomActionDialogInfo) {
+            <p>{{ CustomActionDialogInfo }}</p>
+        }
+    </div>
+    <kendo-dialog-actions>
+        <button kendoButton (click)="closeCustomActionDialog('Yes')" themeColor="primary">Yes</button>
+        <button kendoButton (click)="closeCustomActionDialog('No')">No</button>
     </kendo-dialog-actions>
 </kendo-dialog>
 }
