@@ -168,7 +168,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       console.log(changes);
       console.log('Old Values');
       console.log(oldValues);
-      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString() + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
+      this.sharedService.CreateSimpleNotification('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString() + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2), 'info', 30000);
     }
   }
 
