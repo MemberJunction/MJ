@@ -1,8 +1,8 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
  
  
 @Component({
@@ -194,7 +194,8 @@ export class SimpleRecordListComponent implements OnInit {
     if (result === 'Yes') {
       if (!await this.deleteRecordItem!.Delete()) {
         // show an error message
-        SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 3000);
+        const errorMessage = this.deleteRecordItem!.LatestResult.Message;
+        MJNotificationService.Instance.CreateSimpleNotification('Error deleting record: ' + errorMessage, 'error', 3000);
       }
       else 
         this.Refresh(); // refresh the list

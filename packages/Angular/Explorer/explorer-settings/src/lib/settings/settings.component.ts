@@ -1,9 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { BaseEntity, Metadata } from '@memberjunction/core';
-import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
+import { ApplicationEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { filter } from 'rxjs/operators';
 
 export enum SettingsItem {
@@ -154,7 +155,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       user.IsActive = !currentlyActive;
       
       if (await user.Save()) {
-        SharedService.Instance.CreateSimpleNotification(
+        MJNotificationService.Instance.CreateSimpleNotification(
           `User ${userName} has been ${currentlyActive ? 'deactivated' : 'activated'} successfully.`, 
           'success', 
           3000
@@ -163,7 +164,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
         // Refresh the user list
         this.selectItem(SettingsItem.Users);
       } else {
-        SharedService.Instance.CreateSimpleNotification(
+        MJNotificationService.Instance.CreateSimpleNotification(
           `Error ${currentlyActive ? 'deactivating' : 'activating'} user ${userName}`, 
           'error', 
           5000
@@ -171,7 +172,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       }
     } catch (error) {
       console.error('Error toggling user activation:', error);
-      SharedService.Instance.CreateSimpleNotification(
+      MJNotificationService.Instance.CreateSimpleNotification(
         'An error occurred while toggling user activation.', 
         'error', 
         5000
