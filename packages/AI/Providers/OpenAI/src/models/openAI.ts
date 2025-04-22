@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionMessageParam } from "openai/resources";
@@ -26,9 +26,20 @@ export class OpenAILLM extends BaseLLM {
         return this._openAI;
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
+    /**
+     * OpenAI supports streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return true;
+    }
 
+    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
+        // Check if streaming is requested and if we support it
+        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
+            return this.HandleStreamingChatCompletion(params);
+        }
+
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
         const startTime = new Date();
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
@@ -77,6 +88,105 @@ export class OpenAILLM extends BaseLLM {
             errorMessage: null,
             exception: null
         }
+    }
+
+    /**
+     * Handle streaming chat completion with OpenAI
+     * Private method used internally by ChatCompletion
+     */
+    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
+        const startTime = new Date();
+        
+        return new Promise<ChatResult>((resolve, reject) => {
+            (async () => {
+                try {
+                    const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+                        model: params.model,
+                        messages: messages,
+                        temperature: params.temperature,
+                        max_tokens: params.maxOutputTokens,
+                        stream: true
+                    };
+                    
+                    // Set response format if specified
+                    switch (params.responseFormat) {
+                        case 'JSON':
+                            openAIParams.response_format = { type: "json_object" };
+                            break;
+                        case 'ModelSpecific':
+                            openAIParams.response_format = params.modelSpecificResponseFormat;
+                            break;
+                    }
+                    
+                    // Create streaming completion
+                    const stream = await this.OpenAI.chat.completions.create(openAIParams);
+                    
+                    // Track accumulated response for final result
+                    let accumulatedContent = '';
+                    let finalChoice = null;
+                    let finalUsage = null;
+                    
+                    // Process each chunk
+                    for await (const chunk of stream) {
+                        const content = chunk.choices[0]?.delta?.content || '';
+                        accumulatedContent += content;
+                        
+                        if (params.streamingCallbacks?.OnContent) {
+                            params.streamingCallbacks.OnContent(content, false);
+                        }
+                        
+                        // Save info for final result
+                        finalChoice = chunk.choices[0];
+                        if (chunk.usage) {
+                            finalUsage = chunk.usage;
+                        }
+                    }
+                    
+                    // Stream complete, call OnContent one last time with isComplete=true
+                    if (params.streamingCallbacks?.OnContent) {
+                        params.streamingCallbacks.OnContent('', true);
+                    }
+                    
+                    // Create final result object
+                    const endTime = new Date();
+                    const result: ChatResult = {
+                        data: {
+                            choices: [{
+                                message: {
+                                    role: 'assistant',
+                                    content: accumulatedContent
+                                },
+                                finish_reason: finalChoice?.finish_reason || 'stop',
+                                index: 0
+                            }],
+                            usage: finalUsage ? 
+                                new ModelUsage(finalUsage.prompt_tokens, finalUsage.completion_tokens) :
+                                new ModelUsage(0, 0)
+                        },
+                        success: true,
+                        statusText: 'success',
+                        startTime,
+                        endTime,
+                        timeElapsed: endTime.getTime() - startTime.getTime(),
+                        errorMessage: null,
+                        exception: null
+                    };
+                    
+                    // Call OnComplete with final result
+                    if (params.streamingCallbacks?.OnComplete) {
+                        params.streamingCallbacks.OnComplete(result);
+                    }
+                    
+                    resolve(result);
+                } catch (error) {
+                    if (params.streamingCallbacks?.OnError) {
+                        params.streamingCallbacks.OnError(error);
+                    }
+                    reject(error);
+                }
+            })();
+        });
     }
 
 

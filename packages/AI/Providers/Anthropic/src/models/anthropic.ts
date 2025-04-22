@@ -2,7 +2,7 @@ import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
 import { MessageParam } from "@anthropic-ai/sdk/resources";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
-    SummarizeResult } from "@memberjunction/ai";
+    SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -19,6 +19,13 @@ export class AnthropicLLM extends BaseLLM {
      */
     public get AnthropicClient(): Anthropic {
         return this._anthropic;
+    }
+    
+    /**
+     * Anthropic supports streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return true;
     }
 
     protected anthropicMessageFormatting(messages: ChatMessage[]): MessageParam[] {
@@ -61,6 +68,11 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
+        // Check if streaming is requested and if we support it
+        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
+            return this.HandleStreamingChatCompletion(params);
+        }
+
         const startTime = new Date();
         let result: any = null;
         try {
@@ -117,8 +129,115 @@ export class AnthropicLLM extends BaseLLM {
                 errorMessage: e?.message,
                 exception: {exception: e, llmResult: result}
             };
-        
         }
+    }
+    
+    /**
+     * Handle streaming chat completion with Anthropic
+     * Private method used internally by ChatCompletion
+     */
+    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const startTime = new Date();
+        
+        return new Promise<ChatResult>((resolve, reject) => {
+            (async () => {
+                try {
+                    const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
+                    const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
+                    
+                    // Create streaming completion
+                    const stream = await this.AnthropicClient.messages.create({
+                        model: params.model,
+                        max_tokens: params.maxOutputTokens,
+                        system: systemMessage,
+                        messages: nonSystemMessages,
+                        stream: true
+                    });
+                    
+                    // Track accumulated response for final result
+                    let accumulatedContent = '';
+                    let inputTokens = 0;
+                    let outputTokens = 0;
+                    
+                    // Process each chunk
+                    for await (const chunk of stream) {
+                        if (chunk.type === 'content_block_delta' && 'text' in chunk.delta) {
+                            const content = chunk.delta.text;
+                            accumulatedContent += content;
+                            
+                            if (params.streamingCallbacks?.OnContent) {
+                                params.streamingCallbacks.OnContent(content, false);
+                            }
+                        }
+                        
+                        // The usage information is often not directly available in the stream
+                    // We'll have to manually estimate or handle it differently for streaming
+                    }
+                    
+                    // Stream complete, call OnContent one last time with isComplete=true
+                    if (params.streamingCallbacks?.OnContent) {
+                        params.streamingCallbacks.OnContent('', true);
+                    }
+                    
+                    // Create final result object
+                    const endTime = new Date();
+                    const result: ChatResult = {
+                        data: {
+                            choices: [{
+                                message: {
+                                    role: 'assistant',
+                                    content: accumulatedContent
+                                },
+                                finish_reason: 'stop',
+                                index: 0
+                            }],
+                            usage: {
+                                promptTokens: inputTokens,
+                                completionTokens: outputTokens,
+                                totalTokens: inputTokens + outputTokens
+                            }
+                        },
+                        success: true,
+                        statusText: 'success',
+                        startTime,
+                        endTime,
+                        timeElapsed: endTime.getTime() - startTime.getTime(),
+                        errorMessage: null,
+                        exception: null
+                    };
+                    
+                    // Call OnComplete with final result
+                    if (params.streamingCallbacks?.OnComplete) {
+                        params.streamingCallbacks.OnComplete(result);
+                    }
+                    
+                    resolve(result);
+                } catch (error) {
+                    if (params.streamingCallbacks?.OnError) {
+                        params.streamingCallbacks.OnError(error);
+                    }
+                    
+                    const endTime = new Date();
+                    reject({
+                        data: {
+                            choices: [],
+                            usage: {
+                                promptTokens: 0,
+                                completionTokens: 0,
+                                totalTokens: 0
+                            }
+                        },
+                        success: false,
+                        statusText: 'error',
+                        startTime,
+                        endTime,
+                        timeElapsed: endTime.getTime() - startTime.getTime(),
+                        errorMessage: error?.message,
+                        exception: {exception: error}
+                    });
+                }
+            })();
+        });
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

@@ -11,4 +11,13 @@ export abstract class BaseLLM extends BaseModel {
     public abstract ChatCompletion(params: ChatParams): Promise<ChatResult> 
     public abstract ClassifyText(params: ClassifyParams): Promise<ClassifyResult>
     public abstract SummarizeText(params: SummarizeParams): Promise<SummarizeResult>
+    
+    /**
+     * Check if this provider supports streaming
+     * @returns true if streaming is supported, false otherwise
+     */
+    public get SupportsStreaming(): boolean {
+        // Default to false, providers that support streaming should override
+        return false;
+    }
 }

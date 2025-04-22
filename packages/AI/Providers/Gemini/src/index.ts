@@ -4,7 +4,7 @@
 import { Content, GenerationConfig, GoogleGenerativeAI, TextPart } from "@google/generative-ai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -21,6 +21,13 @@ export class GeminiLLM extends BaseLLM {
      */
     public get GeminiClient(): GoogleGenerativeAI {
         return this._gemini;
+    }
+    
+    /**
+     * Gemini supports streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return true;
     }
 
     protected geminiMessageSpacing(messages: Content[]): Content[] {
@@ -42,6 +49,11 @@ export class GeminiLLM extends BaseLLM {
         return result;
     }
     public async ChatCompletion(params: ChatParams): Promise<ChatResult> {
+        // Check if streaming is requested and if we support it
+        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
+            return this.HandleStreamingChatCompletion(params);
+        }
+
         try {
             // For text-only input, use the gemini-pro model
             const startTime = new Date();
@@ -101,6 +113,118 @@ export class GeminiLLM extends BaseLLM {
             
             }
         }
+    }
+    
+    /**
+     * Handle streaming chat completion with Gemini
+     * Private method used internally by ChatCompletion
+     */
+    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const startTime = new Date();
+        
+        return new Promise<ChatResult>((resolve, reject) => {
+            (async () => {
+                try {
+                    const config: GenerationConfig = {
+                        temperature: params.temperature || 0.5,
+                        responseMimeType: params.responseFormat
+                    };
+                    
+                    const model = this.GeminiClient.getGenerativeModel({ 
+                        model: params.model || "gemini-pro", 
+                        generationConfig: config
+                    }, {apiVersion: "v1beta"});
+                    
+                    const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
+                    const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+                    const tempMessages = this.geminiMessageSpacing(convertedMessages);
+                    
+                    const chat = model.startChat({
+                        history: tempMessages
+                    });
+                    
+                    const latestMessage = params.messages[params.messages.length - 1].content;
+                    
+                    // Stream the response
+                    const streamResult = await chat.sendMessageStream(latestMessage);
+                    
+                    // Track accumulated response for final result
+                    let accumulatedContent = '';
+                    
+                    // Process each chunk
+                    for await (const chunk of streamResult.stream) {
+                        const content = chunk.text();
+                        accumulatedContent += content;
+                        
+                        if (params.streamingCallbacks?.OnContent) {
+                            params.streamingCallbacks.OnContent(content, false);
+                        }
+                    }
+                    
+                    // Stream complete, call OnContent one last time with isComplete=true
+                    if (params.streamingCallbacks?.OnContent) {
+                        params.streamingCallbacks.OnContent('', true);
+                    }
+                    
+                    // Create final result object
+                    const endTime = new Date();
+                    const result: ChatResult = {
+                        data: {
+                            choices: [{
+                                message: {
+                                    role: 'assistant',
+                                    content: accumulatedContent
+                                },
+                                finish_reason: 'stop',
+                                index: 0
+                            }],
+                            usage: {
+                                promptTokens: 0,
+                                completionTokens: 0,
+                                totalTokens: 0
+                            }
+                        },
+                        success: true,
+                        statusText: 'success',
+                        startTime,
+                        endTime,
+                        timeElapsed: endTime.getTime() - startTime.getTime(),
+                        errorMessage: null,
+                        exception: null
+                    };
+                    
+                    // Call OnComplete with final result
+                    if (params.streamingCallbacks?.OnComplete) {
+                        params.streamingCallbacks.OnComplete(result);
+                    }
+                    
+                    resolve(result);
+                } catch (error) {
+                    if (params.streamingCallbacks?.OnError) {
+                        params.streamingCallbacks.OnError(error);
+                    }
+                    
+                    const endTime = new Date();
+                    reject({
+                        data: {
+                            choices: [],
+                            usage: {
+                                promptTokens: 0,
+                                completionTokens: 0,
+                                totalTokens: 0
+                            }
+                        },
+                        success: false,
+                        statusText: 'error',
+                        startTime,
+                        endTime,
+                        timeElapsed: endTime.getTime() - startTime.getTime(),
+                        errorMessage: error?.message,
+                        exception: {exception: error}
+                    });
+                }
+            })();
+        });
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
         throw new Error("Method not implemented.");
