@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { CompositeKey, GetEntityNameFromSchemaAndViewString, Metadata, RunView } from '@memberjunction/core';
-import { SkipAPIAnalysisCompleteResponse, SkipHTMLReportInitFunction } from '@memberjunction/skip-types';
+import { SkipAPIAnalysisCompleteResponse, SkipHTMLReportInitFunction, SkipHTMLReportObject } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { InvokeManualResize } from '@memberjunction/global';
 
@@ -19,7 +19,7 @@ import { InvokeManualResize } from '@memberjunction/global';
 })
 export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     @Input() HTMLReport: string | null = null;
-    @Input() HTMLReportInitFunctionName: string | null = null;
+    @Input() HTMLReportObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
@@ -35,7 +35,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         if (this.HTMLReport) {
             const container = this.htmlContainer?.nativeElement;
             if (container) {
-                if (this.HTMLReportInitFunctionName && this.SkipData) {
+                if (this.HTMLReportObjectName && this.SkipData) {
                     this.invokeHTMLInitFunction();
                 }
             }
@@ -51,7 +51,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         this._skipData = d;
         if (d) {
             this.HTMLReport = d.htmlReport;
-            this.HTMLReportInitFunctionName = d.htmlReportInitFunctionName;
+            this.HTMLReportObjectName = d.htmlReportObjectName;
         }
         if (d && hadData) {
             // normally the initFunction is called in ngAfterViewInit, but here the data changed so we need to call it again
@@ -61,7 +61,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
 
     private invokeHTMLInitFunction() {
         const container = this.htmlContainer?.nativeElement;
-        if (container && this.HTMLReportInitFunctionName) {
+        if (container && this.HTMLReportObjectName) {
             // First set the HTML as is, with script tags
             container.innerHTML = this.HTMLReport; 
             
@@ -97,16 +97,16 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     }
 
     protected finishHTMLInitialization() {
-        if (!this.HTMLReportInitFunctionName) {
-            console.warn('HTML Report init function name not provided');
+        if (!this.HTMLReportObjectName) {
+            console.warn('HTML Report object name not provided');
             return;
         }
 
-        const initFunction = (window as any)[this.HTMLReportInitFunctionName];
-        if (initFunction && this.SkipData?.dataContext) {
-            const castedFunction = initFunction as SkipHTMLReportInitFunction;
+        const reportObject = (window as any)[this.HTMLReportObjectName];
+        if (reportObject && this.SkipData?.dataContext) {
+            const castedObject = reportObject as SkipHTMLReportObject;
             const userState = {};
-            castedFunction(this.SkipData.dataContext, userState, {
+            castedObject.init(this.SkipData.dataContext, userState, {
                 RefreshData: () => {
                     // this is a callback function that can be called from the HTML report to refresh data
                     console.log('HTML Report requested data refresh');
@@ -132,7 +132,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
             });
         }
         else {
-            console.warn(`HTML Report init function ${this.HTMLReportInitFunctionName} not found or invalid data context`);
+            console.warn(`HTML Report object ${this.HTMLReportObjectName} not found or invalid data context`);
         }
     }
 }

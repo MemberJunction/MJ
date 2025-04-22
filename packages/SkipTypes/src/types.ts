@@ -712,14 +712,15 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
     htmlReport: string | null;
     /**
      * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
-     * function name that is used to initialize the HTML report. This function is called by the container application to initialize the 
-     * component and refresh its data as required.
+     * object name that is used to communicate with the HTML Report. This name will be a globally unique name that is used to identify the object
+     * agains the global memory of the browser (e.g. the window object) and is used to communicate with the HTML report. The object will comply with the
+     * @interface SkipHTMLReportObject interface and will be used to communicate with the HTML report.
      * 
-     * Generally speaking, this function name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
-     * modified to be a valid JavaScript function name. The AI generates the function within its HTML with this name. 
-     * The function name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
+     * Generally speaking, this object name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
+     * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
+     * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
      */
-    htmlReportInitFunctionName: string | null;
+    htmlReportObjectName: string | null;
 }
 
 /**
@@ -919,13 +920,43 @@ export interface SkipHTMLReportCallbacks {
 }
 
 /**
- * This is the function signature for the InitFunctionName that is passed into the HTML report. 
- * This function is called when the HTML report is loaded and is passed the data context and a set of callbacks that can be used to interact with the parent component.
+ * This is the function signature for the initialization function provided by each HTML report via the SkipHTMLReportObject so that a container can interact with it.
+ * This function is called when the HTML report is loaded by its container. The function receives the data context, an optional userState property, and a set of callbacks that can be used to interact with the parent component.
  * userState is an optional parameter that can be used to pass in any state information that the parent component wants to provide to the HTML report that is specific
  * to the CURRENT user. If the component modifies the userState, it should notify the parent component via the UserStateChanged event in the callbacks object so that the parent component can handle storage.
  */
 export type SkipHTMLReportInitFunction = (data: SimpleDataContext, userState?: any, callbacks?: SkipHTMLReportCallbacks) => void;
 
+/**
+ * This is the function signature for the print function that is provided by the HTML report via the SkipHTMLReportObject
+ */
+export type SkipHTMLReportPrintFunction = () => void;
+/**
+ * This is the function signature for the refresh function that is provided by the HTML report via the SkipHTMLReportObject
+ */
+export type SkipHTMLReportRefreshFunction = () => void;
+
+/**
+ * This is the interface that each HTML report will expose to the parent component and assign it a name globally on the window object so that the parent component can call it.
+ * The HTML report will create this object and it will include the members defined in this interface.
+ */
+export interface SkipHTMLReportObject {
+    /**
+     * The required init function that is called when the HTML report is loaded. This function is passed the data context and a set of callbacks that can be used to interact with the parent component.
+     */
+    init: SkipHTMLReportInitFunction;
+
+    /**
+     * The optional print function that is called when the user clicks on the print button in the parent of the HTML report. This function will never be called by the parent before the init function so the print function
+     * can assume the report has been initialized;
+     */
+    print?: SkipHTMLReportPrintFunction;
+
+    /**
+     * The optional refresh function that is called when the user clicks on the refresh button in the parent of the HTML report. This function will never be called by the parent before the init function so the refresh function
+     */
+    refresh?: SkipHTMLReportRefreshFunction;
+}
 /**
  * This is a simple data context object that is passed into the SkipHTMLReportInitFunction, it contains a property for each of the data context items and typically are named
  * data_item_1, data_item_2, etc. The data context is a simple JavaScript object that contains properties that are in turn data objects which are typically arrays of things, but can be anything.
