@@ -81,6 +81,7 @@ import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-re
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
+    SkipDynamicHTMLReportComponent
   ]
 })
 export class SkipChatModule { 

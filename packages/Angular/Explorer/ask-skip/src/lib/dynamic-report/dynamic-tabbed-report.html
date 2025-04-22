@@ -13,7 +13,18 @@
     </div>  
   }
   <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25" (ResizeContainer)="sharedService.InvokeManualResize()">
-    <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsChart">
+    <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsHTML">
+      <span class="fa-solid fa-magnifying-glass-chart"></span>
+      <span class="report-tab-title">Report</span>
+    </mj-tab>
+    <mj-tab-body *ngIf="IsHTML">
+      <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
+        <skip-dynamic-html-report #theHtmlReport [SkipData]="SkipData"  (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
+        </skip-dynamic-html-report>  
+      </div>
+    </mj-tab-body>
+
+    <mj-tab [TabSelected]="isTabSelected(1)" *ngIf="IsChart">
       <span class="fa-solid fa-chart-line"></span>
       <span class="report-tab-title">Chart</span>
     </mj-tab>
@@ -24,7 +35,7 @@
       </div>
     </mj-tab-body>
 
-    <mj-tab [TabSelected]="isTabSelected(1)">
+    <mj-tab [TabSelected]="isTabSelected(2)">
       <span class="fa-solid fa-table"></span>
       <span class="report-tab-title">Table</span>
     </mj-tab>
@@ -35,7 +46,7 @@
       </div>
     </mj-tab-body>
 
-    <mj-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [TabSelected]="isTabSelected(2)">
+    <mj-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [TabSelected]="isTabSelected(3)">
       <span class="fa-solid fa-table-columns"></span>
       <span class="report-tab-title">Drill Down</span>
     </mj-tab>
@@ -45,7 +56,7 @@
       </div>  
     </mj-tab-body>
 
-    <mj-tab [TabSelected]="isTabSelected(3)">
+    <mj-tab [TabSelected]="isTabSelected(4)">
       <span class="fa-solid fa-circle-info"></span>
       <!-- <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" /> -->
       <span class="report-tab-title">Analysis</span>
@@ -56,7 +67,7 @@
       </div>
     </mj-tab-body>
 
-    <mj-tab [TabSelected]="isTabSelected(4)">
+    <mj-tab [TabSelected]="isTabSelected(5)">
       <span class="fa-solid fa-file"></span>
       <span class="report-tab-title">Explanation</span>
     </mj-tab> 
@@ -66,7 +77,7 @@
       </div>
     </mj-tab-body>
 
-    <mj-tab [TabSelected]="isTabSelected(5)">
+    <mj-tab [TabSelected]="isTabSelected(6)">
       <span class="fa-solid fa-code"></span>
       <span class="report-tab-title">Details</span>
     </mj-tab>
