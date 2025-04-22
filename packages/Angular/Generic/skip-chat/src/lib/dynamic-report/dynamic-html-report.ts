@@ -106,7 +106,14 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         if (reportObject && this.SkipData?.dataContext) {
             const castedObject = reportObject as SkipHTMLReportObject;
             const userState = {};
-            castedObject.init(this.SkipData.dataContext, userState, {
+
+            const flattenedDataContext: Record<string, any> = {};
+            // Flatten the data context to make it easier to work with
+            for (let i = 0; i < this.SkipData.dataContext.Items?.length; i++) {
+                flattenedDataContext["data_item_" + i] = this.SkipData.dataContext.Items[i]._Data;
+            }
+
+            castedObject.init(flattenedDataContext, userState, {
                 RefreshData: () => {
                     // this is a callback function that can be called from the HTML report to refresh data
                     console.log('HTML Report requested data refresh');
