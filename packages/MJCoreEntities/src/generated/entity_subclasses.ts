@@ -6610,6 +6610,45 @@ export const ListSchema = z.object({
 export type ListEntityType = z.infer<typeof ListSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Report Types
+ */
+export const ReportTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Primary key for the ReportType table.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Human-readable name of the report type.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional description of the report type.`),
+    Configuration: z.string().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration blob for styling and behavior defaults.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ReportTypeEntityType = z.infer<typeof ReportTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Report User States
  */
 export const ReportUserStateSchema = z.object({
@@ -6646,13 +6685,11 @@ export const ReportUserStateSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ReportUserStateEntityType = z.infer<typeof ReportUserStateSchema>;
@@ -6710,8 +6747,7 @@ export const ReportVersionSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
@@ -27384,6 +27420,107 @@ export class ListEntity extends BaseEntity<ListEntityType> {
 
 
 /**
+ * MJ: Report Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ReportType
+ * * Base View: vwReportTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Report Types')
+export class ReportTypeEntity extends BaseEntity<ReportTypeEntityType> {
+    /**
+    * Loads the MJ: Report Types record from the database
+    * @param ID: string - primary key value to load the MJ: Report Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ReportTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for the ReportType table.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Human-readable name of the report type.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional description of the report type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration blob for styling and behavior defaults.
+    */
+    get Configuration(): string {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Report User States - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ReportUserState
@@ -27485,7 +27622,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');
@@ -27495,7 +27631,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string {
         return this.Get('User');
@@ -27671,7 +27806,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');
