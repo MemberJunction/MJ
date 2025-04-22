@@ -30,7 +30,15 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
         Description: 'Create a new Dashboard',
         Icon: 'dashboard',
         Action: () => {
+            // Initialize a new dashboard entity for creation
+            const md: Metadata = new Metadata();
+            this.selectedDashboard = null; // Reset any existing selection
             this.toggleUpsertDashboardDialog(true);
+            // Set focus on the name input field when dialog opens
+            setTimeout(() => {
+                const inputElement = document.querySelector('.dashboard-name-input input') as HTMLInputElement;
+                if (inputElement) inputElement.focus();
+            }, 100);
         }
     }];
 
@@ -113,6 +121,12 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
   }
 
   public async createDashboard(): Promise<void> {
+    // Validate input
+    if (!this.upsertDashboardName || this.upsertDashboardName.trim() === '') {
+      this.sharedService.CreateSimpleNotification('Dashboard name is required', 'warning', 2500);
+      return;
+    }
+    
     const md: Metadata = new Metadata();
     const dashboard: DashboardEntity = await md.GetEntityObject<DashboardEntity>("Dashboards");
     
@@ -128,7 +142,14 @@ export class DashboardBrowserComponent extends BaseBrowserComponent {
       this.toggleUpsertDashboardDialog(false);
       return;
     }
-
+    
+    // Close the dialog
+    this.toggleUpsertDashboardDialog(false);
+    
+    // Show success notification
+    this.sharedService.CreateSimpleNotification(`Dashboard "${dashboard.Name}" created successfully`, "success", 2000);
+    
+    // Navigate to the new dashboard
     this.router.navigate(['resource', this.routeNameSingular, dashboard.ID]);
   }
 

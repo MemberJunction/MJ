@@ -45,3 +45,14 @@
   border-radius: 10px;
   line-height: 34px;
 }
+
+.no-items-message, .no-views-message {
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  color: #6c757d;
+  text-align: center;
+  font-size: 14px;
+  margin-top: 5px;
+  border: 1px dashed #dee2e6;
+}

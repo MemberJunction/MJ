@@ -1,8 +1,8 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
  
  
 @Component({
@@ -36,6 +36,42 @@ export class SimpleRecordListComponent implements OnInit {
    */
   @Input() AllowEdit: boolean = true;
   /**
+   * If true, a custom action button will be shown for each record.
+   */
+  @Input() AllowCustomAction: boolean = false;
+  /**
+   * The CSS class for the custom action button icon (e.g. 'fa-user-lock')
+   */
+  @Input() CustomActionIcon: string = '';
+  /**
+   * A function that returns the appropriate icon based on the record
+   * Signature: (record: BaseEntity) => string
+   * If provided, overrides CustomActionIcon
+   */
+  @Input() CustomActionIconFunction: ((record: BaseEntity) => string) | null = null;
+  /**
+   * Tooltip text for the custom action button
+   */
+  @Input() CustomActionTooltip: string = '';
+  /**
+   * A function that returns the appropriate tooltip text based on the record
+   * Signature: (record: BaseEntity) => string
+   * If provided, overrides CustomActionTooltip
+   */
+  @Input() CustomActionTooltipFunction: ((record: BaseEntity) => string) | null = null;
+  /**
+   * Title for the custom action confirmation dialog
+   */
+  @Input() CustomActionDialogTitle: string = 'Confirm Action';
+  /**
+   * Message for the custom action confirmation dialog
+   */
+  @Input() CustomActionDialogMessage: string = 'Are you sure you want to perform this action?';
+  /**
+   * Optional additional information for the custom action confirmation dialog
+   */
+  @Input() CustomActionDialogInfo: string = '';
+  /**
    * If AllowEdit or AllowNew is true, this is the section name to display for editing a new or existing record.
    */
   @Input() EditSectionName: string = 'details';
@@ -43,6 +79,8 @@ export class SimpleRecordListComponent implements OnInit {
   @Output() RecordSelected = new EventEmitter<BaseEntity>();
   @Output() RecordEdited = new EventEmitter<BaseEntity>();
   @Output() RecordCreated = new EventEmitter<BaseEntity>();
+  @Output() CustomActionClicked = new EventEmitter<BaseEntity>();
+  @Output() CustomActionConfirmed = new EventEmitter<BaseEntity>();
 
   public isLoading: boolean = false;
   public records: BaseEntity[] = [];
@@ -98,7 +136,10 @@ export class SimpleRecordListComponent implements OnInit {
   }
 
   public deleteRecordDialogVisible: boolean = false;
+  public customActionDialogVisible: boolean = false;
   public deleteRecordItem!: BaseEntity | null;
+  public customActionItem!: BaseEntity | undefined;
+  
   public async deleteRecord(event: MouseEvent, r: BaseEntity) {
     // confirm with the user first
     this.deleteRecordItem = r;
@@ -107,13 +148,54 @@ export class SimpleRecordListComponent implements OnInit {
       event.stopPropagation(); // prevent row from getting click
   }
 
+  public async performCustomAction(event: MouseEvent, r: BaseEntity) {
+    // first emit the clicked event to allow the parent to react
+    this.CustomActionClicked.emit(r);
+    
+    // confirm with the user
+    this.customActionItem = r;
+    this.customActionDialogVisible = true;
+    if (event)
+      event.stopPropagation(); // prevent row from getting click
+  }
+  
+  /**
+   * Gets the custom action icon for a record, using the function if provided, otherwise the static icon
+   */
+  public getCustomActionIcon(record: BaseEntity): string {
+    if (this.CustomActionIconFunction) {
+      return this.CustomActionIconFunction(record);
+    }
+    return this.CustomActionIcon;
+  }
+  
+  /**
+   * Gets the custom action tooltip for a record, using the function if provided, otherwise the static tooltip
+   */
+  public getCustomActionTooltip(record: BaseEntity): string {
+    if (this.CustomActionTooltipFunction) {
+      return this.CustomActionTooltipFunction(record);
+    }
+    return this.CustomActionTooltip;
+  }
+
+  public async closeCustomActionDialog(result: 'Yes' | 'No') {
+    this.customActionDialogVisible = false;
+    if (result === 'Yes') {
+      // emit the event so the parent can handle the action
+      this.CustomActionConfirmed.emit(this.customActionItem);
+    }
+    this.customActionItem = undefined;
+  }
+
   public async closeDeleteDialog(result: 'Yes' | 'No') {
     // if the user confirms, delete the record
     this.deleteRecordDialogVisible = false;
     if (result === 'Yes') {
       if (!await this.deleteRecordItem!.Delete()) {
         // show an error message
-        SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 3000);
+        const errorMessage = this.deleteRecordItem!.LatestResult.Message;
+        MJNotificationService.Instance.CreateSimpleNotification('Error deleting record: ' + errorMessage, 'error', 3000);
       }
       else 
         this.Refresh(); // refresh the list
