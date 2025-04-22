@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.33.0
+
+### Minor Changes
+
+- aab9935: Twilio + Gmail Providers for Communication Framework
+
+### Patch Changes
+
+- @memberjunction/core@2.33.0
+- @memberjunction/core-entities@2.33.0
+- @memberjunction/global@2.33.0
+- @memberjunction/templates-base-types@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

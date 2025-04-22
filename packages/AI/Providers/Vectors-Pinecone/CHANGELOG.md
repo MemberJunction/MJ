@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ai-vectors-pinecone
 
+## 2.33.0
+
+### Patch Changes
+
+- efafd0e: Readme documentation, courtesy of Claude
+- Updated dependencies [efafd0e]
+  - @memberjunction/ai-vectors@2.33.0
+  - @memberjunction/aiengine@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

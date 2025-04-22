@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/server
 
+## 2.33.0
+
+### Patch Changes
+
+- 02d7391: Claude Code Performance Optimizations for MJServer and SQLServerDataProvider as proposed
+- fa7239f: Fix import syntax
+- 9537497: Implement infra to handle action and entity action invocation from anywhere via GQL and added to User View Grid.
+- 64f95ce: Fixed duplicate KeyValuePairInput class issue
+- efafd0e: Readme documentation, courtesy of Claude
+- Updated dependencies [02d7391]
+- Updated dependencies [9537497]
+- Updated dependencies [efafd0e]
+  - @memberjunction/sqlserver-dataprovider@2.33.0
+  - @memberjunction/graphql-dataprovider@2.33.0
+  - @memberjunction/ai@2.33.0
+  - @memberjunction/ai-mistral@2.33.0
+  - @memberjunction/ai-openai@2.33.0
+  - @memberjunction/ai-vectors-pinecone@2.33.0
+  - @memberjunction/external-change-detection@2.33.0
+  - @memberjunction/aiengine@2.33.0
+  - @memberjunction/actions@2.33.0
+  - @memberjunction/queue@2.33.0
+  - @memberjunction/templates@2.33.0
+  - @memberjunction/core-actions@2.33.0
+  - @memberjunction/entity-communications-server@2.33.0
+  - @memberjunction/doc-utils@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/data-context@2.33.0
+  - @memberjunction/data-context-server@2.33.0
+  - @memberjunction/global@2.33.0
+  - @memberjunction/storage@2.33.0
+  - @memberjunction/skip-types@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

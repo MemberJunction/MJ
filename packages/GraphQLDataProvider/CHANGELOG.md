@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.33.0
+
+### Patch Changes
+
+- 9537497: Implement infra to handle action and entity action invocation from anywhere via GQL and added to User View Grid.
+  - @memberjunction/actions-base@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.33.0
+
+### Patch Changes
+
+- 02d7391: Claude Code Performance Optimizations for MJServer and SQLServerDataProvider as proposed
+- Updated dependencies [efafd0e]
+  - @memberjunction/ai@2.33.0
+  - @memberjunction/ai-vector-dupe@2.33.0
+  - @memberjunction/aiengine@2.33.0
+  - @memberjunction/actions@2.33.0
+  - @memberjunction/queue@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

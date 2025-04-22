@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-shared
 
+## 2.33.0
+
+### Patch Changes
+
+- 42b7deb: Fix #687 and clean up
+- Updated dependencies [9537497]
+  - @memberjunction/graphql-dataprovider@2.33.0
+  - @memberjunction/ng-notifications@2.33.0
+  - @memberjunction/ng-base-types@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes
