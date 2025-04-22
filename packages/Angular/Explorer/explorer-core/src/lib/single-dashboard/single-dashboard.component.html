@@ -73,7 +73,7 @@
         <kendo-tilelayout-item (mouseenter)="onMouseEnter($event)" (mouseleave)="onMouseOut($event)" [ngClass]="[getSelectedComponentStyle(this)]" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
           <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
             <div class="item-title">
-              <i [class]="getResourceIcon(item.ResourceData?.ResourceType)" aria-hidden="true"></i>
+              <i [class]="getResourceIcon(item.ResourceData.ResourceType)" aria-hidden="true"></i>
               {{item.title}}
             </div>
             @if(!isEditingDashboard) {
