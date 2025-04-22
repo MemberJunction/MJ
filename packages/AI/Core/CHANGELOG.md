@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai
 
+## 2.33.0
+
+### Patch Changes
+
+- efafd0e: Readme documentation, courtesy of Claude
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

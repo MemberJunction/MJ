@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.33.0
+
+### Patch Changes
+
+- Updated dependencies [02d7391]
+- Updated dependencies [efafd0e]
+  - @memberjunction/sqlserver-dataprovider@2.33.0
+  - @memberjunction/ai@2.33.0
+  - @memberjunction/ai-anthropic@2.33.0
+  - @memberjunction/ai-groq@2.33.0
+  - @memberjunction/ai-mistral@2.33.0
+  - @memberjunction/ai-openai@2.33.0
+  - @memberjunction/aiengine@2.33.0
+  - @memberjunction/actions@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

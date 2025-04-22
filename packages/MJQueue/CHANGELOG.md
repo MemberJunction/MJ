@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/queue
 
+## 2.33.0
+
+### Patch Changes
+
+- Updated dependencies [efafd0e]
+  - @memberjunction/ai@2.33.0
+  - @memberjunction/aiengine@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes

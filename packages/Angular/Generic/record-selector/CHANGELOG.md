@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-record-selector
 
+## 2.33.0
+
+### Patch Changes
+
+- Updated dependencies [42b7deb]
+  - @memberjunction/ng-shared@2.33.0
+  - @memberjunction/ng-container-directives@2.33.0
+  - @memberjunction/core@2.33.0
+  - @memberjunction/core-entities@2.33.0
+  - @memberjunction/global@2.33.0
+
 ## 2.32.2
 
 ### Patch Changes
