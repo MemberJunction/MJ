@@ -34,6 +34,7 @@
     "@esbuild/win32-x64": "0.24.0"
   },
   "dependencies": {
+    "@memberjunction/actions-base": "2.32.2",
     "@memberjunction/core": "2.32.2",
     "@memberjunction/core-entities": "2.32.2",
     "@memberjunction/global": "2.32.2",
