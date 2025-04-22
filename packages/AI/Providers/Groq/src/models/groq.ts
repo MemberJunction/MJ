@@ -35,12 +35,10 @@ export class GroqLLM extends BaseLLM {
         return true;
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
-            return this.HandleStreamingChatCompletion(params);
-        }
-        
+    /**
+     * Implementation of non-streaming chat completion for Groq
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
         const groqParams: ChatCompletionCreateParamsNonStreaming = {
@@ -93,133 +91,112 @@ export class GroqLLM extends BaseLLM {
             },
             errorMessage: "",
             exception: null,
-        }
+        };
     }
     
     /**
-     * Handle streaming chat completion with Groq
-     * Private method used internally by ChatCompletion
+     * Create a streaming request for Groq
      */
-    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const startTime = new Date();
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        const groqParams: ChatCompletionCreateParamsStreaming = {
+            model: params.model,
+            messages: params.messages,
+            max_tokens: params.maxOutputTokens,
+            temperature: params.temperature,
+            stream: true
+        };
         
-        return new Promise<ChatResult>((resolve, reject) => {
-            (async () => {
-                try {
-                    const groqParams: ChatCompletionCreateParamsStreaming = {
-                        model: params.model,
-                        messages: params.messages,
-                        max_tokens: params.maxOutputTokens,
-                        temperature: params.temperature,
-                        stream: true
-                    };
-                    
-                    // Set response format if specified
-                    switch (params.responseFormat) {
-                        case 'JSON':
-                            groqParams.response_format = { type: "json_object" };
-                            break;
-                        case 'ModelSpecific':
-                            groqParams.response_format = params.modelSpecificResponseFormat;
-                            break;
-                    }
-                    
-                    // Create streaming completion
-                    const stream = await this.client.chat.completions.create(groqParams);
-                    
-                    // Track accumulated response for final result
-                    let accumulatedContent = '';
-                    let finishReason = '';
-                    let promptTokens = 0;
-                    let completionTokens = 0;
-                    
-                    // Process each chunk
-                    for await (const chunk of stream) {
-                        if (chunk.choices && chunk.choices.length > 0) {
-                            const choice = chunk.choices[0];
-                            
-                            if (choice.delta?.content) {
-                                const content = choice.delta.content;
-                                accumulatedContent += content;
-                                
-                                if (params.streamingCallbacks?.OnContent) {
-                                    params.streamingCallbacks.OnContent(content, false);
-                                }
-                            }
-                            
-                            if (choice.finish_reason) {
-                                finishReason = choice.finish_reason;
-                            }
-                        }
-                        
-                        // Groq doesn't provide usage in streaming chunks
-                        // We'll estimate usage at the end
-                    }
-                    
-                    // Stream complete, call OnContent one last time with isComplete=true
-                    if (params.streamingCallbacks?.OnContent) {
-                        params.streamingCallbacks.OnContent('', true);
-                    }
-                    
-                    // Create final result object
-                    const endTime = new Date();
-                    const result: ChatResult = {
-                        data: {
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: accumulatedContent
-                                },
-                                finish_reason: finishReason || 'stop',
-                                index: 0
-                            }],
-                            usage: {
-                                promptTokens: promptTokens,
-                                completionTokens: completionTokens,
-                                totalTokens: promptTokens + completionTokens
-                            }
-                        },
-                        success: true,
-                        statusText: 'success',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: null,
-                        exception: null
-                    };
-                    
-                    // Call OnComplete with final result
-                    if (params.streamingCallbacks?.OnComplete) {
-                        params.streamingCallbacks.OnComplete(result);
-                    }
-                    
-                    resolve(result);
-                } catch (error) {
-                    if (params.streamingCallbacks?.OnError) {
-                        params.streamingCallbacks.OnError(error);
-                    }
-                    
-                    const endTime = new Date();
-                    reject({
-                        data: {
-                            choices: [],
-                            usage: {
-                                promptTokens: 0,
-                                completionTokens: 0,
-                                totalTokens: 0
-                            }
-                        },
-                        success: false,
-                        statusText: 'error',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: error?.message,
-                        exception: {exception: error}
-                    });
-                }
-            })();
-        });
+        // Set response format if specified
+        switch (params.responseFormat) {
+            case 'JSON':
+                groqParams.response_format = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                groqParams.response_format = params.modelSpecificResponseFormat;
+                break;
+        }
+        
+        return this.client.chat.completions.create(groqParams);
+    }
+    
+    /**
+     * Process a streaming chunk from Groq
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        let content = '';
+        let finishReason = undefined;
+        
+        if (chunk?.choices && chunk.choices.length > 0) {
+            const choice = chunk.choices[0];
+            
+            if (choice?.delta?.content) {
+                content = choice.delta.content;
+            }
+            
+            if (choice?.finish_reason) {
+                finishReason = choice.finish_reason;
+            }
+        }
+        
+        // Groq doesn't provide usage in streaming chunks
+        return {
+            content,
+            finishReason,
+            usage: null
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for Groq
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Extract finish reason from last chunk if available
+        let finishReason = 'stop';
+        if (lastChunk?.choices && lastChunk.choices.length > 0 && lastChunk.choices[0].finish_reason) {
+            finishReason = lastChunk.choices[0].finish_reason;
+        }
+        
+        // For Groq, we don't have precise usage metrics from streaming
+        // We'll use the accumulated ones or defaults
+        const promptTokens = usage?.promptTokens || 0;
+        const completionTokens = usage?.completionTokens || 0;
+        
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: accumulatedContent ? accumulatedContent : ''
+                },
+                finish_reason: finishReason,
+                index: 0
+            }],
+            usage: {
+                promptTokens,
+                completionTokens,
+                totalTokens: promptTokens + completionTokens
+            }
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

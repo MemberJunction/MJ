@@ -48,12 +48,11 @@ export class GeminiLLM extends BaseLLM {
         }
         return result;
     }
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult> {
-        // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
-            return this.HandleStreamingChatCompletion(params);
-        }
-
+    
+    /**
+     * Implementation of non-streaming chat completion for Gemini
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         try {
             // For text-only input, use the gemini-pro model
             const startTime = new Date();
@@ -116,115 +115,92 @@ export class GeminiLLM extends BaseLLM {
     }
     
     /**
-     * Handle streaming chat completion with Gemini
-     * Private method used internally by ChatCompletion
+     * Create a streaming request for Gemini
      */
-    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const startTime = new Date();
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        const config: GenerationConfig = {
+            temperature: params.temperature || 0.5,
+            responseMimeType: params.responseFormat
+        };
         
-        return new Promise<ChatResult>((resolve, reject) => {
-            (async () => {
-                try {
-                    const config: GenerationConfig = {
-                        temperature: params.temperature || 0.5,
-                        responseMimeType: params.responseFormat
-                    };
-                    
-                    const model = this.GeminiClient.getGenerativeModel({ 
-                        model: params.model || "gemini-pro", 
-                        generationConfig: config
-                    }, {apiVersion: "v1beta"});
-                    
-                    const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
-                    const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
-                    const tempMessages = this.geminiMessageSpacing(convertedMessages);
-                    
-                    const chat = model.startChat({
-                        history: tempMessages
-                    });
-                    
-                    const latestMessage = params.messages[params.messages.length - 1].content;
-                    
-                    // Stream the response
-                    const streamResult = await chat.sendMessageStream(latestMessage);
-                    
-                    // Track accumulated response for final result
-                    let accumulatedContent = '';
-                    
-                    // Process each chunk
-                    for await (const chunk of streamResult.stream) {
-                        const content = chunk.text();
-                        accumulatedContent += content;
-                        
-                        if (params.streamingCallbacks?.OnContent) {
-                            params.streamingCallbacks.OnContent(content, false);
-                        }
-                    }
-                    
-                    // Stream complete, call OnContent one last time with isComplete=true
-                    if (params.streamingCallbacks?.OnContent) {
-                        params.streamingCallbacks.OnContent('', true);
-                    }
-                    
-                    // Create final result object
-                    const endTime = new Date();
-                    const result: ChatResult = {
-                        data: {
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: accumulatedContent
-                                },
-                                finish_reason: 'stop',
-                                index: 0
-                            }],
-                            usage: {
-                                promptTokens: 0,
-                                completionTokens: 0,
-                                totalTokens: 0
-                            }
-                        },
-                        success: true,
-                        statusText: 'success',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: null,
-                        exception: null
-                    };
-                    
-                    // Call OnComplete with final result
-                    if (params.streamingCallbacks?.OnComplete) {
-                        params.streamingCallbacks.OnComplete(result);
-                    }
-                    
-                    resolve(result);
-                } catch (error) {
-                    if (params.streamingCallbacks?.OnError) {
-                        params.streamingCallbacks.OnError(error);
-                    }
-                    
-                    const endTime = new Date();
-                    reject({
-                        data: {
-                            choices: [],
-                            usage: {
-                                promptTokens: 0,
-                                completionTokens: 0,
-                                totalTokens: 0
-                            }
-                        },
-                        success: false,
-                        statusText: 'error',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: error?.message,
-                        exception: {exception: error}
-                    });
-                }
-            })();
+        const model = this.GeminiClient.getGenerativeModel({ 
+            model: params.model || "gemini-pro", 
+            generationConfig: config
+        }, {apiVersion: "v1beta"});
+        
+        const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
+        const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
+        const tempMessages = this.geminiMessageSpacing(convertedMessages);
+        
+        const chat = model.startChat({
+            history: tempMessages
         });
+        
+        const latestMessage = params.messages[params.messages.length - 1].content;
+        
+        // Return an object with a stream property
+        const streamResult = await chat.sendMessageStream(latestMessage);
+        // Return the stream directly for the for-await loop to work
+        return streamResult.stream;
+    }
+    
+    /**
+     * Process a streaming chunk from Gemini
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        // Gemini chunks provide text via the text() method
+        const content = chunk.text();
+        
+        // Gemini doesn't provide finish reason or usage in chunks
+        return {
+            content,
+            finishReason: undefined,
+            usage: null
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for Gemini
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Gemini doesn't provide usage information in streaming
+        
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: accumulatedContent ? accumulatedContent : ''
+                },
+                finish_reason: 'stop',
+                index: 0
+            }],
+            usage: {
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0
+            }
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
         throw new Error("Method not implemented.");

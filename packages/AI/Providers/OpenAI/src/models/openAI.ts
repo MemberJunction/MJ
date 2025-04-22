@@ -33,12 +33,10 @@ export class OpenAILLM extends BaseLLM {
         return true;
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
-            return this.HandleStreamingChatCompletion(params);
-        }
-
+    /**
+     * Implementation of non-streaming chat completion for OpenAI
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
         const startTime = new Date();
@@ -91,102 +89,92 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
-     * Handle streaming chat completion with OpenAI
-     * Private method used internally by ChatCompletion
+     * Create a streaming request for OpenAI
      */
-    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
         const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
-        const startTime = new Date();
         
-        return new Promise<ChatResult>((resolve, reject) => {
-            (async () => {
-                try {
-                    const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-                        model: params.model,
-                        messages: messages,
-                        temperature: params.temperature,
-                        max_tokens: params.maxOutputTokens,
-                        stream: true
-                    };
-                    
-                    // Set response format if specified
-                    switch (params.responseFormat) {
-                        case 'JSON':
-                            openAIParams.response_format = { type: "json_object" };
-                            break;
-                        case 'ModelSpecific':
-                            openAIParams.response_format = params.modelSpecificResponseFormat;
-                            break;
-                    }
-                    
-                    // Create streaming completion
-                    const stream = await this.OpenAI.chat.completions.create(openAIParams);
-                    
-                    // Track accumulated response for final result
-                    let accumulatedContent = '';
-                    let finalChoice = null;
-                    let finalUsage = null;
-                    
-                    // Process each chunk
-                    for await (const chunk of stream) {
-                        const content = chunk.choices[0]?.delta?.content || '';
-                        accumulatedContent += content;
-                        
-                        if (params.streamingCallbacks?.OnContent) {
-                            params.streamingCallbacks.OnContent(content, false);
-                        }
-                        
-                        // Save info for final result
-                        finalChoice = chunk.choices[0];
-                        if (chunk.usage) {
-                            finalUsage = chunk.usage;
-                        }
-                    }
-                    
-                    // Stream complete, call OnContent one last time with isComplete=true
-                    if (params.streamingCallbacks?.OnContent) {
-                        params.streamingCallbacks.OnContent('', true);
-                    }
-                    
-                    // Create final result object
-                    const endTime = new Date();
-                    const result: ChatResult = {
-                        data: {
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: accumulatedContent
-                                },
-                                finish_reason: finalChoice?.finish_reason || 'stop',
-                                index: 0
-                            }],
-                            usage: finalUsage ? 
-                                new ModelUsage(finalUsage.prompt_tokens, finalUsage.completion_tokens) :
-                                new ModelUsage(0, 0)
-                        },
-                        success: true,
-                        statusText: 'success',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: null,
-                        exception: null
-                    };
-                    
-                    // Call OnComplete with final result
-                    if (params.streamingCallbacks?.OnComplete) {
-                        params.streamingCallbacks.OnComplete(result);
-                    }
-                    
-                    resolve(result);
-                } catch (error) {
-                    if (params.streamingCallbacks?.OnError) {
-                        params.streamingCallbacks.OnError(error);
-                    }
-                    reject(error);
-                }
-            })();
-        });
+        const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+            model: params.model,
+            messages: messages,
+            temperature: params.temperature,
+            max_tokens: params.maxOutputTokens,
+            stream: true
+        };
+        
+        // Set response format if specified
+        switch (params.responseFormat) {
+            case 'JSON':
+                openAIParams.response_format = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                openAIParams.response_format = params.modelSpecificResponseFormat;
+                break;
+        }
+        
+        return this.OpenAI.chat.completions.create(openAIParams);
+    }
+    
+    /**
+     * Process a streaming chunk from OpenAI
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        // Handle potential null/undefined values safely
+        const content = chunk?.choices?.[0]?.delta?.content || '';
+        const usage = chunk?.usage || null;
+        
+        return {
+            content,
+            finishReason: chunk?.choices?.[0]?.finish_reason,
+            usage: usage ? {
+                promptTokens: usage.prompt_tokens || 0,
+                completionTokens: usage.completion_tokens || 0,
+                totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+            } : null
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for OpenAI
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Handle possible null/undefined values
+        const content = accumulatedContent || '';
+        const promptTokens = usage?.promptTokens || 0;
+        const completionTokens = usage?.completionTokens || 0;
+        
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: content
+                },
+                finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
+                index: 0
+            }],
+            usage: new ModelUsage(promptTokens, completionTokens)
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
 
 

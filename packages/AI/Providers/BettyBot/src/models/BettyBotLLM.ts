@@ -18,17 +18,28 @@ export class BettyBotLLM extends BaseLLM {
         this.TokenExpiration = new Date();
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
+    /**
+     * Betty Bot doesn't support streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return false;
+    }
+
+    /**
+     * Implementation of non-streaming chat completion for Betty Bot
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         try{
             const startTime = new Date();
             
             //ensure the jwt token is up to date
             const jwtResponse = await this.GetJWTToken();
             if(!jwtResponse || jwtResponse.status !== 'SUCCESS'){
-                return {
-                    success: false,
-                    errorMessage: jwtResponse?.errorMessage || 'Error getting JWT token',
-                } as any;
+                // Create an error result
+                const errorResult = new ChatResult(false, startTime, startTime);
+                errorResult.statusText = 'error';
+                errorResult.errorMessage = jwtResponse?.errorMessage || 'Error getting JWT token';
+                return errorResult;
             }
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'response';
@@ -40,10 +51,11 @@ export class BettyBotLLM extends BaseLLM {
 
             const userMessage = params.messages.find(m => m.role === 'user');
             if(!userMessage){
-                return {
-                    success: false,
-                    errorMessage: 'No user message found in params',
-                } as any;
+                // Create an error result
+                const errorResult = new ChatResult(false, startTime, startTime);
+                errorResult.statusText = 'error';
+                errorResult.errorMessage = 'No user message found in params';
+                return errorResult;
             }
 
             const data = {
@@ -52,39 +64,39 @@ export class BettyBotLLM extends BaseLLM {
 
             const bettyResponse = await axios.post<BettyResponse>(endpoint, data, config);
             if(!bettyResponse || !bettyResponse.data){
-                return {
-                    success: false,
-                    errorMessage: 'Error getting response from Betty',
-                } as any;
+                // Create an error result
+                const errorResult = new ChatResult(false, startTime, startTime);
+                errorResult.statusText = 'error';
+                errorResult.errorMessage = 'Error getting response from Betty';
+                return errorResult;
             }
 
             const endTime = new Date();
-            const response: ChatResult = {
-                success: true,
-                statusText: "OK",
-                startTime: startTime,
-                endTime: endTime,
-                timeElapsed: endTime.getTime() - startTime.getTime(),
-                data: {
-                    choices: [
-                        {
-                            message: {
-                                role: 'assistant',
-                                content: bettyResponse.data.response
-                            },
-                            finish_reason: "",
-                            index: 0
-                        }
-                    ],
-                    usage: {
-                        totalTokens: 0,
-                        promptTokens: 0,
-                        completionTokens: 0,
+            
+            // Create a proper ChatResult instance with constructor params
+            const response = new ChatResult(true, startTime, endTime);
+            
+            // Set properties
+            response.statusText = "OK";
+            response.data = {
+                choices: [
+                    {
+                        message: {
+                            role: 'assistant',
+                            content: bettyResponse.data.response
+                        },
+                        finish_reason: "",
+                        index: 0
                     }
-                },
-                errorMessage: "",
-                exception: null
-            }
+                ],
+                usage: {
+                    totalTokens: 0,
+                    promptTokens: 0,
+                    completionTokens: 0,
+                }
+            };
+            response.errorMessage = "";
+            response.exception = null;
 
             /**
              * If Betty gave us any references, add them to the response
@@ -123,11 +135,46 @@ export class BettyBotLLM extends BaseLLM {
                 console.log(`Error calling api`);
             }
             
-            return {
-                success: false,
-                errorMessage: 'Error getting response from Betty',
-            } as any;
+            // Create a proper error result
+            const now = new Date();
+            const errorResult = new ChatResult(false, now, now);
+            errorResult.statusText = 'error';
+            errorResult.errorMessage = 'Error getting response from Betty';
+            errorResult.data = {
+                choices: [],
+                usage: {
+                    promptTokens: 0,
+                    completionTokens: 0,
+                    totalTokens: 0
+                }
+            };
+            
+            return errorResult;
         }
+    }
+    
+    /**
+     * Since BettyBot doesn't support streaming, we don't implement these methods.
+     * They should never be called because SupportsStreaming returns false.
+     */
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        throw new Error("BettyBot does not support streaming");
+    }
+    
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string | undefined;
+        usage?: any | null;
+    } {
+        throw new Error("BettyBot does not support streaming");
+    }
+    
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        throw new Error("BettyBot does not support streaming");
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

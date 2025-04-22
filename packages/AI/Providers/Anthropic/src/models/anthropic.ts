@@ -67,12 +67,10 @@ export class AnthropicLLM extends BaseLLM {
         }
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
-            return this.HandleStreamingChatCompletion(params);
-        }
-
+    /**
+     * Non-streaming implementation for Anthropic
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         let result: any = null;
         try {
@@ -133,111 +131,83 @@ export class AnthropicLLM extends BaseLLM {
     }
     
     /**
-     * Handle streaming chat completion with Anthropic
-     * Private method used internally by ChatCompletion
+     * Create a streaming request for Anthropic
      */
-    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const startTime = new Date();
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
+        const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
         
-        return new Promise<ChatResult>((resolve, reject) => {
-            (async () => {
-                try {
-                    const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
-                    const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
-                    
-                    // Create streaming completion
-                    const stream = await this.AnthropicClient.messages.create({
-                        model: params.model,
-                        max_tokens: params.maxOutputTokens,
-                        system: systemMessage,
-                        messages: nonSystemMessages,
-                        stream: true
-                    });
-                    
-                    // Track accumulated response for final result
-                    let accumulatedContent = '';
-                    let inputTokens = 0;
-                    let outputTokens = 0;
-                    
-                    // Process each chunk
-                    for await (const chunk of stream) {
-                        if (chunk.type === 'content_block_delta' && 'text' in chunk.delta) {
-                            const content = chunk.delta.text;
-                            accumulatedContent += content;
-                            
-                            if (params.streamingCallbacks?.OnContent) {
-                                params.streamingCallbacks.OnContent(content, false);
-                            }
-                        }
-                        
-                        // The usage information is often not directly available in the stream
-                    // We'll have to manually estimate or handle it differently for streaming
-                    }
-                    
-                    // Stream complete, call OnContent one last time with isComplete=true
-                    if (params.streamingCallbacks?.OnContent) {
-                        params.streamingCallbacks.OnContent('', true);
-                    }
-                    
-                    // Create final result object
-                    const endTime = new Date();
-                    const result: ChatResult = {
-                        data: {
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: accumulatedContent
-                                },
-                                finish_reason: 'stop',
-                                index: 0
-                            }],
-                            usage: {
-                                promptTokens: inputTokens,
-                                completionTokens: outputTokens,
-                                totalTokens: inputTokens + outputTokens
-                            }
-                        },
-                        success: true,
-                        statusText: 'success',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: null,
-                        exception: null
-                    };
-                    
-                    // Call OnComplete with final result
-                    if (params.streamingCallbacks?.OnComplete) {
-                        params.streamingCallbacks.OnComplete(result);
-                    }
-                    
-                    resolve(result);
-                } catch (error) {
-                    if (params.streamingCallbacks?.OnError) {
-                        params.streamingCallbacks.OnError(error);
-                    }
-                    
-                    const endTime = new Date();
-                    reject({
-                        data: {
-                            choices: [],
-                            usage: {
-                                promptTokens: 0,
-                                completionTokens: 0,
-                                totalTokens: 0
-                            }
-                        },
-                        success: false,
-                        statusText: 'error',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: error?.message,
-                        exception: {exception: error}
-                    });
-                }
-            })();
+        return this.AnthropicClient.messages.create({
+            model: params.model,
+            max_tokens: params.maxOutputTokens,
+            system: systemMessage,
+            messages: nonSystemMessages,
+            stream: true
         });
+    }
+    
+    /**
+     * Process a streaming chunk from Anthropic
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        let content = '';
+        if (chunk && chunk.type === 'content_block_delta' && chunk.delta && 'text' in chunk.delta) {
+            content = chunk.delta.text || '';
+        }
+        
+        // Anthropic doesn't provide usage info in the stream
+        return {
+            content,
+            finishReason: chunk && chunk.type === 'message_stop' ? 'stop' : undefined,
+            usage: null
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for Anthropic
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Handle possible null/undefined values
+        const content = accumulatedContent || '';
+        const promptTokens = usage?.promptTokens || 0;
+        const completionTokens = usage?.completionTokens || 0;
+        
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: content
+                },
+                finish_reason: 'stop',
+                index: 0
+            }],
+            usage: {
+                promptTokens,
+                completionTokens,
+                totalTokens: promptTokens + completionTokens
+            }
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

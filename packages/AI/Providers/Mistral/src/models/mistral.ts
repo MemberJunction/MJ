@@ -23,12 +23,10 @@ export class MistralLLM extends BaseLLM {
         return true;
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
-            return this.HandleStreamingChatCompletion(params);
-        }
-        
+    /**
+     * Implementation of non-streaming chat completion for Mistral
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
         let responseFormat: ResponseFormat | undefined = undefined;
@@ -88,133 +86,98 @@ export class MistralLLM extends BaseLLM {
     }
     
     /**
-     * Handle streaming chat completion with Mistral
-     * Private method used internally by ChatCompletion
+     * Create a streaming request for Mistral
      */
-    private async HandleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const startTime = new Date();
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        let responseFormat: ResponseFormat | undefined = undefined;
+        if (params.responseFormat === 'JSON') {
+            responseFormat = { type: "json_object" };
+        }
         
-        return new Promise<ChatResult>((resolve, reject) => {
-            (async () => {
-                try {
-                    let responseFormat: ResponseFormat | undefined = undefined;
-                    if (params.responseFormat === 'JSON') {
-                        responseFormat = { type: "json_object" };
-                    }
-                    
-                    // Create streaming completion
-                    const stream = await this.Client.chat.stream({
-                        model: params.model,
-                        messages: params.messages,
-                        maxTokens: params.maxOutputTokens,
-                        responseFormat: responseFormat
-                    });
-                    
-                    // Track accumulated response for final result
-                    let accumulatedContent = '';
-                    let lastChoice: any = null;
-                    let usageInfo = {
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0
-                    };
-                    
-                    // Process each chunk
-                    for await (const chunk of stream) {
-                        if (chunk.data && chunk.data.choices && chunk.data.choices.length > 0) {
-                            const choice = chunk.data.choices[0];
-                            
-                            // Extract content from the choice delta
-                            if (choice.delta && choice.delta.content) {
-                                let content = '';
-                                
-                                if (typeof choice.delta.content === 'string') {
-                                    content = choice.delta.content;
-                                } else if (Array.isArray(choice.delta.content)) {
-                                    content = choice.delta.content.join('');
-                                }
-                                
-                                accumulatedContent += content;
-                                
-                                if (params.streamingCallbacks?.OnContent) {
-                                    params.streamingCallbacks.OnContent(content, false);
-                                }
-                            }
-                            
-                            // Keep track of the last choice for finish reason
-                            lastChoice = choice;
-                        }
-                        
-                        // Save usage information if available
-                        if (chunk.data && chunk.data.usage) {
-                            usageInfo = {
-                                promptTokens: chunk.data.usage.promptTokens,
-                                completionTokens: chunk.data.usage.completionTokens,
-                                totalTokens: chunk.data.usage.totalTokens
-                            };
-                        }
-                    }
-                    
-                    // Stream complete, call OnContent one last time with isComplete=true
-                    if (params.streamingCallbacks?.OnContent) {
-                        params.streamingCallbacks.OnContent('', true);
-                    }
-                    
-                    // Create final result object
-                    const endTime = new Date();
-                    const result: ChatResult = {
-                        data: {
-                            choices: [{
-                                message: {
-                                    role: 'assistant',
-                                    content: accumulatedContent
-                                },
-                                finish_reason: lastChoice?.finishReason || 'stop',
-                                index: 0
-                            }],
-                            usage: usageInfo
-                        },
-                        success: true,
-                        statusText: 'success',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: null,
-                        exception: null
-                    };
-                    
-                    // Call OnComplete with final result
-                    if (params.streamingCallbacks?.OnComplete) {
-                        params.streamingCallbacks.OnComplete(result);
-                    }
-                    
-                    resolve(result);
-                } catch (error) {
-                    if (params.streamingCallbacks?.OnError) {
-                        params.streamingCallbacks.OnError(error);
-                    }
-                    
-                    const endTime = new Date();
-                    reject({
-                        data: {
-                            choices: [],
-                            usage: {
-                                promptTokens: 0,
-                                completionTokens: 0,
-                                totalTokens: 0
-                            }
-                        },
-                        success: false,
-                        statusText: 'error',
-                        startTime,
-                        endTime,
-                        timeElapsed: endTime.getTime() - startTime.getTime(),
-                        errorMessage: error?.message,
-                        exception: {exception: error}
-                    });
-                }
-            })();
+        return this.Client.chat.stream({
+            model: params.model,
+            messages: params.messages,
+            maxTokens: params.maxOutputTokens,
+            responseFormat: responseFormat
         });
+    }
+    
+    /**
+     * Process a streaming chunk from Mistral
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        let content = '';
+        let usage = null;
+        
+        if (chunk?.data?.choices && chunk.data.choices.length > 0) {
+            const choice = chunk.data.choices[0];
+            
+            // Extract content from the choice delta
+            if (choice?.delta?.content) {
+                if (typeof choice.delta.content === 'string') {
+                    content = choice.delta.content;
+                } else if (Array.isArray(choice.delta.content)) {
+                    content = choice.delta.content.join('');
+                }
+            }
+            
+            // Save usage information if available
+            if (chunk?.data?.usage) {
+                usage = {
+                    promptTokens: chunk.data.usage.promptTokens || 0,
+                    completionTokens: chunk.data.usage.completionTokens || 0,
+                    totalTokens: chunk.data.usage.totalTokens || 0
+                };
+            }
+        }
+        
+        return {
+            content,
+            finishReason: chunk?.data?.choices?.[0]?.finishReason,
+            usage
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for Mistral
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: accumulatedContent ? accumulatedContent : ''
+                },
+                finish_reason: lastChunk?.data?.choices?.[0]?.finishReason || 'stop',
+                index: 0
+            }],
+            usage: usage || {
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0
+            }
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
