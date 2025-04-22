@@ -5,6 +5,52 @@ import { PlotlyModule } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
 import { DrillDownInfo } from '../drill-down-info';
 import { InvokeManualResize } from '@memberjunction/global';
+import { ReportTypeEntity } from '@memberjunction/core-entities';
+
+const SKIP_DYNAMIC_CHART = 'Skip Dynamic Chart';
+
+interface ReportTypeConfig {
+  plot_bgcolor: string;
+  font: FontConfig;
+  colorway: string[];
+  margin: MarginConfig;
+  title: TitleConfig;
+  xaxis: AxisConfig;
+  yaxis: AxisConfig;
+  legend: LegendConfig;
+}
+
+interface FontConfig {
+  /** e.g. "Roboto, sans-serif" */
+  family?: string;
+  size: number;
+  /** CSS color string, e.g. "#000" */
+  color: string;
+}
+
+interface MarginConfig {
+  l: number;
+  r: number;
+  t: number;
+  b: number;
+}
+
+interface TitleConfig {
+  font: FontConfig;
+}
+
+interface AxisConfig {
+  automargin: boolean;
+  tickangle: number;
+  ticklabelposition: string;
+  tickpadding: number;
+  title: TitleConfig;
+}
+
+interface LegendConfig {
+  x: number;
+  xanchor: string;
+}
 
 @Component({
   selector: 'skip-dynamic-chart',
@@ -38,12 +84,28 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
     @ViewChild('plotContainer') plotContainer!: ElementRef;
 
     private resizeObserver: ResizeObserver | undefined;
+    private _md: Metadata | undefined;
+    private skipDynamicChart: ReportTypeEntity | undefined;
 
-    constructor(private el: ElementRef) { }
+    constructor(private el: ElementRef) { 
+      this._md = new Metadata();
+    }
   
-    ngOnInit() {
+    async ngOnInit() {
       if (this.AutoResizeChart)
         this.setupResizeObserver();
+
+      // Get the Report Type configuration for this chart
+      const rv = new RunView();
+      const result = await rv.RunView<ReportTypeEntity>({
+        EntityName: 'Report Types',
+        ExtraFilter: `Name = '${SKIP_DYNAMIC_CHART}'`,
+        ResultType: 'entity_object'
+      }, this._md?.CurrentUser);
+
+      if (result.Success && result.Results.length > 0) {
+        this.skipDynamicChart = result.Results[0];
+      }
     }
   
     ngOnDestroy() {
@@ -140,16 +202,20 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
         console.log(d)
         if (d) {
             this.plotData = d.executionResults?.plotData?.data;
+
+            // Parse the Report Type configuration as a JSON object
+            const chartConfig: ReportTypeConfig = this.skipDynamicChart?.Configuration ? JSON.parse(this.skipDynamicChart.Configuration) : undefined;
             
             this.plotLayout = {
               ...this.plotLayout = d.executionResults?.plotData?.layout, // Preserve existing layout properties
-              plot_bgcolor: '#f8f9fa',
+              plot_bgcolor: chartConfig?.plot_bgcolor || '#f8f9fa',
               font: {
-                family: 'Roboto, sans-serif',
-                size: 12,
-                color: '#000'             
+                family: chartConfig?.font?.family || 'Roboto, sans-serif',
+                size: chartConfig?.font?.size || 12,
+                color: chartConfig?.font?.color || '#000'             
               },
-              colorway: [
+              colorway: chartConfig?.colorway || 
+              [
                 "#6EBBE4", // original
                 "#4DAEE0", // cooler medium blue
                 "#389FD5", // stronger sky blue
@@ -163,7 +229,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
                 "#CBE9F8", // softest cool tint
                 "#E6F4FB"  // whisper blue (background-worthy)
               ],
-              margin: {
+              margin: chartConfig?.margin ||
+              {
                 l: 40,
                 r: 40,
                 t: 120,
@@ -171,7 +238,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
               },
               title: {
                 text: d.executionResults?.plotData?.layout?.title || d.executionResults?.plotData?.layout?.title.text,
-                font: {
+                font: chartConfig?.title?.font ||
+                {
                   family: 'Roboto, sans-serif',
                   size: 24,
                   color: '#0076B6'
@@ -180,29 +248,32 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
               xaxis: {
                 title: {
                   text: d.executionResults?.plotData?.layout?.xaxis?.title || d.executionResults?.plotData?.layout?.xaxis?.title.text,
-                  font: {
+                  font: chartConfig?.xaxis?.title?.font ||
+                  {
                     color: '#0076B6',
                     size: 18,
                   }
                 },
-                automargin: true,
-                tickangle: 45,
-                ticklabelposition: 'outside',
-                tickpadding: 20,
+                automargin: chartConfig?.xaxis?.automargin || true,
+                tickangle: chartConfig?.xaxis?.tickangle || 45,
+                ticklabelposition: chartConfig?.xaxis?.ticklabelposition || 'outside',
+                tickpadding: chartConfig?.xaxis?.tickpadding || 20,
               },
               yaxis: {
                 title: {
                   text: d.executionResults?.plotData?.layout?.yaxis?.title || d.executionResults?.plotData?.layout?.yaxis?.title.text,
-                  font: {
+                  font: chartConfig?.yaxis?.title?.font ||{
                     color: '#0076B6',
                     size: 18,
                   }
                 },
-                automargin: true,
-                ticklabelposition: 'outside',
-                tickpadding: 20 
+                automargin: chartConfig?.yaxis?.automargin || true,
+                ticklabelposition: chartConfig?.yaxis?.ticklabelposition || 'outside',
+                tickpadding: chartConfig?.yaxis?.tickpadding || 20 
               },
-              legend: {
+              legend:
+              chartConfig?.legend ||
+              {
                 x: 1, // Position legend to the far right
                 xanchor: 'left'
               }
