@@ -85,27 +85,14 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
 
     private resizeObserver: ResizeObserver | undefined;
     private _md: Metadata | undefined;
-    private skipDynamicChart: ReportTypeEntity | undefined;
 
     constructor(private el: ElementRef) { 
       this._md = new Metadata();
     }
   
-    async ngOnInit() {
+    ngOnInit() {
       if (this.AutoResizeChart)
         this.setupResizeObserver();
-
-      // Get the Report Type configuration for this chart
-      const rv = new RunView();
-      const result = await rv.RunView<ReportTypeEntity>({
-        EntityName: 'Report Types',
-        ExtraFilter: `Name = '${SKIP_DYNAMIC_CHART}'`,
-        ResultType: 'entity_object'
-      }, this._md?.CurrentUser);
-
-      if (result.Success && result.Results.length > 0) {
-        this.skipDynamicChart = result.Results[0];
-      }
     }
   
     ngOnDestroy() {
@@ -204,7 +191,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
             this.plotData = d.executionResults?.plotData?.data;
 
             // Parse the Report Type configuration as a JSON object
-            const chartConfig: ReportTypeConfig = this.skipDynamicChart?.Configuration ? JSON.parse(this.skipDynamicChart.Configuration) : undefined;
+            const chartConfigString = this._md?.ReportTypes?.find(rt => rt.Name === SKIP_DYNAMIC_CHART)?.Configuration;
+            const chartConfig: ReportTypeConfig = chartConfigString ? JSON.parse(chartConfigString) : undefined;
             
             this.plotLayout = {
               ...this.plotLayout = d.executionResults?.plotData?.layout, // Preserve existing layout properties
