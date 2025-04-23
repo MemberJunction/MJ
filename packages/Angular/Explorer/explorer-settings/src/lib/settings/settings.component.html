@@ -39,8 +39,16 @@
                 <mj-simple-record-list
                     EntityName="Users"
                     SortBy="Name"
-                    [Columns]="['Name', 'Email', 'IsActive', 'Type']"
+                    [Columns]="['Name', 'Email', 'IsActive', 'Type']" 
+                    [AllowDelete]="false"
+                    [AllowCustomAction]="true"
+                    [CustomActionIconFunction]="getUserToggleIcon"
+                    [CustomActionTooltipFunction]="getUserToggleTooltip"
+                    [CustomActionDialogTitle]="'Toggle User Activation'"
+                    [CustomActionDialogMessage]="'Are you sure you want to toggle activation for this user?'"
+                    [CustomActionDialogInfo]="'Active users can log in to the system. Inactive users cannot log in.'"
                     (RecordSelected)="selectUser($event)"
+                    (CustomActionConfirmed)="toggleUserActivation($event)"
                 ></mj-simple-record-list>
             }
             @case ('User') {

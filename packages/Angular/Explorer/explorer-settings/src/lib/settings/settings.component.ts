@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { BaseEntity, Metadata } from '@memberjunction/core';
-import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
+import { ApplicationEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { filter } from 'rxjs/operators';
 
@@ -120,6 +121,63 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   }
   public selectUser(u: BaseEntity) {
     this.selectRoute('/settings/user', (<UserEntity>u).ID);
+  }
+  
+  /**
+   * Function that returns the appropriate Font Awesome icon for the user toggle button
+   * based on the user's IsActive status
+   */
+  public getUserToggleIcon(record: BaseEntity): string {
+    const user = record as UserEntity;
+    return user.IsActive ? 'fa-user-lock' : 'fa-user-check';
+  }
+
+  /**
+   * Function that returns the appropriate tooltip text for the user toggle button
+   * based on the user's IsActive status
+   */
+  public getUserToggleTooltip(record: BaseEntity): string {
+    const user = record as UserEntity;
+    return user.IsActive ? 'Deactivate user' : 'Activate user';
+  }
+
+  /**
+   * Handles toggling a user's activation status when the custom action is confirmed
+   */
+  public async toggleUserActivation(record: BaseEntity) {
+    try {
+      const user = record as UserEntity;
+      // Get current status
+      const currentlyActive = user.IsActive;
+      const userName = user.Name;
+      
+      // Toggle the IsActive flag
+      user.IsActive = !currentlyActive;
+      
+      if (await user.Save()) {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          `User ${userName} has been ${currentlyActive ? 'deactivated' : 'activated'} successfully.`, 
+          'success', 
+          3000
+        );
+        
+        // Refresh the user list
+        this.selectItem(SettingsItem.Users);
+      } else {
+        MJNotificationService.Instance.CreateSimpleNotification(
+          `Error ${currentlyActive ? 'deactivating' : 'activating'} user ${userName}`, 
+          'error', 
+          5000
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling user activation:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'An error occurred while toggling user activation.', 
+        'error', 
+        5000
+      );
+    }
   }
   public selectRoute(route: string, value: any) {
     this.router.navigate([route, value]);    

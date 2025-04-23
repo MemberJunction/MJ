@@ -4,6 +4,7 @@ import { EntityActionEngineServer } from "@memberjunction/actions";
 import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from "@memberjunction/core";
 import { ActionParam } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
+import { KeyValuePairInput } from "../generic/KeyValuePairInput";
 
 /**
  * Input type for action parameters
@@ -56,27 +57,7 @@ export class RunActionInput {
   @Field(() => Boolean, { nullable: true })
   SkipActionLog?: boolean;
 }
-
-// Input Types for Entity Action Parameters
-/**
- * Represents a key-value pair used in composite keys
- */
-@InputType()
-export class KeyValuePairInput {
-  /**
-   * The name of the field in the composite key
-   */
-  @Field()
-  FieldName: string;
-
-  /**
-   * The value of the field in the composite key
-   * Always stored as a string and converted to the appropriate type on the server
-   */
-  @Field()
-  Value: string;
-}
-
+ 
 /**
  * Represents a collection of key-value pairs that make up a composite key
  * Used for both primary keys and foreign keys
@@ -464,7 +445,7 @@ export class ActionResolver {
     
     for (const kvp of primaryKey.KeyValuePairs) {
       // Convert value based on the field type if necessary
-      const field = entity.Fields.find(f => f.Name === kvp.FieldName);
+      const field = entity.Fields.find(f => f.Name === kvp.Key);
       let value: any = kvp.Value;
       
       // If the field is found, try to convert to proper type
@@ -474,7 +455,7 @@ export class ActionResolver {
       
       // Add to composite key
       const kvPair = new KeyValuePair();
-      kvPair.FieldName = kvp.FieldName;
+      kvPair.FieldName = kvp.Key;
       kvPair.Value = value;
       compositeKey.KeyValuePairs.push(kvPair);
     }

@@ -1,11 +1,11 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
-import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
-import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
+import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Injectable({

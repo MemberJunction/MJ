@@ -90,11 +90,21 @@ export class SingleDashboardComponent implements OnInit {
       else {
         this.dashboardEntity.NewRecord(); // creating a new dashboard
         this.dashboardEntity.UserID = md.CurrentUser.ID;
-        this.dashboardEntity.Name = 'New Dashboard';
-        this.config.columns = this.config.columns || this.config.columns;
-        this.config.rowHeight = this.config.rowHeight || this.config.rowHeight;
-        this.config.resizable = this.config.resizable || this.config.resizable;
-        this.config.reorderable = this.config.reorderable || this.config.reorderable;
+        
+        // We should never get here now because dashboard creation is handled in dashboard-browser
+        // But just in case, set a better default name
+        this.dashboardEntity.Name = 'My Dashboard';
+        
+        // Set default configuration
+        this.config.columns = 4;  // 4-column layout
+        this.config.rowHeight = 150;
+        this.config.resizable = true;
+        this.config.reorderable = true;
+        
+        // Automatically show edit mode for new dashboards to encourage adding items
+        setTimeout(() => {
+          this.toggleEditDashboard(true);
+        }, 500);
       }
 
       // now we need to load up the items
@@ -312,6 +322,26 @@ export class SingleDashboardComponent implements OnInit {
     return this.selectedComponent === component ? "position: unset" : "";
   }
 
+  /**
+   * Get the appropriate icon for a resource type
+   * @param resourceType The type of resource
+   * @returns FontAwesome icon class
+   */
+  getResourceIcon(resourceType: string | undefined): string {
+    // Default to a cube icon if type is undefined
+    if (!resourceType) return 'fa-solid fa-cube';
+    
+    // Map resource types to appropriate FontAwesome icons
+    const iconMap: {[key: string]: string} = {
+      'Reports': 'fa-solid fa-chart-line',
+      'UserViews': 'fa-solid fa-table',
+      'Dashboards': 'fa-solid fa-grip',
+      'Lists': 'fa-solid fa-list',
+      'default': 'fa-solid fa-cube'
+    };
+    
+    return iconMap[resourceType] || iconMap['default'];
+  }
 }
 
 export class DashboardConfigDetails {

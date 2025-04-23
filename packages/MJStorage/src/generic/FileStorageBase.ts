@@ -285,4 +285,15 @@ export abstract class FileStorageBase {
    * @returns A Promise that resolves to a boolean indicating if the directory exists.
    */
   public abstract DirectoryExists(directoryPath: string): Promise<boolean>;
+
+  /**
+   * Optional initialization method for storage providers that require async setup.
+   * This method can be overridden by subclasses that need to perform async initialization
+   * after construction, such as setting up access tokens or establishing connections.
+   * 
+   * @returns A Promise that resolves when initialization is complete.
+   */
+  public async initialize(): Promise<void> {
+    // Default implementation does nothing
+  }
 }

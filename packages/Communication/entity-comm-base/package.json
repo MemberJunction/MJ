@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/entity-communications-base",
-  "version": "2.32.2",
+  "version": "2.33.0",
   "description": "MemberJunction: Base Types for Client/Server use with Entity Communications Engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.32.2",
-    "@memberjunction/core": "2.32.2",
-    "@memberjunction/core-entities": "2.32.2",
-    "@memberjunction/communication-types": "2.32.2"
+    "@memberjunction/global": "2.33.0",
+    "@memberjunction/core": "2.33.0",
+    "@memberjunction/core-entities": "2.33.0",
+    "@memberjunction/communication-types": "2.33.0"
   }
 }

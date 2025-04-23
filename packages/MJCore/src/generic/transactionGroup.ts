@@ -315,7 +315,7 @@ export abstract class TransactionGroupBase {
             }
             else {
                 // there are no transactions to submit, so we just return true and go back to pending since there were no transactions
-                LogStatus('TransactionGroupBase.Submit', 'No transactions to submit, switching status back to Pending');
+                LogStatus('No transactions to submit, switching status back to Pending');
                 this._status = 'Pending';
                 return true;
             }

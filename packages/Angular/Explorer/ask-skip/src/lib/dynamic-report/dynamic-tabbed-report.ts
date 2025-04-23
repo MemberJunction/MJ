@@ -67,13 +67,14 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     let offset = 0;
     switch (currentTabIndex) {
       case 0:
-        // chart tab, no change
+      case 1: 
+        // chart tab, or HTML tab, no change
         break;
-      case 1:
+      case 2:
         // table tab. If chart tab isn't showing, then we need to offset by 1
         if (!this.IsChart) offset++;
         break;
-      case 2:
+      case 3:
         // drill down tab. If chart tab isn't showing, then we need to offset
         if (!this.IsChart) offset++;
         break;

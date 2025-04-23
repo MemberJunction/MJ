@@ -25,12 +25,15 @@ export class AddItemComponent implements OnInit {
   }
   private md: Metadata = new Metadata();
 
-  constructor() { }
+  constructor(private sharedService: SharedService) { }
 
   ngOnInit(): void {
     this.resourceType = this.selectedResource || SharedService.Instance.ViewResourceType;
     this.onResourceTypeChange(this.resourceType);
-    this.Entities = this.md.Entities;
+    // Sort entities alphabetically by name
+    this.Entities = [...this.md.Entities].sort((a, b) => 
+      a.Name.localeCompare(b.Name)
+    );
   }
 
   async onResourceTypeChange(event: any) {
@@ -43,20 +46,35 @@ export class AddItemComponent implements OnInit {
 
   async getViews() {
     if (!this.selectedEntity) return;
+    
     this.showloader = true;
     this.Views = await ViewInfo.GetViewsForUser(this.selectedEntity.ID);
+    
+    // Sort views alphabetically
+    if (this.Views && this.Views.length) {
+      this.Views = this.Views.sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+    
+    // Always set showloader to false when done, even if no views found
     this.showloader = false;
   }
 
   async getReports() {
     if (!this.resourceType) return;
+    
     this.showloader = true;
     this.selectedReport = null;
+    this.Reports = [];
+    
     const rv = new RunView();
     const reports = await rv.RunView({ EntityName: this.resourceType.Entity, ExtraFilter: `UserID='${this.md.CurrentUser.ID}'` });
-    if (reports.Success) {
-      this.Reports = reports.Results;
+    
+    if (reports.Success && reports.Results) {
+      // Sort reports alphabetically
+      this.Reports = reports.Results.sort((a, b) => a.Name.localeCompare(b.Name));
     }
+    
+    // Always set showloader to false when done, even if no reports found
     this.showloader = false;
   }
 
@@ -68,26 +86,42 @@ export class AddItemComponent implements OnInit {
   }
 
   onViewChange(event: any) {
-    this.selectedEntity = event.ID;
+    if (this.resourceType.Name === 'Reports') {
+      this.selectedReport = event;
+    } else {
+      this.selectedView = event;
+    }
   }
 
   public addItem() {
-    if (!this.selectedReport && !this.selectedView) return;
+    if (!this.selectedReport && !this.selectedView) {
+      this.sharedService.CreateSimpleNotification('Please select an item to add', 'warning', 2000);
+      return;
+    }
+    
     const name = this.selectedReport?.Name || this.selectedView?.Name;
     const id = this.selectedReport?.ID || this.selectedView?.ID;
+    
+    if (!id) {
+      this.sharedService.CreateSimpleNotification('Invalid selection', 'error', 2000);
+      return;
+    }
+    
     const dashboardItem = {
       title: name ? name : 'New Item - ' + id,
       col: 1,
       rowSpan: 3,
       colSpan: 2,
       ResourceData: new ResourceData({
-        Name: '',
+        Name: name,
+        ResourceType: this.resourceType.Name, // Add ResourceType
         ResourceTypeID: this.resourceType.ID,
         ResourceRecordID: id,
-        Configuration: {
-        }
+        Configuration: {}
       }),
     };
+    
+    this.sharedService.CreateSimpleNotification(`Added "${name}" to dashboard`, 'success', 2000);
     this.onClose.emit(dashboardItem);
 
   }
