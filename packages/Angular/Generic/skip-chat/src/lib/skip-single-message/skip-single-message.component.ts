@@ -8,6 +8,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Meta } from '@angular/platform-browser';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { DrillDownInfo } from '../drill-down-info';
  
 
 @Component({
@@ -80,6 +81,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * This event fires when the user is requesting to delete a message, the container of this component will handle
      */
     @Output() DeleteMessageRequested = new EventEmitter<ConversationDetailEntity>();
+
+    /**
+     * This event fires whenever a drill down is requested within a given report.
+     */
+    @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
@@ -290,6 +296,9 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
             });
             report.NewReportCreated.subscribe((reportID: string) => {
               this.NewReportCreated.emit(reportID); // bubble up
+            });
+            report.DrillDownEvent.subscribe((drillDownInfo: any) => {
+              this.DrillDownEvent.emit(drillDownInfo); // bubble up
             });
             report.Provider = this.ProviderToUse;
             report.SkipData = analysisResult;

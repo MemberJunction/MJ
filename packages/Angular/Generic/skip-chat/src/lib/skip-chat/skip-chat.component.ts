@@ -35,6 +35,7 @@ import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-m
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
+import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-chat',
@@ -117,6 +118,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * This event fires whenever a new report is created.
    */
   @Output() NewReportCreated = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a drill down is requested within a given report.
+   */
+  @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();  
 
   
   @ViewChild(Container, { static: true }) askSkip!: Container;
@@ -1252,6 +1258,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     });
     obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
       this.HandleMessageEditRequest(message);
+    });
+    obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
+      this.DrillDownEvent.emit(drillDownInfo);
     });
 
     obj.Provider = this.ProviderToUse;

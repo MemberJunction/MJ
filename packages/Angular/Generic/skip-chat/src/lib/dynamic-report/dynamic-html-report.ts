@@ -1,8 +1,9 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { CompositeKey, GetEntityNameFromSchemaAndViewString, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, GetEntityNameFromSchemaAndViewString, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { SkipAPIAnalysisCompleteResponse, SkipHTMLReportInitFunction, SkipHTMLReportObject } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { InvokeManualResize } from '@memberjunction/global';
+import { Meta } from '@angular/platform-browser';
 
 @Component({
   selector: 'skip-dynamic-html-report',
@@ -103,6 +104,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         }
 
         const reportObject = (window as any)[this.HTMLReportObjectName];
+        const md = new Metadata();
         if (reportObject && this.SkipData?.dataContext) {
             const castedObject = reportObject as SkipHTMLReportObject;
             const userState = {};
@@ -121,10 +123,10 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                 },
                 OpenEntityRecord: (entityName: string, key: CompositeKey) => {
                     // this is a callback function that can be called from the HTML report to open an entity record
-                    const entityId = GetEntityNameFromSchemaAndViewString(entityName);
-                    if (entityId) {
+                    if (entityName) {
                         // bubble this up to our parent component as we don't directly open records in this component
-                        this.DrillDownEvent.emit(new DrillDownInfo(entityId, key.ToURLSegment()));
+                        const cKey = new CompositeKey(key as any as KeyValuePair[])
+                        this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
                     }
                 },
                 UpdateUserState: (userState: any) => {
