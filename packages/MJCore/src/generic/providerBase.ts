@@ -10,6 +10,7 @@ import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } fro
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { ReportTypeInfo } from "./reportTypeInfo";
 
 /**
  * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
@@ -31,6 +32,7 @@ export class AllMetadata {
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];
+    AllReportTypes: ReportTypeInfo[] = [];
 }
 
 // Create a new instance of AllMetadata from a simple object
@@ -69,7 +71,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
     { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
     { key: 'AllLibraries', class: LibraryInfo },
-    { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
+    { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem },
+    { key: 'AllReportTypes', class: ReportTypeInfo }
 ];
 
 
@@ -303,6 +306,11 @@ export abstract class ProviderBase implements IMetadataProvider {
             this._cachedVisibleExplorerNavigationItems = this._localMetadata.AllExplorerNavigationItems.filter(e => e.IsActive).sort((a, b) => a.Sequence - b.Sequence);
         return this._cachedVisibleExplorerNavigationItems;
     }
+
+    public get ReportTypes(): ReportTypeInfo[] {
+        return this._localMetadata.AllReportTypes;
+    }
+
 
     public async Refresh(): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested

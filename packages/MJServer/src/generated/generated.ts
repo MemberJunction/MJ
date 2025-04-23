@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, ReportUserStateEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIAgentLearningCycleEntity, ReportVersionEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, ReportUserStateEntity, QueryEntityEntity, ReportTypeEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIAgentLearningCycleEntity, ReportVersionEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -6308,14 +6308,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
-    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
+    
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -6757,15 +6757,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -6781,6 +6772,15 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
@@ -29907,6 +29907,158 @@ export class QueryEntityResolver extends ResolverBase {
         const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Entities', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Report Types
+//****************************************************************************
+@ObjectType()
+export class ReportType_ {
+    @Field({description: `Primary key for the ReportType table.`}) 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Human-readable name of the report type.`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the report type.`}) 
+    @MaxLength(510)
+    Description?: string;
+        
+    @Field({description: `JSON configuration blob for styling and behavior defaults.`}) 
+    Configuration: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Report Types
+//****************************************************************************
+@InputType()
+export class CreateReportTypeInput {
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Report Types
+//****************************************************************************
+@InputType()
+export class UpdateReportTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Report Types
+//****************************************************************************
+@ObjectType()
+export class RunReportTypeViewResult {
+    @Field(() => [ReportType_])
+    Results: ReportType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ReportType_)
+export class ReportTypeResolver extends ResolverBase {
+    @Query(() => RunReportTypeViewResult)
+    async RunReportTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunReportTypeViewResult)
+    async RunReportTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunReportTypeViewResult)
+    async RunReportTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Report Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ReportType_, { nullable: true })
+    async ReportType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportType_ | null> {
+        this.CheckUserReadPermissions('MJ: Report Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Report Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Report Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ReportType_)
+    async CreateReportType(
+        @Arg('input', () => CreateReportTypeInput) input: CreateReportTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Report Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ReportType_)
+    async UpdateReportType(
+        @Arg('input', () => UpdateReportTypeInput) input: UpdateReportTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Report Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ReportType_)
+    async DeleteReportType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Report Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }

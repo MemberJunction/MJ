@@ -10,6 +10,7 @@ import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { ReportTypeInfo } from "./reportTypeInfo";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -223,6 +224,8 @@ export interface IMetadataProvider {
     get VisibleExplorerNavigationItems(): ExplorerNavigationItem[]
 
     get AllExplorerNavigationItems(): ExplorerNavigationItem[]
+
+    get ReportTypes(): ReportTypeInfo[]
 
     get LatestRemoteMetadata(): MetadataInfo[]
 
