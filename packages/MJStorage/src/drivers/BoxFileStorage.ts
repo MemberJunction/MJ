@@ -20,6 +20,7 @@ export class BoxFileStorage extends FileStorageBase {
   private _baseApiUrl: string = 'https://api.box.com/2.0';
   private _uploadApiUrl: string = 'https://upload.box.com/api/2.0';
   private _rootFolderId: string;
+  private _enterpriseId: string;
 
   constructor() {
     super();
@@ -29,11 +30,8 @@ export class BoxFileStorage extends FileStorageBase {
     this._refreshToken = env.get('STORAGE_BOX_REFRESH_TOKEN').asString();
     this._clientId = env.get('STORAGE_BOX_CLIENT_ID').asString();
     this._clientSecret = env.get('STORAGE_BOX_CLIENT_SECRET').asString();
-    
-    if (!this._refreshToken && !this._accessToken) {
-      throw new Error('Box storage requires either STORAGE_BOX_ACCESS_TOKEN or STORAGE_BOX_REFRESH_TOKEN with CLIENT_ID and CLIENT_SECRET');
-    }
-    
+    this._enterpriseId = env.get('STORAGE_BOX_ENTERPRISE_ID').asString();
+
     if (this._refreshToken && (!this._clientId || !this._clientSecret)) {
       throw new Error('Box storage with refresh token requires STORAGE_BOX_CLIENT_ID and STORAGE_BOX_CLIENT_SECRET');
     }
@@ -41,6 +39,47 @@ export class BoxFileStorage extends FileStorageBase {
     // Root folder ID, optional (defaults to '0' which is root)
     this._rootFolderId = env.get('STORAGE_BOX_ROOT_FOLDER_ID').default('0').asString();
   }
+
+  /**
+   * Initialize the storage driver by setting up the access token
+   * This should be called after construction
+   */
+  public async initialize(): Promise<void> {
+    if (!this._accessToken && this._clientId && this._clientSecret && this._enterpriseId) {
+      await this._setAccessToken();
+    }
+  }
+
+  private async _setAccessToken() {
+    try {
+      const response = await fetch('https://api.box.com/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          client_id: this._clientId,
+          client_secret: this._clientSecret,
+          grant_type: 'client_credentials',
+          box_subject_type: 'enterprise',
+          box_subject_id: this._enterpriseId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
+      }
+      
+      const tokenData = await response.json();
+      const { access_token, expires_in } = tokenData;
+      this._accessToken = access_token;
+      this._tokenExpiresAt = Date.now() + (expires_in * 1000) - 60000; // Subtract 1 minute for safety
+    } catch (error) {
+      console.error('Error getting Box access token', error);
+      throw new Error('Failed to authenticate with Box: ' + error.message);
+    }
+  }
+
   
   /**
    * Ensures we have a valid access token
@@ -722,7 +761,7 @@ export class BoxFileStorage extends FileStorageBase {
         : directoryPath;
       
       const itemId = await this._getIdFromPath(normalizedPath);
-      const itemInfo = await this._apiRequest(`/items/${itemId}`);
+      const itemInfo = await this._apiRequest(`/folders/${itemId}`);
       
       return itemInfo.type === 'folder';
     } catch (error) {
