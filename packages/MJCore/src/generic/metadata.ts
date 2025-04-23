@@ -10,6 +10,7 @@ import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { ReportTypeInfo } from "./reportTypeInfo";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -122,6 +123,10 @@ export class Metadata {
      */
     public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
         return Metadata.Provider.AllExplorerNavigationItems;
+    }
+
+    public get ReportTypes(): ReportTypeInfo[] {
+        return Metadata.Provider.ReportTypes;
     }
 
     /**
