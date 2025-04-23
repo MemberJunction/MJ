@@ -5262,26 +5262,6 @@ export const EntityFieldSchema = z.object({
     *   * None
     *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
-    GeneratedValidationFunctionName: z.string().nullable().describe(`
-        * * Field Name: GeneratedValidationFunctionName
-        * * Display Name: Generated Validation Function Name
-        * * SQL Data Type: nvarchar(255)
-    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise`),
-    GeneratedValidationFunctionDescription: z.string().nullable().describe(`
-        * * Field Name: GeneratedValidationFunctionDescription
-        * * Display Name: Generated Validation Function Description
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Contains a description for business users of what the validation function for this field does, if it exists`),
-    GeneratedValidationFunctionCode: z.string().nullable().describe(`
-        * * Field Name: GeneratedValidationFunctionCode
-        * * Display Name: Generated Validation Function Code
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.`),
-    GeneratedValidationFunctionCheckConstraint: z.string().nullable().describe(`
-        * * Field Name: GeneratedValidationFunctionCheckConstraint
-        * * Display Name: Generated Validation Function Check Constraint
-        * * SQL Data Type: nvarchar(MAX)
-    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -6610,6 +6590,208 @@ export const ListSchema = z.object({
 export type ListEntityType = z.infer<typeof ListSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Types
+ */
+export const ArtifactTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Display name of the artifact type`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the artifact type`),
+    ContentType: z.string().describe(`
+        * * Field Name: ContentType
+        * * Display Name: Content Type
+        * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type or content identifier for this artifact type`),
+    IsEnabled: z.boolean().describe(`
+        * * Field Name: IsEnabled
+        * * Display Name: Is Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates if this artifact type is currently available for use`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Artifact Permissions
+ */
+export const ConversationArtifactPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationArtifactID: z.string().describe(`
+        * * Field Name: ConversationArtifactID
+        * * Display Name: Conversation Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Reference to the artifact this permission applies to`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+    * * Description: User this permission applies to`),
+    AccessLevel: z.string().describe(`
+        * * Field Name: AccessLevel
+        * * Display Name: Access Level
+        * * SQL Data Type: nvarchar(20)
+    * * Description: Level of access granted (Read, Edit, Owner)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ConversationArtifact: z.string().describe(`
+        * * Field Name: ConversationArtifact
+        * * Display Name: Conversation Artifact
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ConversationArtifactPermissionEntityType = z.infer<typeof ConversationArtifactPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Artifact Versions
+ */
+export const ConversationArtifactVersionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationArtifactID: z.string().describe(`
+        * * Field Name: ConversationArtifactID
+        * * Display Name: Conversation Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Reference to the parent artifact`),
+    Version: z.number().describe(`
+        * * Field Name: Version
+        * * Display Name: Version
+        * * SQL Data Type: int
+    * * Description: Sequential version number (starting from 1) for this artifact`),
+    Configuration: z.string().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration and metadata for this artifact version`),
+    Content: z.string().nullable().describe(`
+        * * Field Name: Content
+        * * Display Name: Content
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Actual content of the artifact, if stored separately from configuration`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments specific to this version`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ConversationArtifact: z.string().describe(`
+        * * Field Name: ConversationArtifact
+        * * Display Name: Conversation Artifact
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ConversationArtifactVersionEntityType = z.infer<typeof ConversationArtifactVersionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Artifacts
+ */
+export const ConversationArtifactSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the artifact`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Extended description of the artifact`),
+    ConversationID: z.string().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Reference to the conversation this artifact belongs to`),
+    ArtifactTypeID: z.string().describe(`
+        * * Field Name: ArtifactTypeID
+        * * Display Name: Artifact Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Reference to the type of artifact`),
+    SharingScope: z.string().describe(`
+        * * Field Name: SharingScope
+        * * Display Name: Sharing Scope
+        * * SQL Data Type: nvarchar(50)
+    * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments about the artifact`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactType: z.string().describe(`
+        * * Field Name: ArtifactType
+        * * Display Name: Artifact Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ConversationArtifactEntityType = z.infer<typeof ConversationArtifactSchema>;
+
+/**
  * zod schema definition for the entity MJ: Report User States
  */
 export const ReportUserStateSchema = z.object({
@@ -6646,13 +6828,11 @@ export const ReportUserStateSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ReportUserStateEntityType = z.infer<typeof ReportUserStateSchema>;
@@ -6710,8 +6890,7 @@ export const ReportVersionSchema = z.object({
     Report: z.string().describe(`
         * * Field Name: Report
         * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)
-        * * Default Value: null`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
@@ -23873,58 +24052,6 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
 
     /**
-    * * Field Name: GeneratedValidationFunctionName
-    * * Display Name: Generated Validation Function Name
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Contains the name of the generated field validation function, if it exists, null otherwise
-    */
-    get GeneratedValidationFunctionName(): string | null {
-        return this.Get('GeneratedValidationFunctionName');
-    }
-    set GeneratedValidationFunctionName(value: string | null) {
-        this.Set('GeneratedValidationFunctionName', value);
-    }
-
-    /**
-    * * Field Name: GeneratedValidationFunctionDescription
-    * * Display Name: Generated Validation Function Description
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Contains a description for business users of what the validation function for this field does, if it exists
-    */
-    get GeneratedValidationFunctionDescription(): string | null {
-        return this.Get('GeneratedValidationFunctionDescription');
-    }
-    set GeneratedValidationFunctionDescription(value: string | null) {
-        this.Set('GeneratedValidationFunctionDescription', value);
-    }
-
-    /**
-    * * Field Name: GeneratedValidationFunctionCode
-    * * Display Name: Generated Validation Function Code
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Contains the generated code for the field validation function, if it exists, null otherwise.
-    */
-    get GeneratedValidationFunctionCode(): string | null {
-        return this.Get('GeneratedValidationFunctionCode');
-    }
-    set GeneratedValidationFunctionCode(value: string | null) {
-        this.Set('GeneratedValidationFunctionCode', value);
-    }
-
-    /**
-    * * Field Name: GeneratedValidationFunctionCheckConstraint
-    * * Display Name: Generated Validation Function Check Constraint
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.
-    */
-    get GeneratedValidationFunctionCheckConstraint(): string | null {
-        return this.Get('GeneratedValidationFunctionCheckConstraint');
-    }
-    set GeneratedValidationFunctionCheckConstraint(value: string | null) {
-        this.Set('GeneratedValidationFunctionCheckConstraint', value);
-    }
-
-    /**
     * * Field Name: FieldCodeName
     * * Display Name: Field Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -27384,6 +27511,602 @@ export class ListEntity extends BaseEntity<ListEntityType> {
 
 
 /**
+ * MJ: Artifact Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactType
+ * * Base View: vwArtifactTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Types')
+export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
+    /**
+    * Loads the MJ: Artifact Types record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ArtifactTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name of the artifact type
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the artifact type
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ContentType
+    * * Display Name: Content Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: MIME type or content identifier for this artifact type
+    */
+    get ContentType(): string {
+        return this.Get('ContentType');
+    }
+    set ContentType(value: string) {
+        this.Set('ContentType', value);
+    }
+
+    /**
+    * * Field Name: IsEnabled
+    * * Display Name: Is Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates if this artifact type is currently available for use
+    */
+    get IsEnabled(): boolean {
+        return this.Get('IsEnabled');
+    }
+    set IsEnabled(value: boolean) {
+        this.Set('IsEnabled', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Conversation Artifact Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationArtifactPermission
+ * * Base View: vwConversationArtifactPermissions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Artifact Permissions')
+export class ConversationArtifactPermissionEntity extends BaseEntity<ConversationArtifactPermissionEntityType> {
+    /**
+    * Loads the MJ: Conversation Artifact Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Artifact Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationArtifactPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Artifact Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * AccessLevel: This rule ensures that the access level of a user can only be one of three specific values: 'Owner', 'Edit', or 'Read'.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAccessLevelMustBeValid(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the access level of a user can only be one of three specific values: 'Owner', 'Edit', or 'Read'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAccessLevelMustBeValid(result: ValidationResult) {
+    	if (this.AccessLevel !== 'Owner' && this.AccessLevel !== 'Edit' && this.AccessLevel !== 'Read') {
+    		result.Errors.push(new ValidationErrorInfo('AccessLevel', 'Access level must be either Owner, Edit, or Read.', this.AccessLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ConversationArtifactID
+    * * Display Name: Conversation Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Reference to the artifact this permission applies to
+    */
+    get ConversationArtifactID(): string {
+        return this.Get('ConversationArtifactID');
+    }
+    set ConversationArtifactID(value: string) {
+        this.Set('ConversationArtifactID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: User this permission applies to
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: AccessLevel
+    * * Display Name: Access Level
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Level of access granted (Read, Edit, Owner)
+    */
+    get AccessLevel(): string {
+        return this.Get('AccessLevel');
+    }
+    set AccessLevel(value: string) {
+        this.Set('AccessLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ConversationArtifact
+    * * Display Name: Conversation Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationArtifact(): string {
+        return this.Get('ConversationArtifact');
+    }
+}
+
+
+/**
+ * MJ: Conversation Artifact Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationArtifactVersion
+ * * Base View: vwConversationArtifactVersions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Artifact Versions')
+export class ConversationArtifactVersionEntity extends BaseEntity<ConversationArtifactVersionEntityType> {
+    /**
+    * Loads the MJ: Conversation Artifact Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Artifact Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationArtifactVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Version: This rule ensures that the version number must be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the version number must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionGreaterThanZero(result: ValidationResult) {
+    	if (this.Version <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("Version", "The version number must be greater than zero.", this.Version, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ConversationArtifactID
+    * * Display Name: Conversation Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Reference to the parent artifact
+    */
+    get ConversationArtifactID(): string {
+        return this.Get('ConversationArtifactID');
+    }
+    set ConversationArtifactID(value: string) {
+        this.Set('ConversationArtifactID', value);
+    }
+
+    /**
+    * * Field Name: Version
+    * * Display Name: Version
+    * * SQL Data Type: int
+    * * Description: Sequential version number (starting from 1) for this artifact
+    */
+    get Version(): number {
+        return this.Get('Version');
+    }
+    set Version(value: number) {
+        this.Set('Version', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration and metadata for this artifact version
+    */
+    get Configuration(): string {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Content
+    * * Display Name: Content
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Actual content of the artifact, if stored separately from configuration
+    */
+    get Content(): string | null {
+        return this.Get('Content');
+    }
+    set Content(value: string | null) {
+        this.Set('Content', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments specific to this version
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ConversationArtifact
+    * * Display Name: Conversation Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationArtifact(): string {
+        return this.Get('ConversationArtifact');
+    }
+}
+
+
+/**
+ * MJ: Conversation Artifacts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationArtifact
+ * * Base View: vwConversationArtifacts
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Artifacts')
+export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactEntityType> {
+    /**
+    * Loads the MJ: Conversation Artifacts record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Artifacts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationArtifactEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Artifacts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * SharingScope: This rule ensures that the sharing scope of an entity can only be one of the predefined options: 'Public', 'Everyone', 'SpecificUsers', or 'None'.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSharingScopeAgainstPredefinedOptions(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the sharing scope of an entity can only be one of the predefined options: 'Public', 'Everyone', 'SpecificUsers', or 'None'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSharingScopeAgainstPredefinedOptions(result: ValidationResult) {
+    	if (this.SharingScope !== 'Public' && this.SharingScope !== 'Everyone' && this.SharingScope !== 'SpecificUsers' && this.SharingScope !== 'None') {
+    		result.Errors.push(new ValidationErrorInfo("SharingScope", "The SharingScope must be one of the following: 'Public', 'Everyone', 'SpecificUsers', or 'None'.", this.SharingScope, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the artifact
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Extended description of the artifact
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Reference to the conversation this artifact belongs to
+    */
+    get ConversationID(): string {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactTypeID
+    * * Display Name: Artifact Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Reference to the type of artifact
+    */
+    get ArtifactTypeID(): string {
+        return this.Get('ArtifactTypeID');
+    }
+    set ArtifactTypeID(value: string) {
+        this.Set('ArtifactTypeID', value);
+    }
+
+    /**
+    * * Field Name: SharingScope
+    * * Display Name: Sharing Scope
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)
+    */
+    get SharingScope(): string {
+        return this.Get('SharingScope');
+    }
+    set SharingScope(value: string) {
+        this.Set('SharingScope', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User comments about the artifact
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: ArtifactType
+    * * Display Name: Artifact Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ArtifactType(): string {
+        return this.Get('ArtifactType');
+    }
+}
+
+
+/**
  * MJ: Report User States - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ReportUserState
@@ -27485,7 +28208,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');
@@ -27495,7 +28217,6 @@ export class ReportUserStateEntity extends BaseEntity<ReportUserStateEntityType>
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
-    * * Default Value: null
     */
     get User(): string {
         return this.Get('User');
@@ -27671,7 +28392,6 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     * * Field Name: Report
     * * Display Name: Report
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get Report(): string {
         return this.Get('Report');

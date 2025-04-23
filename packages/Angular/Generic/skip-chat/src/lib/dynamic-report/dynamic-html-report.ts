@@ -125,6 +125,18 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                     // this is a callback function that can be called from the HTML report to open an entity record
                     if (entityName) {
                         // bubble this up to our parent component as we don't directly open records in this component
+                        const md = new Metadata();
+                        const entityMatch = md.EntityByName(entityName);
+                        if (!entityMatch) {
+                            // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
+                            const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                                   e.BaseView.toLowerCase() === entityName.toLowerCase() || 
+                                                                   e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                                   e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
+                            if (altMatch && altMatch.length === 1) { 
+                                entityName = altMatch[0].Name;
+                            }
+                        }
                         const cKey = new CompositeKey(key as any as KeyValuePair[])
                         this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
                     }

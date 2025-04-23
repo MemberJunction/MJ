@@ -45,8 +45,8 @@
     "@progress/kendo-angular-indicators": "16.2.0",
     "tslib": "^2.3.0",
     "rxjs": "^7.8.1",
-    "angular-plotly.js": "^5.2.2",
-    "plotly.js-dist-min": "^2.3.4",
+    "angular-plotly.js": "^6.0.0",
+    "plotly.js-dist-min": "^3.0.1",
     "@types/plotly.js-dist-min": "^2.3.4",
     "@angular/cdk": "18.0.2",
     "ngx-markdown": "18.0.0"
