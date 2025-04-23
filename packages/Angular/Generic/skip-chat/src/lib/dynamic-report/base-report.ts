@@ -111,7 +111,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
     return this.ResultType === 'plot';
   }
   public get IsTable(): boolean {
-    return this.ResultType === 'table';
+    return this.ResultType === 'data' || this.ResultType === 'table';
   }
   public get IsHTML(): boolean {
     return this.ResultType === 'html';
