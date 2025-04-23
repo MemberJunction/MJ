@@ -800,3 +800,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportType] TO [cdp_Integrat
 /* spDelete Permissions for MJ: Report Types */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReportType] TO [cdp_Integration]
+
+
+----- Insert into MJ Dataset -----
+INSERT INTO __mj.DatasetItem (ID, Code, DatasetID, Sequence, EntityID, DateFieldToCheck)
+VALUES ('845F433E-F36B-1410-8E17-00F026831CBD', 'ReportTypes', 'E4ADCCEC-6A37-EF11-86D4-000D3A4E707E', 23, 'ADE1756E-F1BB-4C4D-BF8C-88C849D0AA1E', '__mj_UpdatedAt');
