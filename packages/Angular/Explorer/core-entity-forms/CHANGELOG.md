@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.34.2
+- @memberjunction/ng-explorer-core@2.34.2
+- @memberjunction/ng-form-toolbar@2.34.2
+- @memberjunction/ng-code-editor@2.34.2
+- @memberjunction/ng-container-directives@2.34.2
+- @memberjunction/ng-join-grid@2.34.2
+- @memberjunction/ng-tabstrip@2.34.2
+- @memberjunction/ng-timeline@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-forms@2.34.1
+- @memberjunction/ng-explorer-core@2.34.1
+- @memberjunction/ng-form-toolbar@2.34.1
+- @memberjunction/ng-code-editor@2.34.1
+- @memberjunction/ng-container-directives@2.34.1
+- @memberjunction/ng-join-grid@2.34.1
+- @memberjunction/ng-tabstrip@2.34.1
+- @memberjunction/ng-timeline@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+
+## 2.34.0
+
+### Minor Changes
+
+- e60f326: More support for HTML Reports in Skip, Additional Entities and CodeGen and SkipTypes for Artifacts Support
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+- Updated dependencies [54ac86c]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ng-explorer-core@2.34.0
+  - @memberjunction/ng-form-toolbar@2.34.0
+  - @memberjunction/ng-code-editor@2.34.0
+  - @memberjunction/ng-join-grid@2.34.0
+  - @memberjunction/ng-timeline@2.34.0
+  - @memberjunction/ng-base-forms@2.34.0
+  - @memberjunction/ng-container-directives@2.34.0
+  - @memberjunction/ng-tabstrip@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

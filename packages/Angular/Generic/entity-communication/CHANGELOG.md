@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-entity-communications
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.34.2
+- @memberjunction/ng-container-directives@2.34.2
+- @memberjunction/communication-types@2.34.2
+- @memberjunction/entity-communications-base@2.34.2
+- @memberjunction/entity-communications-client@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+- @memberjunction/global@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.34.1
+- @memberjunction/ng-container-directives@2.34.1
+- @memberjunction/communication-types@2.34.1
+- @memberjunction/entity-communications-base@2.34.1
+- @memberjunction/entity-communications-client@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+- @memberjunction/global@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ng-shared@2.34.0
+  - @memberjunction/communication-types@2.34.0
+  - @memberjunction/entity-communications-base@2.34.0
+  - @memberjunction/entity-communications-client@2.34.0
+  - @memberjunction/ng-container-directives@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

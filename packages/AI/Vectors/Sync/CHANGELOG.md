@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.34.2
+- @memberjunction/aiengine@2.34.2
+- @memberjunction/ai-mistral@2.34.2
+- @memberjunction/ai-openai@2.34.2
+- @memberjunction/ai-vectors-pinecone@2.34.2
+- @memberjunction/ai-vectors@2.34.2
+- @memberjunction/ai-vectordb@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/global@2.34.2
+- @memberjunction/templates-base-types@2.34.2
+- @memberjunction/templates@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.34.1
+- @memberjunction/aiengine@2.34.1
+- @memberjunction/ai-mistral@2.34.1
+- @memberjunction/ai-openai@2.34.1
+- @memberjunction/ai-vectors-pinecone@2.34.1
+- @memberjunction/ai-vectors@2.34.1
+- @memberjunction/ai-vectordb@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/global@2.34.1
+- @memberjunction/templates-base-types@2.34.1
+- @memberjunction/templates@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies [785f06a]
+- Updated dependencies [b48d6b4]
+- Updated dependencies [4c7f532]
+- Updated dependencies [54ac86c]
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ai@2.34.0
+  - @memberjunction/ai-mistral@2.34.0
+  - @memberjunction/ai-openai@2.34.0
+  - @memberjunction/aiengine@2.34.0
+  - @memberjunction/ai-vectors@2.34.0
+  - @memberjunction/templates-base-types@2.34.0
+  - @memberjunction/templates@2.34.0
+  - @memberjunction/ai-vectors-pinecone@2.34.0
+  - @memberjunction/ai-vectordb@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

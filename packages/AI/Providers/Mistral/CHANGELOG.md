@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.34.2
+- @memberjunction/global@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.34.1
+- @memberjunction/global@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- b48d6b4: LLM Streaming Support + HTML Report Fixes
+- 54ac86c: Optimize streaming implementation + bug fixes
+- Updated dependencies [b48d6b4]
+- Updated dependencies [4c7f532]
+- Updated dependencies [54ac86c]
+  - @memberjunction/ai@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

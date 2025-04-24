@@ -1,5 +1,91 @@
 # Change Log - @memberjunction/server
 
+## 2.34.2
+
+### Patch Changes
+
+- ae5d495: Fix migration script
+  - @memberjunction/ai@2.34.2
+  - @memberjunction/aiengine@2.34.2
+  - @memberjunction/ai-mistral@2.34.2
+  - @memberjunction/ai-openai@2.34.2
+  - @memberjunction/ai-vectors-pinecone@2.34.2
+  - @memberjunction/core-actions@2.34.2
+  - @memberjunction/actions@2.34.2
+  - @memberjunction/entity-communications-server@2.34.2
+  - @memberjunction/doc-utils@2.34.2
+  - @memberjunction/external-change-detection@2.34.2
+  - @memberjunction/graphql-dataprovider@2.34.2
+  - @memberjunction/core@2.34.2
+  - @memberjunction/core-entities@2.34.2
+  - @memberjunction/data-context@2.34.2
+  - @memberjunction/data-context-server@2.34.2
+  - @memberjunction/global@2.34.2
+  - @memberjunction/queue@2.34.2
+  - @memberjunction/storage@2.34.2
+  - @memberjunction/sqlserver-dataprovider@2.34.2
+  - @memberjunction/skip-types@2.34.2
+  - @memberjunction/templates@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- 5e4dd59: Fixed broken import syntax
+  - @memberjunction/ai@2.34.1
+  - @memberjunction/aiengine@2.34.1
+  - @memberjunction/ai-mistral@2.34.1
+  - @memberjunction/ai-openai@2.34.1
+  - @memberjunction/ai-vectors-pinecone@2.34.1
+  - @memberjunction/core-actions@2.34.1
+  - @memberjunction/actions@2.34.1
+  - @memberjunction/entity-communications-server@2.34.1
+  - @memberjunction/doc-utils@2.34.1
+  - @memberjunction/external-change-detection@2.34.1
+  - @memberjunction/graphql-dataprovider@2.34.1
+  - @memberjunction/core@2.34.1
+  - @memberjunction/core-entities@2.34.1
+  - @memberjunction/data-context@2.34.1
+  - @memberjunction/data-context-server@2.34.1
+  - @memberjunction/global@2.34.1
+  - @memberjunction/queue@2.34.1
+  - @memberjunction/storage@2.34.1
+  - @memberjunction/sqlserver-dataprovider@2.34.1
+  - @memberjunction/skip-types@2.34.1
+  - @memberjunction/templates@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+- Updated dependencies [4c80a28]
+- Updated dependencies [785f06a]
+- Updated dependencies [b48d6b4]
+- Updated dependencies [4c7f532]
+- Updated dependencies [54ac86c]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/skip-types@2.34.0
+  - @memberjunction/storage@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ai@2.34.0
+  - @memberjunction/ai-mistral@2.34.0
+  - @memberjunction/ai-openai@2.34.0
+  - @memberjunction/aiengine@2.34.0
+  - @memberjunction/core-actions@2.34.0
+  - @memberjunction/actions@2.34.0
+  - @memberjunction/entity-communications-server@2.34.0
+  - @memberjunction/doc-utils@2.34.0
+  - @memberjunction/external-change-detection@2.34.0
+  - @memberjunction/graphql-dataprovider@2.34.0
+  - @memberjunction/data-context@2.34.0
+  - @memberjunction/queue@2.34.0
+  - @memberjunction/sqlserver-dataprovider@2.34.0
+  - @memberjunction/templates@2.34.0
+  - @memberjunction/ai-vectors-pinecone@2.34.0
+  - @memberjunction/data-context-server@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

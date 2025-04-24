@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/storage
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+- @memberjunction/global@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+- @memberjunction/global@2.34.1
+
+## 2.34.0
+
+### Minor Changes
+
+- 4c80a28: fixes a bug in the Box.com file storage provider that was preventing proper file handling and adds a new initialization method to streamline the connection process with the Box.com API.
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

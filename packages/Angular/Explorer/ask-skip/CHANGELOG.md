@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/ng-ask-skip
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.34.2
+- @memberjunction/ng-user-view-grid@2.34.2
+- @memberjunction/ng-chat@2.34.2
+- @memberjunction/ng-container-directives@2.34.2
+- @memberjunction/ng-data-context@2.34.2
+- @memberjunction/ng-skip-chat@2.34.2
+- @memberjunction/ng-tabstrip@2.34.2
+- @memberjunction/graphql-dataprovider@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+- @memberjunction/global@2.34.2
+- @memberjunction/skip-types@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.34.1
+- @memberjunction/ng-user-view-grid@2.34.1
+- @memberjunction/ng-chat@2.34.1
+- @memberjunction/ng-container-directives@2.34.1
+- @memberjunction/ng-data-context@2.34.1
+- @memberjunction/ng-skip-chat@2.34.1
+- @memberjunction/ng-tabstrip@2.34.1
+- @memberjunction/graphql-dataprovider@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+- @memberjunction/global@2.34.1
+- @memberjunction/skip-types@2.34.1
+
+## 2.34.0
+
+### Minor Changes
+
+- e60f326: More support for HTML Reports in Skip, Additional Entities and CodeGen and SkipTypes for Artifacts Support
+
+### Patch Changes
+
+- 785f06a: Improvements to Ask Skip and Skip Chat components for HTML Reports
+- b48d6b4: LLM Streaming Support + HTML Report Fixes
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+- Updated dependencies [b48d6b4]
+  - @memberjunction/ng-skip-chat@2.34.0
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/skip-types@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ng-shared@2.34.0
+  - @memberjunction/ng-user-view-grid@2.34.0
+  - @memberjunction/ng-data-context@2.34.0
+  - @memberjunction/graphql-dataprovider@2.34.0
+  - @memberjunction/ng-chat@2.34.0
+  - @memberjunction/ng-container-directives@2.34.0
+  - @memberjunction/ng-tabstrip@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # @memberjunction/communication-twilio
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/global@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/global@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies [785f06a]
+  - @memberjunction/core@2.34.0
+  - @memberjunction/communication-types@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Minor Changes

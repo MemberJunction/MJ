@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ai
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/global@2.34.2
+
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/global@2.34.1
+
+## 2.34.0
+
+### Patch Changes
+
+- b48d6b4: LLM Streaming Support + HTML Report Fixes
+- 4c7f532: Documentation for new core AI package
+- 54ac86c: Optimize streaming implementation + bug fixes
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes
