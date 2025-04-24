@@ -61,7 +61,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         }
     }
 
-    private invokeHTMLInitFunction() {
+    private async invokeHTMLInitFunction() {
         try {
             const container = this.htmlContainer?.nativeElement;
             if (container && this.HTMLReportObjectName) {
@@ -73,25 +73,26 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                 
                 // Now find and manually execute all scripts in the container
                 const scriptElements = container.querySelectorAll('script');
-                scriptElements.forEach((script: HTMLScriptElement) => {
-                    // For external scripts
-                    if (script.src) {
-                        // Create a new script element
-                        const newScript = document.createElement('script');
-                        newScript.src = script.src;
-                        document.head.appendChild(newScript);
-                    } 
-                    // For inline scripts
-                    else if (script.textContent) {
-                        // Execute the script content directly
-                        try {
-                            // This will execute the script in global context
-                            eval(script.textContent);
-                        } catch (error) {
-                            console.error('Error executing script:', error);
-                        }
-                    }
-                });
+                await this.loadScriptsSequentially(scriptElements);
+                // scriptElements.forEach((script: HTMLScriptElement) => {
+                //     // For external scripts
+                //     if (script.src) {
+                //         // Create a new script element
+                //         const newScript = document.createElement('script');
+                //         newScript.src = script.src;
+                //         document.head.appendChild(newScript);
+                //     } 
+                //     // For inline scripts
+                //     else if (script.textContent) {
+                //         // Execute the script content directly
+                //         try {
+                //             // This will execute the script in global context
+                //             eval(script.textContent);
+                //         } catch (error) {
+                //             console.error('Error executing script:', error);
+                //         }
+                //     }
+                // });
                 this.finishHTMLInitialization();
             }
             else {
@@ -101,6 +102,42 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         catch (e) {
             LogError(e);
         }
+    }
+
+    protected async loadScriptsSequentially(scriptElements: HTMLScriptElement[]) {
+        for (let i = 0; i < scriptElements.length; i++) {
+            const script = scriptElements[i];
+            
+            // For external scripts
+            if (script.src) {
+                // we use the promise to ensure we are awaiting for the script to load before moving on to the next one
+                await new Promise<void>((resolve, reject) => {
+                    const newScript = document.createElement('script');
+                    newScript.src = script.src;
+                    
+                    // Set up handlers
+                    newScript.onload = () => resolve();
+                    newScript.onerror = (error) => {
+                        console.error('Error loading script:', script.src, error);
+                        resolve(); // Resolve anyway to continue loading other scripts
+                    };
+                    
+                    document.head.appendChild(newScript);
+                });
+            } 
+            // For inline scripts
+            else if (script.textContent) {
+                try {
+                    // Execute inline script
+                    eval(script.textContent);
+                } catch (error) {
+                    console.error('Error executing inline script:', error);
+                    // Continue to next script even if this one failed
+                }
+            }
+        }
+        
+        console.log('All scripts loaded');
     }
 
     protected finishHTMLInitialization() {
