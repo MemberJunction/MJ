@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/actions-base
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+- @memberjunction/global@2.34.2
+
 ## 2.34.1
 
 ### Patch Changes

@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.34.2
+
+### Patch Changes
+
+- ae5d495: Fix migration script
+  - @memberjunction/ai@2.34.2
+  - @memberjunction/aiengine@2.34.2
+  - @memberjunction/ai-mistral@2.34.2
+  - @memberjunction/ai-openai@2.34.2
+  - @memberjunction/ai-vectors-pinecone@2.34.2
+  - @memberjunction/core-actions@2.34.2
+  - @memberjunction/actions@2.34.2
+  - @memberjunction/entity-communications-server@2.34.2
+  - @memberjunction/doc-utils@2.34.2
+  - @memberjunction/external-change-detection@2.34.2
+  - @memberjunction/graphql-dataprovider@2.34.2
+  - @memberjunction/core@2.34.2
+  - @memberjunction/core-entities@2.34.2
+  - @memberjunction/data-context@2.34.2
+  - @memberjunction/data-context-server@2.34.2
+  - @memberjunction/global@2.34.2
+  - @memberjunction/queue@2.34.2
+  - @memberjunction/storage@2.34.2
+  - @memberjunction/sqlserver-dataprovider@2.34.2
+  - @memberjunction/skip-types@2.34.2
+  - @memberjunction/templates@2.34.2
+
 ## 2.34.1
 
 ### Patch Changes

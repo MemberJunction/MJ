@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.34.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.34.2
+- @memberjunction/aiengine@2.34.2
+- @memberjunction/ai-anthropic@2.34.2
+- @memberjunction/ai-groq@2.34.2
+- @memberjunction/ai-mistral@2.34.2
+- @memberjunction/ai-openai@2.34.2
+- @memberjunction/actions@2.34.2
+- @memberjunction/core@2.34.2
+- @memberjunction/core-entities@2.34.2
+- @memberjunction/global@2.34.2
+- @memberjunction/sqlserver-dataprovider@2.34.2
+
 ## 2.34.1
 
 ### Patch Changes

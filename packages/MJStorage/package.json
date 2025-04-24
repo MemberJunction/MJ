@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/storage",
-  "version": "2.34.1",
+  "version": "2.34.2",
   "description": "This library provides a set of objects that handle the interface between the server-side API and various cloud storage providers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,9 +32,9 @@
     "@microsoft/mgt-sharepoint-provider": "^3.1.3",
     "googleapis": "^134.0.0",
     "dropbox": "^10.34.0",
-    "@memberjunction/core": "2.34.1",
-    "@memberjunction/core-entities": "2.34.1",
-    "@memberjunction/global": "2.34.1",
+    "@memberjunction/core": "2.34.2",
+    "@memberjunction/core-entities": "2.34.2",
+    "@memberjunction/global": "2.34.2",
     "env-var": "^7.4.1",
     "mime-types": "^2.1.35"
   }

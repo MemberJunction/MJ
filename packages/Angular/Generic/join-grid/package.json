@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-join-grid",
-  "version": "2.34.1",
+  "version": "2.34.2",
   "description": "MemberJunction: Grid component that is able to display/edit the relationship between two entities. For example being able to edit Users + Roles in a single grid.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.34.1",
-    "@memberjunction/global": "2.34.1",
-    "@memberjunction/core": "2.34.1",
-    "@memberjunction/ng-base-types": "2.34.1",
-    "@memberjunction/ng-container-directives": "2.34.1",
-    "@memberjunction/ng-shared": "2.34.1",
+    "@memberjunction/core-entities": "2.34.2",
+    "@memberjunction/global": "2.34.2",
+    "@memberjunction/core": "2.34.2",
+    "@memberjunction/ng-base-types": "2.34.2",
+    "@memberjunction/ng-container-directives": "2.34.2",
+    "@memberjunction/ng-shared": "2.34.2",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-layout": "16.2.0",
