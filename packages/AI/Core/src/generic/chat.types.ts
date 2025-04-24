@@ -29,12 +29,48 @@ export type ChatMessage = {
     content: string;
 }
 
+/**
+ * Interface for streaming chat completion callbacks
+ */
+export interface StreamingChatCallbacks {
+    /**
+     * Called when a new chunk of content is received
+     * @param chunk The new content chunk
+     * @param isComplete Whether this is the final chunk
+     */
+    OnContent?: (chunk: string, isComplete: boolean) => void;
+    
+    /**
+     * Called when the stream is complete
+     * @param finalResponse The complete ChatResult
+     */
+    OnComplete?: (finalResponse: ChatResult) => void;
+    
+    /**
+     * Called when an error occurs during streaming
+     * @param error The error that occurred
+     */
+    OnError?: (error: any) => void;
+}
+
 export class ChatParams extends BaseParams  {
     /**
      * Array of messages, allows full control over the order and content of the conversation.
      */
     messages: ChatMessage[] = [];
 
+    /**
+     * Whether to use streaming for this request.
+     * If true and the provider supports streaming, responses will be streamed.
+     * If true but the provider doesn't support streaming, the request will fall back to non-streaming.
+     */
+    streaming?: boolean = false;
+    
+    /**
+     * Callbacks for streaming responses.
+     * Only used when streaming is true.
+     */
+    streamingCallbacks?: StreamingChatCallbacks;
 }
 /**
  * Returns the first user message from the chat params

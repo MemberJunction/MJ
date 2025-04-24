@@ -35,6 +35,7 @@ import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-m
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
+import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-chat',
@@ -117,6 +118,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * This event fires whenever a new report is created.
    */
   @Output() NewReportCreated = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a drill down is requested within a given report.
+   */
+  @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();  
 
   
   @ViewChild(Container, { static: true }) askSkip!: Container;
@@ -1253,6 +1259,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     obj.EditMessageRequested.subscribe((message: ConversationDetailEntity) => {
       this.HandleMessageEditRequest(message);
     });
+    obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
+      this.DrillDownEvent.emit(drillDownInfo);
+    });
 
     obj.Provider = this.ProviderToUse;
     obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
@@ -1294,10 +1303,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // Calculate the difference between the scroll height and the sum of scroll top and client height
       const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
 
+      // Only show the icon if there's actually content to scroll (more than the viewport height)
+      const hasScrollableContent = element.scrollHeight > element.clientHeight + 50; // 50px as minimum scrollable content
+
       // Consider it at the bottom if the difference is less than or equal to the buffer
       const atBottom = scrollDifference <= buffer;
 
-      this._showScrollToBottomIcon = !atBottom;
+      // Only show the icon if not at bottom AND has enough content to scroll
+      this._showScrollToBottomIcon = !atBottom && hasScrollableContent;
     }
   }
 

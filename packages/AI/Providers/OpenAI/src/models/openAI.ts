@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionMessageParam } from "openai/resources";
@@ -26,9 +26,18 @@ export class OpenAILLM extends BaseLLM {
         return this._openAI;
     }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
+    /**
+     * OpenAI supports streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return true;
+    }
 
+    /**
+     * Implementation of non-streaming chat completion for OpenAI
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
         const startTime = new Date();
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
@@ -77,6 +86,95 @@ export class OpenAILLM extends BaseLLM {
             errorMessage: null,
             exception: null
         }
+    }
+
+    /**
+     * Create a streaming request for OpenAI
+     */
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
+        
+        const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+            model: params.model,
+            messages: messages,
+            temperature: params.temperature,
+            max_tokens: params.maxOutputTokens,
+            stream: true
+        };
+        
+        // Set response format if specified
+        switch (params.responseFormat) {
+            case 'JSON':
+                openAIParams.response_format = { type: "json_object" };
+                break;
+            case 'ModelSpecific':
+                openAIParams.response_format = params.modelSpecificResponseFormat;
+                break;
+        }
+        
+        return this.OpenAI.chat.completions.create(openAIParams);
+    }
+    
+    /**
+     * Process a streaming chunk from OpenAI
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        // Handle potential null/undefined values safely
+        const content = chunk?.choices?.[0]?.delta?.content || '';
+        const usage = chunk?.usage || null;
+        
+        return {
+            content,
+            finishReason: chunk?.choices?.[0]?.finish_reason,
+            usage: usage ? {
+                promptTokens: usage.prompt_tokens || 0,
+                completionTokens: usage.completion_tokens || 0,
+                totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
+            } : null
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for OpenAI
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Handle possible null/undefined values
+        const content = accumulatedContent || '';
+        const promptTokens = usage?.promptTokens || 0;
+        const completionTokens = usage?.completionTokens || 0;
+        
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: content
+                },
+                finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
+                index: 0
+            }],
+            usage: new ModelUsage(promptTokens, completionTokens)
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
 
 

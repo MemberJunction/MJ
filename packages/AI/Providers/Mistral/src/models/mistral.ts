@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
-import { ChatCompletionChoice, ResponseFormat } from '@mistralai/mistralai/models/components';
+import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice } from '@mistralai/mistralai/models/components';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
@@ -15,8 +15,18 @@ export class MistralLLM extends BaseLLM {
     }
 
     public get Client(): Mistral {return this._client;}
+    
+    /**
+     * Mistral supports streaming
+     */
+    public override get SupportsStreaming(): boolean {
+        return true;
+    }
 
-    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
+    /**
+     * Implementation of non-streaming chat completion for Mistral
+     */
+    protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
         let responseFormat: ResponseFormat | undefined = undefined;
@@ -73,7 +83,101 @@ export class MistralLLM extends BaseLLM {
             errorMessage: "",
             exception: null,
         }
-
+    }
+    
+    /**
+     * Create a streaming request for Mistral
+     */
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        let responseFormat: ResponseFormat | undefined = undefined;
+        if (params.responseFormat === 'JSON') {
+            responseFormat = { type: "json_object" };
+        }
+        
+        return this.Client.chat.stream({
+            model: params.model,
+            messages: params.messages,
+            maxTokens: params.maxOutputTokens,
+            responseFormat: responseFormat
+        });
+    }
+    
+    /**
+     * Process a streaming chunk from Mistral
+     */
+    protected processStreamingChunk(chunk: any): {
+        content: string;
+        finishReason?: string;
+        usage?: any;
+    } {
+        let content = '';
+        let usage = null;
+        
+        if (chunk?.data?.choices && chunk.data.choices.length > 0) {
+            const choice = chunk.data.choices[0];
+            
+            // Extract content from the choice delta
+            if (choice?.delta?.content) {
+                if (typeof choice.delta.content === 'string') {
+                    content = choice.delta.content;
+                } else if (Array.isArray(choice.delta.content)) {
+                    content = choice.delta.content.join('');
+                }
+            }
+            
+            // Save usage information if available
+            if (chunk?.data?.usage) {
+                usage = {
+                    promptTokens: chunk.data.usage.promptTokens || 0,
+                    completionTokens: chunk.data.usage.completionTokens || 0,
+                    totalTokens: chunk.data.usage.totalTokens || 0
+                };
+            }
+        }
+        
+        return {
+            content,
+            finishReason: chunk?.data?.choices?.[0]?.finishReason,
+            usage
+        };
+    }
+    
+    /**
+     * Create the final response from streaming results for Mistral
+     */
+    protected finalizeStreamingResponse(
+        accumulatedContent: string | null | undefined,
+        lastChunk: any | null | undefined,
+        usage: any | null | undefined
+    ): ChatResult {
+        // Create dates (will be overridden by base class)
+        const now = new Date();
+        
+        // Create a proper ChatResult instance with constructor params
+        const result = new ChatResult(true, now, now);
+        
+        // Set all properties
+        result.data = {
+            choices: [{
+                message: {
+                    role: 'assistant',
+                    content: accumulatedContent ? accumulatedContent : ''
+                },
+                finish_reason: lastChunk?.data?.choices?.[0]?.finishReason || 'stop',
+                index: 0
+            }],
+            usage: usage || {
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0
+            }
+        };
+        
+        result.statusText = 'success';
+        result.errorMessage = null;
+        result.exception = null;
+        
+        return result;
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

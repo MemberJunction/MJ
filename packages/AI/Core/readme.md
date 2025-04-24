@@ -8,6 +8,7 @@ The MemberJunction AI Core package provides a comprehensive abstraction layer fo
 - **Runtime Optionality**: Switch between AI providers at runtime based on configuration
 - **Base Classes**: Abstract base classes for different AI model types (LLMs, embedding models, etc.)
 - **Standard Interfaces**: Consistent interfaces for common AI operations like chat, summarization, and classification
+- **Streaming Support**: Stream responses from supported LLM providers for real-time UIs
 - **Type Definitions**: Comprehensive TypeScript type definitions for all AI operations
 - **Error Handling**: Standardized error handling and reporting across all providers
 - **Token Usage Tracking**: Consistent tracking of token usage across providers
@@ -110,9 +111,9 @@ const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
 - `BaseAudio`: Abstract class for speech and audio processing models
 - `BaseVideo`: Abstract class for video generation models
 
-### Operation Types
+## LLM Operations
 
-#### Chat Completion
+### Standard Chat Completion
 
 For interactive conversations with AI models:
 
@@ -133,7 +134,73 @@ const params: ChatParams = {
 const result: ChatResult = await llm.ChatCompletion(params);
 ```
 
-#### Text Summarization
+### Streaming Chat Completion
+
+For real-time streaming of responses (supported by most modern LLM providers):
+
+```typescript
+import { ChatParams, ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
+
+// Define the streaming callbacks
+const callbacks: StreamingChatCallbacks = {
+  // Called when a new chunk arrives
+  OnContent: (chunk: string, isComplete: boolean) => {
+    if (isComplete) {
+      console.log("\nStream completed!");
+    } else {
+      // Print chunks as they arrive (or add to UI)
+      process.stdout.write(chunk);
+    }
+  },
+  
+  // Called when the complete response is available
+  OnComplete: (finalResponse: ChatResult) => {
+    console.log("\nFull response:", finalResponse.data.choices[0].message.content);
+    console.log("Total tokens:", finalResponse.data.usage.totalTokens);
+  },
+  
+  // Called if an error occurs during streaming
+  OnError: (error: any) => {
+    console.error("Streaming error:", error);
+  }
+};
+
+// Create streaming chat parameters
+const params: ChatParams = {
+  model: 'gpt-4',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Write a short poem about AI, one line at a time.' }
+  ],
+  streaming: true, // Enable streaming
+  streamingCallbacks: callbacks
+};
+
+// The ChatCompletion API remains the same, but will stream results
+await llm.ChatCompletion(params);
+```
+
+### Checking Streaming Support
+
+Check if a provider supports streaming before enabling it:
+
+```typescript
+// Check if the provider supports streaming
+if (llm.SupportsStreaming) {
+  console.log("Provider supports streaming!");
+  params.streaming = true;
+  params.streamingCallbacks = callbacks;
+} else {
+  console.log("Provider doesn't support streaming, using standard request");
+  params.streaming = false;
+}
+
+// The call automatically handles both streaming and non-streaming paths
+await llm.ChatCompletion(params);
+```
+ 
+
+### Text Summarization
 
 For summarizing longer text content:
 
@@ -150,7 +217,7 @@ const result: SummarizeResult = await llm.SummarizeText(params);
 console.log(result.summary);
 ```
 
-#### Text Classification
+### Text Classification
 
 For categorizing text into predefined classes:
 
@@ -215,6 +282,19 @@ console.log('Completion Tokens:', result.data.usage.completionTokens);
 console.log('Total Tokens:', result.data.usage.totalTokens);
 ```
 
+## Provider Streaming Support
+
+The following providers support streaming in the current implementation:
+
+| Provider | Streaming Support |
+|----------|------------------|
+| OpenAI   | ✅ Full support   |
+| Anthropic | ✅ Full support  |
+| Mistral  | ✅ Full support   |
+| Groq     | ✅ Full support   |
+| Gemini   | ✅ Full support   |
+| BettyBot | ❌ Not supported  |
+
 ## Available Providers
 
 The following provider packages implement the MemberJunction AI abstractions:
@@ -225,6 +305,21 @@ The following provider packages implement the MemberJunction AI abstractions:
 - `@memberjunction/ai-gemini` - Google's Gemini models
 - `@memberjunction/ai-groq` - Groq's optimized inference
 - `@memberjunction/ai-bettybot` - BettyBot AI
+
+## Implementation Details
+
+### Streaming Architecture
+
+The BaseLLM class uses a template method pattern for handling streaming:
+
+1. The main `ChatCompletion` method checks if streaming is requested and supported
+2. If streaming is enabled, it calls the template method `handleStreamingChatCompletion`
+3. Provider implementations supply three key methods:
+   - `createStreamingRequest`: Creates the provider-specific streaming request
+   - `processStreamingChunk`: Processes individual chunks from the stream
+   - `finalizeStreamingResponse`: Creates the final response object
+
+This architecture allows for a clean separation between common streaming logic and provider-specific implementations.
 
 ## Dependencies
 
