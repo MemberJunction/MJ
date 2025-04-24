@@ -197,7 +197,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
             this.plotLayout = {
               ...this.plotLayout = d.executionResults?.plotData?.layout, // Preserve existing layout properties
               plot_bgcolor: chartConfig?.plot_bgcolor || '#f8f9fa',
-              font: {
+              font: chartConfig?.font ||
+              {
                 family: chartConfig?.font?.family || 'Roboto, sans-serif',
                 size: chartConfig?.font?.size || 12,
                 color: chartConfig?.font?.color || '#000'             
@@ -250,7 +251,8 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
               yaxis: {
                 title: {
                   text: d.executionResults?.plotData?.layout?.yaxis?.title || d.executionResults?.plotData?.layout?.yaxis?.title.text,
-                  font: chartConfig?.yaxis?.title?.font ||{
+                  font: chartConfig?.yaxis?.title?.font ||
+                  {
                     color: '#0076B6',
                     size: 18,
                   }
