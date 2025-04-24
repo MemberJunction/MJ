@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-treelist
 
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-entity-form-dialog@2.34.1
+- @memberjunction/ng-shared@2.34.1
+- @memberjunction/ng-container-directives@2.34.1
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+- @memberjunction/global@2.34.1
+
 ## 2.34.0
 
 ### Patch Changes

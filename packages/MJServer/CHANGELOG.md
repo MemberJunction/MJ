@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.34.1
+
+### Patch Changes
+
+- 5e4dd59: Fixed broken import syntax
+  - @memberjunction/ai@2.34.1
+  - @memberjunction/aiengine@2.34.1
+  - @memberjunction/ai-mistral@2.34.1
+  - @memberjunction/ai-openai@2.34.1
+  - @memberjunction/ai-vectors-pinecone@2.34.1
+  - @memberjunction/core-actions@2.34.1
+  - @memberjunction/actions@2.34.1
+  - @memberjunction/entity-communications-server@2.34.1
+  - @memberjunction/doc-utils@2.34.1
+  - @memberjunction/external-change-detection@2.34.1
+  - @memberjunction/graphql-dataprovider@2.34.1
+  - @memberjunction/core@2.34.1
+  - @memberjunction/core-entities@2.34.1
+  - @memberjunction/data-context@2.34.1
+  - @memberjunction/data-context-server@2.34.1
+  - @memberjunction/global@2.34.1
+  - @memberjunction/queue@2.34.1
+  - @memberjunction/storage@2.34.1
+  - @memberjunction/sqlserver-dataprovider@2.34.1
+  - @memberjunction/skip-types@2.34.1
+  - @memberjunction/templates@2.34.1
+
 ## 2.34.0
 
 ### Patch Changes

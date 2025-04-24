@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/core@2.34.1
+- @memberjunction/core-entities@2.34.1
+- @memberjunction/global@2.34.1
+- @memberjunction/sqlserver-dataprovider@2.34.1
+
 ## 2.34.0
 
 ### Patch Changes

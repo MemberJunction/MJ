@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.34.1
+
+### Patch Changes
+
+- @memberjunction/core@2.34.1
+- @memberjunction/global@2.34.1
+
 ## 2.34.0
 
 ### Minor Changes
