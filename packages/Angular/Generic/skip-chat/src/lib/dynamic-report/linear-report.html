@@ -46,6 +46,7 @@
           <skip-dynamic-html-report
                           #theHtmlReport 
                           [SkipData]="SkipData"
+                          (DrillDownEvent)="HandleDrillDownEvent($event)"
                           ></skip-dynamic-html-report>  
       </kendo-expansionpanel>
     }

@@ -5,6 +5,7 @@ import { DynamicReportDrillDownComponent } from './dynamic-drill-down';
 import { TabEvent } from '@memberjunction/ng-tabstrip';
 import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
 import { SkipDynamicReportBase } from '@memberjunction/ng-skip-chat/dist/lib/dynamic-report/base-report';
+import { BaseEntity, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
 // info from the database. This can also be used directly to render a dynamic report that is NOT saved in the DB
@@ -103,6 +104,10 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     this.confirmCreateReportDialogOpen = false;
   }
   
+  public async handleHTMLReportDrillDown(info: DrillDownInfo) {
+    this.handleDrillDown(info);
+  }
+
   public async handleChartDrillDown(info: DrillDownInfo) {
     this.handleDrillDown(info);
   }
@@ -110,20 +115,42 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     this.handleDrillDown(info);
   }
   private _drillDownSelectTab: number = -1;
-  protected handleDrillDown(info: DrillDownInfo) {
-    // first, make sure that the info is not already in the drill down list
-    const idx = this.DrillDowns.findIndex((x) => x.EntityName === info.EntityName && x.Filter === info.Filter);
-    if (idx >= 0) {
-      // here we already have the drill down, so just select the tab
-      this._drillDownSelectTab = idx;
-    } else {
-      // just add to the info, Angular binding will then update the drill down tabs
-      if (this.SkipData?.drillDown?.baseFilter && (!info.BaseFilter || info.BaseFilter.length === 0))
-        info.BaseFilter = this.SkipData?.drillDown?.baseFilter; // add the base filter if we have it from Skip and it wasn't already set
+  protected async handleDrillDown(info: DrillDownInfo) {
+    // check to see if the drill down is for a single record, or for multiple, if single, just open the record
+    const filter = info.Filter;
+    const rv = new RunView();
+    const result = await rv.RunView<BaseEntity>({
+      EntityName: info.EntityName,
+      ExtraFilter: filter,
+      ResultType: 'entity_object'
+    })
+    if (result && result.Success && result.Results.length === 1) {
+      const record = result.Results[0];
+      const ck = new CompositeKey(record.PrimaryKeys.map((pk) => {
+        const kv = new KeyValuePair;
+        kv.FieldName = pk.Name;
+        kv.Value = record.Get(pk.Name);
+        return kv;
+      }));
+      const urlSegment = ck.ToURLSegment();//ck.KeyValuePairs.length > 1 ? ck.ToURLSegment() : ck.KeyValuePairs[0].Value;
+      const url = `/resource/record/${urlSegment}?Entity=${info.EntityName}`;
+      this.router.navigateByUrl(url);
+    }
+    else {
+      // first, make sure that the info is not already in the drill down list
+      const idx = this.DrillDowns.findIndex((x) => x.EntityName === info.EntityName && x.Filter === info.Filter);
+      if (idx >= 0) {
+        // here we already have the drill down, so just select the tab
+        this._drillDownSelectTab = idx;
+      } else {
+        // just add to the info, Angular binding will then update the drill down tabs
+        if (this.SkipData?.drillDown?.baseFilter && (!info.BaseFilter || info.BaseFilter.length === 0))
+          info.BaseFilter = this.SkipData?.drillDown?.baseFilter; // add the base filter if we have it from Skip and it wasn't already set
 
-      this.DrillDowns.push(info);
-      // now make sure the drill down tab is selected, but wait a bit to ensure angular has updated the view
-      this._drillDownSelectTab = this.DrillDowns.length - 1;
+        this.DrillDowns.push(info);
+        // now make sure the drill down tab is selected, but wait a bit to ensure angular has updated the view
+        this._drillDownSelectTab = this.DrillDowns.length - 1;
+      }
     }
   }
 

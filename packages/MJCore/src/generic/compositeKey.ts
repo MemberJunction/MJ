@@ -111,6 +111,33 @@ export class FieldValueCollection {
     }
 
     /**
+     * Utility function to return a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
+     * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value, if false, will return "FieldName=Value"
+     * @param quoteString is either 'single' or 'double' and will determine if the string values are quoted with single or double quotes. Quotes are only applied to values that are of type string or Date.
+     * @returns a string representation of the composite key in the format "FieldName=Value AND FieldName=Value"
+     * @example "ID=1 AND Name='John'"
+     */
+    ToWhereClause(useIsNull: boolean = true, quoteStyle: 'single' | 'double' = 'single'): string {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
+            let value = keyValue.Value;
+            if (useIsNull && (value === null || value === undefined)) {
+                return `${keyValue.FieldName} IS NULL`;
+            }
+            else {
+                if (typeof value === 'string' || value instanceof Date) {
+                    if (quoteStyle === 'single') {
+                        value = `'${value}'`;
+                    }
+                    else {
+                        value = `"${value}"`;
+                    }
+                }
+                return `${keyValue.FieldName}=${value}`;
+            }
+        }).join(" AND ");
+    }
+
+    /**
      * @returns the value of each key value pair in the format "Value1, Value2, Value3"
      * @param delimiter - the delimiter to use between the values. Defaults to ', '
      * @example "1, John"

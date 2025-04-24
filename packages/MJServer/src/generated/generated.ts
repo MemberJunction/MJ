@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentRequestEntity, ReportUserStateEntity, QueryEntityEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIAgentLearningCycleEntity, ReportVersionEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIAgentEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, ReportUserStateEntity, QueryEntityEntity, ArtifactTypeEntity, ConversationArtifactEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ConversationArtifactPermissionEntity, AIAgentLearningCycleEntity, ReportVersionEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -4701,19 +4701,6 @@ export class EntityField_ {
     @MaxLength(20)
     ValuesToPackWithSchema: string;
         
-    @Field({nullable: true, description: `Contains the name of the generated field validation function, if it exists, null otherwise`}) 
-    @MaxLength(510)
-    GeneratedValidationFunctionName?: string;
-        
-    @Field({nullable: true, description: `Contains a description for business users of what the validation function for this field does, if it exists`}) 
-    GeneratedValidationFunctionDescription?: string;
-        
-    @Field({nullable: true, description: `Contains the generated code for the field validation function, if it exists, null otherwise.`}) 
-    GeneratedValidationFunctionCode?: string;
-        
-    @Field({nullable: true, description: `If a generated validation function was generated previously, this stores the text from the source CHECK constraint in the database. This is stored so that regeneration of the validation function will only occur when the source CHECK constraint changes.`}) 
-    GeneratedValidationFunctionCheckConstraint?: string;
-        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -4857,18 +4844,6 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     ValuesToPackWithSchema?: string;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionName: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionDescription: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionCode: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionCheckConstraint: string | null;
 }
     
 
@@ -4966,18 +4941,6 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     ValuesToPackWithSchema?: string;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionName?: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionDescription?: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionCode?: string | null;
-
-    @Field({ nullable: true })
-    GeneratedValidationFunctionCheckConstraint?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15998,6 +15961,9 @@ export class Conversation_ {
     @Field(() => [Report_])
     Reports_ConversationIDArray: Report_[]; // Link to Reports
     
+    @Field(() => [ConversationArtifact_])
+    MJ_ConversationArtifacts_ConversationIDArray: ConversationArtifact_[]; // Link to MJ_ConversationArtifacts
+    
 }
 
 //****************************************************************************
@@ -16144,6 +16110,15 @@ export class ConversationResolver extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReports] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifact_])
+    async MJ_ConversationArtifacts_ConversationIDArray(@Root() conversation_: Conversation_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ConversationID]='${conversation_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifacts', await dataSource.query(sSQL));
         return result;
     }
         
@@ -29379,6 +29354,179 @@ export class ResourceLinkResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Conversation Artifact Versions
+//****************************************************************************
+@ObjectType()
+export class ConversationArtifactVersion_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the parent artifact`}) 
+    @MaxLength(16)
+    ConversationArtifactID: string;
+        
+    @Field(() => Int, {description: `Sequential version number (starting from 1) for this artifact`}) 
+    Version: number;
+        
+    @Field({description: `JSON configuration and metadata for this artifact version`}) 
+    Configuration: string;
+        
+    @Field({nullable: true, description: `Actual content of the artifact, if stored separately from configuration`}) 
+    Content?: string;
+        
+    @Field({nullable: true, description: `User comments specific to this version`}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    ConversationArtifact: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifact Versions
+//****************************************************************************
+@InputType()
+export class CreateConversationArtifactVersionInput {
+    @Field({ nullable: true })
+    ConversationArtifactID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    Configuration?: string;
+
+    @Field({ nullable: true })
+    Content: string | null;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifact Versions
+//****************************************************************************
+@InputType()
+export class UpdateConversationArtifactVersionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ConversationArtifactID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Version?: number;
+
+    @Field({ nullable: true })
+    Configuration?: string;
+
+    @Field({ nullable: true })
+    Content?: string | null;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Conversation Artifact Versions
+//****************************************************************************
+@ObjectType()
+export class RunConversationArtifactVersionViewResult {
+    @Field(() => [ConversationArtifactVersion_])
+    Results: ConversationArtifactVersion_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ConversationArtifactVersion_)
+export class ConversationArtifactVersionResolver extends ResolverBase {
+    @Query(() => RunConversationArtifactVersionViewResult)
+    async RunConversationArtifactVersionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactVersionViewResult)
+    async RunConversationArtifactVersionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactVersionViewResult)
+    async RunConversationArtifactVersionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Conversation Artifact Versions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ConversationArtifactVersion_, { nullable: true })
+    async ConversationArtifactVersion(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationArtifactVersion_ | null> {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ConversationArtifactVersion_)
+    async CreateConversationArtifactVersion(
+        @Arg('input', () => CreateConversationArtifactVersionInput) input: CreateConversationArtifactVersionInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Conversation Artifact Versions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ConversationArtifactVersion_)
+    async UpdateConversationArtifactVersion(
+        @Arg('input', () => UpdateConversationArtifactVersionInput) input: UpdateConversationArtifactVersionInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Conversation Artifact Versions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ConversationArtifactVersion_)
+    async DeleteConversationArtifactVersion(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Conversation Artifact Versions', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for AI Agent Requests
 //****************************************************************************
 @ObjectType()
@@ -29907,6 +30055,392 @@ export class QueryEntityResolver extends ResolverBase {
         const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Entities', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Artifact Types
+//****************************************************************************
+@ObjectType()
+export class ArtifactType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Display name of the artifact type`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of the artifact type`}) 
+    Description?: string;
+        
+    @Field({description: `MIME type or content identifier for this artifact type`}) 
+    @MaxLength(200)
+    ContentType: string;
+        
+    @Field(() => Boolean, {description: `Indicates if this artifact type is currently available for use`}) 
+    IsEnabled: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [ConversationArtifact_])
+    MJ_ConversationArtifacts_ArtifactTypeIDArray: ConversationArtifact_[]; // Link to MJ_ConversationArtifacts
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Artifact Types
+//****************************************************************************
+@InputType()
+export class CreateArtifactTypeInput {
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ContentType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsEnabled?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Artifact Types
+//****************************************************************************
+@InputType()
+export class UpdateArtifactTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ContentType?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsEnabled?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Artifact Types
+//****************************************************************************
+@ObjectType()
+export class RunArtifactTypeViewResult {
+    @Field(() => [ArtifactType_])
+    Results: ArtifactType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ArtifactType_)
+export class ArtifactTypeResolver extends ResolverBase {
+    @Query(() => RunArtifactTypeViewResult)
+    async RunArtifactTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunArtifactTypeViewResult)
+    async RunArtifactTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunArtifactTypeViewResult)
+    async RunArtifactTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Artifact Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ArtifactType_, { nullable: true })
+    async ArtifactType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ArtifactType_ | null> {
+        this.CheckUserReadPermissions('MJ: Artifact Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Artifact Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [ConversationArtifact_])
+    async MJ_ConversationArtifacts_ArtifactTypeIDArray(@Root() artifacttype_: ArtifactType_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ArtifactTypeID]='${artifacttype_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifacts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ArtifactType_)
+    async CreateArtifactType(
+        @Arg('input', () => CreateArtifactTypeInput) input: CreateArtifactTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Artifact Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ArtifactType_)
+    async UpdateArtifactType(
+        @Arg('input', () => UpdateArtifactTypeInput) input: UpdateArtifactTypeInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Artifact Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ArtifactType_)
+    async DeleteArtifactType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Artifact Types', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Conversation Artifacts
+//****************************************************************************
+@ObjectType()
+export class ConversationArtifact_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Display name of the artifact`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({nullable: true, description: `Extended description of the artifact`}) 
+    Description?: string;
+        
+    @Field({description: `Reference to the conversation this artifact belongs to`}) 
+    @MaxLength(16)
+    ConversationID: string;
+        
+    @Field({description: `Reference to the type of artifact`}) 
+    @MaxLength(16)
+    ArtifactTypeID: string;
+        
+    @Field({description: `Controls who can view this artifact (None, SpecificUsers, Everyone, Public)`}) 
+    @MaxLength(100)
+    SharingScope: string;
+        
+    @Field({nullable: true, description: `User comments about the artifact`}) 
+    Comments?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Conversation?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    ArtifactType: string;
+        
+    @Field(() => [ConversationArtifactPermission_])
+    MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
+    
+    @Field(() => [ConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifacts
+//****************************************************************************
+@InputType()
+export class CreateConversationArtifactInput {
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    ArtifactTypeID?: string;
+
+    @Field({ nullable: true })
+    SharingScope?: string;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifacts
+//****************************************************************************
+@InputType()
+export class UpdateConversationArtifactInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ConversationID?: string;
+
+    @Field({ nullable: true })
+    ArtifactTypeID?: string;
+
+    @Field({ nullable: true })
+    SharingScope?: string;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Conversation Artifacts
+//****************************************************************************
+@ObjectType()
+export class RunConversationArtifactViewResult {
+    @Field(() => [ConversationArtifact_])
+    Results: ConversationArtifact_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ConversationArtifact_)
+export class ConversationArtifactResolver extends ResolverBase {
+    @Query(() => RunConversationArtifactViewResult)
+    async RunConversationArtifactViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactViewResult)
+    async RunConversationArtifactViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactViewResult)
+    async RunConversationArtifactDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Conversation Artifacts';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ConversationArtifact_, { nullable: true })
+    async ConversationArtifact(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationArtifact_ | null> {
+        this.CheckUserReadPermissions('MJ: Conversation Artifacts', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifacts] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifacts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifacts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @FieldResolver(() => [ConversationArtifactPermission_])
+    async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ConversationArtifact_)
+    async CreateConversationArtifact(
+        @Arg('input', () => CreateConversationArtifactInput) input: CreateConversationArtifactInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Conversation Artifacts', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ConversationArtifact_)
+    async UpdateConversationArtifact(
+        @Arg('input', () => UpdateConversationArtifactInput) input: UpdateConversationArtifactInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Conversation Artifacts', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ConversationArtifact_)
+    async DeleteConversationArtifact(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Conversation Artifacts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -32118,6 +32652,163 @@ export class GeneratedCodeResolver extends ResolverBase {
         const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Generated Codes', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Conversation Artifact Permissions
+//****************************************************************************
+@ObjectType()
+export class ConversationArtifactPermission_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Reference to the artifact this permission applies to`}) 
+    @MaxLength(16)
+    ConversationArtifactID: string;
+        
+    @Field({description: `User this permission applies to`}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({description: `Level of access granted (Read, Edit, Owner)`}) 
+    @MaxLength(40)
+    AccessLevel: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    ConversationArtifact: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifact Permissions
+//****************************************************************************
+@InputType()
+export class CreateConversationArtifactPermissionInput {
+    @Field({ nullable: true })
+    ConversationArtifactID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    AccessLevel?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Conversation Artifact Permissions
+//****************************************************************************
+@InputType()
+export class UpdateConversationArtifactPermissionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ConversationArtifactID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    AccessLevel?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Conversation Artifact Permissions
+//****************************************************************************
+@ObjectType()
+export class RunConversationArtifactPermissionViewResult {
+    @Field(() => [ConversationArtifactPermission_])
+    Results: ConversationArtifactPermission_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ConversationArtifactPermission_)
+export class ConversationArtifactPermissionResolver extends ResolverBase {
+    @Query(() => RunConversationArtifactPermissionViewResult)
+    async RunConversationArtifactPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactPermissionViewResult)
+    async RunConversationArtifactPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunConversationArtifactPermissionViewResult)
+    async RunConversationArtifactPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Conversation Artifact Permissions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ConversationArtifactPermission_, { nullable: true })
+    async ConversationArtifactPermission(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationArtifactPermission_ | null> {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ConversationArtifactPermission_)
+    async CreateConversationArtifactPermission(
+        @Arg('input', () => CreateConversationArtifactPermissionInput) input: CreateConversationArtifactPermissionInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Conversation Artifact Permissions', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ConversationArtifactPermission_)
+    async UpdateConversationArtifactPermission(
+        @Arg('input', () => UpdateConversationArtifactPermissionInput) input: UpdateConversationArtifactPermissionInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Conversation Artifact Permissions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ConversationArtifactPermission_)
+    async DeleteConversationArtifactPermission(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Conversation Artifact Permissions', key, options, dataSource, userPayload, pubSub);
     }
     
 }

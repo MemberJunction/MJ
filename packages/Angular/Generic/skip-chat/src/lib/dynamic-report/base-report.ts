@@ -7,6 +7,7 @@ import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { BaseAngularComponent } from "@memberjunction/ng-base-types";
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipColumnInfo } from "@memberjunction/skip-types";
 import { SkipConversationReportCache } from "../report-cache";
+import { DrillDownInfo } from "../drill-down-info";
 
 @Directive() // using a directive here becuase this is an abstract base class that will later be subclassed and decorated as @Component
 export abstract class SkipDynamicReportBase  extends BaseAngularComponent implements AfterViewInit {
@@ -30,6 +31,12 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
    * This event fires whenever a new report is created.
    */
   @Output() NewReportCreated = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a drill down is requested within a given report.
+   */
+  @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
+  
 
   constructor(protected cdRef: ChangeDetectorRef) {
     super();
@@ -79,6 +86,10 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
     }
   }    
 
+  public HandleDrillDownEvent(drillDownInfo: DrillDownInfo) {
+    // bubble the event up to the parent component
+    this.DrillDownEvent.emit(drillDownInfo);
+  }
 
   public get Columns(): SkipColumnInfo[] {
       return this.SkipData?.tableDataColumns || [];
@@ -100,7 +111,7 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
     return this.ResultType === 'plot';
   }
   public get IsTable(): boolean {
-    return this.ResultType === 'table';
+    return this.ResultType === 'data' || this.ResultType === 'table';
   }
   public get IsHTML(): boolean {
     return this.ResultType === 'html';

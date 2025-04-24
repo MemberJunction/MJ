@@ -19,7 +19,7 @@
     </mj-tab>
     <mj-tab-body *ngIf="IsHTML">
       <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
-        <skip-dynamic-html-report #theHtmlReport [SkipData]="SkipData"  (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
+        <skip-dynamic-html-report #theHtmlReport [SkipData]="SkipData"  (DrillDownEvent)="handleHTMLReportDrillDown($event)" style="display:block;">
         </skip-dynamic-html-report>  
       </div>
     </mj-tab-body>
