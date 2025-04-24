@@ -12,7 +12,7 @@ $ npm install -g @memberjunction/cli
 $ mj COMMAND
 running command...
 $ mj (--version)
-@memberjunction/cli/2.33.0 linux-x64 node-v20.19.0
+@memberjunction/cli/2.34.0 linux-x64 node-v20.19.0
 $ mj --help [COMMAND]
 USAGE
   $ mj COMMAND
@@ -63,7 +63,7 @@ EXAMPLES
     $ mj bump -rqt v2.10.0 | xargs -n1 -I{} npm install --prefix {}
 ```
 
-_See code: [src/commands/bump/index.ts](https://github.com/MemberJunction/MJ/blob/v2.33.0/src/commands/bump/index.ts)_
+_See code: [src/commands/bump/index.ts](https://github.com/MemberJunction/MJ/blob/v2.34.0/src/commands/bump/index.ts)_
 
 ## `mj clean`
 
@@ -83,7 +83,7 @@ EXAMPLES
   $ mj clean
 ```
 
-_See code: [src/commands/clean/index.ts](https://github.com/MemberJunction/MJ/blob/v2.33.0/src/commands/clean/index.ts)_
+_See code: [src/commands/clean/index.ts](https://github.com/MemberJunction/MJ/blob/v2.34.0/src/commands/clean/index.ts)_
 
 ## `mj codegen`
 
@@ -103,7 +103,7 @@ EXAMPLES
   $ mj codegen
 ```
 
-_See code: [src/commands/codegen/index.ts](https://github.com/MemberJunction/MJ/blob/v2.33.0/src/commands/codegen/index.ts)_
+_See code: [src/commands/codegen/index.ts](https://github.com/MemberJunction/MJ/blob/v2.34.0/src/commands/codegen/index.ts)_
 
 ## `mj help [COMMAND]`
 
@@ -143,7 +143,7 @@ EXAMPLES
   $ mj install
 ```
 
-_See code: [src/commands/install/index.ts](https://github.com/MemberJunction/MJ/blob/v2.33.0/src/commands/install/index.ts)_
+_See code: [src/commands/install/index.ts](https://github.com/MemberJunction/MJ/blob/v2.34.0/src/commands/install/index.ts)_
 
 ## `mj migrate`
 
@@ -164,7 +164,7 @@ EXAMPLES
   $ mj migrate
 ```
 
-_See code: [src/commands/migrate/index.ts](https://github.com/MemberJunction/MJ/blob/v2.33.0/src/commands/migrate/index.ts)_
+_See code: [src/commands/migrate/index.ts](https://github.com/MemberJunction/MJ/blob/v2.34.0/src/commands/migrate/index.ts)_
 
 ## `mj version`
 
