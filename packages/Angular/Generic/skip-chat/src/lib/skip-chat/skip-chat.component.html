@@ -51,7 +51,7 @@
         }
 
         <div class="right-panel">
-            <div class="conversation-wrapper" mjFillContainer>
+            <div class="conversation-wrapper">
                 <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
                     <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
                         <div class='welcome-message'>
