@@ -4,7 +4,7 @@ import { EntityActionEngineServer } from "@memberjunction/actions";
 import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from "@memberjunction/core";
 import { ActionParam } from "@memberjunction/actions-base";
 import { Field, InputType, ObjectType } from "type-graphql";
-import { KeyValuePairInput } from "../generic/KeyValuePairInput";
+import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 
 /**
  * Input type for action parameters
