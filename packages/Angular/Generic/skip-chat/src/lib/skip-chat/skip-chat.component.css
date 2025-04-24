@@ -93,6 +93,7 @@
     flex-direction: column;
     position: relative; /* Add this line if the wrapper needs to be a reference point */
     background-color: #f9f9f9;
+    height: 100%; /* Ensure it takes full height */
 }
 
 .new-conversation {
@@ -242,6 +243,7 @@
     flex: 1;
     scrollbar-width: thin; /* For Firefox */
     scrollbar-color: #d3d3d3 #f8f9fa; /* Thumb color and track color */
+    position: relative; /* For proper positioning of scroll icon */
 }
 
 /* For WebKit-based browsers (Chrome, Edge, Safari) */
@@ -354,6 +356,10 @@ background-color: #f8f9fa; /* Background of the scrollbar track */
     align-items: center;
     justify-content: center;
     margin-bottom: 15px;
+    position: sticky;
+    bottom: 0;
+    background-color: #f9f9f9;
+    z-index: 10;
 }
 
 .input-area > .button-area {
@@ -433,21 +439,22 @@ background-color: #f8f9fa; /* Background of the scrollbar track */
 }
   
 .scroll-to-bottom-icon {
-    position: absolute;
-    bottom: 100px; /* Adjust as needed to position away from the bottom edge */
+    position: fixed;
+    bottom: 120px; /* Position relative to the viewport */
     left: 50%; /* Start at the exact horizontal center */
     transform: translateX(-50%); /* Shift it back by half its width to center it */
     z-index: 1000; /* Ensure it stays on top */
-    background-color: white; /* Circle background color - adjust as needed */
-    color: black; /* Icon color - adjust as needed */
+    background-color: white; /* Circle background color */
+    color: black; /* Icon color */
     border-radius: 50%; /* Makes the background a circle */
-    width: 40px; /* Circle size - adjust as needed */
-    height: 40px; /* Circle size - adjust as needed */
+    width: 40px; /* Circle size */
+    height: 40px; /* Circle size */
     display: flex;
     justify-content: center;
     align-items: center;
-    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Optional: Adds a subtle shadow for better visibility */
+    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Subtle shadow for better visibility */
     cursor: pointer;
+    opacity: 0.9; /* Slightly transparent */
 }
 
 .loading-convo-messages-wrapper {

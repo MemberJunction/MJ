@@ -1303,10 +1303,14 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // Calculate the difference between the scroll height and the sum of scroll top and client height
       const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
 
+      // Only show the icon if there's actually content to scroll (more than the viewport height)
+      const hasScrollableContent = element.scrollHeight > element.clientHeight + 50; // 50px as minimum scrollable content
+
       // Consider it at the bottom if the difference is less than or equal to the buffer
       const atBottom = scrollDifference <= buffer;
 
-      this._showScrollToBottomIcon = !atBottom;
+      // Only show the icon if not at bottom AND has enough content to scroll
+      this._showScrollToBottomIcon = !atBottom && hasScrollableContent;
     }
   }
 

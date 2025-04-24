@@ -290,7 +290,7 @@ const mcpServerConfig = {
   }
 }
 
-/** @type {CodeGenConfig & MJConfig & MJServerConfig} */
+/** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig} */
 const config = {
   ...codegenConfig,
   ...mjServerConfig,
