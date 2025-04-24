@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/templates
 
+## 2.34.0
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+- Updated dependencies [b48d6b4]
+- Updated dependencies [4c7f532]
+- Updated dependencies [54ac86c]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ai@2.34.0
+  - @memberjunction/ai-groq@2.34.0
+  - @memberjunction/aiengine@2.34.0
+  - @memberjunction/templates-base-types@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

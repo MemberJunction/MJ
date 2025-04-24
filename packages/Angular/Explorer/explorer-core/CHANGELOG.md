@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.34.0
+
+### Patch Changes
+
+- 54ac86c: Optimize streaming implementation + bug fixes
+- Updated dependencies [e60f326]
+- Updated dependencies [785f06a]
+- Updated dependencies [b48d6b4]
+  - @memberjunction/ng-ask-skip@2.34.0
+  - @memberjunction/ng-skip-chat@2.34.0
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/core@2.34.0
+  - @memberjunction/ng-compare-records@2.34.0
+  - @memberjunction/ng-entity-form-dialog@2.34.0
+  - @memberjunction/ng-explorer-settings@2.34.0
+  - @memberjunction/ng-shared@2.34.0
+  - @memberjunction/ng-user-view-grid@2.34.0
+  - @memberjunction/ng-user-view-properties@2.34.0
+  - @memberjunction/ng-file-storage@2.34.0
+  - @memberjunction/ng-query-grid@2.34.0
+  - @memberjunction/ng-record-selector@2.34.0
+  - @memberjunction/ng-resource-permissions@2.34.0
+  - @memberjunction/communication-types@2.34.0
+  - @memberjunction/entity-communications-client@2.34.0
+  - @memberjunction/templates-base-types@2.34.0
+  - @memberjunction/ng-auth-services@2.34.0
+  - @memberjunction/ng-base-forms@2.34.0
+  - @memberjunction/ng-record-changes@2.34.0
+  - @memberjunction/ng-container-directives@2.34.0
+  - @memberjunction/ng-tabstrip@2.34.0
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

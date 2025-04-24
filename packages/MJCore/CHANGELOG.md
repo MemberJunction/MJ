@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.34.0
+
+### Patch Changes
+
+- 785f06a: Improvements to Ask Skip and Skip Chat components for HTML Reports
+  - @memberjunction/global@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes

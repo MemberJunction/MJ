@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.34.0
+
+### Minor Changes
+
+- e60f326: More support for HTML Reports in Skip, Additional Entities and CodeGen and SkipTypes for Artifacts Support
+
+### Patch Changes
+
+- Updated dependencies [e60f326]
+  - @memberjunction/core-entities@2.34.0
+  - @memberjunction/data-context@2.34.0
+
 ## 2.33.0
 
 ### Patch Changes
