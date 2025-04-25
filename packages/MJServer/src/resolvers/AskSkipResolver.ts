@@ -118,7 +118,7 @@ export class AskSkipResolver {
     }
 
     const md = new Metadata();
-    const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipInitialObjectLoading(
+    const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipChatInitialObjectLoading(
       dataSource,
       ConversationId,
       UserQuestion,
@@ -155,17 +155,17 @@ export class AskSkipResolver {
       }
     }
 
-    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user, dataSource, false, false);
+    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user, dataSource, false, false);
     messages.push({
       content: UserQuestion,
       role: 'user',
       conversationDetailID: convoDetailEntity.ID,
     });
 
-    return this.handleSimpleSkipPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
+    return this.handleSimpleSkipChatPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
   }
 
-  protected async handleSimpleSkipPostRequest(
+  protected async handleSimpleSkipChatPostRequest(
     input: SkipAPIRequest,
     conversationID: string = '',
     UserMessageConversationDetailId: string = '',
@@ -228,7 +228,7 @@ export class AskSkipResolver {
     }
   }
 
-  protected async buildSkipAPIRequest(
+  protected async buildSkipChatAPIRequest(
     messages: SkipMessage[],
     conversationId: string,
     dataContext: DataContext,
@@ -298,9 +298,9 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = <SkipAPIRunScriptRequest>await this.buildSkipAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user, dataSource, false, false);
+    const input = <SkipAPIRunScriptRequest>await this.buildSkipChatAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user, dataSource, false, false);
     input.scriptText = ScriptText;
-    return this.handleSimpleSkipPostRequest(input);
+    return this.handleSimpleSkipChatPostRequest(input);
   }
 
   protected buildSkipAPIKeys(): SkipAPIRequestAPIKey[] {
@@ -341,7 +341,7 @@ export class AskSkipResolver {
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
-    const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipInitialObjectLoading(
+    const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipChatInitialObjectLoading(
       dataSource,
       ConversationId,
       UserQuestion,
@@ -359,9 +359,9 @@ export class AskSkipResolver {
     );
 
     const conversationDetailCount = 1
-    const input = await this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
+    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
 
-    return this.HandleSkipRequest(
+    return this.HandleSkipChatRequest(
       input,
       UserQuestion,
       user,
@@ -743,7 +743,7 @@ export class AskSkipResolver {
     }
   }
 
-  protected async HandleSkipInitialObjectLoading(
+  protected async HandleSkipChatInitialObjectLoading(
     dataSource: DataSource,
     ConversationId: string,
     UserQuestion: string,
@@ -971,7 +971,7 @@ export class AskSkipResolver {
     }
   }
 
-  protected async HandleSkipRequest(
+  protected async HandleSkipChatRequest(
     input: SkipAPIRequest,
     UserQuestion: string,
     user: UserInfo,
@@ -1379,7 +1379,7 @@ export class AskSkipResolver {
       }
       conversationDetailCount++;
       // we have all of the data now, add it to the data context and then submit it back to the Skip API
-      return this.HandleSkipRequest(
+      return this.HandleSkipChatRequest(
         apiRequest,
         UserQuestion,
         user,
