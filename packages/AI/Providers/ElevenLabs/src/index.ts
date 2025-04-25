@@ -17,6 +17,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             const audio = await this._elevenLabs.generate(
                 {
                     text: params.text,
+                    voice: params.voice,
                     model_id: params.model_id,
                     voice_settings: params.voice_settings,
                     apply_text_normalization: params.apply_text_normalization,
@@ -29,8 +30,8 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             }
             const audioBuffer = Buffer.concat(chunks);
             speechResult.data = audioBuffer;
-            speechResult.success = true;
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
+            speechResult.success = true;
         } catch (error) {
             speechResult.success = false;
             speechResult.errorMessage = error.message;
