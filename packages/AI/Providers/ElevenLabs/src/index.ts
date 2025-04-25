@@ -14,16 +14,21 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
         try {
-            const audio = await this._elevenLabs.generate({
-                text: params.text,
-                voice: params.voiceId,
-                model_id: params.modelId
-            })
+            const audio = await this._elevenLabs.generate(
+                {
+                    text: params.text,
+                    model_id: params.model_id,
+                    voice_settings: params.voice_settings,
+                    apply_text_normalization: params.apply_text_normalization,
+                    pronunciation_dictionary_locators: params.pronunciation_dictionary_locators,
+                }
+            )
             const chunks: Uint8Array[] = [];
             for await (let chunk of audio) {
                 chunks.push(chunk);
             }
             const audioBuffer = Buffer.concat(chunks);
+            speechResult.data = audioBuffer;
             speechResult.success = true;
             speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
         } catch (error) {
