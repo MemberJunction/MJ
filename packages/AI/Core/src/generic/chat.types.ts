@@ -71,6 +71,11 @@ export class ChatParams extends BaseParams  {
      * Only used when streaming is true.
      */
     streamingCallbacks?: StreamingChatCallbacks;
+
+    /**
+     * If the model supports effort levels, this parameter can be used to specify the effort level.
+     */
+    effortLevel?: string;
 }
 /**
  * Returns the first user message from the chat params
