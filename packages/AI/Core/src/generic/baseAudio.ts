@@ -42,33 +42,55 @@ export class SpeechToTextParams extends BaseParams {
     audioFile: string;    
 }
 
-// Define the interface for TextToSpeechParams
+/**
+ * Interface defining voice configuration settings for text-to-speech generation
+ */
 export interface VoiceSettings {
-    stability: number;          // 0-1, higher means more stable/consistent
-    similarity_boost: number;   // 0-1, higher means more similar to original voice
-    style: number;              // 0-1, speech style
-    use_speaker_boost: boolean; // Enhance speaker clarity and target voice
-    speed: number;              // 0-1, higher means faster
-  }
-  
+    /** Stability of the voice (0-1), higher values result in more consistent/stable voice output */
+    stability: number;
+    /** Similarity boost to original voice (0-1), higher values make the voice more similar to the original */
+    similarity_boost: number;
+    /** Style parameter (0-1) affecting the speech style characteristics */
+    style: number;
+    /** Whether to enhance speaker clarity and target voice characteristics */
+    use_speaker_boost: boolean;
+    /** Speed of speech (0-1), higher values result in faster speech */
+    speed: number;
+}
+
+/**
+ * Parameters for text-to-speech generation requests
+ */
 export interface TextToSpeechParams {
-    // Required parameters
-    voice: string;              // Voice ID or name
-    text: string;               // Text to convert to speech
+    /** Voice ID or name to use for speech generation */
+    voice: string;
+    /** Text content to convert to speech */
+    text: string;
     
-    // Optional parameters
-    model_id?: string;          // Model ID, default is "eleven_monolingual_v1"
-    stream?: boolean;           // Whether to stream the response
-    voice_settings?: VoiceSettings; // Voice configuration
-    output_format?: string;     // Format as codec_samplerate_bitrate (e.g., "mp3_44100_128")
-    latency?: number;           // 0-4, optimization level (0 = no optimization, 4 = max)
-    previous_text?: string;     // Text that came before this generation (for continuity)
-    previous_request_id?: string; // ID of previous generation
-    next_request_ids?: string[]; // IDs of next generations
-    language_code?: string;     // ISO 639-1 language code
-    apply_text_normalization?: "auto" | "on" | "off"; // Text normalization setting (spell out numbers, etc)
-    pronunciation_dictionary_locators?: any[]; // Pronunciation dictionary locators
-    instructions?: string; // Instructions for the voice
+    /** Model ID to use, defaults to "eleven_monolingual_v1" */
+    model_id?: string;
+    /** Whether to stream the response */
+    stream?: boolean;
+    /** Voice configuration settings */
+    voice_settings?: VoiceSettings;
+    /** Output format specified as codec_samplerate_bitrate (e.g., "mp3_44100_128") */
+    output_format?: string;
+    /** Optimization level (0-4), where 0 is no optimization and 4 is maximum optimization */
+    latency?: number;
+    /** Text that came before this generation, used for maintaining continuity */
+    previous_text?: string;
+    /** ID of the previous generation request */
+    previous_request_id?: string;
+    /** Array of IDs for next generations */
+    next_request_ids?: string[];
+    /** ISO 639-1 language code for the speech generation */
+    language_code?: string;
+    /** Text normalization setting to control how numbers and special characters are handled */
+    apply_text_normalization?: "auto" | "on" | "off";
+    /** Array of pronunciation dictionary locators for custom word pronunciations */
+    pronunciation_dictionary_locators?: any[];
+    /** Special instructions for the voice generation */
+    instructions?: string;
 }
 
 /**
