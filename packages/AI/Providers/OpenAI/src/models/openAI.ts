@@ -44,7 +44,7 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
-            max_tokens: params.maxOutputTokens
+            max_completion_tokens: params.maxOutputTokens
         };
 
         switch (params.responseFormat) {
