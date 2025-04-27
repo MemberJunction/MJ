@@ -1,4 +1,3 @@
-IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.AIModel WHERE Name = 'OpenAI TTS')
 BEGIN
     INSERT INTO ${flyway:defaultSchema}.AIModel 
     (
