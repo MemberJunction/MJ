@@ -21,6 +21,6 @@
   "dependencies": {
     "@memberjunction/ai": "2.34.2",
     "@memberjunction/global": "2.34.2",
-    "openai": "4.83.0"
+    "openai": "4.96.0"
   }
 }
