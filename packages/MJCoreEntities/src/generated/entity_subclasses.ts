@@ -1192,6 +1192,12 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(100)
         * * Default Value: Any
     * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
+    SupportsEffortLevel: z.boolean().describe(`
+        * * Field Name: SupportsEffortLevel
+        * * Display Name: Supports Effort Level
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -13329,6 +13335,20 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set SupportedResponseFormats(value: string) {
         this.Set('SupportedResponseFormats', value);
+    }
+
+    /**
+    * * Field Name: SupportsEffortLevel
+    * * Display Name: Supports Effort Level
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.
+    */
+    get SupportsEffortLevel(): boolean {
+        return this.Get('SupportsEffortLevel');
+    }
+    set SupportsEffortLevel(value: boolean) {
+        this.Set('SupportsEffortLevel', value);
     }
 
     /**

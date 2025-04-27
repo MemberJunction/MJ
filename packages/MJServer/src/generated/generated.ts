@@ -6271,9 +6271,6 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
-    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
@@ -6283,20 +6280,23 @@ export class User_ {
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
+    
     @Field(() => [ReportUserState_])
     MJ_ReportUserStates_UserIDArray: ReportUserState_[]; // Link to MJ_ReportUserStates
     
     @Field(() => [AIAgentNote_])
     AIAgentNotes_UserIDArray: AIAgentNote_[]; // Link to AIAgentNotes
     
-    @Field(() => [ResourcePermission_])
-    ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
-    
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_RequestForUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_UserIDArray: ConversationDetail_[]; // Link to ConversationDetails
+    
+    @Field(() => [ResourcePermission_])
+    ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
     
 }
 
@@ -6720,15 +6720,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -6756,6 +6747,15 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ReportUserState_])
     async MJ_ReportUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
@@ -6774,15 +6774,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ResourcePermission_])
-    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Permissions', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIAgentRequest_])
     async AIAgentRequests_RequestForUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Requests', userPayload);
@@ -6798,6 +6789,15 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ResourcePermission_])
+    async ResourcePermissions_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Permissions', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourcePermissions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Permissions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -12023,6 +12023,9 @@ export class AIModel_ {
     @MaxLength(200)
     SupportedResponseFormats: string;
         
+    @Field(() => Boolean, {description: `Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`}) 
+    SupportsEffortLevel: boolean;
+        
     @Field() 
     @MaxLength(100)
     AIModelType: string;
@@ -12039,14 +12042,14 @@ export class AIModel_ {
     @Field(() => [VectorIndex_])
     VectorIndexes_EmbeddingModelIDArray: VectorIndex_[]; // Link to VectorIndexes
     
-    @Field(() => [ContentType_])
-    ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
-    
     @Field(() => [AIResultCache_])
     AIResultCache_AIModelIDArray: AIResultCache_[]; // Link to AIResultCache
     
     @Field(() => [EntityAIAction_])
     EntityAIActions_AIModelIDArray: EntityAIAction_[]; // Link to EntityAIActions
+    
+    @Field(() => [ContentType_])
+    ContentTypes_AIModelIDArray: ContentType_[]; // Link to ContentTypes
     
     @Field(() => [AIAgentModel_])
     AIAgentModels_ModelIDArray: AIAgentModel_[]; // Link to AIAgentModels
@@ -12102,6 +12105,9 @@ export class CreateAIModelInput {
 
     @Field({ nullable: true })
     SupportedResponseFormats?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEffortLevel?: boolean;
 }
     
 
@@ -12154,6 +12160,9 @@ export class UpdateAIModelInput {
 
     @Field({ nullable: true })
     SupportedResponseFormats?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEffortLevel?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12260,15 +12269,6 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ContentType_])
-    async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Content Types', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Content Types', await dataSource.query(sSQL));
-        return result;
-    }
-        
     @FieldResolver(() => [AIResultCache_])
     async AIResultCache_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);
@@ -12284,6 +12284,15 @@ export class AIModelResolver extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityAIActions] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [ContentType_])
+    async ContentTypes_AIModelIDArray(@Root() aimodel_: AIModel_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Content Types', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwContentTypes] WHERE [AIModelID]='${aimodel_.ID}' ` + this.getRowLevelSecurityWhereClause('Content Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Content Types', await dataSource.query(sSQL));
         return result;
     }
         
