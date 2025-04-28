@@ -409,3 +409,24 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,'Any, JSON',
            1);
 GO
+
+-- Add Agent Note Types for Skip
+INSERT INTO [${flyway:defaultSchema}].[AIAgentNoteType]
+           ([ID]
+           ,[Name]
+           ,[Description])
+     VALUES
+           ('C49BBEA7-5424-F011-A770-AC1A3D21423D'
+           ,'Human'
+           ,'Notes added by a Human')
+GO
+
+INSERT INTO [${flyway:defaultSchema}].[AIAgentNoteType]
+           ([ID]
+           ,[Name]
+           ,[Description])
+     VALUES
+           ('C59BBEA7-5424-F011-A770-AC1A3D21423D'
+           ,'AI'
+           ,'Notes added by an AI')
+GO
