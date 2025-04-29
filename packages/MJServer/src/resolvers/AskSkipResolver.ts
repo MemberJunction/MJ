@@ -55,10 +55,6 @@ import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
-import { request } from 'http';
-import { stat } from 'fs';
-import { response } from 'express';
-import { error } from 'console';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -1819,7 +1815,6 @@ export class AskSkipResolver {
     pubSub: PubSubEngine,
     userPayload: UserPayload
   ): Promise<{ AIMessageConversationDetailID: string }> {
-
     const sTitle = apiResponse.reportTitle;
     const sResult = JSON.stringify(apiResponse);
 
@@ -1952,7 +1947,6 @@ protected validateAgentNoteType(type: string): 'Human' | 'AI' {
     if (result && result.Success) return result.Results;
     else throw new Error(`Error running view ${ViewId}`);
   }
-
 }
 
 export default AskSkipResolver;
