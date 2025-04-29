@@ -1,4 +1,5 @@
-![](https://memberjunction.com/wp-content/uploads/2022/05/Member-Junction-WEB.jpg)
+![](./MJ_logo.webp#gh-light-mode-only)
+![](./MJ_logo_dark.png#gh-dark-mode-only)
 
 # MemberJunction (MJ)
 
@@ -131,3 +132,8 @@ We embrace a diverse community of developers and users. Join the discussion at [
 ## 📄 License
 
 This project is licensed under the ISC License - see the LICENSE file for details.
+
+
+# Acknowledgements
+
+This project is tested with BrowserStack.
