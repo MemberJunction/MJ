@@ -1,7 +1,5 @@
-<center>
 ![](./MJ_logo.webp#gh-light-mode-only)
 ![](./MJ_logo_dark.webp#gh-dark-mode-only)
-</center>
 
 # MemberJunction (MJ)
 
