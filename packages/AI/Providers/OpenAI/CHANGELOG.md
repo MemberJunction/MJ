@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-openai
 
+## 2.35.0
+
+### Minor Changes
+
+- 989a9b8: Adding new AIModel for OpenAI TTS
+
+### Patch Changes
+
+- 364f754: expanded functionality for elevenlabs & heygen + implement openai TTS
+  - @memberjunction/ai@2.35.0
+  - @memberjunction/global@2.35.0
+
 ## 2.34.2
 
 ### Patch Changes

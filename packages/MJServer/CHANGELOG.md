@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/server
 
+## 2.35.0
+
+### Patch Changes
+
+- 8863e80: Minor tweaks for Skip UI stuff
+- 4dae30c: Removed HTML QA Agent from MJServer
+- Updated dependencies [989a9b8]
+- Updated dependencies [364f754]
+  - @memberjunction/ai-openai@2.35.0
+  - @memberjunction/core-actions@2.35.0
+  - @memberjunction/sqlserver-dataprovider@2.35.0
+  - @memberjunction/external-change-detection@2.35.0
+  - @memberjunction/ai@2.35.0
+  - @memberjunction/aiengine@2.35.0
+  - @memberjunction/ai-mistral@2.35.0
+  - @memberjunction/ai-vectors-pinecone@2.35.0
+  - @memberjunction/actions@2.35.0
+  - @memberjunction/entity-communications-server@2.35.0
+  - @memberjunction/doc-utils@2.35.0
+  - @memberjunction/graphql-dataprovider@2.35.0
+  - @memberjunction/core@2.35.0
+  - @memberjunction/core-entities@2.35.0
+  - @memberjunction/data-context@2.35.0
+  - @memberjunction/data-context-server@2.35.0
+  - @memberjunction/global@2.35.0
+  - @memberjunction/queue@2.35.0
+  - @memberjunction/storage@2.35.0
+  - @memberjunction/skip-types@2.35.0
+  - @memberjunction/templates@2.35.0
+
 ## 2.34.2
 
 ### Patch Changes
