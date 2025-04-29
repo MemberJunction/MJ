@@ -133,8 +133,7 @@ We embrace a diverse community of developers and users. Join the discussion at [
 
 This project is licensed under the ISC License - see the LICENSE file for details.
 
-------------------------------------------------------------------------------------------------------------
 
 # Acknowledgements
 
-This project is tested with [BrowserStack](https://www.browserstack.com/).
+This project is tested with BrowserStack.
