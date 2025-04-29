@@ -32,6 +32,7 @@ export class SpeechResult {
      * SpeechToText requests, the text that was transcribed.
      */
     content: string;
+    data?: Buffer;
 }
 
 export class SpeechToTextParams extends BaseParams {
@@ -41,43 +42,55 @@ export class SpeechToTextParams extends BaseParams {
     audioFile: string;    
 }
 
-export class TextToSpeechParams extends BaseParams {
-    /**
-     * The text to convert to audio
-     */
-    text: string
+/**
+ * Interface defining voice configuration settings for text-to-speech generation
+ */
+export interface VoiceSettings {
+    /** Stability of the voice (0-1), higher values result in more consistent/stable voice output */
+    stability: number;
+    /** Similarity boost to original voice (0-1), higher values make the voice more similar to the original */
+    similarity_boost: number;
+    /** Style parameter (0-1) affecting the speech style characteristics */
+    style: number;
+    /** Whether to enhance speaker clarity and target voice characteristics */
+    use_speaker_boost: boolean;
+    /** Speed of speech (0-1), higher values result in faster speech */
+    speed: number;
+}
 
-    /**
-     * The ID for the voice to use - each text-to-audio system has its own catalog of possible voices
-     */
-    voiceId: string
-
-    /**
-     * The ID for the model to use for audio generation
-     */
-    modelId: string
-
-    stability?: number;
-    similarityBoost?: number;
-    style?: number;
-    speakerBoost?: number;
-
-    pronounciationDictionaries?: PronounciationDictionary[];
-
-    /**
-     * The speed of the audio, in words per minute
-     */
-    speed: 'slow' | 'normal' | 'fast';
-
-    /**
-     * Base format type
-     */
-
-    outputFormat?: 'mp3' | 'pcm' | 'ulaw';
-    /**
-     * Additional output format information such as mp3_22050_32 or pcm_16000
-     */
-    outputFormatDetails?: string; 
+/**
+ * Parameters for text-to-speech generation requests
+ */
+export interface TextToSpeechParams {
+    /** Voice ID or name to use for speech generation */
+    voice: string;
+    /** Text content to convert to speech */
+    text: string;
+    
+    /** Model ID to use, defaults to "eleven_monolingual_v1" */
+    model_id?: string;
+    /** Whether to stream the response */
+    stream?: boolean;
+    /** Voice configuration settings */
+    voice_settings?: VoiceSettings;
+    /** Output format specified as codec_samplerate_bitrate (e.g., "mp3_44100_128") */
+    output_format?: string;
+    /** Optimization level (0-4), where 0 is no optimization and 4 is maximum optimization */
+    latency?: number;
+    /** Text that came before this generation, used for maintaining continuity */
+    previous_text?: string;
+    /** ID of the previous generation request */
+    previous_request_id?: string;
+    /** Array of IDs for next generations */
+    next_request_ids?: string[];
+    /** ISO 639-1 language code for the speech generation */
+    language_code?: string;
+    /** Text normalization setting to control how numbers and special characters are handled */
+    apply_text_normalization?: "auto" | "on" | "off";
+    /** Array of pronunciation dictionary locators for custom word pronunciations */
+    pronunciation_dictionary_locators?: any[];
+    /** Special instructions for the voice generation */
+    instructions?: string;
 }
 
 /**
