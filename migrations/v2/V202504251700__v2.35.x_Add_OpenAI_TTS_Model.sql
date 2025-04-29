@@ -15,8 +15,8 @@ BEGIN
        ModelSelectionInsights,
        InputTokenLimit,
        SupportedResponseFormats,
-       ${flyway:defaultSchema}_CreatedAt,
-       ${flyway:defaultSchema}_UpdatedAt
+       __mj_CreatedAt,
+       __mj_UpdatedAt
     )
     VALUES
     (
