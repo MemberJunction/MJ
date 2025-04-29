@@ -34,6 +34,7 @@ import {
 } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+
 import {
   AIAgentLearningCycleEntity,
   AIAgentNoteEntity,
@@ -45,7 +46,7 @@ import {
   UserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { ___skipAPIOrgId, ___skipChatAPIurl, ___skipLearningAPIurl, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -57,6 +58,7 @@ import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists
 import { request } from 'http';
 import { stat } from 'fs';
 import { response } from 'express';
+import { error } from 'console';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -187,6 +189,9 @@ export class AskSkipResolver {
       const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
       if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
+      // if already configured this does nothing, just makes sure we're configured
+      await AIEngine.Instance.Config(false, user); 
+
       LogStatus(`Starting learning cycle for AI agent Skip`);
 
       // Get the Skip agent ID
@@ -196,10 +201,24 @@ export class AskSkipResolver {
         throw new Error("Skip agent not found in AIEngine");
       }
 
-      // Retrieve the last learning cycle date from database
-      let lastLearningCycleDate: Date = await this.GetLastLearningCycleDate(skipAgent.ID, user);
+      const agentID = skipAgent.ID;
 
-      // Create a new learning cycle record
+      let lastLearningCycle = await this.GetLastLearningCycle(agentID, user);
+
+      // If there is a learning cycle already in progress, return
+      if (lastLearningCycle.Status === 'In-Progress') {
+        LogStatus(`Learning cycle already in progress for agent ${skipAgent.Name}`);
+        return {
+          success: false,
+          error: 'Learning cycle already in progress',
+          elapsedTime: 0,
+          noteChanges: [],
+          queryChanges: [],
+          requestChanges: []
+        };
+      }
+
+      // Create a new learning cycle record for this run
       const learningCycleEntity = await md.GetEntityObject<AIAgentLearningCycleEntity>('AI Agent Learning Cycles', user);
       learningCycleEntity.NewRecord();
       learningCycleEntity.AgentID = skipAgent.ID;
@@ -215,10 +234,10 @@ export class AskSkipResolver {
 
       // Build the request to Skip learning API
       LogStatus(`Building Skip Learning API request`);
-      const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastLearningCycleDate, true, true, true, true, dataSource, user, ForceEntityRefresh || false);
+      const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastLearningCycle.StartedAt, true, true, true, true, dataSource, user, ForceEntityRefresh || false);
 
       // Make the API request
-      const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId);
+      const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
 
       // Update learning cycle to completed
       const endTime = new Date();
@@ -239,11 +258,12 @@ export class AskSkipResolver {
   protected async handleSimpleSkipLearningPostRequest(
     input: SkipAPILearningCycleRequest, 
     user: UserInfo, 
-    learningCycleId: string
+    learningCycleId: string,
+    agentID: string
   ): Promise<SkipAPILearningCycleResponse> {
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${___skipAPIurl}`);
+    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${___skipLearningAPIurl}`);
 
-    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+    const response = await sendPostRequest(___skipLearningAPIurl, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -252,7 +272,7 @@ export class AskSkipResolver {
 
       // Process any note changes, if any
       if (apiResponse.noteChanges && apiResponse.noteChanges.length > 0) {
-        await this.processLearningCycleNoteChanges(apiResponse.noteChanges, user);
+        await this.processLearningCycleNoteChanges(apiResponse.noteChanges, agentID, user);
       }
 
       // Not yet implemented
@@ -288,9 +308,9 @@ export class AskSkipResolver {
     createAIMessageConversationDetail: boolean = false,
     user: UserInfo = null
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipAPIurl}`);
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipChatAPIurl}`);
 
-    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+    const response = await sendPostRequest(___skipChatAPIurl, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -329,7 +349,9 @@ export class AskSkipResolver {
    */
   protected async processLearningCycleNoteChanges(
     noteChanges: SkipLearningCycleNoteChange[], 
-    user: UserInfo): Promise<void> {
+    agentID: string,
+    user: UserInfo
+    ): Promise<void> {
       const md = new Metadata();
 
       // Filter out any operations on "Human" notes
@@ -343,7 +365,7 @@ export class AskSkipResolver {
         }
         return true;
       });
-  
+      
       // Process all valid note changes in parallel
       await Promise.all(validNoteChanges.map(async (change) => {
         try {
@@ -368,10 +390,11 @@ export class AskSkipResolver {
   
               // Create a new note
               noteEntity.NewRecord();
+              noteEntity.AgentID = agentID;
             }
   
-            // Set note properties
-            noteEntity.AgentNoteTypeID = change.note.agentNoteTypeId;
+            // Set note propertiesin the
+            noteEntity.AgentNoteTypeID = await this.getAgentNoteTypeIDByName('AI', user);
             noteEntity.Note = change.note.note;
             noteEntity.Type = change.note.type;
   
@@ -574,7 +597,7 @@ export class AskSkipResolver {
     }
   }
 
-  protected async GetLastLearningCycleDate(agentID: string, user: UserInfo): Promise<Date> {
+  protected async GetLastLearningCycle(agentID: string, user: UserInfo): Promise<AIAgentLearningCycleEntity> {
     const md = new Metadata();
     const rv = new RunView();
 
@@ -586,10 +609,22 @@ export class AskSkipResolver {
       MaxRows: 1,
     }, user);
 
-    if (lastLearningCycleRV.Results && lastLearningCycleRV.Results.length > 0) {
-      return lastLearningCycleRV.Results[0].StartedAt;
+    const lastLearningCycle = lastLearningCycleRV.Results[0];
+
+    if (lastLearningCycle) {
+      return lastLearningCycle;
     }
-    return new Date(0); // return epoch date if no learning cycle found
+    else {
+      // if no lerarning cycle found, return a new one with the epoch date
+      const learningCycleEntity = <AIAgentLearningCycleEntity>await md.GetEntityObject('AI Agent Learning Cycles', user);
+      learningCycleEntity.NewRecord();
+      learningCycleEntity.AgentID = agentID;
+      learningCycleEntity.Status = 'In-Progress';
+      learningCycleEntity.StartedAt = new Date(0); // epoch date
+      learningCycleEntity.EndedAt = new Date(0); // epoch date
+
+      return learningCycleEntity;
+    }
   }
 
   protected async buildSkipChatAPIRequest(
@@ -804,13 +839,13 @@ export class AskSkipResolver {
           return {
             id: r.ID,
             agentNoteTypeId: r.AgentNoteTypeID,
-            agentNoteType: r.AgentNoteType,
+            agentNoteType: this.validateAgentNoteType(r.AgentNoteType), 
             note: r.Note,
             type: r.Type,
             userId: r.UserID,
             user: r.User,
             createdAt: r.__mj_CreatedAt,
-            updatedAt: r.__mj_UpdatedAt,
+            updatedAt: r.__mj_CreatedAt,
           }
         });
 
@@ -1350,7 +1385,7 @@ export class AskSkipResolver {
     dataContextEntity: DataContextEntity, 
     conversationDetailCount: number
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipChatAPIurl}`);
 
     if (conversationDetailCount > 10) {
       // At this point it is likely that we are stuck in a loop, so we stop here
@@ -1376,7 +1411,7 @@ export class AskSkipResolver {
     }
 
     const response = await sendPostRequest(
-      ___skipAPIurl,
+      ___skipChatAPIurl,
       input,
       true,
       null,
@@ -1860,6 +1895,55 @@ export class AskSkipResolver {
     return {
       AIMessageConversationDetailID: convoDetailEntityAI.ID,
     };
+  }
+
+  protected async CheckIfLearningCycleInProgress(contextUser: UserInfo): Promise<boolean> {
+    const rv = new RunView();
+    const learningCycleRV = await rv.RunView<AIAgentLearningCycleEntity>({ 
+      EntityName: 'AI Agent Learning Cycles',
+      MaxRows: 1,
+      OrderBy: 'StartedAt DESC',
+    }, contextUser);
+
+    const lastLearningCycle = learningCycleRV.Results[0];
+
+    if (lastLearningCycle && lastLearningCycle.Status === 'In-Progress') {
+      return true; // Learning cycle is in progress
+    } else {
+      return false; // No learning cycle in progress
+    }
+  }
+
+  /**
+ * Validates that the agent note type is one of the expected values
+ * @param type The agent note type to validate
+ * @returns The validated agent note type
+ */
+protected validateAgentNoteType(type: string): 'Human' | 'AI' {
+  // Type guard to check if the value is a valid agent note type
+  function isAgentNoteType(value: string): value is 'Human' | 'AI' {
+    return value === 'Human' || value === 'AI';
+  }
+  
+  if (!isAgentNoteType(type)) {
+    LogError(`Invalid agent note type: ${type}, defaulting to 'AI'`);
+    return 'AI'; // Default to a safe value
+  }
+  
+  return type; // Type is now properly narrowed, no cast needed
+}
+
+  protected async getAgentNoteTypeIDByName(name: string, user: UserInfo): Promise<string> {
+    const rv = new RunView();
+
+    const noteTypeRV = await rv.RunView({EntityName: 'AI Agent Note Types'}, user);
+    const noteType = noteTypeRV.Results.find((n) => n.Name === name);
+    if (!noteType) {
+      LogError(`Could not find note type for ${name}`);
+    }
+    const noteTypeId = noteType.ID;
+
+    return noteTypeId;
   }
 
   protected async getViewData(ViewId: string, user: UserInfo): Promise<any> {

@@ -73,7 +73,9 @@ const configInfoSchema = z.object({
     .string()
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
-  ___skipAPIurl: z.string().optional(),
+  ___skipChatAPIurl: z.string().optional(),
+  ___skipLearningAPIurl: z.string().optional(),
+  ___skipLearningCycleIntervalInMinutes: z.coerce.number().optional(),
   ___skipAPIOrgId: z.string().optional(),
   auth0Domain: z.string().optional(),
   auth0WebClientID: z.string().optional(),
@@ -106,7 +108,9 @@ export const {
   enableIntrospection,
   websiteRunFromPackage,
   userEmailMap,
-  ___skipAPIurl,
+  ___skipChatAPIurl,
+  ___skipLearningAPIurl,
+  ___skipLearningCycleIntervalInMinutes,
   ___skipAPIOrgId,
   auth0Domain,
   auth0WebClientID,

@@ -21,7 +21,7 @@ import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-grap
 import { DataSource } from 'typeorm';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, ___skipLearningCycleIntervalInMinutes } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import orm from './orm.js';
@@ -33,6 +33,7 @@ import { LoadGeneratedActions } from '@memberjunction/core-actions';
 LoadGeneratedActions(); // prevent tree shaking for this dynamic module
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { LearningCycleScheduler } from './scheduler/LearningCycleScheduler.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -68,6 +69,7 @@ export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 
 export { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+export { LearningCycleScheduler } from './scheduler/LearningCycleScheduler.js';
 
 export * from './generated/generated.js';
 
@@ -232,4 +234,18 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+  
+  // Start the learning cycle scheduler
+  try {
+    const scheduler = LearningCycleScheduler.getInstance();
+    // Set the data sources for the scheduler
+    scheduler.setDataSources(dataSources);
+    
+    // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
+    const interval = ___skipLearningCycleIntervalInMinutes ?? 60; // Use nullish coalescing for stricter fallback
+    scheduler.start(interval);
+    console.log(`📅 Learning cycle scheduler started with 60 minute interval`);
+  } catch (error) {
+    console.error(`Error starting learning cycle scheduler: ${error}`);
+  }
 };
