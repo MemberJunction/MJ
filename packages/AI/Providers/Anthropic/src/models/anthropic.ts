@@ -91,7 +91,7 @@ export class AnthropicLLM extends BaseLLM {
                 // No levels of reasoning in Anthropic, we only enable or disable
                 createParams.thinking = {
                     "type": "enabled",
-                    "budget_tokens": 16000
+                    "budget_tokens": params.reasoningBudgetTokens
                 }
             }
             
@@ -172,7 +172,7 @@ export class AnthropicLLM extends BaseLLM {
             // No levels of reasoning in Anthropic, we only enable or disable
             createParams.thinking = {
                 "type": "enabled",
-                "budget_tokens": 16000
+                "budget_tokens": params.reasoningBudgetTokens
             }
         }
         

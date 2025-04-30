@@ -4,13 +4,13 @@ import { GetReadWriteDataSource } from '../util.js';
 import { AskSkipResolver } from '../resolvers/AskSkipResolver.js';
 import { DataSourceInfo } from '../types.js';
 import { getSystemUser } from '../auth/index.js';
-import { get } from 'http';
+import { BaseSingleton } from '@memberjunction/global';
 
 /**
  * A simple scheduler for the Skip AI learning cycle
+ * Implements BaseSingleton pattern for cross-instance synchronization
  */
-export class LearningCycleScheduler {
-  private static instance: LearningCycleScheduler;
+export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler> {
   private intervalId: NodeJS.Timeout | null = null;
   
   // Track executions by organization ID instead of a global flag
@@ -19,17 +19,13 @@ export class LearningCycleScheduler {
   private lastRunTime: Date | null = null;
   private dataSources: DataSourceInfo[] = [];
   
-  // Private constructor to enforce singleton
-  private constructor() {}
+  // Protected constructor to enforce singleton pattern via BaseSingleton
+  protected constructor() {
+    super();
+  }
   
-  /**
-   * Get the singleton instance
-   */
-  public static getInstance(): LearningCycleScheduler {
-    if (!LearningCycleScheduler.instance) {
-      LearningCycleScheduler.instance = new LearningCycleScheduler();
-    }
-    return LearningCycleScheduler.instance;
+  public static get Instance(): LearningCycleScheduler {
+    return super.getInstance<LearningCycleScheduler>();
   }
   
   /**

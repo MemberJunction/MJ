@@ -410,6 +410,9 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            1);
 GO
 
+-- The AIAgentNoteType table is an existing table but previously had no data in it. Here we add two new types of notes: Human and AI.
+-- Human notes are notes that are written and added by a human user, and must not be modified by AI learning cycles. 
+-- AI notes are notes that are written and added by AI during learning cycles, and may be added, updated, or deleted by the AI.  
 -- Add Agent Note Types for Skip
 INSERT INTO [${flyway:defaultSchema}].[AIAgentNoteType]
            ([ID]

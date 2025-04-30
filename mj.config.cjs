@@ -1,7 +1,9 @@
 /** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
 /** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
+/** @import { ConfigInfo as MCPServerConfig } from "./packages/AI/MCPServer/src/config" */
 /** @import { MJConfig } from "./packages/MJCLI/src/config" */
 
+/** @type {CodeGenConfig} */
 const codegenConfig = {
   /**
    * CodeGenLib Configuration (previously config.json)
@@ -14,6 +16,7 @@ const codegenConfig = {
   //   Email: '',
   //   Roles: ['Developer', 'Integration', 'UI'],
   // },
+  verboseOutput: false,
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
     { name: 'skip_database_generation', value: false },
@@ -46,6 +49,13 @@ const codegenConfig = {
         { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
       ],
     },
+    NameRulesBySchema: [ 
+      { 
+        SchemaName: '${mj_core_schema}', 
+        EntityNamePrefix: 'MJ: ',
+        EntityNameSuffix: '', 
+      },
+    ]
   },
   newEntityRelationshipDefaults: {
     AutomaticallyCreateRelationships: true,
@@ -54,12 +64,16 @@ const codegenConfig = {
   newSchemaDefaults: {
     CreateNewApplicationWithSchemaName: true,
   },
-  excludeSchemas: ['sys', 'staging', '__mj'],
+  excludeSchemas: ['sys', 'staging'],
   excludeTables: [
     {
       schema: '%',
       table: 'sys%',
     },
+    {
+      schema: '%', 
+      table: 'flyway_schema_history' // Exclude Flyway schema history table from ever being part of CodeGen
+    }
   ],
   customSQLScripts: [
     {
@@ -77,10 +91,14 @@ const codegenConfig = {
       },
     ],
   },
+  integrityChecks: {
+    enabled: true,
+    entityFieldsSequenceCheck: true,
+  },
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
-    AIModel: 'gpt-4-1106-preview',
+    AIModel: 'gpt-4o-mini',
     features: [
       {
         name: 'EntityNames',
@@ -115,35 +133,73 @@ const codegenConfig = {
           "Use AI to decide which entity relationships should have visible tabs and the best order to display those tabs. All relationships will be generated based on the Database Schema, but the EntityRelationship.DisplayInForm. The idea is that the AI will pick which of these tabs should be visible by default. In some cases an entity will have a large # of relationships and it isn't necessarily a good idea to display all of them. This feature only applies when an entity is created or new Entity Relationships are detected. This tool will not change existing EntityRelationship records.",
         enabled: false,
       },
+      {
+        name: 'ParseCheckConstraints',
+        description:
+          'Use AI to parse check constraints and generate a description as well as sub-class Validate() methods that reflect the logic of the constraint.',
+        enabled: true,
+      }
     ],
   },
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
     {
       type: 'Angular',
-      directory: './MJExplorer/src/app/generated',
+      directory: './packages/MJExplorer/src/app/generated',
       options: [{ name: 'maxComponentsPerModule', value: 20 }],
     },
-    { type: 'GraphQLServer', directory: './MJAPI/src/generated' },
-    { type: 'ActionSubclasses', directory: './GeneratedActions/src/generated' },
-    { type: 'EntitySubclasses', directory: './GeneratedEntities/src/generated' },
+    {
+      type: 'AngularCoreEntities',
+      directory: './packages/Angular/Explorer/core-entity-forms/src/lib/generated',
+      options: [{ name: 'maxComponentsPerModule', value: 100 }],
+    },
+    { type: 'GraphQLServer', directory: './packages/MJAPI/src/generated' },
+    { type: 'GraphQLCoreEntityResolvers', directory: './packages/MJServer/src/generated' },
+    { type: 'CoreActionSubclasses', directory: './packages/Actions/CoreActions/src/generated' },
+    { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
+    { type: 'CoreEntitySubclasses', directory: './packages/MJCoreEntities/src/generated' },
+    { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
     { type: 'DBSchemaJSON', directory: './Schema Files' },
   ],
   commands: [
     {
-      workingDirectory: './GeneratedEntities',
+      workingDirectory: './packages/MJCoreEntities',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './GeneratedActions',
+      workingDirectory: './packages/Angular/Explorer/core-entity-forms',
       command: 'npm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
-      workingDirectory: './MJAPI',
+      workingDirectory: './packages/Actions/CoreActions',
+      command: 'npm',
+      args: ['run', 'build'],
+      when: 'after',
+    },
+    {
+      workingDirectory: './packages/GeneratedEntities',
+      command: 'npm',
+      args: ['run', 'build'],
+      when: 'after',
+    },
+    {
+      workingDirectory: './packages/GeneratedActions',
+      command: 'npm',
+      args: ['run', 'build'],
+      when: 'after',
+    },
+    {
+      workingDirectory: './packages/MJServer',
+      command: 'npm',
+      args: ['run', 'build'],
+      when: 'after',
+    },
+    {
+      workingDirectory: './packages/MJAPI',
       command: 'npm',
       args: ['start'],
       timeout: 30000,
@@ -151,10 +207,11 @@ const codegenConfig = {
     },
   ],
   SQLOutput: {
-    enabled: false,
+    enabled: true,
     folderPath: './migrations/v2/',
     appendToFile: true,
     convertCoreSchemaToFlywayMigrationFile: true,
+    omitRecurringScriptsFromLog: true,
   },
 };
 
@@ -168,15 +225,19 @@ const mjServerConfig = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI'],
+    newUserRoles: ['UI', 'Developer'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
     contextUserForNewUserCreation: 'not.set@nowhere.com',
+    CreateUserApplicationRecords: true,
+    UserApplications: ['Admin'],
   },
   databaseSettings: {
     connectionTimeout: 45000,
     requestTimeout: 30000,
-    metadataCacheRefreshInterval: 180000,
+    metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
+      ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
+      : 180000,
   },
   viewingSystem: {
     enableSmartFilters: true,
@@ -186,6 +247,8 @@ const mjServerConfig = {
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
       includeEntitiesFromExcludedSchemas: [
+        'Entities',
+        'Entity Fields',
         'Content Items',
         'Content Item Tags',
         'Content Item Attributes',
@@ -202,10 +265,36 @@ const mjServerConfig = {
   },
 };
 
-/** @type {CodeGenConfig & MJConfig & MJServerConfig} */
+/** @type {MCPServerConfig} */
+const mcpServerConfig = {
+  mcpServerSettings: {
+    port: 3100,
+    enableMCPServer: true,
+    actionTools: [
+      {
+        actionName: 'NOT YET SUPPORTED',
+        actionCategory: '*',
+      }
+    ],
+    entityTools: [
+      {
+        schemaName: 'CRM',
+        entityName: '*',
+        get: true,
+        create: true,
+        update: true,
+        delete: true,
+        runView: true,
+      },
+    ]
+  }
+}
+
+/** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig} */
 const config = {
   ...codegenConfig,
   ...mjServerConfig,
+  ...mcpServerConfig,
 
   /**
    * Shared Configuration and Environment Variables
@@ -220,6 +309,8 @@ const config = {
   dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
+  dbReadOnlyUsername: process.env.DB_READ_ONLY_USERNAME,
+  dbReadOnlyPassword: process.env.DB_READ_ONLY_PASSWORD,
 
   // Used only for CodeGenLib
   outputCode: process.env.OUTPUT_CODE,
@@ -239,13 +330,14 @@ const config = {
   enableIntrospection: process.env.ENABLE_INTROSPECTION,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
   userEmailMap: process.env.USER_EMAIL_MAP,
-  ___skipChatAPIurl: process.env.ASK_SKIP_API_URL,
+  ___skipAPIurl: process.env.ASK_SKIP_API_URL,
   ___skipLearningAPIurl: process.env.ASK_SKIP_LEARNING_API_URL,
   ___skipLearningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
   ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
   auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
+  apiKey: process.env.MJ_API_KEY,
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',

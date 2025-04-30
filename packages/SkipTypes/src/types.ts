@@ -551,7 +551,7 @@ export class SkipAPIAgentNote {
     /**
      * Text name for the note type
      */
-    agentNoteType: 'Human' | 'AI';
+    agentNoteType: string;
     /**
      * Date/Time the note was initially created
      */

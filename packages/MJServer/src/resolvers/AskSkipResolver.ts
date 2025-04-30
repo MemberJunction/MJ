@@ -1,11 +1,12 @@
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, KeyValuePair, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, AllMetadataArrays } from '@memberjunction/core';
-import { AppContext, UserPayload } from '../types.js';
+import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context';
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
+import { LearningCycleScheduler } from '../scheduler/LearningCycleScheduler.js';
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import {
@@ -46,7 +47,7 @@ import {
   UserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipChatAPIurl, ___skipLearningAPIurl, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { ___skipAPIOrgId, ___skipAPIurl, ___skipLearningAPIurl, ___skipLearningCycleIntervalInMinutes, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -91,9 +92,57 @@ export class AskSkipResultType {
   AIMessageConversationDetailId: string;
 }
 
+@ObjectType()
+export class ManualLearningCycleResultType {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String)
+  Message: string;
+}
+
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
+  
+  // Static initializer that runs when the class is loaded - initializes the learning cycle scheduler
+  static {
+    try {
+      LogStatus('Initializing Skip AI Learning Cycle Scheduler');
+      
+      // Set up event listener for server initialization
+      const eventListener = MJGlobal.Instance.GetEventListener(true);
+      eventListener.subscribe(event => {
+        // Filter for our server's setup complete event
+        if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
+          try {
+            const dataSources = event.args.dataSources;
+            if (dataSources && dataSources.length > 0) {
+              // Initialize the scheduler
+              const scheduler = LearningCycleScheduler.Instance;
+              
+              // Set the data sources for the scheduler
+              scheduler.setDataSources(dataSources);
+              
+              // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
+              const interval = ___skipLearningCycleIntervalInMinutes ?? 60;
+              scheduler.start(interval);
+              LogStatus(`📅 Skip AI Learning cycle scheduler started with ${interval} minute interval`);
+            } else {
+              LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
+            }
+          } catch (error) {
+            LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
+          }
+        }
+      });
+      
+      LogStatus('Skip AI Learning Cycle Scheduler initialization listener registered');
+    } catch (error) {
+      // Handle any errors from the static initializer
+      LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
+    }
+  }
   private static _maxHistoricalMessages = 30;
 
   /**
@@ -304,9 +353,9 @@ export class AskSkipResolver {
     createAIMessageConversationDetail: boolean = false,
     user: UserInfo = null
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipChatAPIurl}`);
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipAPIurl}`);
 
-    const response = await sendPostRequest(___skipChatAPIurl, input, true, null);
+    const response = await sendPostRequest(___skipAPIurl, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -390,7 +439,7 @@ export class AskSkipResolver {
             }
   
             // Set note propertiesin the
-            noteEntity.AgentNoteTypeID = await this.getAgentNoteTypeIDByName('AI', user);
+            noteEntity.AgentNoteTypeID = await this.getAgentNoteTypeIDByName('AI');
             noteEntity.Note = change.note.note;
             noteEntity.Type = change.note.type;
   
@@ -515,37 +564,32 @@ export class AskSkipResolver {
     dataSource: DataSource,
     contextUser: UserInfo
   ): Promise<SkipConversation[]> {
-    try{
-      const md = new Metadata();
+    try {
       const rv = new RunView();
 
-      // First we need the conversation IDs corresponding to conversation details that have been updated/added since the last learning cycle
-      const newConversationDetailRV = await rv.RunView<ConversationDetailEntity>({
-        EntityName: 'Conversation Details',
-        ExtraFilter: `__mj_UpdatedAt >= '${lastLearningCycleDate.toISOString()}'`,
+      const conversationsSinceLastLearningCycle = await rv.RunView<ConversationEntity>({
+        EntityName: 'Conversations',
+        ExtraFilter: `ID IN (SELECT ConversationID FROM __mj.vwConversationDetails WHERE __mj_UpdatedAt >= '${lastLearningCycleDate.toISOString()}')`,
         ResultType: 'entity_object',
-      }, contextUser)
+      }, contextUser);
 
-      const newConversationIDs: string[] = Array.from(
-        new Set(newConversationDetailRV.Results.map((r) => r.ConversationID))
-      );
+      if (!conversationsSinceLastLearningCycle.Success || conversationsSinceLastLearningCycle.Results.length === 0) {
+        return [];
+      }
 
-      // With the conversations IDs, we now load up the conversations, build SkipConversations, and return them
-      const newConversations: SkipConversation[] = await Promise.all(newConversationIDs.map(async (id) => {
-        const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', contextUser);
-        await convoEntity.Load(id);
-        const skipConvo = new SkipConversation();
-        skipConvo.id = convoEntity.ID;
-        skipConvo.name = convoEntity.Name;
-        skipConvo.userId = convoEntity.UserID;
-        skipConvo.description = convoEntity.Description;
-        skipConvo.messages = await this.LoadConversationDetailsIntoSkipMessages(dataSource, convoEntity.ID, AskSkipResolver._maxHistoricalMessages);
-        skipConvo.createdAt = convoEntity.__mj_CreatedAt;
-        skipConvo.updatedAt = convoEntity.__mj_UpdatedAt;
-        return skipConvo;
+      // Now we map the conversations to SkipConversations and return 
+      return await Promise.all(conversationsSinceLastLearningCycle.Results.map(async (c) => {
+        return {
+          id: c.ID,
+          name: c.Name,
+          userId: c.UserID,
+          user: c.User,
+          description: c.Description,
+          messages: await this.LoadConversationDetailsIntoSkipMessages(dataSource, c.ID),
+          createdAt: c.__mj_CreatedAt,
+          updatedAt: c.__mj_UpdatedAt
+        };
       }));
-
-      return newConversations;
     }
     catch (e) {
       LogError(`Error loading conversations since last learning cycle: ${e}`);
@@ -835,13 +879,13 @@ export class AskSkipResolver {
           return {
             id: r.ID,
             agentNoteTypeId: r.AgentNoteTypeID,
-            agentNoteType: this.validateAgentNoteType(r.AgentNoteType), 
+            agentNoteType: r.AgentNoteType, 
             note: r.Note,
             type: r.Type,
             userId: r.UserID,
             user: r.User,
             createdAt: r.__mj_CreatedAt,
-            updatedAt: r.__mj_CreatedAt,
+            updatedAt: r.__mj_UpdatedAt,
           }
         });
 
@@ -1381,7 +1425,7 @@ export class AskSkipResolver {
     dataContextEntity: DataContextEntity, 
     conversationDetailCount: number
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipChatAPIurl}`);
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
 
     if (conversationDetailCount > 10) {
       // At this point it is likely that we are stuck in a loop, so we stop here
@@ -1407,7 +1451,7 @@ export class AskSkipResolver {
     }
 
     const response = await sendPostRequest(
-      ___skipChatAPIurl,
+      ___skipAPIurl,
       input,
       true,
       null,
@@ -1892,53 +1936,16 @@ export class AskSkipResolver {
     };
   }
 
-  protected async CheckIfLearningCycleInProgress(contextUser: UserInfo): Promise<boolean> {
-    const rv = new RunView();
-    const learningCycleRV = await rv.RunView<AIAgentLearningCycleEntity>({ 
-      EntityName: 'AI Agent Learning Cycles',
-      MaxRows: 1,
-      OrderBy: 'StartedAt DESC',
-    }, contextUser);
-
-    const lastLearningCycle = learningCycleRV.Results[0];
-
-    if (lastLearningCycle && lastLearningCycle.Status === 'In-Progress') {
-      return true; // Learning cycle is in progress
-    } else {
-      return false; // No learning cycle in progress
+  protected async getAgentNoteTypeIDByName(name: string): Promise<string> {
+    const noteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
+    if (noteTypeID) { 
+      return noteTypeID;
     }
-  }
-
-  /**
- * Validates that the agent note type is one of the expected values
- * @param type The agent note type to validate
- * @returns The validated agent note type
- */
-protected validateAgentNoteType(type: string): 'Human' | 'AI' {
-  // Type guard to check if the value is a valid agent note type
-  function isAgentNoteType(value: string): value is 'Human' | 'AI' {
-    return value === 'Human' || value === 'AI';
-  }
-  
-  if (!isAgentNoteType(type)) {
-    LogError(`Invalid agent note type: ${type}, defaulting to 'AI'`);
-    return 'AI'; // Default to a safe value
-  }
-  
-  return type; // Type is now properly narrowed, no cast needed
-}
-
-  protected async getAgentNoteTypeIDByName(name: string, user: UserInfo): Promise<string> {
-    const rv = new RunView();
-
-    const noteTypeRV = await rv.RunView({EntityName: 'AI Agent Note Types'}, user);
-    const noteType = noteTypeRV.Results.find((n) => n.Name === name);
-    if (!noteType) {
-      LogError(`Could not find note type for ${name}`);
+    else{ 
+      // default to AI note ID
+      const AINoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === 'AI')?.ID;
+      return AINoteTypeID
     }
-    const noteTypeId = noteType.ID;
-
-    return noteTypeId;
   }
 
   protected async getViewData(ViewId: string, user: UserInfo): Promise<any> {
@@ -1946,6 +1953,33 @@ protected validateAgentNoteType(type: string): 'Human' | 'AI' {
     const result = await rv.RunView({ ViewID: ViewId, IgnoreMaxRows: true }, user);
     if (result && result.Success) return result.Results;
     else throw new Error(`Error running view ${ViewId}`);
+  }
+
+  /**
+   * Manually executes the Skip AI learning cycle.
+   */
+  @Mutation(() => ManualLearningCycleResultType)
+  async ManuallyExecuteSkipLearningCycle(): Promise<ManualLearningCycleResultType> {
+    try {
+      LogStatus('Manual execution of Skip learning cycle requested via API');
+      
+      // Call the scheduler's manual execution method
+      const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle();
+      
+      return {
+        Success: result,
+        Message: result 
+          ? "Learning cycle was successfully executed manually" 
+          : "Learning cycle execution failed. Check server logs for details."
+      };
+    }
+    catch (e) {
+      LogError(`Error in ManuallyExecuteSkipLearningCycle`);
+      return {
+        Success: false,
+        Message: `Error executing learning cycle: ${e}`
+      };
+    }
   }
 }
 
