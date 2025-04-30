@@ -101,6 +101,60 @@ export class ManualLearningCycleResultType {
   Message: string;
 }
 
+@ObjectType()
+export class CycleDetailsType {
+  @Field(() => String)
+  LearningCycleId: string;
+  
+  @Field(() => String)
+  StartTime: string;
+  
+  @Field(() => Number)
+  RunningForMinutes: number;
+}
+
+@ObjectType()
+export class RunningOrganizationType {
+  @Field(() => String)
+  OrganizationId: string;
+  
+  @Field(() => String)
+  LearningCycleId: string;
+  
+  @Field(() => String)
+  StartTime: string;
+  
+  @Field(() => Number)
+  RunningForMinutes: number;
+}
+
+@ObjectType()
+export class LearningCycleStatusType {
+  @Field(() => Boolean)
+  IsSchedulerRunning: boolean;
+  
+  @Field(() => String, { nullable: true })
+  LastRunTime: string;
+  
+  @Field(() => [RunningOrganizationType], { nullable: true })
+  RunningOrganizations: RunningOrganizationType[];
+}
+
+@ObjectType()
+export class StopLearningCycleResultType {
+  @Field(() => Boolean)
+  Success: boolean;
+  
+  @Field(() => String)
+  Message: string;
+  
+  @Field(() => Boolean)
+  WasRunning: boolean;
+  
+  @Field(() => CycleDetailsType, { nullable: true })
+  CycleDetails: CycleDetailsType;
+}
+
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
@@ -237,6 +291,23 @@ export class AskSkipResolver {
       // if already configured this does nothing, just makes sure we're configured
       await AIEngine.Instance.Config(false, user); 
 
+      // Check if this organization is already running a learning cycle
+      const organizationId = ___skipAPIOrgId;
+      const scheduler = LearningCycleScheduler.Instance;
+      const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
+      
+      if (runningStatus.isRunning) {
+        LogStatus(`Learning cycle already in progress for organization ${organizationId}, started at ${runningStatus.startTime.toISOString()}`);
+        return {
+          success: false,
+          error: `Learning cycle already in progress for this organization (started ${Math.round(runningStatus.runningForMinutes)} minutes ago)`,
+          elapsedTime: 0,
+          noteChanges: [],
+          queryChanges: [],
+          requestChanges: []
+        };
+      }
+
       LogStatus(`Starting learning cycle for AI agent Skip`);
 
       // Get the Skip agent ID
@@ -248,20 +319,7 @@ export class AskSkipResolver {
 
       const agentID = skipAgent.ID;
 
-      let lastLearningCycle = await this.GetLastLearningCycle(agentID, user);
-
-      // If there is a learning cycle already in progress, return
-      if (lastLearningCycle.Status === 'In-Progress') {
-        LogStatus(`Learning cycle already in progress for agent ${skipAgent.Name}`);
-        return {
-          success: false,
-          error: 'Learning cycle already in progress',
-          elapsedTime: 0,
-          noteChanges: [],
-          queryChanges: [],
-          requestChanges: []
-        };
-      }
+      let lastCompleteLearningCycle = await this.GetLastCompleteLearningCycle(agentID, user);
 
       // Create a new learning cycle record for this run
       const learningCycleEntity = await md.GetEntityObject<AIAgentLearningCycleEntity>('AI Agent Learning Cycles', user);
@@ -277,27 +335,51 @@ export class AskSkipResolver {
       const learningCycleId = learningCycleEntity.ID;
       LogStatus(`Created new learning cycle with ID: ${learningCycleId}`);
 
-      // Build the request to Skip learning API
-      LogStatus(`Building Skip Learning API request`);
-      const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastLearningCycle.StartedAt, true, true, true, true, dataSource, user, ForceEntityRefresh || false);
-
-      // Make the API request
-      const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
-
-      // Update learning cycle to completed
-      const endTime = new Date();
-      const elapsedTimeMs = endTime.getTime() - startTime.getTime();
-
-      LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
-
-      learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
-      learningCycleEntity.EndedAt = endTime;
-
-      if (!(await learningCycleEntity.Save())) {
-        LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
-      }
+      // Register this organization as running a learning cycle
+      scheduler.registerRunningCycle(organizationId, learningCycleId);
       
-      return response;
+      try {
+        // Build the request to Skip learning API
+        LogStatus(`Building Skip Learning API request`);
+        const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycle.StartedAt, true, true, true, true, dataSource, user, ForceEntityRefresh || false);
+
+        // Make the API request
+        const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
+
+        // Update learning cycle to completed
+        const endTime = new Date();
+        const elapsedTimeMs = endTime.getTime() - startTime.getTime();
+
+        LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
+
+        learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
+        learningCycleEntity.EndedAt = endTime;
+
+        if (!(await learningCycleEntity.Save())) {
+          LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+        }
+        
+        // Unregister the organization after completion
+        scheduler.unregisterRunningCycle(organizationId);
+        
+        return response;
+      } catch (error) {
+        // Make sure to update the learning cycle record as failed
+        learningCycleEntity.Status = 'Failed';
+        learningCycleEntity.EndedAt = new Date();
+        
+        try {
+          await learningCycleEntity.Save();
+        } catch (saveError) {
+          LogError(`Failed to update learning cycle record after error: ${saveError}`);
+        }
+        
+        // Unregister the organization on error
+        scheduler.unregisterRunningCycle(organizationId);
+        
+        // Re-throw the original error
+        throw error;
+      }
   }
 
   protected async handleSimpleSkipLearningPostRequest(
@@ -698,13 +780,13 @@ export class AskSkipResolver {
     }
   }
 
-  protected async GetLastLearningCycle(agentID: string, user: UserInfo): Promise<AIAgentLearningCycleEntity> {
+  protected async GetLastCompleteLearningCycle(agentID: string, user: UserInfo): Promise<AIAgentLearningCycleEntity> {
     const md = new Metadata();
     const rv = new RunView();
 
     const lastLearningCycleRV = await rv.RunView<AIAgentLearningCycleEntity>({
       EntityName: 'AI Agent Learning Cycles',
-      ExtraFilter: `AgentID = '${agentID}'`,
+      ExtraFilter: `AgentID = '${agentID}' AND Status = 'Complete'`,
       ResultType: 'entity_object',
       OrderBy: 'StartedAt DESC',
       MaxRows: 1,
@@ -2018,27 +2100,130 @@ export class AskSkipResolver {
 
   /**
    * Manually executes the Skip AI learning cycle.
+   * @param OrganizationId Optional organization ID to register for this run
    */
   @Mutation(() => ManualLearningCycleResultType)
-  async ManuallyExecuteSkipLearningCycle(): Promise<ManualLearningCycleResultType> {
+  async ManuallyExecuteSkipLearningCycle(
+    @Arg('OrganizationId', () => String, { nullable: true }) OrganizationId?: string
+  ): Promise<ManualLearningCycleResultType> {
     try {
       LogStatus('Manual execution of Skip learning cycle requested via API');
       
-      // Call the scheduler's manual execution method
-      const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle();
+      // Use the organization ID from config if not provided
+      const orgId = OrganizationId || ___skipAPIOrgId;
+      
+      // Call the scheduler's manual execution method with org ID
+      const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
       
       return {
         Success: result,
         Message: result 
-          ? "Learning cycle was successfully executed manually" 
-          : "Learning cycle execution failed. Check server logs for details."
+          ? `Learning cycle was successfully executed manually for organization ${orgId}` 
+          : `Learning cycle execution failed for organization ${orgId}. Check server logs for details.`
       };
     }
     catch (e) {
-      LogError(`Error in ManuallyExecuteSkipLearningCycle`);
+      LogError(`Error in ManuallyExecuteSkipLearningCycle: ${e}`);
       return {
         Success: false,
         Message: `Error executing learning cycle: ${e}`
+      };
+    }
+  }
+  
+  /**
+   * Gets the current status of the learning cycle scheduler
+   */
+  @Query(() => LearningCycleStatusType)
+  async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
+    try {
+      const status = LearningCycleScheduler.Instance.getStatus();
+      
+      return {
+        IsSchedulerRunning: status.isSchedulerRunning,
+        LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
+        RunningOrganizations: status.runningOrganizations ? status.runningOrganizations.map(org => ({
+          OrganizationId: org.organizationId,
+          LearningCycleId: org.learningCycleId,
+          StartTime: org.startTime.toISOString(),
+          RunningForMinutes: org.runningForMinutes
+        })) : []
+      };
+    }
+    catch (e) {
+      LogError(`Error in GetLearningCycleStatus: ${e}`);
+      return {
+        IsSchedulerRunning: false,
+        LastRunTime: null,
+        RunningOrganizations: []
+      };
+    }
+  }
+  
+  /**
+   * Checks if a specific organization is running a learning cycle
+   * @param OrganizationId The organization ID to check
+   */
+  @Query(() => RunningOrganizationType, { nullable: true })
+  async IsOrganizationRunningLearningCycle(
+    @Arg('OrganizationId', () => String) OrganizationId: string
+  ): Promise<RunningOrganizationType | null> {
+    try {
+      // Use the organization ID from config if not provided
+      const orgId = OrganizationId || ___skipAPIOrgId;
+      
+      const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
+      
+      if (!status.isRunning) {
+        return null;
+      }
+      
+      return {
+        OrganizationId: orgId,
+        LearningCycleId: status.learningCycleId,
+        StartTime: status.startTime.toISOString(),
+        RunningForMinutes: status.runningForMinutes
+      };
+    }
+    catch (e) {
+      LogError(`Error in IsOrganizationRunningLearningCycle: ${e}`);
+      return null;
+    }
+  }
+  
+  /**
+   * Stops a running learning cycle for a specific organization
+   * @param OrganizationId The organization ID to stop the cycle for
+   */
+  @Mutation(() => StopLearningCycleResultType)
+  async StopLearningCycleForOrganization(
+    @Arg('OrganizationId', () => String) OrganizationId: string
+  ): Promise<StopLearningCycleResultType> {
+    try {
+      // Use the organization ID from config if not provided
+      const orgId = OrganizationId || ___skipAPIOrgId;
+      
+      const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
+      
+      // Transform the result to match our GraphQL type
+      return {
+        Success: result.success,
+        Message: result.message,
+        WasRunning: result.wasRunning,
+        CycleDetails: result.cycleDetails ? {
+          LearningCycleId: result.cycleDetails.learningCycleId,
+          StartTime: result.cycleDetails.startTime.toISOString(),
+          RunningForMinutes: result.cycleDetails.runningForMinutes
+        } : null
+      };
+    }
+    catch (e) {
+      LogError(`Error in StopLearningCycleForOrganization: ${e}`);
+      return {
+        Success: false,
+        Message: `Error stopping learning cycle: ${e}`,
+        WasRunning: false,
+        CycleDetails: null
       };
     }
   }

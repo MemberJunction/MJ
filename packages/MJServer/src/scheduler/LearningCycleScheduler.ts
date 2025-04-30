@@ -134,20 +134,179 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
   public getStatus() {
     return {
       isSchedulerRunning: this.intervalId !== null,
-      lastRunTime: this.lastRunTime
+      lastRunTime: this.lastRunTime,
+      runningOrganizations: Array.from(this.runningOrganizations.entries()).map(([orgId, info]) => ({
+        organizationId: orgId,
+        learningCycleId: info.learningCycleId,
+        startTime: info.startTime,
+        runningForMinutes: (new Date().getTime() - info.startTime.getTime()) / (1000 * 60)
+      }))
     };
+  }
+  
+  /**
+   * Checks if an organization is currently running a learning cycle
+   * @param organizationId The organization ID to check
+   * @returns Whether the organization is running a cycle and details if running
+   */
+  public isOrganizationRunningCycle(
+    organizationId: string
+  ): { isRunning: boolean, startTime?: Date, learningCycleId?: string, runningForMinutes?: number } {
+    const runningInfo = this.runningOrganizations.get(organizationId);
+    
+    if (runningInfo) {
+      // Check if it's been running too long and should be considered stalled
+      const now = new Date();
+      const elapsedMinutes = (now.getTime() - runningInfo.startTime.getTime()) / (1000 * 60);
+      
+      return { 
+        isRunning: true, 
+        startTime: runningInfo.startTime,
+        learningCycleId: runningInfo.learningCycleId,
+        runningForMinutes: elapsedMinutes
+      };
+    }
+    
+    return { isRunning: false };
+  }
+
+  /**
+   * Registers an organization as running a learning cycle
+   * @param organizationId The organization ID to register
+   * @param learningCycleId The ID of the learning cycle
+   * @returns true if successfully registered, false if already running
+   */
+  public registerRunningCycle(organizationId: string, learningCycleId: string): boolean {
+    // First check if already running
+    const { isRunning } = this.isOrganizationRunningCycle(organizationId);
+    
+    if (isRunning) {
+      return false;
+    }
+    
+    // Register the organization as running a cycle
+    this.runningOrganizations.set(organizationId, {
+      startTime: new Date(),
+      learningCycleId
+    });
+    
+    return true;
+  }
+
+  /**
+   * Unregisters an organization after its learning cycle completes
+   * @param organizationId The organization ID to unregister
+   * @returns true if successfully unregistered, false if wasn't registered
+   */
+  public unregisterRunningCycle(organizationId: string): boolean {
+    if (this.runningOrganizations.has(organizationId)) {
+      this.runningOrganizations.delete(organizationId);
+      return true;
+    }
+    
+    return false;
   }
   
   /**
    * Manually execute a learning cycle run for testing purposes
    * This is intended for debugging/testing only and will force a run
    * even if the scheduler is not started
+   * @param organizationId Optional organization ID to register for the manual run
    * @returns A promise that resolves when the learning cycle completes
    */
-  public async manuallyExecuteLearningCycle(): Promise<boolean> {
-    console.log('🧪 Manually executing learning cycle for testing...');
-    const result = await this.runLearningCycle();
-    console.log(`🧪 Manual learning cycle execution completed with result: ${result ? 'Success' : 'Failed'}`);
-    return result;
+  public async manuallyExecuteLearningCycle(organizationId?: string): Promise<boolean> {
+    try {
+      LogStatus('🧪 Manually executing learning cycle for testing...');
+      
+      // If an organization ID is provided, register it as running
+      const learningCycleId = `manual_${Date.now()}`;
+      let orgRegistered = false;
+      
+      if (organizationId) {
+        // Check if already running
+        const runningStatus = this.isOrganizationRunningCycle(organizationId);
+        
+        if (runningStatus.isRunning) {
+          LogError(`Organization ${organizationId} is already running a learning cycle. Cannot start a new one.`);
+          return false;
+        }
+        
+        // Register this organization
+        orgRegistered = this.registerRunningCycle(organizationId, learningCycleId);
+        if (!orgRegistered) {
+          LogError(`Failed to register organization ${organizationId} for manual learning cycle execution`);
+          return false;
+        }
+      }
+      
+      // Run the learning cycle
+      const result = await this.runLearningCycle();
+      LogStatus(`🧪 Manual learning cycle execution completed with result: ${result ? 'Success' : 'Failed'}`);
+      
+      // Unregister the organization if it was registered
+      if (organizationId && orgRegistered) {
+        this.unregisterRunningCycle(organizationId);
+      }
+      
+      return result;
+    } catch (error) {
+      // Make sure to unregister on error
+      if (organizationId && this.runningOrganizations.has(organizationId)) {
+        this.unregisterRunningCycle(organizationId);
+      }
+      
+      LogError(`Error in manual learning cycle execution: ${error}`);
+      return false;
+    }
+  }
+  
+  /**
+   * Force stop a running learning cycle for an organization
+   * @param organizationId The organization ID to stop the cycle for
+   * @returns Information about the stopped cycle
+   */
+  public stopLearningCycleForOrganization(organizationId: string): { 
+    success: boolean, 
+    message: string,
+    wasRunning: boolean,
+    cycleDetails?: { learningCycleId: string, startTime: Date, runningForMinutes: number }
+  } {
+    // Check if this organization has a running cycle
+    const runningStatus = this.isOrganizationRunningCycle(organizationId);
+    
+    if (!runningStatus.isRunning) {
+      return {
+        success: false,
+        message: `No running learning cycle found for organization ${organizationId}`,
+        wasRunning: false
+      };
+    }
+    
+    // Capture details before unregistering
+    const startTime = runningStatus.startTime!;
+    const learningCycleId = runningStatus.learningCycleId!;
+    const runningForMinutes = runningStatus.runningForMinutes!;
+    
+    // Unregister the organization
+    const unregistered = this.unregisterRunningCycle(organizationId);
+    
+    if (unregistered) {
+      return {
+        success: true,
+        message: `Successfully stopped learning cycle for organization ${organizationId}`,
+        wasRunning: true,
+        cycleDetails: {
+          learningCycleId,
+          startTime,
+          runningForMinutes
+        }
+      };
+    } else {
+      return {
+        success: false,
+        message: `Failed to stop learning cycle for organization ${organizationId}`,
+        wasRunning: true
+      };
+    }
   }
 }
