@@ -1402,13 +1402,13 @@ export class AIAgentNote_ {
     @MaxLength(16)
     ID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(16)
-    AgentID?: string;
+    AgentID: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(16)
-    AgentNoteTypeID?: string;
+    AgentNoteTypeID: string;
         
     @Field({nullable: true}) 
     Note?: string;
@@ -1449,10 +1449,10 @@ export class AIAgentNote_ {
 @InputType()
 export class CreateAIAgentNoteInput {
     @Field({ nullable: true })
-    AgentID: string | null;
+    AgentID?: string;
 
     @Field({ nullable: true })
-    AgentNoteTypeID: string | null;
+    AgentNoteTypeID?: string;
 
     @Field({ nullable: true })
     Note: string | null;
@@ -1474,10 +1474,10 @@ export class UpdateAIAgentNoteInput {
     ID: string;
 
     @Field({ nullable: true })
-    AgentID?: string | null;
+    AgentID?: string;
 
     @Field({ nullable: true })
-    AgentNoteTypeID?: string | null;
+    AgentNoteTypeID?: string;
 
     @Field({ nullable: true })
     Note?: string | null;

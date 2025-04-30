@@ -844,12 +844,12 @@ export const AIAgentNoteSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    AgentID: z.string().nullable().describe(`
+    AgentID: z.string().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
-    AgentNoteTypeID: z.string().nullable().describe(`
+    AgentNoteTypeID: z.string().describe(`
         * * Field Name: AgentNoteTypeID
         * * Display Name: Agent Note Type ID
         * * SQL Data Type: uniqueidentifier
@@ -12409,10 +12409,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
-    get AgentID(): string | null {
+    get AgentID(): string {
         return this.Get('AgentID');
     }
-    set AgentID(value: string | null) {
+    set AgentID(value: string) {
         this.Set('AgentID', value);
     }
 
@@ -12422,10 +12422,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)
     */
-    get AgentNoteTypeID(): string | null {
+    get AgentNoteTypeID(): string {
         return this.Get('AgentNoteTypeID');
     }
-    set AgentNoteTypeID(value: string | null) {
+    set AgentNoteTypeID(value: string) {
         this.Set('AgentNoteTypeID', value);
     }
 
