@@ -214,7 +214,7 @@ export class AskSkipResolver {
       }
     }
 
-    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, user, dataSource, false, false);
+    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, false, user, dataSource, false, false);
     messages.push({
       content: UserQuestion,
       role: 'user',
@@ -503,6 +503,72 @@ export class AskSkipResolver {
     }
   }
 
+  /**
+   * Builds the base Skip API request with common fields and data
+   * @param contextUser The user making the request
+   * @param dataSource The data source to use
+   * @param includeEntities Whether to include entities in the request
+   * @param includeQueries Whether to include queries in the request
+   * @param includeNotes Whether to include agent notes in the request
+   * @param forceEntitiesRefresh Whether to force refresh of entities
+   * @param includeCallBackKeyAndAccessToken Whether to include a callback key and access token
+   * @param additionalTokenInfo Additional info to include in the access token
+   * @returns Base request data that can be used by specific request builders
+   */
+  protected async buildBaseSkipRequest(
+    contextUser: UserInfo,
+    dataSource: DataSource,
+    includeEntities: boolean,
+    includeQueries: boolean,
+    includeNotes: boolean,
+    includeRequests: boolean,
+    forceEntitiesRefresh: boolean = false,
+    includeCallBackKeyAndAccessToken: boolean = false,
+    additionalTokenInfo: any = {}
+  ) {
+    
+    const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
+    const queries = includeQueries ? this.BuildSkipQueries() : [];
+    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
+    const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
+    
+    // Setup access token if needed
+    let accessToken: GetDataAccessToken;
+    if (includeCallBackKeyAndAccessToken) {
+      const tokenInfo = {
+        type: 'skip_api_request',
+        userEmail: contextUser.Email,
+        userName: contextUser.Name,
+        userID: contextUser.ID,
+        ...additionalTokenInfo
+      };
+      
+      accessToken = registerAccessToken(
+        undefined,
+        1000 * 60 * 10 /*10 minutes*/, 
+        tokenInfo
+      );
+    }
+    
+    return {
+      entities,
+      queries,
+      notes,
+      noteTypes,
+      requests, 
+      accessToken,
+      organizationId: ___skipAPIOrgId,
+      organizationInfo: configInfo?.askSkip?.organizationInfo,
+      apiKeys: this.buildSkipAPIKeys(),
+      callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
+      callingServerAPIKey: accessToken ? apiKey : undefined,
+      callingServerAccessToken: accessToken ? accessToken.Token : undefined
+    };
+  }
+
+  /**
+   * Builds the learning API request for Skip
+   */
   protected async buildSkipLearningAPIRequest(
     learningCycleId: string,
     lastLearningCycleDate: Date,
@@ -515,39 +581,34 @@ export class AskSkipResolver {
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false
   ) {
-    const newConversations: SkipConversation[] = await this.BuildSkipLearningCycleNewConversations(lastLearningCycleDate, dataSource, contextUser);
-    const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
-    const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []}; 
-    const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
+    // Get base request data
+    const baseRequest = await this.buildBaseSkipRequest(
+      contextUser,
+      dataSource,
+      includeEntities,
+      includeQueries,
+      includeNotes,
+      includeRequests,
+      forceEntitiesRefresh,
+      includeCallBackKeyAndAccessToken
+    );
+    
+    // Get data specific to learning cycle
+    const newConversations = await this.BuildSkipLearningCycleNewConversations(lastLearningCycleDate, dataSource, contextUser);
 
-    // setup a secure access token that is short lived for use with the Skip API
-    let accessToken: GetDataAccessToken;
-    if (includeCallBackKeyAndAccessToken) {
-      accessToken = registerAccessToken(
-        undefined,
-        1000 * 60 * 10 /*10 minutes*/, 
-        {
-          type: 'skip_api_request',
-          userEmail: contextUser.Email,
-          userName: contextUser.Name,
-          userID: contextUser.ID
-        } 
-      );  
-    }
-
+    // Create the learning-specific request object
     const input: SkipAPILearningCycleRequest = {
-      organizationId: ___skipAPIOrgId,
-      organizationInfo: configInfo?.askSkip?.organizationInfo,
-      learningCycleId: learningCycleId, 
-      newConversations: newConversations, // this is a placeholder, we don't have a real new conversation yet
-      entities: entities,
-      queries: queries,
-      notes: notes,
-      noteTypes: noteTypes,
-      requests: requests,
-      lastLearningCycleDate: new Date(), // this is a placeholder, we don't have a real learning cycle date yet
-      apiKeys: this.buildSkipAPIKeys(),
+      organizationId: baseRequest.organizationId,
+      organizationInfo: baseRequest.organizationInfo,
+      learningCycleId,
+      lastLearningCycleDate,
+      newConversations,
+      entities: baseRequest.entities,
+      queries: baseRequest.queries,
+      notes: baseRequest.notes,
+      noteTypes: baseRequest.noteTypes,
+      requests: baseRequest.requests,
+      apiKeys: baseRequest.apiKeys
     };
 
     return input;
@@ -667,6 +728,9 @@ export class AskSkipResolver {
     }
   }
 
+  /**
+   * Builds the chat API request for Skip
+   */
   protected async buildSkipChatAPIRequest(
     messages: SkipMessage[],
     conversationId: string,
@@ -675,48 +739,45 @@ export class AskSkipResolver {
     includeEntities: boolean,
     includeQueries: boolean,
     includeNotes: boolean,
+    includeRequests: boolean,
     contextUser: UserInfo,
     dataSource: DataSource,
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false
   ): Promise<SkipAPIRequest> {
-    const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
-    const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []}; 
+    // Additional token info specific to chat requests
+    const additionalTokenInfo = {
+      conversationId,
+      requestPhase,
+    };
+    
+    // Get base request data
+    const baseRequest = await this.buildBaseSkipRequest(
+      contextUser,
+      dataSource,
+      includeEntities,
+      includeQueries,
+      includeNotes,
+      includeRequests,
+      forceEntitiesRefresh,
+      includeCallBackKeyAndAccessToken,
+      additionalTokenInfo
+    );
 
-    // setup a secure access token that is short lived for use with the Skip API
-    let accessToken: GetDataAccessToken;
-    if (includeCallBackKeyAndAccessToken) {
-      accessToken = registerAccessToken(
-        undefined,
-        1000 * 60 * 10 /*10 minutes*/, 
-        {
-          type: 'skip_api_request',
-          userEmail: contextUser.Email,
-          userName: contextUser.Name,
-          userID: contextUser.ID,
-          conversationId: conversationId,
-          requestPhase: requestPhase,
-        } 
-      );  
-    }
-
+    // Create the chat-specific request object
     const input: SkipAPIRequest = {
-      apiKeys: this.buildSkipAPIKeys(),
-      organizationInfo: configInfo?.askSkip?.organizationInfo,
-      messages: messages,
+      messages,
       conversationID: conversationId.toString(),
       dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
-      organizationID: ___skipAPIOrgId,
-      requestPhase: requestPhase,
-      entities: entities,
-      queries: queries,
-      notes: notes,
-      noteTypes: noteTypes,
-      callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
-      callingServerAPIKey: accessToken ? apiKey : undefined,
-      callingServerAccessToken: accessToken ? accessToken.Token : undefined
+      organizationID: baseRequest.organizationId,
+      requestPhase,
+      entities: baseRequest.entities,
+      queries: baseRequest.queries,
+      notes: baseRequest.notes,
+      noteTypes: baseRequest.noteTypes,
+      apiKeys: baseRequest.apiKeys,
     };
+    
     return input;
   }
 
@@ -737,7 +798,7 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = <SkipAPIRunScriptRequest>await this.buildSkipChatAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, user, dataSource, false, false);
+    const input = <SkipAPIRunScriptRequest>await this.buildSkipChatAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, false, user, dataSource, false, false);
     input.scriptText = ScriptText;
     return this.handleSimpleSkipChatPostRequest(input);
   }
@@ -798,7 +859,7 @@ export class AskSkipResolver {
     );
 
     const conversationDetailCount = 1
-    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
+    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, false, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
 
     return this.HandleSkipChatRequest(
       input,
