@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 2.35.1
+
+### Patch Changes
+
+- Updated dependencies [3e7ec64]
+  - @memberjunction/core@2.35.1
+  - @memberjunction/sqlserver-dataprovider@2.35.1
+  - @memberjunction/aiengine@2.35.1
+  - @memberjunction/communication-types@2.35.1
+  - @memberjunction/core-entities@2.35.1
+  - @memberjunction/ai@2.35.1
+  - @memberjunction/ai-openai@2.35.1
+  - @memberjunction/global@2.35.1
+
 ## 2.35.0
 
 ### Patch Changes

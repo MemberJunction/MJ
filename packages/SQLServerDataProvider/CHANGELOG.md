@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.35.1
+
+### Patch Changes
+
+- 3e7ec64: Strong typing for transaction item callback function and fix bug in SQL Server Data Provider caused by weak typing
+- Updated dependencies [3e7ec64]
+  - @memberjunction/core@2.35.1
+  - @memberjunction/aiengine@2.35.1
+  - @memberjunction/ai-vector-dupe@2.35.1
+  - @memberjunction/actions@2.35.1
+  - @memberjunction/core-entities@2.35.1
+  - @memberjunction/queue@2.35.1
+  - @memberjunction/ai@2.35.1
+  - @memberjunction/global@2.35.1
+
 ## 2.35.0
 
 ### Patch Changes

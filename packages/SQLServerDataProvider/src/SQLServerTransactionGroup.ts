@@ -32,7 +32,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             if (result && result.length > 0) {
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
-                            bSuccess = result !== null 
+                            bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
                         }
                         catch (e) {
                             result = e; // push the exception to the result

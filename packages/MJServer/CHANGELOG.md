@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/server
 
+## 2.35.1
+
+### Patch Changes
+
+- Updated dependencies [3e7ec64]
+  - @memberjunction/core@2.35.1
+  - @memberjunction/sqlserver-dataprovider@2.35.1
+  - @memberjunction/aiengine@2.35.1
+  - @memberjunction/ai-vectors-pinecone@2.35.1
+  - @memberjunction/core-actions@2.35.1
+  - @memberjunction/actions@2.35.1
+  - @memberjunction/entity-communications-server@2.35.1
+  - @memberjunction/doc-utils@2.35.1
+  - @memberjunction/external-change-detection@2.35.1
+  - @memberjunction/graphql-dataprovider@2.35.1
+  - @memberjunction/core-entities@2.35.1
+  - @memberjunction/data-context@2.35.1
+  - @memberjunction/queue@2.35.1
+  - @memberjunction/storage@2.35.1
+  - @memberjunction/templates@2.35.1
+  - @memberjunction/skip-types@2.35.1
+  - @memberjunction/data-context-server@2.35.1
+  - @memberjunction/ai@2.35.1
+  - @memberjunction/ai-mistral@2.35.1
+  - @memberjunction/ai-openai@2.35.1
+  - @memberjunction/global@2.35.1
+
 ## 2.35.0
 
 ### Patch Changes
