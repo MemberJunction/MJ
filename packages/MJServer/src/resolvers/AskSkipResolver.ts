@@ -497,70 +497,88 @@ export class AskSkipResolver {
       await Promise.all(validNoteChanges.map(async (change) => {
         try {
           if (change.changeType === 'add' || change.changeType === 'update') {
-            // Get the note entity object
-            const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
-  
-            if (change.changeType === 'update') {
-              // Load existing note
-              const loadResult = await noteEntity.Load(change.note.id);
-  
-              if (!loadResult) {
-                LogError(`Could not load note with ID ${change.note.id}`);
-                return;
-              }
-            } else {
-              // For new notes, ensure the note type is not "Human"
-              if (change.note.agentNoteType === "Human") {
-                LogStatus(`WARNING: Cannot create a new Human note with the learning cycle. Operation ignored.`);
-                return;
-              }
-  
-              // Create a new note
-              noteEntity.NewRecord();
-              noteEntity.AgentID = agentID;
-            }
-  
-            // Set note properties
-            noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI');
-            noteEntity.Note = change.note.note;
-            noteEntity.Type = change.note.type;
-  
-            if (change.note.type === 'User') {
-              noteEntity.UserID = change.note.userId;
-            }
-  
-            // Save the note
-            if (!(await noteEntity.Save())) {
-              LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
-            }
+            await this.processAddOrUpdateSkipNote(change, agentID, user);
           } else if (change.changeType === 'delete') {
-            // Get the note entity object
-            const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
-  
-            // Load the note first
-            const loadResult = await noteEntity.Load(change.note.id);
-  
-            if (!loadResult) {
-              LogError(`Could not load note with ID ${change.note.id} for deletion`);
-              return;
-            }
-  
-            // Double-check if the loaded note is of type "Human"
-            if (change.note.agentNoteType === "Human") {
-              LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
-    cycle.`);
-              return;
-            }
-  
-            // Proceed with deletion
-            if (!(await noteEntity.Delete())) {
-              LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
-            }
+            await this.processDeleteSkipNote(change, user);
           }
         } catch (e) {
           LogError(`Error processing note change: ${e}`);
         }
       }));
+  }
+
+  protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo): Promise<boolean> {
+    try {  
+      // Get the note entity object
+      const md = new Metadata();
+      const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
+      
+      if (change.changeType === 'update') {
+        // Load existing note
+        const loadResult = await noteEntity.Load(change.note.id);
+        if (!loadResult) {
+          LogError(`Could not load note with ID ${change.note.id}`);
+          return false;
+        }
+      } else {
+        // For new notes, ensure the note type is not "Human"
+        if (change.note.agentNoteType === "Human") {
+          LogStatus(`WARNING: Cannot create a new Human note with the learning cycle. Operation ignored.`);
+          return false;
+        }
+
+        // Create a new note
+        noteEntity.NewRecord();
+        noteEntity.AgentID = agentID;
+      }
+      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI');
+      noteEntity.Note = change.note.note;
+      noteEntity.Type = change.note.type;
+
+      if (change.note.type === 'User') {
+        noteEntity.UserID = change.note.userId;
+      }
+
+      // Save the note
+      if (!(await noteEntity.Save())) {
+        LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      LogError(`Error processing note change: ${e}`);
+      return false;
+    }
+  }
+
+  protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo): Promise<boolean> {
+    // Get the note entity object
+    const md = new Metadata();
+    const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
+
+    // Load the note first
+    const loadResult = await noteEntity.Load(change.note.id);
+
+    if (!loadResult) {
+      LogError(`Could not load note with ID ${change.note.id} for deletion`);
+      return false;
+    }
+
+    // Double-check if the loaded note is of type "Human"
+    if (change.note.agentNoteType === "Human") {
+      LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
+cycle.`);
+      return false;
+    }
+
+    // Proceed with deletion
+    if (!(await noteEntity.Delete())) {
+      LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+      return false;
+    }
+
+    return true;
   }
 
   protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: string, user: UserInfo): Promise<string> {

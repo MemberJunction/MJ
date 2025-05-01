@@ -232,7 +232,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
 
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         AIEngine.checkMetadataLoaded();
-        return AIEngine.Instance._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase()).ID;
+        return AIEngine.Instance._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase())?.ID;
     }
 
     public get AgentNotes(): AIAgentNoteEntity[] {
