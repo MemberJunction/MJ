@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-communications",
-  "version": "2.35.0",
+  "version": "2.35.1",
   "description": "MemberJunction: Angular Components to allow a user to select templates, preview the messages with those tempaltes, and send them",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -29,14 +29,14 @@
     "@progress/kendo-angular-indicators": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "2.35.0",
-    "@memberjunction/global": "2.35.0",
-    "@memberjunction/core": "2.35.0",
-    "@memberjunction/communication-types": "2.35.0",
-    "@memberjunction/entity-communications-base": "2.35.0",
-    "@memberjunction/entity-communications-client": "2.35.0",
-    "@memberjunction/ng-container-directives": "2.35.0",
-    "@memberjunction/ng-shared": "2.35.0",
+    "@memberjunction/core-entities": "2.35.1",
+    "@memberjunction/global": "2.35.1",
+    "@memberjunction/core": "2.35.1",
+    "@memberjunction/communication-types": "2.35.1",
+    "@memberjunction/entity-communications-base": "2.35.1",
+    "@memberjunction/entity-communications-client": "2.35.1",
+    "@memberjunction/ng-container-directives": "2.35.1",
+    "@memberjunction/ng-shared": "2.35.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
