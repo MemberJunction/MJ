@@ -151,8 +151,8 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('9604B1A4-3A21-F011-8B3D-7C1E5249773E'
-           ,'GPT 4.1 mini'
-           ,'GPT 4.1 mini'
+           ,'4.1 mini'
+           ,'GPT-4.1 mini provides a balance between intelligence, speed, and cost that makes it an attractive model for many use cases.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
            ,4
@@ -191,7 +191,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('E1095D3C-E821-F011-8B3D-000D3A9E3408'
-           ,'GPT o4-mini'
+           ,'o4-mini'
            ,'Smaller model optimized for fast, cost-efficient reasoning'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -231,7 +231,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('03080654-F721-F011-8B3D-000D3A9E3408'
-           ,'GPT o3'
+           ,'o3'
            ,'Well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following. Use it to think through multi-step problems that involve analysis across text, code, and images.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -271,7 +271,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('A647667B-F721-F011-8B3D-000D3A9E3408'
-           ,'GPT o3-mini'
+           ,'o3-mini'
            ,'small reasoning model, providing high intelligence at the same cost and latency targets of o1-mini. o3-mini supports key developer features, like Structured Outputs, function calling, and Batch API.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -311,7 +311,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('D8B332B2-F721-F011-8B3D-000D3A9E3408'
-           ,'GPT o1'
+           ,'o1'
            ,'The o1 series of models are trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -351,7 +351,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('E54347C3-F721-F011-8B3D-000D3A9E3408'
-           ,'GPT o1-mini'
+           ,'o1-mini'
            ,'The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -391,7 +391,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('913EC3DB-F721-F011-8B3D-000D3A9E3408'
-           ,'GPT o1-pro'
+           ,'o1-pro'
            ,'Version of o1 with more compute for better responses'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
@@ -431,7 +431,7 @@ INSERT INTO [${flyway:defaultSchema}].[AIModel]
            ,[SupportsEffortLevel])
      VALUES
            ('287E317F-BF26-F011-A770-AC1A3D21423D'
-           ,'GPT-4.1'
+           ,'4.1'
            ,'Flagship model for complex tasks. It is well suited for problem solving across domains.'
            ,'OpenAI'
            ,'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
