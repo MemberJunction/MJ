@@ -8,7 +8,12 @@ import { LogError, LogStatus } from "./logging";
 export class TransactionItem {
     private _instruction: string; // gql or sql or similar having the actual instructions to execute
     private _vars: any; // variables to pass to the gql or sql
-    private _callBack: Function; // callback function to call when the transaction is complete
+    /**
+     * Callback function to call when the transaction is complete
+     * @param result The result of the transaction - a row/record with field name/value pairs
+     * @param success Whether the transaction completed successfully
+     */
+    private _callBack: (result: Record<string, any>, success: boolean) => void;
     private _extraData: any // any additional stuff that is needed for processing by the provider
     private _baseEntity: BaseEntity; // the base entity object that this transaction is associated with
     private _operationType: 'Create' | 'Update' | 'Delete';
@@ -25,7 +30,11 @@ export class TransactionItem {
     public set Instruction(value: string) {
         this._instruction = value;
     }
-    public get CallBack(): Function {
+    /**
+     * Callback function that gets called when the transaction is complete
+     * @returns A function that takes a result object (database row) and a success boolean
+     */
+    public get CallBack(): (result: Record<string, any>, success: boolean) => void {
         return this._callBack;
     }
     public get BaseEntity(): BaseEntity {
@@ -35,7 +44,16 @@ export class TransactionItem {
         return this._operationType; 
     }
 
-    constructor (baseEntity: BaseEntity, operationType: 'Create' | 'Update' | 'Delete', instruction: string, vars: any, extraData: any, callBack: Function) {
+    /**
+     * Creates a new TransactionItem
+     * @param baseEntity The base entity object this transaction is associated with
+     * @param operationType The type of operation (Create, Update, Delete)
+     * @param instruction The SQL or GraphQL instruction to execute
+     * @param vars Variables to pass to the SQL or GraphQL
+     * @param extraData Additional data needed for processing by the provider
+     * @param callBack Callback function that gets called when the transaction completes
+     */
+    constructor (baseEntity: BaseEntity, operationType: 'Create' | 'Update' | 'Delete', instruction: string, vars: any, extraData: any, callBack: (result: Record<string, any>, success: boolean) => void) {
         this._operationType = operationType;
         this._baseEntity = baseEntity;
         this._instruction = instruction;

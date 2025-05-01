@@ -1441,12 +1441,12 @@ export class SQLServerDataProvider
             // and when the transaction is committed, we will send all the queries at once
             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
             entity.TransactionGroup.AddTransaction(
-              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+              new TransactionItem(entity, entityResult.Type === 'create' ? 'Create' : 'Update', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
                 // we get here whenever the transaction group does gets around to committing
                 // our query.
                 this._bAllowRefresh = true; // allow refreshes again
                 entityResult.EndedAt = new Date();
-                if (success && results) {
+                if (success && transactionResult) {
                   // process any Entity AI actions that are set to trigger AFTER the save
                   // these are fired off but are NOT part of the transaction group, so if they fail,
                   // the transaction group will still commit, but the AI action will not be executed
@@ -1460,7 +1460,7 @@ export class SQLServerDataProvider
                   }
 
                   entityResult.Success = true;
-                  entityResult.NewValues = results[0];
+                  entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                 } 
                 else {
                   // the transaction failed, nothing to update, but we need to call Reject so the
@@ -1498,7 +1498,10 @@ export class SQLServerDataProvider
 
               entityResult.Success = true;
               return result[0];
-            } else throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
+            } 
+            else {
+              throw new Error(`SQL Error: No result row returned from SQL: ` + sSQL);
+            }
           }
         } 
         else {
@@ -1512,6 +1515,15 @@ export class SQLServerDataProvider
       LogError(e);
       throw e; // rethrow the error
     }
+  }
+
+  protected MapTransactionResultToNewValues(transactionResult: Record<string, any>): {FieldName: string, Value: any}[] {  
+    return Object.keys(transactionResult).map(k => { 
+      return {
+        FieldName: k, 
+        Value: transactionResult[k] 
+      }
+    }); // transform the result into a list of field/value pairs
   }
 
   /**
@@ -1943,11 +1955,11 @@ export class SQLServerDataProvider
         // we are part of a transaction group, so just add our query to the list
         // and when the transaction is committed, we will send all the queries at once
         entity.TransactionGroup.AddTransaction(
-          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (results: any, success: boolean) => {
+          new TransactionItem(entity, 'Delete', sSQL, null, { dataSource: this._dataSource }, (transactionResult: Record<string, any>, success: boolean) => {
             // we get here whenever the transaction group does gets around to committing
             // our query.
             result.EndedAt = new Date();
-            if (success && results) {
+            if (success && result) {
               // Entity AI Actions and Actions - fired off async, NO await on purpose
               if (false === options?.SkipEntityActions) {
                 this.HandleEntityActions(entity, 'delete', false, user);
@@ -1958,12 +1970,12 @@ export class SQLServerDataProvider
 
               // Make sure the return value matches up as that is how we know the SP was succesfully internally
               for (let key of entity.PrimaryKeys) {
-                if (key.Value !== results[0][key.Name]) {
+                if (key.Value !== transactionResult[key.Name]) {
                   result.Success = false;
                   result.Message = 'Transaction failed to commit';
                 }
               }
-              result.NewValues = results;
+              result.NewValues = this.MapTransactionResultToNewValues(transactionResult);
               result.Success = true;
             }
             else {
@@ -1979,14 +1991,19 @@ export class SQLServerDataProvider
       } 
       else {
         let d;
-        if (bReplay)
+        if (bReplay) {
           d = [entity.GetAll()]; // just return the entity as it was before the save as we are NOT saving anything as we are in replay mode
-        else d = await this.ExecuteSQL(sSQL);
+        }
+        else {
+          d = await this.ExecuteSQL(sSQL);
+        }
 
         if (d && d[0]) {
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
           for (let key of entity.PrimaryKeys) {
-            if (key.Value !== d[0][key.Name]) return false;
+            if (key.Value !== d[0][key.Name]) {
+              return false;
+            }
           }
 
           // Entity AI Actions and Actions - fired off async, NO await on purpose
