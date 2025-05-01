@@ -74,12 +74,28 @@ export class AnthropicLLM extends BaseLLM {
         const startTime = new Date();
         let result: any = null;
         try {
-            result = await this.AnthropicClient.messages.create({
+            const createParams: {
+                model: string;
+                max_tokens: number;
+                system: string;
+                messages: MessageParam[];
+                thinking?: { type: string; budget_tokens: number };
+            } = {
                 model: params.model,
                 max_tokens: params.maxOutputTokens, 
                 system: params.messages.find(m => m.role === "system").content,
                 messages: this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"))
-            });
+            };
+            
+            if (params.effortLevel) {
+                // No levels of reasoning in Anthropic, we only enable or disable
+                createParams.thinking = {
+                    "type": "enabled",
+                    "budget_tokens": params.reasoningBudgetTokens
+                }
+            }
+            
+            result = await this.AnthropicClient.messages.create(createParams);
             const endTime = new Date();
             return {
                 data: {
@@ -137,13 +153,30 @@ export class AnthropicLLM extends BaseLLM {
         const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
         const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
         
-        return this.AnthropicClient.messages.create({
+        const createParams: {
+            model: string;
+            max_tokens: number;
+            system: string;
+            messages: MessageParam[];
+            stream: boolean;
+            thinking?: { type: string; budget_tokens: number };
+        } = {
             model: params.model,
             max_tokens: params.maxOutputTokens,
             system: systemMessage,
             messages: nonSystemMessages,
             stream: true
-        });
+        };
+        
+        if (params.effortLevel) {
+            // No levels of reasoning in Anthropic, we only enable or disable
+            createParams.thinking = {
+                "type": "enabled",
+                "budget_tokens": params.reasoningBudgetTokens
+            }
+        }
+        
+        return this.AnthropicClient.messages.create(createParams);
     }
     
     /**

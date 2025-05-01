@@ -89,6 +89,14 @@ export class SkipConversation {
      * The user-friendly name for the conversation
      */
     name: string;
+    /**
+     * The unique identifier for the user that the conversation is associated with
+     */
+    userId?: string;
+    /**
+     * The name of the user that the conversation is associated with
+     */
+    user?: string;
 
     /**
      * Optional, more detailed description of the conversation

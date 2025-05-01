@@ -331,6 +331,8 @@ const config = {
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
   userEmailMap: process.env.USER_EMAIL_MAP,
   ___skipAPIurl: process.env.ASK_SKIP_API_URL,
+  ___skipLearningAPIurl: process.env.ASK_SKIP_LEARNING_API_URL,
+  ___skipLearningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
   ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
