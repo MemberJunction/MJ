@@ -23,9 +23,17 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
 });
-
+ 
 const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
+});
+
+const restApiOptionsSchema = z.object({
+  enabled: z.boolean().default(true),
+  includeEntities: z.array(z.string()).optional(),
+  excludeEntities: z.array(z.string()).optional(),
+  includeSchemas: z.array(z.string()).optional(),
+  excludeSchemas: z.array(z.string()).optional(),
 });
 
 const askSkipInfoSchema = z.object({
@@ -42,6 +50,7 @@ const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
+  restApiOptions: restApiOptionsSchema.optional().default({}),
   askSkip: askSkipInfoSchema.optional(),
 
   apiKey: z.string().optional(),
@@ -74,6 +83,8 @@ const configInfoSchema = z.object({
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
   ___skipAPIurl: z.string().optional(),
+  ___skipLearningAPIurl: z.string().optional(),
+  ___skipLearningCycleIntervalInMinutes: z.coerce.number().optional(),
   ___skipAPIOrgId: z.string().optional(),
   auth0Domain: z.string().optional(),
   auth0WebClientID: z.string().optional(),
@@ -84,6 +95,7 @@ const configInfoSchema = z.object({
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
+export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
@@ -107,6 +119,8 @@ export const {
   websiteRunFromPackage,
   userEmailMap,
   ___skipAPIurl,
+  ___skipLearningAPIurl,
+  ___skipLearningCycleIntervalInMinutes,
   ___skipAPIOrgId,
   auth0Domain,
   auth0WebClientID,

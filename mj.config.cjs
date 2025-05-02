@@ -242,6 +242,15 @@ const mjServerConfig = {
   viewingSystem: {
     enableSmartFilters: true,
   },
+  restApiOptions: {
+    enabled: false, // Disabled by default
+    basePath: '/rest',
+    // Example of entity and schema filtering (uncomment and customize as needed):
+    // includeEntities: ['Users', 'Entity*', 'Entity Fields'], // Only allow these entities (supports wildcards)
+    // excludeEntities: ['Password', 'APIKey*', 'Credential'], // Exclude sensitive entities (supports wildcards)
+    // includeSchemas: ['public', 'CRM'], // Only allow entities from these schemas
+    // excludeSchemas: ['internal', 'security', '__mj'] // Exclude entire schemas
+  },
   askSkip: {
     organizationInfo: '',
     entitiesToSendSkip: {
@@ -331,6 +340,8 @@ const config = {
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
   userEmailMap: process.env.USER_EMAIL_MAP,
   ___skipAPIurl: process.env.ASK_SKIP_API_URL,
+  ___skipLearningAPIurl: process.env.ASK_SKIP_LEARNING_API_URL,
+  ___skipLearningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
   ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,

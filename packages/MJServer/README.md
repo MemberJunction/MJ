@@ -2,7 +2,7 @@
 
 The `@memberjunction/server` library provides a simple way to run the MemberJunction API server. It includes all the functions required to start up the GraphQL server, manage authentication, and connect to the common data store.
 
-comprehensive interface for accessing and managing metadata within MemberJunction, along with facilities for working with entities, applications, and various other aspects central to the MemberJunction ecosystem. This library primarily exports a `Metadata` class which acts as the gateway to many functionalities.
+The server provides a comprehensive interface for accessing and managing metadata within MemberJunction, along with facilities for working with entities, applications, and various other aspects central to the MemberJunction ecosystem.
 
 ## Installation
 
@@ -32,6 +32,20 @@ The server uses configuration from its environment
 | AUTH0_CLIENT_SECRET      | The Auth0 Client secret                                      |
 | MJ_CORE_SCHEMA           | The core schema to use for the data provider                 |
 | CONFIG_FILE              | An absolute path to the config file json                     |
+
+### REST API
+
+In addition to the GraphQL API, MemberJunction provides a REST API for applications that prefer RESTful architecture. By default, the REST API is enabled but can be disabled.
+
+For comprehensive documentation on the REST API, including configuration options, security controls, and available endpoints, see [REST_API.md](./REST_API.md).
+
+The REST API supports:
+- Standard CRUD operations for entities
+- View operations for data retrieval
+- Metadata exploration
+- Wildcard pattern matching for entity filtering
+- Schema-level access control
+- Comprehensive security configuration
 
 
 ## Usage

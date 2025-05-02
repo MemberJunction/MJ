@@ -44,8 +44,12 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
-            max_tokens: params.maxOutputTokens
+            max_completion_tokens: params.maxOutputTokens
         };
+        
+        if (params.effortLevel) {
+            openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+        }
 
         switch (params.responseFormat) {
             case 'Any':
@@ -101,6 +105,10 @@ export class OpenAILLM extends BaseLLM {
             max_tokens: params.maxOutputTokens,
             stream: true
         };
+        
+        if (params.effortLevel) {
+            openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+        }
         
         // Set response format if specified
         switch (params.responseFormat) {

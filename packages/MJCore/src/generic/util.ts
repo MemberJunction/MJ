@@ -248,9 +248,23 @@ export function ExtractActualDefaultValue(storedDefaultValue: string): string {
 
     const noParens = StripContainingParens(storedDefaultValue);
     const unicodeStripped = StripUnicodePrefix(noParens);
-    const finalValue = StripSingleQuotes(unicodeStripped);
 
-    return finalValue;
+    // now, we need to see if the unicodeStripped value is exactly equal to NULL which should be treated 
+    // as the same as no default value. Without checking this, string data types that have a DEFAULT set to NULL
+    // which is the same as no default, will end up with a STRING 'null' in the default value, but that isn't the
+    // intent. 
+    // BY CHECKING this BEFORE we strip the single quotes, we allow for a string of 'NULL', 'null' etc to exist
+    // in a string data type's default value. As odd as that might be for a string default value it should be allowed
+    if (unicodeStripped.trim().toLowerCase() === 'null') {
+        return null;  // return the actual TypeScript/JavaScript null here as opposed to a string
+    }
+    else {
+        // our unicodeStripped value is NOT equal to exact match of null, so whatever we have is what we use
+        // but we strip single quotes now
+        const finalValue = StripSingleQuotes(unicodeStripped);
+
+        return finalValue;    
+    }
 }
 
 

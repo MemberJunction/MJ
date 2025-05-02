@@ -39,6 +39,11 @@ export class BaseParams {
      * Model max output response tokens, optional.
      */
     maxOutputTokens?: number
+
+    /**
+     * Model max budget tokens that we may use for reasoning in reasoning models, optional.
+     */
+    reasoningBudgetTokens?: number
 }
 
 export class ModelUsage {

@@ -844,12 +844,12 @@ export const AIAgentNoteSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    AgentID: z.string().nullable().describe(`
+    AgentID: z.string().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
-    AgentNoteTypeID: z.string().nullable().describe(`
+    AgentNoteTypeID: z.string().describe(`
         * * Field Name: AgentNoteTypeID
         * * Display Name: Agent Note Type ID
         * * SQL Data Type: uniqueidentifier
@@ -1192,6 +1192,12 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(100)
         * * Default Value: Any
     * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
+    SupportsEffortLevel: z.boolean().describe(`
+        * * Field Name: SupportsEffortLevel
+        * * Display Name: Supports Effort Level
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -12403,10 +12409,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
-    get AgentID(): string | null {
+    get AgentID(): string {
         return this.Get('AgentID');
     }
-    set AgentID(value: string | null) {
+    set AgentID(value: string) {
         this.Set('AgentID', value);
     }
 
@@ -12416,10 +12422,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)
     */
-    get AgentNoteTypeID(): string | null {
+    get AgentNoteTypeID(): string {
         return this.Get('AgentNoteTypeID');
     }
-    set AgentNoteTypeID(value: string | null) {
+    set AgentNoteTypeID(value: string) {
         this.Set('AgentNoteTypeID', value);
     }
 
@@ -13329,6 +13335,20 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set SupportedResponseFormats(value: string) {
         this.Set('SupportedResponseFormats', value);
+    }
+
+    /**
+    * * Field Name: SupportsEffortLevel
+    * * Display Name: Supports Effort Level
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.
+    */
+    get SupportsEffortLevel(): boolean {
+        return this.Get('SupportsEffortLevel');
+    }
+    set SupportsEffortLevel(value: boolean) {
+        this.Set('SupportsEffortLevel', value);
     }
 
     /**

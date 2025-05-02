@@ -184,7 +184,7 @@ export class EntityField {
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
         this._entityFieldInfo = fieldInfo;
-        if (Value){
+        if (Value) {
             this.Value = Value;
         }
         else if (fieldInfo.DefaultValue) {
