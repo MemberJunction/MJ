@@ -78,55 +78,55 @@ The REST API provides the following endpoint groups:
 
 ### Entity Operations
 
-- `GET /rest/entities/:entityName` - List entities with optional filtering
-- `POST /rest/entities/:entityName` - Create a new entity
-- `GET /rest/entities/:entityName/:id` - Get a specific entity by ID
-- `PUT /rest/entities/:entityName/:id` - Update an entity
-- `DELETE /rest/entities/:entityName/:id` - Delete an entity
-- `GET /rest/entities/:entityName/:id/changes` - Get record change history
-- `GET /rest/entities/:entityName/:id/dependencies` - Get record dependencies
-- `GET /rest/entities/:entityName/:id/name` - Get entity record name
+- `GET /api/v1/entities/:entityName` - List entities with optional filtering
+- `POST /api/v1/entities/:entityName` - Create a new entity
+- `GET /api/v1/entities/:entityName/:id` - Get a specific entity by ID
+- `PUT /api/v1/entities/:entityName/:id` - Update an entity
+- `DELETE /api/v1/entities/:entityName/:id` - Delete an entity
+- `GET /api/v1/entities/:entityName/:id/changes` - Get record change history
+- `GET /api/v1/entities/:entityName/:id/dependencies` - Get record dependencies
+- `GET /api/v1/entities/:entityName/:id/name` - Get entity record name
 
 ### View Operations
 
-- `POST /rest/views/:entityName` - Run a view for an entity
-- `POST /rest/views/batch` - Run multiple views in a batch
-- `GET /rest/views/entity` - Get entity for a view
-- `GET /rest/views/:entityName/metadata` - Get views metadata for an entity
+- `POST /api/v1/views/:entityName` - Run a view for an entity
+- `POST /api/v1/views/batch` - Run multiple views in a batch
+- `GET /api/v1/views/entity` - Get entity for a view
+- `GET /api/v1/views/:entityName/metadata` - Get views metadata for an entity
 
 ### Metadata Operations
 
-- `GET /rest/metadata/entities` - Get metadata for all accessible entities
-- `GET /rest/metadata/entities/:entityName` - Get field metadata for a specific entity
+- `GET /api/v1/metadata/entities` - Get metadata for all accessible entities
+- `GET /api/v1/metadata/entities/:entityName` - Get field metadata for a specific entity
 
 ### User Operations
 
-- `GET /rest/users/current` - Get the current user
-- `GET /rest/users/:userId/favorites/:entityName/:id` - Get favorite status for a record
-- `PUT /rest/users/:userId/favorites/:entityName/:id` - Set favorite status for a record
-- `DELETE /rest/users/:userId/favorites/:entityName/:id` - Remove favorite status for a record
+- `GET /api/v1/users/current` - Get the current user
+- `GET /api/v1/users/:userId/favorites/:entityName/:id` - Get favorite status for a record
+- `PUT /api/v1/users/:userId/favorites/:entityName/:id` - Set favorite status for a record
+- `DELETE /api/v1/users/:userId/favorites/:entityName/:id` - Remove favorite status for a record
 
 ### Transaction Operations
 
-- `POST /rest/transactions` - Execute a transaction
+- `POST /api/v1/transactions` - Execute a transaction
 
 ### Reports and Queries
 
-- `GET /rest/reports/:reportId` - Run a report
-- `POST /rest/queries/run` - Run a query
+- `GET /api/v1/reports/:reportId` - Run a report
+- `POST /api/v1/queries/run` - Run a query
 
 ## Examples
 
 ### List Entities with Filtering
 
 ```http
-GET /rest/entities/User?filter=IsAdmin=true&orderBy=LastName&maxRows=10
+GET /api/v1/entities/User?filter=IsAdmin=true&orderBy=LastName&maxRows=10
 ```
 
 ### Create a New Entity
 
 ```http
-POST /rest/entities/Contact
+POST /api/v1/entities/Contact
 Content-Type: application/json
 
 {
@@ -140,7 +140,7 @@ Content-Type: application/json
 ### Run a View
 
 ```http
-POST /rest/views/User
+POST /api/v1/views/User
 Content-Type: application/json
 
 {
@@ -154,13 +154,13 @@ Content-Type: application/json
 ### Get Entity Metadata
 
 ```http
-GET /rest/metadata/entities/User
+GET /api/v1/metadata/entities/User
 ```
 
 ### Update an Entity
 
 ```http
-PUT /rest/entities/Contact/12345
+PUT /api/v1/entities/Contact/12345
 Content-Type: application/json
 
 {
@@ -172,7 +172,7 @@ Content-Type: application/json
 ### Batch View Execution
 
 ```http
-POST /rest/views/batch
+POST /api/v1/views/batch
 Content-Type: application/json
 
 {
