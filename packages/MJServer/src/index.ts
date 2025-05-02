@@ -286,5 +286,5 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   }
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
-  console.log(`🚀 REST API ready at http://localhost:${graphqlPort}/`);
+  console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 };
