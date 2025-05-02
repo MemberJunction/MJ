@@ -232,7 +232,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const authMiddleware = async (req, res, next) => {
     try {
       const sessionIdRaw = req.headers['x-session-id'];
-      const requestDomain = url.parse(req.headers.origin || '');
+      const requestDomain = new URL(req.headers.origin || '').hostname;
       const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
       const bearerToken = req.headers.authorization ?? '';
       const apiKey = String(req.headers['x-mj-api-key']);
