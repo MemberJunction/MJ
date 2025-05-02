@@ -21,10 +21,11 @@ import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-grap
 import { DataSource } from 'typeorm';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import orm from './orm.js';
+import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
 import { LoadActionEntityServer } from '@memberjunction/actions';
 LoadActionEntityServer(); // prevent tree shaking for this dynamic module
@@ -76,6 +77,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
+  restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
 };
 
 const localPath = (p: string) => {
@@ -225,6 +227,63 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
                                }),
     })
   );
+  
+  // Setup REST API endpoints
+  const authMiddleware = async (req, res, next) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      
+      const userPayload = await getUserPayload(token, undefined, dataSources);
+      if (!userPayload) {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      
+      req.user = userPayload;
+      next();
+    } catch (error) {
+      console.error('Auth error:', error);
+      return res.status(401).json({ error: 'Authentication failed' });
+    }
+  };
+  
+  // Get REST API configuration from the config file
+  const restApiConfig: RESTApiOptions = {
+    enabled: configInfo.restApiOptions?.enabled ?? false,
+    basePath: configInfo.restApiOptions?.basePath ?? '/rest',
+    includeEntities: configInfo.restApiOptions?.includeEntities,
+    excludeEntities: configInfo.restApiOptions?.excludeEntities
+  };
+  
+  // Apply options from server options if provided (these override the config file)
+  if (options?.restApiOptions) {
+    Object.assign(restApiConfig, options.restApiOptions);
+  }
+  
+  // Get REST API configuration from environment variables if present (env vars override everything)
+  if (process.env.MJ_REST_API_ENABLED !== undefined) {
+    restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
+    if (restApiConfig.enabled) {
+      console.log('REST API is enabled via environment variable');
+    }
+  }
+  
+  if (process.env.MJ_REST_API_BASE_PATH) {
+    restApiConfig.basePath = process.env.MJ_REST_API_BASE_PATH;
+  }
+  
+  if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
+    restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map(e => e.trim());
+  }
+  
+  if (process.env.MJ_REST_API_EXCLUDE_ENTITIES) {
+    restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
+  }
+  
+  // Set up REST endpoints with the configured options and auth middleware
+  setupRESTEndpoints(app, restApiConfig, authMiddleware);
 
   if (options?.onBeforeServe) {
     await Promise.resolve(options.onBeforeServe());

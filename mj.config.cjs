@@ -242,6 +242,15 @@ const mjServerConfig = {
   viewingSystem: {
     enableSmartFilters: true,
   },
+  restApiOptions: {
+    enabled: false, // Disabled by default
+    basePath: '/rest',
+    // Example of entity and schema filtering (uncomment and customize as needed):
+    // includeEntities: ['Users', 'Entity*', 'Entity Fields'], // Only allow these entities (supports wildcards)
+    // excludeEntities: ['Password', 'APIKey*', 'Credential'], // Exclude sensitive entities (supports wildcards)
+    // includeSchemas: ['public', 'CRM'], // Only allow entities from these schemas
+    // excludeSchemas: ['internal', 'security', '__mj'] // Exclude entire schemas
+  },
   askSkip: {
     organizationInfo: '',
     entitiesToSendSkip: {

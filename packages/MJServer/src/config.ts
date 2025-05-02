@@ -28,6 +28,15 @@ const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
 });
 
+const restApiOptionsSchema = z.object({
+  enabled: z.boolean().default(false),
+  basePath: z.string().default('/rest'),
+  includeEntities: z.array(z.string()).optional(),
+  excludeEntities: z.array(z.string()).optional(),
+  includeSchemas: z.array(z.string()).optional(),
+  excludeSchemas: z.array(z.string()).optional(),
+});
+
 const askSkipInfoSchema = z.object({
   organizationInfo: z.string().optional(),
   entitiesToSendSkip: z
@@ -42,6 +51,7 @@ const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
+  restApiOptions: restApiOptionsSchema.optional().default({}),
   askSkip: askSkipInfoSchema.optional(),
 
   apiKey: z.string().optional(),
@@ -86,6 +96,7 @@ const configInfoSchema = z.object({
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
+export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
