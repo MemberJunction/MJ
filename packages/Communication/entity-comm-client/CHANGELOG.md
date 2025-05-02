@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/entity-communications-client
 
+## 2.36.0
+
+### Minor Changes
+
+- 920867c: This PR mainly introduces the components to wire up the new Skip Learning Cycle. It also includes the addition of several reasoning models. Changes include:Additions to the AskSkipResolver.ts file: Includes methods to build the necessary entities for a call to the learning cycle API, the actual call to the API, and post-processing of resulting note changes.Addition of a LearningCycleScheduler: This class handles the asynchronous calls to the learning cycle API on an interval that defaults to 60 minutes.Reasoning models from OpenAI and Gemini added to AI Models tableNew field "SupportsEffortLevel" added to AI Models table
+- 2e6fd3c: This PR mainly introduces the components to wire up the new Skip Learning Cycle. It also includes the addition of several reasoning models. Changes include:Additions to the AskSkipResolver.ts file: Includes methods to build the necessary entities for a call to the learning cycle API, the actual call to the API, and post-processing of resulting note changes.Addition of a LearningCycleScheduler: This class handles the asynchronous calls to the learning cycle API on an interval that defaults to 60 minutes.Reasoning models from OpenAI and Gemini added to AI Models tableNew field "SupportsEffortLevel" added to AI Models table
+
+### Patch Changes
+
+- Updated dependencies [920867c]
+- Updated dependencies [2e6fd3c]
+- Updated dependencies [160f24f]
+  - @memberjunction/entity-communications-base@2.36.0
+  - @memberjunction/graphql-dataprovider@2.36.0
+  - @memberjunction/core-entities@2.36.0
+  - @memberjunction/global@2.36.0
+  - @memberjunction/core@2.36.0
+
 ## 2.35.1
 
 ### Patch Changes
