@@ -1,5 +1,6 @@
 -- Add EffortLevel to AIModel table
-ALTER TABLE [${flyway:defaultSchema}].[AIModel] ADD SupportsEffortLevel BIT NOT NULL DEFAULT 0;
+ALTER TABLE [${flyway:defaultSchema}].[AIModel] ADD SupportsEffortLevel BIT NOT NULL DEFAULT 0
+GO
 
 -- Extended property for SupportsEffortLevel column 
 EXEC sp_addextendedproperty 
