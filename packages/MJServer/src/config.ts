@@ -23,14 +23,13 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
 });
-
+ 
 const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
 });
 
 const restApiOptionsSchema = z.object({
-  enabled: z.boolean().default(false),
-  basePath: z.string().default('/rest'),
+  enabled: z.boolean().default(true),
   includeEntities: z.array(z.string()).optional(),
   excludeEntities: z.array(z.string()).optional(),
   includeSchemas: z.array(z.string()).optional(),

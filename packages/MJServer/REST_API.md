@@ -4,17 +4,17 @@ In addition to the GraphQL API, MemberJunction provides a REST API for applicati
 
 ## Enabling the REST API
 
-By default, the REST API is disabled for security reasons. You can enable it by adding the following to your `mj.config.cjs` file:
+By default, the REST API is eanbled. 
+You can disable it by adding the following to your `mj.config.cjs` file:
 
 ```javascript
 restApiOptions: {
-  enabled: true,
-  basePath: '/rest',
+  enabled: false,
   // Optional entity and schema filtering
 }
 ```
 
-Or by setting the environment variable `REST_API_ENABLED=true`.
+Or by setting the environment variable `REST_API_ENABLED=false`.
 
 ## Security Configuration
 
@@ -27,9 +27,8 @@ You can control which entities are accessible through the REST API using include
 ```javascript
 restApiOptions: {
   enabled: true,
-  basePath: '/rest',
   // Allow only specific entities
-  includeEntities: ['User', 'Entity*', 'EntityField'],
+  includeEntities: ['Users', 'Entity*', 'Entity Fields'],
   // Always exclude sensitive entities (takes precedence over includeEntities)
   excludeEntities: ['Password', 'APIKey*', 'Credential'],
 }
@@ -47,7 +46,6 @@ You can also control access at the schema level, which is useful for including o
 ```javascript
 restApiOptions: {
   enabled: true,
-  basePath: '/rest',
   // Only allow entities from these schemas
   includeSchemas: ['public', 'CRM'],
   // Always exclude these schemas (takes precedence over includeSchemas)
@@ -68,8 +66,7 @@ The REST API can also be configured using environment variables:
 
 | Env variable             | Description                                                  |
 | ------------------------ | ------------------------------------------------------------ |
-| REST_API_ENABLED         | Enable/disable the REST API (default: false)                 |
-| REST_API_BASE_PATH       | Base URL path for REST endpoints (default: /rest)            |
+| REST_API_ENABLED         | Enable/disable the REST API (default: true)                  |
 | REST_API_INCLUDE_ENTITIES| Comma-separated list of entities to include                  |
 | REST_API_EXCLUDE_ENTITIES| Comma-separated list of entities to exclude                  |
 | REST_API_INCLUDE_SCHEMAS | Comma-separated list of schemas to include                   |
@@ -195,8 +192,7 @@ Content-Type: application/json
 
 ## Best Practices
 
-1. **Always disable the REST API in production** unless specifically needed by your applications.
-2. **Use exclude lists for sensitive entities** to ensure they're never accidentally exposed.
-3. **Consider using schema-level filtering** for broad access control.
-4. **Use wildcards carefully** as they can accidentally expose more entities than intended.
-5. **Regularly audit your REST API configuration** to ensure it adheres to your security requirements.
+1. **Use exclude lists for sensitive entities** to ensure they're never accidentally exposed.
+2. **Consider using schema-level filtering** for broad access control.
+3. **Use wildcards carefully** as they can accidentally expose more entities than intended.
+4. **Regularly audit your REST API configuration** to ensure it adheres to your security requirements.

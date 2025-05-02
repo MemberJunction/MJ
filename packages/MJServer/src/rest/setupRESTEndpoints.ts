@@ -1,19 +1,17 @@
 import express from 'express';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
+ 
+
+export const ___REST_API_BASE_PATH = '/api/v1';
 
 /**
  * Configuration options for REST API endpoints
  */
 export interface RESTApiOptions {
     /**
-     * Whether to enable REST API endpoints (default: false)
+     * Whether to enable REST API endpoints (default: true)
      */
     enabled: boolean;
-    
-    /**
-     * Base path for REST API endpoints (default: '/rest')
-     */
-    basePath: string;
     
     /**
      * Array of entity names to include in the API (case-insensitive)
@@ -48,8 +46,7 @@ export interface RESTApiOptions {
  * Default REST API configuration
  */
 export const DEFAULT_REST_API_OPTIONS: RESTApiOptions = {
-    enabled: false,
-    basePath: '/rest'
+    enabled: true,
 };
 
 /**
@@ -81,7 +78,7 @@ export function setupRESTEndpoints(
     });
     
     // Mount REST API at the specified base path with authentication
-    const basePath = config.basePath || '/rest';
+    const basePath = ___REST_API_BASE_PATH;
     if (authMiddleware) {
         app.use(basePath, authMiddleware, restHandler.getRouter());
     } else {

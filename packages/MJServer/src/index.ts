@@ -231,12 +231,13 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   // Setup REST API endpoints
   const authMiddleware = async (req, res, next) => {
     try {
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      if (!token) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-      
-      const userPayload = await getUserPayload(token, undefined, dataSources);
+      const sessionIdRaw = req.headers['x-session-id'];
+      const requestDomain = url.parse(req.headers.origin || '');
+      const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
+      const bearerToken = req.headers.authorization ?? '';
+      const apiKey = String(req.headers['x-mj-api-key']);
+
+      const userPayload = await getUserPayload(bearerToken, sessionId, dataSources, requestDomain, apiKey);
       if (!userPayload) {
         return res.status(401).json({ error: 'Invalid token' });
       }
@@ -251,8 +252,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   
   // Get REST API configuration from the config file
   const restApiConfig: RESTApiOptions = {
-    enabled: configInfo.restApiOptions?.enabled ?? false,
-    basePath: configInfo.restApiOptions?.basePath ?? '/rest',
+    enabled: configInfo.restApiOptions?.enabled ?? true,
     includeEntities: configInfo.restApiOptions?.includeEntities,
     excludeEntities: configInfo.restApiOptions?.excludeEntities
   };
@@ -268,10 +268,6 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     if (restApiConfig.enabled) {
       console.log('REST API is enabled via environment variable');
     }
-  }
-  
-  if (process.env.MJ_REST_API_BASE_PATH) {
-    restApiConfig.basePath = process.env.MJ_REST_API_BASE_PATH;
   }
   
   if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
@@ -290,5 +286,5 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   }
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
-  console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+  console.log(`🚀 REST API ready at http://localhost:${graphqlPort}/`);
 };

@@ -35,7 +35,7 @@ The server uses configuration from its environment
 
 ### REST API
 
-In addition to the GraphQL API, MemberJunction now provides a REST API for applications that prefer RESTful architecture. By default, the REST API is disabled for security reasons.
+In addition to the GraphQL API, MemberJunction provides a REST API for applications that prefer RESTful architecture. By default, the REST API is enabled but can be disabled.
 
 For comprehensive documentation on the REST API, including configuration options, security controls, and available endpoints, see [REST_API.md](./REST_API.md).
 
