@@ -12,14 +12,6 @@ import { DefaultAzureCredential } from "@azure/identity";
 @RegisterClass(Embeddings, "AzureEmbedding")
 export class AzureEmbedding extends Embeddings {
     private _client: ReturnType<typeof ModelClient> | null = null;
-    private _additionalSettings: Record<string, any> = {};
-    
-    /**
-     * Get the current additional settings
-     */
-    public get AdditionalSettings(): Record<string, any> {
-        return this._additionalSettings;
-    }
     
     /**
      * Create a new AzureEmbedding instance with an API key
@@ -34,9 +26,9 @@ export class AzureEmbedding extends Embeddings {
      * Set additional provider-specific settings
      * @param settings Azure-specific settings
      */
-    public SetAdditionalSettings(settings: Record<string, any>): void {
-        // Store settings
-        this._additionalSettings = {...this._additionalSettings, ...settings};
+    public override SetAdditionalSettings(settings: Record<string, any>): void {
+        // Call the base class implementation to store settings
+        super.SetAdditionalSettings(settings);
         
         // Validate required settings
         if (!this.AdditionalSettings.endpoint) {
@@ -60,8 +52,8 @@ export class AzureEmbedding extends Embeddings {
     /**
      * Clear all additional settings and reset the client
      */
-    public ClearAdditionalSettings(): void {
-        this._additionalSettings = {};
+    public override ClearAdditionalSettings(): void {
+        super.ClearAdditionalSettings();
         this._client = null;
     }
     
