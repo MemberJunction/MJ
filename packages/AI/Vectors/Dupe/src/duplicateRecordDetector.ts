@@ -1,4 +1,4 @@
-import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
+import { BaseEmbeddings, GetAIAPIKey } from "@memberjunction/ai";
 import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, RecordMergeRequest, EntityInfo, PotentialDuplicate } from "@memberjunction/core";
 import { LogStatus } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase } from "@memberjunction/ai-vectordb";
@@ -10,7 +10,7 @@ import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams
 export class DuplicateRecordDetector extends VectorBase {
 
     _vectorDB: VectorDBBase;
-    _embedding: Embeddings;
+    _embedding: BaseEmbeddings;
 
     constructor(){
         super();
@@ -86,7 +86,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         //LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
-        this._embedding = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, aiModel.DriverClass, embeddingAPIKey)
+        this._embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, aiModel.DriverClass, embeddingAPIKey)
         this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey);
 
         if(!this._embedding){
