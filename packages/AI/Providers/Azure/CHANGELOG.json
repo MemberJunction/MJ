@@ -1,0 +1,17 @@
+{
+  "name": "@memberjunction/ai-azure",
+  "entries": [
+    {
+      "version": "0.1.0",
+      "tag": "@memberjunction/ai-azure_v0.1.0",
+      "date": "2025-05-02",
+      "comments": {
+        "none": [
+          {
+            "comment": "Initial implementation of Azure AI Provider for MemberJunction"
+          }
+        ]
+      }
+    }
+  ]
+}
