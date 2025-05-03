@@ -1,7 +1,10 @@
 import { BaseModel } from "./baseModel";
 import { EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from "./embed.types";
 
-export abstract class Embeddings extends BaseModel {
+/**
+ * Base class for all embedding model implementations
+ */
+export abstract class BaseEmbeddings extends BaseModel {
     /**
      * Protected property to store additional provider-specific settings
      */
@@ -37,3 +40,8 @@ export abstract class Embeddings extends BaseModel {
     public abstract EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult>
     public abstract GetEmbeddingModels(): Promise<any>
 }
+
+/**
+ * @deprecated Use BaseEmbeddings instead - will be removed in a future release
+ */
+export abstract class Embeddings extends BaseEmbeddings {}

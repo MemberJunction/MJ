@@ -1,4 +1,4 @@
-import { Embeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult } from '@memberjunction/ai';
+import { BaseEmbeddings, Embeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, BaseResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import ModelClient from "@azure-rest/ai-inference";
 import { AzureKeyCredential } from "@azure/core-auth";
@@ -7,10 +7,10 @@ import { DefaultAzureCredential } from "@azure/identity";
 /**
  * Implementation of Azure AI Embedding Model
  * @class AzureEmbedding
- * @extends Embeddings
+ * @extends BaseEmbeddings
  */
-@RegisterClass(Embeddings, "AzureEmbedding")
-export class AzureEmbedding extends Embeddings {
+@RegisterClass(BaseEmbeddings, "AzureEmbedding")
+export class AzureEmbedding extends BaseEmbeddings {
     private _client: ReturnType<typeof ModelClient> | null = null;
     
     /**
