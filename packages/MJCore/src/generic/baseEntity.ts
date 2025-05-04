@@ -925,18 +925,25 @@ export abstract class BaseEntity<T = unknown> {
                         // First run synchronous validation
                         valResult = this.Validate();
                         
-                        // If synchronous validation passes, check if we should run async validation
-                        if (valResult.Success) {
-                            // Determine if we should skip async validation:
-                            // 1. Explicitly set in options, OR
-                            // 2. Use the subclass's default if not specified in options
-                            const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ? 
-                                _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
-                                
-                            // If not skipping async validation, run it
-                            if (!skipAsyncValidation) {
-                                valResult = await this.ValidateAsync();
-                            }
+                        // Determine if we should run async validation:
+                        // 1. Explicitly set in options, OR
+                        // 2. Use the subclass's default if not specified in options
+                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ? 
+                            _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
+                            
+                        // If not skipping async validation, run it - even if sync validation failed
+                        // This ensures all validation errors (sync and async) are collected
+                        if (!skipAsyncValidation) {
+                            const asyncResult = await this.ValidateAsync();
+                            
+                            // Combine the results of both validations
+                            // If either validation fails, the overall result fails
+                            valResult.Success = valResult.Success && asyncResult.Success;
+                            
+                            // Add any async validation errors to the result
+                            asyncResult.Errors.forEach(error => {
+                                valResult.Errors.push(error);
+                            });
                         }
                     }
                     if (valResult.Success) {
