@@ -1,6 +1,6 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks } from "./chat.types";
+import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 
 /**
@@ -51,6 +51,79 @@ export abstract class BaseLLM extends BaseModel {
         
         // Continue with normal non-streaming implementation
         return this.nonStreamingChatCompletion(params);
+    }
+    
+    /**
+     * Process multiple chat completion requests in parallel. This is useful for:
+     * - Generating multiple variations with different parameters (temperature, etc.)
+     * - Getting multiple responses to compare or select from
+     * - Improving reliability by sending the same request multiple times
+     * 
+     * @param paramsArray Array of chat completion parameter objects
+     * @param callbacks Optional callbacks for progress and individual completions
+     * @returns Promise resolving to an array of ChatResults in the same order as the input params
+     */
+    public async ChatCompletions(
+        paramsArray: ChatParams[],
+        callbacks?: ParallelChatCompletionsCallbacks
+    ): Promise<ChatResult[]> {
+        if (!paramsArray || paramsArray.length === 0) {
+            return [];
+        }
+        
+        // Create promises for each completion
+        const promises = paramsArray.map((params, index) => 
+            this.ChatCompletion(params)
+                .then(response => {
+                    // Call the OnCompletion callback if provided
+                    if (callbacks?.OnCompletion) {
+                        callbacks.OnCompletion(response, index);
+                    }
+                    return response;
+                })
+                .catch(error => {
+                    // Call the OnError callback if provided
+                    if (callbacks?.OnError) {
+                        callbacks.OnError(error, index);
+                    }
+                    throw error; // Re-throw to be caught by Promise.allSettled
+                })
+        );
+        
+        // Use Promise.allSettled to get results even if some fail
+        const results = await Promise.allSettled(promises);
+        
+        // Convert the settled results to an array of ChatResults
+        // For rejected promises, create error ChatResults
+        const chatResults = results.map((result, index) => {
+            if (result.status === 'fulfilled') {
+                return result.value;
+            } else {
+                // Create an error result
+                const startTime = new Date();
+                const endTime = new Date();
+                const errorResult = new ChatResult(false, startTime, endTime);
+                errorResult.data = {
+                    choices: [],
+                    usage: {
+                        promptTokens: 0,
+                        completionTokens: 0,
+                        totalTokens: 0
+                    }
+                };
+                errorResult.statusText = 'error';
+                errorResult.errorMessage = result.reason?.message || 'Unknown error';
+                errorResult.exception = {exception: result.reason};
+                return errorResult;
+            }
+        });
+        
+        // Call the OnAllCompleted callback if provided
+        if (callbacks?.OnAllCompleted) {
+            callbacks.OnAllCompleted(chatResults);
+        }
+        
+        return chatResults;
     }
     
     /**
