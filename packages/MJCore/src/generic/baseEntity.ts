@@ -922,7 +922,22 @@ export abstract class BaseEntity<T = unknown> {
                         valResult.Success = true; // bypassing validation since we are in replay only....
                     }
                     else {
+                        // First run synchronous validation
                         valResult = this.Validate();
+                        
+                        // If synchronous validation passes, check if we should run async validation
+                        if (valResult.Success) {
+                            // Determine if we should skip async validation:
+                            // 1. Explicitly set in options, OR
+                            // 2. Use the subclass's default if not specified in options
+                            const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ? 
+                                _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
+                                
+                            // If not skipping async validation, run it
+                            if (!skipAsyncValidation) {
+                                valResult = await this.ValidateAsync();
+                            }
+                        }
                     }
                     if (valResult.Success) {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
@@ -1153,7 +1168,8 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
-     * @returns
+     * 
+     * @returns ValidationResult The validation result
      */
     public Validate(): ValidationResult  {
         const result = new ValidationResult();
@@ -1167,6 +1183,42 @@ export abstract class BaseEntity<T = unknown> {
             result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
         }
 
+        return result;
+    }
+    
+    /**
+     * Default value for whether async validation should be skipped.
+     * Subclasses can override this property to enable async validation by default.
+     * When the options object is passed to Save(), and it includes a value for the 
+     * SkipAsyncValidation property, that value will take precedence over this default.
+     * 
+     * @see {@link Save}
+     * 
+     * @protected
+     */
+    public get DefaultSkipAsyncValidation(): boolean {
+        return true; // By default, skip async validation unless explicitly enabled
+    }
+    
+    /**
+     * Asynchronous validation method that can be overridden by subclasses to add custom async validation logic.
+     * This method is automatically called by Save() AFTER the synchronous Validate() passes.
+     * 
+     * IMPORTANT: 
+     * 1. This should NEVER be called INSTEAD of the synchronous Validate() method
+     * 2. This is meant to be overridden by subclasses that need to perform async validations
+     * 3. The base implementation just returns success - no actual validation is performed
+     * 
+     * Subclasses should override this to add complex validations that require database queries 
+     * or other async operations that cannot be performed in the synchronous Validate() method.
+     * 
+     * @returns Promise<ValidationResult> A promise that resolves to the validation result
+     */
+    public async ValidateAsync(): Promise<ValidationResult> {
+        // Default implementation just returns success
+        // Subclasses should override this to perform actual async validation
+        const result = new ValidationResult();
+        result.Success = true;
         return result;
     }
 
