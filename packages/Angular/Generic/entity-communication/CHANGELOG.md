@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-entity-communications
 
+## 2.36.1
+
+### Patch Changes
+
+- Updated dependencies [9d709e2]
+  - @memberjunction/core@2.36.1
+  - @memberjunction/ng-shared@2.36.1
+  - @memberjunction/ng-container-directives@2.36.1
+  - @memberjunction/communication-types@2.36.1
+  - @memberjunction/entity-communications-base@2.36.1
+  - @memberjunction/entity-communications-client@2.36.1
+  - @memberjunction/core-entities@2.36.1
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes

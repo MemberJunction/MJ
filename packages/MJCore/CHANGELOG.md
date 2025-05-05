@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.36.1
+
+### Patch Changes
+
+- 9d709e2: Implemented optional async Validate mechanism for any BaseEntity sub-class to be part of the Save() pipeline.
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes

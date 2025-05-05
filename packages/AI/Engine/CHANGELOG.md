@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.36.1
+
+### Patch Changes
+
+- 577cc6a: Support for parallel LLM completions in BaseLLM and AIEngine
+- Updated dependencies [d9defc9]
+- Updated dependencies [9d709e2]
+- Updated dependencies [577cc6a]
+  - @memberjunction/ai@2.36.1
+  - @memberjunction/core@2.36.1
+  - @memberjunction/core-entities@2.36.1
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes

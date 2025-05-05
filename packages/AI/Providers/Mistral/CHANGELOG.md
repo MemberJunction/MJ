@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 2.36.1
+
+### Patch Changes
+
+- 38db5e1: Updates to Embeddings Models
+- Updated dependencies [d9defc9]
+- Updated dependencies [577cc6a]
+  - @memberjunction/ai@2.36.1
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes

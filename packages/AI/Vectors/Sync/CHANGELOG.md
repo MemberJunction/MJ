@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.36.1
+
+### Patch Changes
+
+- b45b336: updated Embeddings->BaseEmbeddings
+- Updated dependencies [d9defc9]
+- Updated dependencies [38db5e1]
+- Updated dependencies [9d709e2]
+- Updated dependencies [577cc6a]
+- Updated dependencies [b45b336]
+  - @memberjunction/ai@2.36.1
+  - @memberjunction/ai-mistral@2.36.1
+  - @memberjunction/ai-openai@2.36.1
+  - @memberjunction/core@2.36.1
+  - @memberjunction/aiengine@2.36.1
+  - @memberjunction/ai-vectors@2.36.1
+  - @memberjunction/templates@2.36.1
+  - @memberjunction/ai-vectors-pinecone@2.36.1
+  - @memberjunction/ai-vectordb@2.36.1
+  - @memberjunction/templates-base-types@2.36.1
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes

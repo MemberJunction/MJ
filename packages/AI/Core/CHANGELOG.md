@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai
 
+## 2.36.1
+
+### Patch Changes
+
+- d9defc9: Azure AI Inference - Implementation
+- 577cc6a: Support for parallel LLM completions in BaseLLM and AIEngine
+  - @memberjunction/global@2.36.1
+
 ## 2.36.0
 
 ### Minor Changes
