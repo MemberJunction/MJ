@@ -1,4 +1,4 @@
-import { Embeddings, EmbedTextsResult } from "@memberjunction/ai";
+import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { TemplateContentEntity, EntityDocumentEntity } from "@memberjunction/core-entities";
@@ -56,7 +56,7 @@ export type EmbeddingData = {
 };
 
 export type VectorEmeddingData = { 
-    embedding: Embeddings; 
+    embedding: BaseEmbeddings; 
     vectorDB: VectorDBBase, 
     vectorDBClassKey: string, 
     vectorDBAPIKey: string, 

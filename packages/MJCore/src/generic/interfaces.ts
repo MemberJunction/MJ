@@ -147,6 +147,15 @@ export class EntitySaveOptions {
      * * IMPORTANT: This is only used for client-side providers. On server-side providers, this check never occurs because server side operations are as up to date as this check would yield. 
      */
     SkipOldValuesCheck?: boolean = false;
+    
+    /**
+     * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.
+     * This is an advanced setting and should only be used when you are sure the async validation is not needed.
+     * The default behavior is to run the async validation and the default value is undefined. 
+     * Also, you can set an Entity level default in a BaseEntity subclass by overriding the DefaultSkipAsyncValidation() getter property.
+     * @see BaseEntity.DefaultSkipAsyncValidation
+     */
+    SkipAsyncValidation?: boolean = undefined;
 }
 
 /**

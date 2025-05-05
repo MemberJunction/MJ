@@ -1,11 +1,11 @@
-import { EmbedTextParams, EmbedTextsParams, Embeddings, ModelUsage, EmbedTextResult, EmbedTextsResult } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, BaseEmbeddings, ModelUsage, EmbedTextResult, EmbedTextsResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { Mistral } from "@mistralai/mistralai";
 import { EmbeddingRequest, EmbeddingResponse } from "@mistralai/mistralai/models/components";
 
 
-@RegisterClass(Embeddings, 'MistralEmbedding')
-export class MistralEmbedding extends Embeddings {
+@RegisterClass(BaseEmbeddings, 'MistralEmbedding')
+export class MistralEmbedding extends BaseEmbeddings {
     private _client: Mistral;
     
         constructor(apiKey: string) {

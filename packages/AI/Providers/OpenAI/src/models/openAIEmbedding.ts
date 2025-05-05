@@ -1,9 +1,9 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, Embeddings, ModelUsage } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
-@RegisterClass(Embeddings, 'OpenAIEmbedding')
-export class OpenAIEmbedding extends Embeddings {
+@RegisterClass(BaseEmbeddings, 'OpenAIEmbedding')
+export class OpenAIEmbedding extends BaseEmbeddings {
     private _openAI: OpenAI;
 
     constructor(apiKey: string) {

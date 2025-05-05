@@ -53,6 +53,31 @@ export interface StreamingChatCallbacks {
     OnError?: (error: any) => void;
 }
 
+/**
+ * Interface for callbacks used in parallel chat completions
+ */
+export interface ParallelChatCompletionsCallbacks {
+    /**
+     * Called when a single completion from the batch is completed
+     * @param response The completed ChatResult
+     * @param index The index of the completion in the original request array
+     */
+    OnCompletion?: (response: ChatResult, index: number) => void;
+    
+    /**
+     * Called when any completion in the batch encounters an error
+     * @param error The error that occurred
+     * @param index The index of the completion that failed
+     */
+    OnError?: (error: any, index: number) => void;
+    
+    /**
+     * Called when all completions in the batch are completed (successfully or with errors)
+     * @param responses Array of all ChatResults in the same order as the request params
+     */
+    OnAllCompleted?: (responses: ChatResult[]) => void;
+}
+
 export class ChatParams extends BaseParams  {
     /**
      * Array of messages, allows full control over the order and content of the conversation.

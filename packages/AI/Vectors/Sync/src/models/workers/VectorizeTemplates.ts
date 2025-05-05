@@ -5,7 +5,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateContentEntity } from '@memberjunction/core-entities';
 import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { Embeddings, EmbedTextsResult } from '@memberjunction/ai';
+import { BaseEmbeddings, EmbedTextsResult } from '@memberjunction/ai';
 
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
@@ -29,7 +29,7 @@ export async function VectorizeEntity(): Promise<void> {
   const startTime = Date.now();
   //console.log('\t##### Annotator started #####', { threadId, now: Date.now() % 10_000, elapsed: Date.now() - context.executionId });
 
-  const embedding: Embeddings = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, context.embeddingDriverClass, context.embeddingAPIKey);
+  const embedding: BaseEmbeddings = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, context.embeddingDriverClass, context.embeddingAPIKey);
   const processedBatch: string[] = [];
   for (const entityData of batch) {
     const validationResult = ValidateTemplateInput(template, entityData);

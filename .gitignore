@@ -117,3 +117,5 @@ mj.config.js
 mj.config.ts
 *.local
 packages/AI/MCPServer/build/Server.js
+
+**/.claude/settings.local.json

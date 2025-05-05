@@ -1,4 +1,4 @@
-import { BaseLLM, BaseModel, BaseParams, BaseResult, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
+import { BaseLLM, BaseModel, BaseParams, BaseResult, ChatParams, ChatMessage, ChatMessageRole, ParallelChatCompletionsCallbacks, GetAIAPIKey } from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
@@ -164,40 +164,154 @@ export class AIEngine extends BaseEngine<AIEngine> {
     }
 
     /**
+     * Prepares standard chat parameters with system and user messages.
+     * 
+     * @param userPrompt The user message/query to send to the model
+     * @param systemPrompt Optional system prompt to set context/persona for the model
+     * @returns Array of properly formatted chat messages
+     */
+    public PrepareChatMessages(userPrompt: string, systemPrompt?: string): ChatMessage[] {
+        const messages: ChatMessage[] = [];
+        if (systemPrompt && systemPrompt.length > 0) {
+            messages.push({ role: ChatMessageRole.system, content: systemPrompt });
+        }
+        messages.push({ role: ChatMessageRole.user, content: userPrompt });
+        return messages;
+    }
+    
+    /**
+     * Prepares an LLM model instance with the appropriate parameters.
+     * This method handles common tasks needed before calling an LLM:
+     * - Loading AI metadata if needed
+     * - Selecting the appropriate model (user-provided or highest power)
+     * - Getting the correct API key
+     * - Creating the LLM instance
+     * 
+     * @param contextUser The user context for authentication and permissions
+     * @param model Optional specific model to use, otherwise uses highest power LLM
+     * @param apiKey Optional API key to use with the model
+     * @returns Object containing the prepared model instance and model information
+     */
+    public async PrepareLLMInstance(
+        contextUser: UserInfo, 
+        model?: AIModelEntityExtended, 
+        apiKey?: string
+    ): Promise<{
+        modelInstance: BaseLLM,
+        modelToUse: AIModelEntityExtended
+    }> {
+        await AIEngine.Instance.Config(false, contextUser);
+        const modelToUse = model ? model : await this.GetHighestPowerLLM(null, contextUser);
+        const apiKeyToUse = apiKey ? apiKey : GetAIAPIKey(modelToUse.DriverClass);   
+        const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, modelToUse.DriverClass, apiKeyToUse);
+
+        return { modelInstance, modelToUse };
+    }
+
+    /**
      * Executes a simple completion task using the provided parameters. The underlying code uses the MJ AI BaseLLM and related class infrastructure to execute the task. 
      * This is simply a convenience method to make it easier to execute a completion task without having to deal with the underlying infrastructure. For more control,
      * use the underlying classes directly.
-     * @param userPrompt 
-     * @param contextUser 
-     * @param systemPrompt 
-     * @param model - optional, if not provided, @GetHighestPowerLLM will be called to get the highest power LLM model
-     * @param apiKey 
-     * @returns 
+     * 
+     * @param userPrompt The user message/query to send to the model
+     * @param contextUser The user context for authentication and permissions
+     * @param systemPrompt Optional system prompt to set context/persona for the model
+     * @param model Optional specific model to use, otherwise uses highest power LLM
+     * @param apiKey Optional API key to use with the model
+     * @returns The text response from the LLM
+     * @throws Error if user prompt is not provided or if there are issues with model creation
      */
     public async SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: AIModelEntityExtended, apiKey?: string): Promise<string> {
         try {
-            if (!userPrompt || userPrompt.length === 0)
+            if (!userPrompt || userPrompt.length === 0) {
                 throw new Error('User prompt not provided.');
+            }
+            
+            const { modelInstance, modelToUse } = await this.PrepareLLMInstance(
+                contextUser, model, apiKey
+            );
 
-            await AIEngine.Instance.Config(false, contextUser);
-            const modelToUse = model ? model : await this.GetHighestPowerLLM(null, contextUser);
-            const apiKeyToUse = apiKey ? apiKey : GetAIAPIKey(modelToUse.DriverClass);   
-            const modelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, modelToUse.DriverClass, apiKeyToUse)
+            // Prepare the chat messages
+            const messages = this.PrepareChatMessages(userPrompt, systemPrompt);
 
-            const messages = [];
-            if (systemPrompt && systemPrompt.length > 0)
-                messages.push({ role: 'system', content: systemPrompt });
-            messages.push({ role: 'user', content: userPrompt });
+            // Set up the chat parameters
+            const params = new ChatParams();
+            params.messages = messages;
+            params.model = modelToUse.APIName;
 
-            const result = await modelInstance.ChatCompletion({
-                messages: messages,
-                model: modelToUse.APIName
-            })
+            // Execute the LLM call
+            const result = await modelInstance.ChatCompletion(params);
+
             if (result && result.success) {
                 return result.data.choices[0].message.content;
             }
             else
                 throw new Error(`Error executing LLM model ${modelToUse.Name} : ${result.errorMessage}`);
+        }
+        catch (e) {
+            LogError(e);
+            throw e;
+        }
+    }
+    
+    /**
+     * Executes multiple parallel chat completions with the same model but potentially different parameters.
+     * This is useful for:
+     * - Generating multiple variations with different parameters (temperature, etc.)
+     * - Getting multiple responses to compare or select from
+     * - Improving reliability by sending the same request multiple times
+     * 
+     * @param userPrompt The user's message/question to send to the model
+     * @param contextUser The user context for authentication and logging
+     * @param systemPrompt Optional system prompt to set the context/persona
+     * @param iterations Number of parallel completions to run (default: 3)
+     * @param temperatureIncrement The amount to increment temperature for each iteration (default: 0.1)
+     * @param baseTemperature The starting temperature value (default: 0.7)
+     * @param model Optional specific model to use, otherwise uses highest power LLM
+     * @param apiKey Optional API key to use with the model
+     * @param callbacks Optional callbacks for monitoring progress
+     * @returns Array of ChatResult objects, one for each parallel completion
+     * @throws Error if user prompt is not provided, iterations < 1, or if there are issues with model creation
+     */
+    public async ParallelLLMCompletions(
+        userPrompt: string, 
+        contextUser: UserInfo, 
+        systemPrompt?: string,
+        iterations: number = 3,
+        temperatureIncrement: number = 0.1,
+        baseTemperature: number = 0.7,
+        model?: AIModelEntityExtended,
+        apiKey?: string,
+        callbacks?: ParallelChatCompletionsCallbacks
+    ): Promise<ChatResult[]> {
+        try {
+            if (!userPrompt || userPrompt.length === 0) {
+                throw new Error('User prompt not provided.');
+            }
+            
+            if (iterations < 1) {
+                throw new Error('Iterations must be at least 1');
+            }
+
+            // Get the model instance
+            const { modelInstance, modelToUse } = await this.PrepareLLMInstance(
+                contextUser, model, apiKey
+            );
+
+            // Prepare the messages that will be common to all requests
+            const messages = this.PrepareChatMessages(userPrompt, systemPrompt);
+
+            // Create parameter arrays for each completion with varying temperatures
+            const paramsArray: ChatParams[] = Array(iterations).fill(0).map((_, i) => {
+                const params = new ChatParams();
+                params.messages = [...messages]; // Clone the messages array
+                params.model = modelToUse.APIName;
+                params.temperature = baseTemperature + (i * temperatureIncrement);
+                return params;
+            });
+
+            // Run all completions in parallel
+            return await modelInstance.ChatCompletions(paramsArray, callbacks);
         }
         catch (e) {
             LogError(e);
