@@ -16,9 +16,7 @@
   "dependencies": {
     "@azure-rest/ai-inference": "^1.0.0-beta.6",
     "@azure/core-auth": "^1.5.0",
-    "@azure/identity": "^4.0.0"
-  },
-  "peerDependencies": {
+    "@azure/identity": "^4.0.0",
     "@memberjunction/ai": "*",
     "@memberjunction/global": "*"
   },
