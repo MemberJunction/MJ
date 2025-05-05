@@ -147,7 +147,8 @@ export class ManageMetadataBase {
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
       const sql = `SELECT * FROM [${mj_core_schema()}].vwEntities WHERE VirtualEntity = 1`;
-      const virtualEntities = await ds.query(sql);
+      // Cache virtual entities query for 5 minutes as this rarely changes during a code generation run
+      const virtualEntities = await this._sqlUtilityObject.executeQueryWithCache(ds, sql, [], 300000);
       let anyUpdates: boolean = false;
       if (virtualEntities && virtualEntities.length > 0) {
          // we have 1+ virtual entities, now loop through them and process each one
@@ -182,7 +183,8 @@ export class ManageMetadataBase {
                            SCHEMA_NAME(v.schema_id) = '${virtualEntity.SchemaName}'
                         ORDER BY
                            c.column_id`;
-         const veFields = await ds.query(sql);
+         // Cache virtual entity fields for 5 minutes - this is schema metadata that rarely changes during a code generation run
+         const veFields = await this._sqlUtilityObject.executeQueryWithCache(ds, sql, [], 300000);
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
             // first though, remove any fields that are no longer in the view

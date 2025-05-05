@@ -13,6 +13,7 @@ export * from './Misc/runCommand'
 export * from './Database/sql_codegen'
 export * from './Database/sql'
 export * from './Misc/util'
+export * from './Misc/cache'
 
 export * from './Angular/angular-codegen'
 export * from './Angular/related-entity-components';

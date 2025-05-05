@@ -50,39 +50,61 @@ export async function attemptDeleteFile(filePath: string, maxRetries: number, re
     }
   }
 
-export function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): void {
+export async function combineFiles(directory: string, combinedFileName: string, pattern: string, overwriteExistingFile: boolean): Promise<void> {
     const combinedFilePath = path.join(directory, combinedFileName);
 
-    // Check if the combined file exists and if overwriteExistingFile is false, skip the process
-    if (fs.existsSync(combinedFilePath) && !overwriteExistingFile) {
-        console.log(`File ${combinedFileName} already exists. Skipping the process as overwriteExistingFile is set to false.`);
-        return;
-    }
+    try {
+        // Check if the combined file exists and if overwriteExistingFile is false, skip the process
+        const fileExists = await fs.promises.access(combinedFilePath)
+            .then(() => true)
+            .catch(() => false);
 
-    // Use glob.sync to find files that match the pattern synchronously, excluding the combinedFileName
-    const files = glob.sync(pattern, { cwd: directory }).filter((file: string) => file !== combinedFileName);
-
-    // Sort the files so that files ending with '.generated.sql' come before '.permissions.generated.sql'
-    files.sort((a: string, b: string) => {
-        const isAPermissions = a.includes('.permissions.generated.sql');
-        const isBPermissions = b.includes('.permissions.generated.sql');
-        if (isAPermissions && !isBPermissions) {
-            return 1;
-        } else if (!isAPermissions && isBPermissions) {
-            return -1;
-        } else {
-            return a.localeCompare(b);
+        if (fileExists && !overwriteExistingFile) {
+            console.log(`File ${combinedFileName} already exists. Skipping the process as overwriteExistingFile is set to false.`);
+            return;
         }
-    });
 
-    let combinedContent = '';
-    files.forEach((file: string) => {
-        const filePath = path.join(directory, file);
-        combinedContent += fs.readFileSync(filePath, 'utf8') + '\n\n\n';
-    });
+        // Use promisified glob to find files that match the pattern
+        const files = await new Promise<string[]>((resolve, reject) => {
+            glob(pattern, { cwd: directory }, (err: Error | null, matches: string[]) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(matches.filter((file: string) => file !== combinedFileName));
+            });
+        });
 
-    // Write the combined content to the specified file
-    fs.writeFileSync(combinedFilePath, combinedContent);
+        // Sort the files so that files ending with '.generated.sql' come before '.permissions.generated.sql'
+        files.sort((a: string, b: string) => {
+            const isAPermissions = a.includes('.permissions.generated.sql');
+            const isBPermissions = b.includes('.permissions.generated.sql');
+            if (isAPermissions && !isBPermissions) {
+                return 1;
+            } else if (!isAPermissions && isBPermissions) {
+                return -1;
+            } else {
+                return a.localeCompare(b);
+            }
+        });
+
+        // Read all files in parallel for better performance
+        const fileContents = await Promise.all(
+            files.map(async (file: string) => {
+                const filePath = path.join(directory, file);
+                return await fs.promises.readFile(filePath, 'utf8');
+            })
+        );
+
+        // Combine the contents
+        const combinedContent = fileContents.join('\n\n\n');
+
+        // Write the combined content to the specified file
+        await fs.promises.writeFile(combinedFilePath, combinedContent);
+    } catch (error) {
+        logError(`Error combining files in directory ${directory}: ${error}`);
+        throw error;
+    }
 }
 
 

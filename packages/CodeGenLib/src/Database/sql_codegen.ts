@@ -53,7 +53,9 @@ export class SQLCodeGenBase {
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
             // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
-            this.deleteGeneratedEntityFiles(directory, baselineEntities);
+            const step2aStartTime: Date = new Date();
+            await this.deleteGeneratedEntityFiles(directory, baselineEntities);
+            logStatus(`   Time to delete generated entity files: ${(new Date().getTime() - step2aStartTime.getTime())/1000} seconds`);
 
             // STEP 2(b) - generate all the SQL files and execute them
             const step2StartTime: Date = new Date();
@@ -91,7 +93,10 @@ export class SQLCodeGenBase {
             logStatus(`   Time to generate entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
-            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
+            const step2dStartTime: Date = new Date();
+            const allEntityFiles = await this.createCombinedEntitySQLFiles(directory, baselineEntities);
+            logStatus(`   Time to combine entity SQL files: ${(new Date().getTime() - step2dStartTime.getTime())/1000} seconds`);
+            
             // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
             const step2eStartTime: Date = new Date();
             if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, true)) {
@@ -271,49 +276,78 @@ export class SQLCodeGenBase {
         }
     }
 
-    public deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
+    public async deleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]): Promise<void> {
         try {
-            // for the schemas associated with the specified entities, clean out all the generated files
+            // For the schemas associated with the specified entities, clean out all the generated files
             const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
-            for (const s of schemaNames) {
+            
+            // Process all schemas in parallel
+            await Promise.all(schemaNames.map(async s => {
                 const fullPath = path.join(directory, s);
-                // now, within each schema directory, clean out all the generated files
-                // the generated files map this pattern: *.generated.sql or *.permissions.generated.sql
-                let stats: fs.Stats | undefined;
+                
                 try {
-                  stats = fs.statSync(fullPath)
-                } catch (e) {
-                    // this is NOT an error, so not doing this logging anymore as it makes it seem like we're having a problem, not needed
-                    //logMessage(`      Directory '${fullPath}' does not exist so no need to delete previously generated SQL`, 'Info');
-                }
-                if (stats?.isDirectory()) {
-                    const files = fs.readdirSync(fullPath).filter(f => f.endsWith('.generated.sql') || f.endsWith('.permissions.generated.sql'));
-                    for (const f of files) {
-                        const filePath = path.join(fullPath, f);
-                        fs.unlinkSync(filePath);
+                    // Check if directory exists using async fs.promises
+                    const stats = await fs.promises.stat(fullPath).catch(() => null);
+                    
+                    if (stats?.isDirectory()) {
+                        // Read directory contents
+                        const allFiles = await fs.promises.readdir(fullPath);
+                        
+                        // Filter for generated SQL files
+                        const filesToDelete = allFiles.filter(f => 
+                            f.endsWith('.generated.sql') || f.endsWith('.permissions.generated.sql')
+                        );
+                        
+                        // Delete all files in parallel
+                        await Promise.all(filesToDelete.map(async f => {
+                            const filePath = path.join(fullPath, f);
+                            try {
+                                await fs.promises.unlink(filePath);
+                            } catch (err) {
+                                // Log error but continue with other files
+                                logError(`Error deleting file ${filePath}: ${err}`);
+                            }
+                        }));
                     }
+                } catch (err) {
+                    // Log error but continue with other schemas
+                    logError(`Error processing schema directory ${fullPath}: ${err}`);
                 }
-            }
-        }
-        catch (e) {
-            logError(e as string);
+            }));
+        } catch (e) {
+            logError(`Error in deleteGeneratedEntityFiles: ${e}`);
         }
     }
 
-    public createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]): string[] {
-        // first, get a disinct list of schemanames from the entities
+    public async createCombinedEntitySQLFiles(directory: string, entities: EntityInfo[]): Promise<string[]> {
+        // first, get a distinct list of schema names from the entities
         const files: string[] = [];
         const schemaNames = entities.map(e => e.SchemaName).filter((value, index, self) => self.indexOf(value) === index);
-        for (const s of schemaNames) {
+        
+        // Process all schemas in parallel
+        await Promise.all(schemaNames.map(async s => {
             // generate the all-entities.sql file and all-entities.permissions.sql file in each schema folder
             const fullPath = path.join(directory, s);
-            if (fs.statSync(fullPath).isDirectory()) {
-                combineFiles(fullPath, '_all_entities.sql', '*.generated.sql', true);
-                files.push(path.join(fullPath, '_all_entities.sql'));
-                combineFiles(fullPath, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
-                files.push(path.join(fullPath, '_all_entities.permissions.sql'));
+            
+            try {
+                const stats = await fs.promises.stat(fullPath);
+                if (stats.isDirectory()) {
+                    await Promise.all([
+                        (async () => {
+                            await combineFiles(fullPath, '_all_entities.sql', '*.generated.sql', true);
+                            files.push(path.join(fullPath, '_all_entities.sql'));
+                        })(),
+                        (async () => {
+                            await combineFiles(fullPath, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
+                            files.push(path.join(fullPath, '_all_entities.permissions.sql'));
+                        })()
+                    ]);
+                }
+            } catch (err) {
+                logError(`Error processing schema directory ${fullPath}: ${err}`);
             }
-        }
+        }));
+        
         return files;
     }
 
@@ -753,7 +787,8 @@ export class SQLCodeGenBase {
         o.schema_id = SCHEMA_ID('${entity.SchemaName}') AND
         kc.type = 'PK';
         `
-        const result = await ds.query(sSQL);
+        // Use cache with 5-minute TTL for schema metadata since this rarely changes during a code generation run
+        const result = await this.SQLUtilityObject.executeQueryWithCache(ds, sSQL, [], 300000);
         if (result && result.length > 0)
             return result[0].IndexName;
         else

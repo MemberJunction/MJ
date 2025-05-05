@@ -1,11 +1,19 @@
 import { z } from 'zod';
-import { cosmiconfigSync } from 'cosmiconfig';
+import { cosmiconfigSync, cosmiconfig } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
 import { LogError } from '@memberjunction/core';
+import { SchemaCache } from '../Misc/cache';
 
+// Cache for configuration to avoid repeated searches and parsing
+let cachedConfigResult: any = null;
+let cachedConfigPath: string = '';
+
+// Async configuration loader (used for initial load)
+const explorerAsync = cosmiconfig('mj', { searchStrategy: 'global' });
+
+// Sync configuration loader (used for fallback and immediate needs)
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
-const configSearchResult = explorer.search(process.cwd());
 
 export type SettingInfo = z.infer<typeof settingInfoSchema>;
 const settingInfoSchema = z.object({
@@ -309,6 +317,8 @@ const configInfoSchema = z.object({
 });
 export let currentWorkingDirectory: string;
 
+// Initialize with sync fallback for compatibility
+const configSearchResult = explorer.search(process.cwd());
 const configParsing = configInfoSchema.safeParse(configSearchResult?.config);
 if (!configParsing.success) {
   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
@@ -317,10 +327,72 @@ if (!configParsing.success) {
 export const configInfo = configParsing.data ?? ({} as ConfigInfo);
 export const { mjCoreSchema, dbDatabase } = configInfo;
 
+/**
+ * Asynchronously initialize configuration with caching for better performance.
+ * 
+ * @param cwd Current working directory
+ * @returns Promise<ConfigInfo>
+ */
+export async function initializeConfigAsync(cwd: string): Promise<ConfigInfo> {
+  currentWorkingDirectory = cwd;
+  
+  // Check if we have cached this path
+  const cacheKey = `config:${cwd}`;
+  if (cachedConfigResult && cachedConfigPath === cwd) {
+    const cachedConfig = SchemaCache.get(cacheKey);
+    if (cachedConfig) {
+      return cachedConfig as ConfigInfo;
+    }
+  }
+  
+  try {
+    // Use async loading for better performance
+    const searchResult = await explorerAsync.search(cwd);
+    cachedConfigPath = cwd;
+    cachedConfigResult = searchResult;
+    
+    // Parse the config with Zod for validation
+    const maybeConfig = configInfoSchema.safeParse(searchResult?.config);
+    if (!maybeConfig.success) {
+      LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
+      throw new Error('Invalid configuration format');
+    }
+    
+    const config = maybeConfig.data;
+    
+    // Cache the parsed configuration
+    SchemaCache.set(cacheKey, config);
+    
+    return config;
+  } catch (error) {
+    LogError(`Failed to load configuration: ${error}`);
+    
+    // Fallback to sync loading if async fails
+    const fallbackConfig = initializeConfig(cwd);
+    return fallbackConfig;
+  }
+}
+
+/**
+ * Synchronously initialize configuration (legacy support)
+ * @param cwd Current working directory
+ * @returns ConfigInfo
+ */
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  const maybeConfig = configInfoSchema.safeParse(explorer.search(currentWorkingDirectory)?.config);
+  // Check if we have cached this path
+  const cacheKey = `config:${cwd}`;
+  if (cachedConfigResult && cachedConfigPath === cwd) {
+    const cachedConfig = SchemaCache.get(cacheKey);
+    if (cachedConfig) {
+      return cachedConfig as ConfigInfo;
+    }
+  }
+
+  // Use sync loading if we don't have a cache
+  const searchResult = explorer.search(currentWorkingDirectory);
+  const maybeConfig = configInfoSchema.safeParse(searchResult?.config);
   if (!maybeConfig.success) {
     LogError('Error parsing config file', null, JSON.stringify(maybeConfig.error.issues, null, 2));
   }
@@ -330,6 +402,11 @@ export function initializeConfig(cwd: string): ConfigInfo {
   if (config === undefined) {
     throw new Error('No configuration found');
   }
+
+  // Cache the result
+  cachedConfigPath = cwd;
+  cachedConfigResult = searchResult;
+  SchemaCache.set(cacheKey, config);
 
   return config;
 }

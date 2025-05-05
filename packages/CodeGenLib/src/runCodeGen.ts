@@ -304,6 +304,16 @@ export class RunCodeGenBase {
           ' seconds)'
       );
 
+      // Clean up resources before exiting
+      try {
+        // Close the database connection pool to release resources properly
+        const { closeMSSQLConnection } = await import('./Config/db-connection');
+        await closeMSSQLConnection();
+        logStatus('Resources cleaned up successfully');
+      } catch (cleanupError) {
+        logError(`Error during cleanup: ${cleanupError}`);
+      }
+
       process.exit(0); // wrap it up, 0 means success
     } catch (e) {
       logError(e as string);
@@ -312,7 +322,23 @@ export class RunCodeGenBase {
   }
 }
 
-export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
+/**
+ * Run the MemberJunction code generation process
+ * @param skipDatabaseGeneration Whether to skip database-related code generation
+ * @param workingDirectory Optional working directory to use (defaults to process.cwd())
+ * @returns Promise resolving when the code generation is complete
+ */
+export async function runMemberJunctionCodeGeneration(
+  skipDatabaseGeneration: boolean = false, 
+  workingDirectory?: string
+) {
+  const cwd = workingDirectory || process.cwd();
+  
+  // Use async config initialization for better performance
+  const { initializeConfigAsync } = await import('./Config/config');
+  await initializeConfigAsync(cwd);
+  
+  // Create and run the code generator
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.Run(skipDatabaseGeneration);
 }

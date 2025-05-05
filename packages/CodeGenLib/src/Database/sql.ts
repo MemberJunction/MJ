@@ -1,4 +1,4 @@
-import { logError } from "../Misc/status_logging";
+import { logError, logStatus } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
@@ -13,6 +13,7 @@ import { promisify } from 'util';
 import * as crypto from 'crypto';
 import { mkdirSync } from "fs-extra";
 import { attemptDeleteFile, logIf } from "../Misc/util";
+import { SQLQueryCache, SchemaCache } from "../Misc/cache";
 
 const execAsync = promisify(exec);
 
@@ -291,18 +292,87 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
 
 
 
- public async executeSQLScript(ds: DataSource, scriptText: string, inChunks : boolean): Promise<boolean> {
+ /**
+  * Executes a SQL script with optional caching for read-only queries
+  * 
+  * @param ds DataSource to use for execution
+  * @param scriptText SQL script to execute
+  * @param inChunks Whether to execute the script in chunks (not currently used)
+  * @param cacheOptions Optional caching configuration { useCache: boolean, ttl?: number, isReadOnly?: boolean }
+  * @returns Promise<boolean> indicating success or failure
+  */
+ public async executeSQLScript(
+    ds: DataSource, 
+    scriptText: string, 
+    inChunks: boolean,
+    cacheOptions?: { 
+      useCache?: boolean, 
+      ttl?: number, 
+      isReadOnly?: boolean 
+    }
+ ): Promise<boolean> {
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do
 
+      // If it's a read-only operation and caching is enabled, try to use the cache
+      if (cacheOptions?.useCache && cacheOptions?.isReadOnly) {
+        // Use script hash as cache key
+        const scriptHash = crypto.createHash('sha256').update(scriptText).digest('hex');
+        
+        // Execute or use cache
+        return await SQLQueryCache.getOrCompute(
+          scriptHash,
+          async () => {
+            logIf(configInfo.verboseOutput, `Cache miss for SQL Script: ${scriptText?.length > 100 ? scriptText.substring(0, 100) + '...' : scriptText}`);
+            return this.executeBatchSQLScript(scriptText);
+          },
+          cacheOptions.ttl || null
+        );
+      }
+      
+      // For non-cacheable scripts, execute normally
       logIf(configInfo.verboseOutput, `Executing SQL Script: ${scriptText?.length > 100 ? scriptText.substring(0, 100) + '...' : scriptText}`);
-
       return this.executeBatchSQLScript(scriptText);
     }
     catch (e) {
        logError(e as string);
        return false;
     }
+ }
+ 
+ /**
+  * Utility method to execute a read-only query with caching
+  * 
+  * @param ds DataSource to use for execution
+  * @param query SQL query to execute
+  * @param params Query parameters
+  * @param ttl Optional cache time-to-live in milliseconds
+  * @returns Query results
+  */
+ public async executeQueryWithCache<T = any>(
+    ds: DataSource, 
+    query: string, 
+    params?: any[], 
+    ttl?: number
+ ): Promise<T[]> {
+    // Create a cache key from the query and params
+    const cacheKey = params && params.length > 0 
+        ? `${query}_${JSON.stringify(params)}`
+        : query;
+    const queryHash = crypto.createHash('sha256').update(cacheKey).digest('hex');
+    
+    return SQLQueryCache.getOrCompute(
+      queryHash,
+      async () => {
+        try {
+          return await ds.query(query, params);
+        } catch (error) {
+          logError(`Error executing query: ${error}`);
+          throw error;
+        }
+      },
+      ttl || null
+    );
  }
 }
