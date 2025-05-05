@@ -284,10 +284,14 @@ export class AzureFileStorage extends FileStorageBase {
       // Read the stream into a buffer
       const chunks: Buffer[] = [];
       for await (const chunk of downloadResponse.readableStreamBody) {
-        chunks.push(Buffer.from(chunk));
+        if (typeof chunk === 'string') {
+          chunks.push(Buffer.from(chunk, 'utf8')); // or appropriate encoding
+        } else {
+          chunks.push(chunk); // already a Buffer
+        }
       }
       
-      return Buffer.concat(chunks);
+      return Buffer.concat(chunks as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);
