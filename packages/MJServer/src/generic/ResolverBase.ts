@@ -775,7 +775,6 @@ export class ResolverBase {
       if (field) {
         switch (field.TSType) {
           case EntityFieldTSType.Number:
-            //2025-05-04 RJK: We need to use the Type for the different number types
             if (val == null && val == undefined) {
               val = null;
             }
