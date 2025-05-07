@@ -1,0 +1,159 @@
+.skip-artifact-viewer-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.skip-artifact-viewer-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  background-color: #fafafa;
+}
+
+.artifact-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.artifact-title {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.artifact-type {
+  font-size: 12px;
+  color: #666;
+}
+
+.skip-artifact-viewer-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.content-container {
+  margin-bottom: 16px;
+  background-color: #fff;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  overflow: auto;
+}
+
+.markdown-content {
+  padding: 16px;
+}
+
+.code-content, .json-content {
+  padding: 0;
+}
+
+.code-content pre, .json-content pre {
+  margin: 0;
+  padding: 16px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  background-color: #f5f7f9;
+  border-radius: 4px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.text-content pre {
+  margin: 0;
+  padding: 16px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.html-content {
+  padding: 16px;
+}
+
+.artifact-description {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.artifact-description h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+}
+
+.artifact-description p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+}
+
+.artifact-metadata {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.metadata-item {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.metadata-label {
+  width: 80px;
+  font-weight: 500;
+  color: #555;
+}
+
+.metadata-value {
+  color: #333;
+}
+
+.loading-container, .error-container, .empty-state {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  text-align: center;
+}
+
+.loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.error-icon, .empty-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.error-icon {
+  color: #e33d3d;
+}
+
+.empty-icon {
+  color: #aaa;
+}
+
+.error-message {
+  font-size: 14px;
+  color: #e33d3d;
+  max-width: 300px;
+}
+
+.empty-message {
+  font-size: 14px;
+  color: #888;
+}

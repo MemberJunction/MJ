@@ -178,3 +178,34 @@
 .rating-icon-selected {
     font-size: 0.9rem;
 }
+
+/* Artifact indicator styles */
+.artifact-indicator {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background-color: #eef6ff;
+    border: 1px solid #d0e1fd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    max-width: fit-content;
+}
+
+.artifact-indicator:hover {
+    background-color: #d2e5ff;
+    border-color: #a9c9fc;
+}
+
+.artifact-indicator i {
+    font-size: 14px;
+    color: #4285f4;
+    margin-right: 6px;
+}
+
+.artifact-label {
+    font-size: 12px;
+    color: #4285f4;
+    font-weight: 500;
+}

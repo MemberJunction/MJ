@@ -51,6 +51,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      */
     @Input() public ShowMessageRating: boolean = true;
 
+    /**
+     * If set to true, messages with linked artifacts will show an artifact indicator
+     */
+    @Input() public ShowArtifactIndicator: boolean = true;
+
     /** 
      * Indicates if the message is currently being rated and saved to the database
      */
@@ -86,6 +91,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * This event fires whenever a drill down is requested within a given report.
      */
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
+    
+    /**
+     * This event fires when the user clicks on an artifact indicator to view the artifact
+     */
+    @Output() ArtifactSelected = new EventEmitter<any>();
 
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
@@ -382,6 +392,29 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         return 'Thanks for the positive feedback!';
       } else {
         return 'Thanks for your feedback!';
+      }
+    }
+
+    /**
+     * Determines if the current message has an associated artifact
+     */
+    public get HasArtifact(): boolean {
+      return this.ShowArtifactIndicator && 
+             !!this.ConversationDetailRecord && 
+             !!this.ConversationDetailRecord.ArtifactID && 
+             this.ConversationDetailRecord.ArtifactID.length > 0;
+    }
+  
+    /**
+     * Emits the ArtifactSelected event with the artifact ID and version ID
+     */
+    public onArtifactIndicatorClick(): void {
+      if (this.HasArtifact) {
+        this.ArtifactSelected.emit({
+          artifactId: this.ConversationDetailRecord.ArtifactID,
+          artifactVersionId: this.ConversationDetailRecord.ArtifactVersionID,
+          messageId: this.ConversationDetailRecord.ID
+        });
       }
     }
 }
