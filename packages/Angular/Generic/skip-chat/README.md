@@ -8,6 +8,7 @@ An Angular component package for integrating the Skip AI assistant into MemberJu
 - **Dynamic Report Rendering**: Displays AI-generated reports, charts, and data visualizations
 - **Conversation Management**: Create, save, rename, and delete conversations
 - **Message Controls**: Edit, delete, and rate messages
+- **Inline Artifacts**: View and interact with AI-generated artifacts directly within messages
 - **Welcome Experience**: Configurable welcome screen with suggested prompts
 - **Sharing Capabilities**: Share conversations with other users or roles
 - **Data Context Integration**: Link conversations with data contexts for contextual understanding
@@ -183,6 +184,76 @@ export class AnalyticsDashboardComponent implements OnInit {
 }
 ```
 
+## Inline Artifacts Support
+
+Skip Chat provides an intuitive way to work with AI-generated artifacts directly within the conversation flow. Artifacts are standalone content pieces created during AI conversations, such as:
+
+- Code snippets
+- Data analyses and visualizations 
+- Documents and reports
+- SQL queries
+- JSON data structures
+- Markdown content
+- Plain text notes
+
+### Artifact Display Design
+
+Artifacts are integrated directly into the conversation with a contextual, streamlined approach:
+
+1. **Inline Indicators**: When a message has a linked artifact (as indicated by ArtifactID in the ConversationDetailEntity), a visual indicator/box appears within that message
+   
+2. **Split-Panel View**: Clicking on an artifact indicator dynamically splits the screen:
+   - Left panel: Continues displaying the conversation messages
+   - Right panel: Shows the selected artifact's content
+   - Draggable splitter between panels for customizing the view ratio
+
+3. **Artifact Creation Flow**: Skip can request artifact creation or versioning during analysis completion (SkipAPIAnalysisComplete)
+
+### Artifact-Message Relationship
+
+Each `ConversationDetailEntity` can have:
+- `ArtifactID`: Links to the specific artifact created or referenced by this message
+- `ArtifactVersionID`: Tracks which version of the artifact is associated with this message
+
+### Artifact Components
+
+The package includes specialized components for artifact handling:
+
+- **SkipMessageArtifactIndicatorComponent**: Displays the artifact indicator within messages
+- **SkipArtifactViewerComponent**: Renders artifact content in the right panel
+- **SkipSplitPanelComponent**: Manages the split-panel layout with draggable divider
+
+### Artifact Events
+
+The Skip Chat components provide event emitters for artifact interactions:
+
+```typescript
+// Listen for artifact events
+<skip-chat
+  (ArtifactSelected)="handleArtifactSelected($event)"
+  (ArtifactViewed)="handleArtifactViewed($event)">
+</skip-chat>
+```
+
+Handle artifact events in your component:
+
+```typescript
+import { SkipAPIArtifact } from '@memberjunction/skip-types';
+
+@Component({...})
+export class MyComponent {
+  handleArtifactSelected(artifact: SkipAPIArtifact) {
+    console.log(`Selected artifact: ${artifact.name}`);
+    // Custom handling of artifact selection
+  }
+  
+  handleArtifactViewed(artifact: SkipAPIArtifact) {
+    console.log(`Viewing artifact: ${artifact.name}`);
+    // Custom handling for artifact viewing
+  }
+}
+```
+
 ## API Reference
 
 ### SkipChatComponent
@@ -215,12 +286,16 @@ The main component for the Skip chat interface.
 - `WelcomeQuestions`: ChatWelcomeQuestion[] - Array of welcome questions/prompts
 - `AutoLoad`: boolean - Whether to automatically load data (default: true)
 - `VerboseLogging`: boolean - Whether to enable verbose logging (default: false)
+- `EnableArtifactSplitView`: boolean - Whether to enable split-panel viewing for artifacts (default: true)
+- `DefaultSplitRatio`: number - Default ratio for split panels when viewing artifacts (0-1, default: 0.6)
 
 #### Outputs
 
 - `NavigateToMatchingReport`: EventEmitter<string> - Emitted when a matching report is clicked
 - `ConversationSelected`: EventEmitter<string> - Emitted when a conversation is selected
 - `NewReportCreated`: EventEmitter<string> - Emitted when a new report is created
+- `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Emitted when an artifact is selected
+- `ArtifactViewed`: EventEmitter<SkipAPIArtifact> - Emitted when an artifact is viewed
 
 #### Methods
 
@@ -231,6 +306,7 @@ The main component for the Skip chat interface.
 - `sendPrompt(val: string)`: Sends a prompt to Skip AI
 - `sendSkipMessage()`: Sends the current message in the input box
 - `FlipEmbeddedConversationState()`: Toggles the inclusion of linked conversations
+- `ViewArtifact(artifactId: string)`: Opens an artifact in the split panel view
 
 ### SkipSingleMessageComponent
 
@@ -257,6 +333,23 @@ Component for rendering a single message in the conversation.
 - `NewReportCreated`: EventEmitter<string> - Emitted when a new report is created
 - `EditMessageRequested`: EventEmitter<ConversationDetailEntity> - Emitted when message edit is requested
 - `DeleteMessageRequested`: EventEmitter<ConversationDetailEntity> - Emitted when message delete is requested
+- `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Emitted when an artifact indicator is selected
+
+### SkipSplitPanelComponent
+
+Component for managing the split-panel layout.
+
+#### Inputs
+
+- `SplitRatio`: number - Ratio for dividing the panels (0-1, default: 0.6)
+- `MinLeftPanelWidth`: string - Minimum width for left panel (default: '30%')
+- `MinRightPanelWidth`: string - Minimum width for right panel (default: '30%')
+- `LeftPanelContent`: TemplateRef<any> - Template for left panel content
+- `RightPanelContent`: TemplateRef<any> - Template for right panel content
+
+#### Outputs
+
+- `SplitRatioChanged`: EventEmitter<number> - Emitted when split ratio changes via drag
 
 ### Dynamic Report Components
 
@@ -273,8 +366,10 @@ The package includes several components for rendering dynamic reports:
 1. **Initialization**: Load existing conversations or create a new one
 2. **User Input**: User enters a message or selects a suggested prompt
 3. **AI Processing**: Skip processes the request and generates a response
-4. **Report Generation**: For data analysis requests, Skip generates dynamic reports
-5. **Follow-up**: Skip suggests follow-up questions and provides interaction with the data
+4. **Artifact Creation**: Skip can generate artifacts during response processing
+5. **Artifact Viewing**: Users can view artifacts in the split-panel interface
+6. **Report Generation**: For data analysis requests, Skip generates dynamic reports
+7. **Follow-up**: Skip suggests follow-up questions and provides interaction with the data
 
 ## Styling
 

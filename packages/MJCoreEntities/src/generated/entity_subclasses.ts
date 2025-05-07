@@ -844,12 +844,12 @@ export const AIAgentNoteSchema = z.object({
         * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
-    AgentID: z.string().describe(`
+    AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
         * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
-    AgentNoteTypeID: z.string().describe(`
+    AgentNoteTypeID: z.string().nullable().describe(`
         * * Field Name: AgentNoteTypeID
         * * Display Name: Agent Note Type ID
         * * SQL Data Type: uniqueidentifier
@@ -1192,12 +1192,6 @@ export const AIModelSchema = z.object({
         * * SQL Data Type: nvarchar(100)
         * * Default Value: Any
     * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
-    SupportsEffortLevel: z.boolean().describe(`
-        * * Field Name: SupportsEffortLevel
-        * * Display Name: Supports Effort Level
-        * * SQL Data Type: bit
-        * * Default Value: 0
-    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -3107,6 +3101,18 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
+    ArtifactID: z.string().nullable().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Optional reference to a conversation artifact associated with this conversation detail`),
+    ArtifactVersionID: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
+    * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -3115,6 +3121,10 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
@@ -12409,10 +12419,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
     */
-    get AgentID(): string {
+    get AgentID(): string | null {
         return this.Get('AgentID');
     }
-    set AgentID(value: string) {
+    set AgentID(value: string | null) {
         this.Set('AgentID', value);
     }
 
@@ -12422,10 +12432,10 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: AI Agent Note Types (vwAIAgentNoteTypes.ID)
     */
-    get AgentNoteTypeID(): string {
+    get AgentNoteTypeID(): string | null {
         return this.Get('AgentNoteTypeID');
     }
-    set AgentNoteTypeID(value: string) {
+    set AgentNoteTypeID(value: string | null) {
         this.Set('AgentNoteTypeID', value);
     }
 
@@ -13335,20 +13345,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set SupportedResponseFormats(value: string) {
         this.Set('SupportedResponseFormats', value);
-    }
-
-    /**
-    * * Field Name: SupportsEffortLevel
-    * * Display Name: Supports Effort Level
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.
-    */
-    get SupportsEffortLevel(): boolean {
-        return this.Get('SupportsEffortLevel');
-    }
-    set SupportsEffortLevel(value: boolean) {
-        this.Set('SupportsEffortLevel', value);
     }
 
     /**
@@ -18524,6 +18520,34 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
+    * * Description: Optional reference to a conversation artifact associated with this conversation detail
+    */
+    get ArtifactID(): string | null {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string | null) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
+    * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail
+    */
+    get ArtifactVersionID(): string | null {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string | null) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -18539,6 +18563,15 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
     }
 }
 

@@ -89,7 +89,7 @@ export class BoxFileStorage extends FileStorageBase {
     if (this._accessToken && Date.now() < this._tokenExpiresAt) {
       return this._accessToken;
     }
-    
+
     // If we have refresh token, try to get a new access token
     if (this._refreshToken && this._clientId && this._clientSecret) {
       try {
@@ -118,17 +118,28 @@ export class BoxFileStorage extends FileStorageBase {
         return this._accessToken;
       } catch (error) {
         console.error('Error refreshing Box access token', error);
+        // Fall through to client credentials if refresh fails
+      }
+    }
+    
+    // If we have client credentials, try to get a new access token
+    if (this._clientId && this._clientSecret && this._enterpriseId) {
+      try {
+        await this._setAccessToken();
+        return this._accessToken;
+      } catch (error) {
+        console.error('Error getting new access token via client credentials', error);
         throw new Error('Failed to authenticate with Box: ' + error.message);
       }
     }
     
     // If we have an access token but it's expired and we can't refresh it
     if (this._accessToken) {
-      console.warn('Using expired Box access token as no refresh token is available');
+      console.warn('Using expired Box access token as no refresh mechanism is available');
       return this._accessToken;
     }
     
-    throw new Error('No valid Box access token available');
+    throw new Error('No valid Box access token available and no authentication method configured');
   }
   
   /**
