@@ -775,7 +775,31 @@ export class ResolverBase {
       if (field) {
         switch (field.TSType) {
           case EntityFieldTSType.Number:
-            val = val !== null && val !== undefined ? parseInt(val) : null;
+            if (val == null && val == undefined) {
+              val = null;
+            }
+            else {
+              let typeLowered = (field.Type as string).toLowerCase();
+
+              switch (typeLowered) {
+                case 'int':
+                case 'smallint':
+                case 'bigint':
+                case 'tinyint':
+                  val = parseInt(val);
+                  break;
+                case 'money':
+                case 'smallmoney':
+                case 'decimal':
+                case 'numeric':
+                case 'float':
+                  val = parseFloat(val);
+                  break;
+                default:
+                  val = parseFloat(val);
+                  break;
+              }
+            }
             break;
           case EntityFieldTSType.Boolean:
             val = val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
