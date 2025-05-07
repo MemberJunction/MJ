@@ -1,15 +1,17 @@
 # @memberjunction/ng-ask-skip
 
-The `@memberjunction/ng-ask-skip` library provides Angular components for integrating Skip AI assistant functionality into your MemberJunction applications. It allows users to chat with Skip about specific records, generate dynamic reports, and access AI-powered insights.
+The `@memberjunction/ng-ask-skip` library provides Angular components for integrating Skip AI assistant functionality into your MemberJunction applications. It allows users to chat with Skip about specific records, generate dynamic reports, access AI-powered insights, and work with AI-generated artifacts.
 
 ## Features
 
 - **AI Chat with Records**: Direct chat interface with Skip AI about specific entity records
 - **Skip Button Integration**: Easy way to add Skip functionality to any view
 - **Dynamic Reports**: Generate and display AI-powered reports based on data analysis
+- **Inline Artifacts**: View and interact with AI-generated artifacts directly within messages
 - **Customizable Welcome Questions**: Configure suggested prompts for users
 - **Window and Inline Modes**: Display Skip as a popup or embedded in your UI
 - **Conversation History**: Automatically saves and loads conversation history
+- **Resource Sharing**: Share conversations with other users
 
 ## Installation
 
@@ -154,6 +156,86 @@ Display AI-generated reports with tabs:
 | UserViewGridWithAnalysisComponent | `mj-user-view-grid-with-analysis` | User view grid with Skip analysis |
 | SkipChatWrapperComponent | `mj-skip-chat-wrapper` | Wrapper for Skip chat |
 
+## Inline Artifacts Support
+
+Ask Skip includes intelligent integration with AI-generated artifacts directly within the conversation interface. Artifacts are standalone content pieces created during AI conversations, such as:
+
+- Code snippets
+- Data analyses and visualizations
+- Documents and reports
+- SQL queries
+- JSON data structures
+- Markdown content
+- Plain text notes
+
+### Artifact Display Design
+
+The artifacts integration follows an intuitive inline approach:
+
+1. **Message-Linked Artifacts**: When a message has an associated artifact (identified by ArtifactID in the ConversationDetailEntity), a visual indicator appears within the message display.
+
+2. **Split-Panel Viewing**: Clicking on an artifact indicator dynamically splits the conversation area:
+   - Left panel: Continues displaying all conversation messages
+   - Right panel: Shows the selected artifact's content
+   - Draggable splitter between panels allows users to customize the view ratio
+
+3. **Context-Aware Integration**: Artifacts remain in context with the conversation that created them
+
+### Using Artifacts
+
+Working with artifacts is straightforward:
+
+1. **View Artifact**: Click on the artifact indicator within a message to open the split-panel view
+2. **Resize Panels**: Drag the splitter to adjust the ratio between conversation and artifact content
+3. **Close Artifact View**: Close the artifact panel to return to the full conversation view
+
+### Artifact Events
+
+Components provide event emitters for artifact interactions:
+
+```typescript
+// Listen for artifact events
+<mj-skip-chat-with-record
+  (ArtifactSelected)="handleArtifactSelected($event)"
+  (ArtifactViewed)="handleArtifactViewed($event)">
+</mj-skip-chat-with-record>
+```
+
+Handle artifact events in your component:
+
+```typescript
+import { SkipAPIArtifact } from '@memberjunction/skip-types';
+
+@Component({...})
+export class MyComponent {
+  handleArtifactSelected(artifact: SkipAPIArtifact) {
+    console.log(`Selected artifact: ${artifact.name}`);
+    // Custom handling of artifact selection
+  }
+  
+  handleArtifactViewed(artifact: SkipAPIArtifact) {
+    console.log(`Viewing artifact: ${artifact.name}`);
+    // Custom handling for artifact viewing
+  }
+}
+```
+
+### Configuration Options
+
+Control artifact features with these input properties:
+
+```html
+<mj-skip-chat-with-record
+  [EnableArtifactSplitView]="true"
+  [DefaultSplitRatio]="0.6">
+</mj-skip-chat-with-record>
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EnableArtifactSplitView` | boolean | true | Enable/disable split-panel artifact viewing |
+| `DefaultSplitRatio` | number | 0.6 | Default ratio for split panels (0-1) |
+
 ## Component Details
 
 ### SkipChatWithRecordComponent
@@ -162,10 +244,19 @@ Display AI-generated reports with tabs:
 - `LinkedEntityID`: string - ID of the entity to chat about
 - `LinkedPrimaryKey`: CompositeKey - Primary key of the record to chat about
 - `WelcomeQuestions`: ChatWelcomeQuestion[] - Custom welcome questions
+- `EnableArtifactSplitView`: boolean - Whether to enable split-panel artifact viewing (default: true)
+- `DefaultSplitRatio`: number - Default ratio for split panels (0-1, default: 0.6)
+
+#### Outputs
+- `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is selected
+- `ArtifactViewed`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is viewed in the panel
+- `NavigateToMatchingReport`: EventEmitter<string> - Fires when a report link is clicked
+- `NewReportCreated`: EventEmitter<string> - Fires when a new report is created
 
 #### Methods
 - `HandleChatMessageAdded(message: ChatMessage)`: Processes new chat messages
 - `HandleClearChat()`: Clears the conversation history
+- `ViewArtifact(artifactId: string)`: Opens an artifact in the split-panel view
 
 ### SkipButtonComponent
 
@@ -174,6 +265,37 @@ Display AI-generated reports with tabs:
 
 #### Outputs
 - `click`: EventEmitter<SkipClickedEvent> - Fires when the button is clicked
+
+### SkipChatWithRecordWindowComponent
+
+#### Inputs
+- `LinkedEntityID`: string - ID of the entity to chat about
+- `LinkedPrimaryKey`: CompositeKey - Primary key of the record to chat about
+- `DialogTitle`: string - Title for the dialog window
+- `Visible`: boolean - Whether the dialog is visible
+- `Width`: number - Width of the dialog
+- `Height`: number - Height of the dialog
+- `WelcomeQuestions`: ChatWelcomeQuestion[] - Custom welcome questions
+- `EnableArtifactSplitView`: boolean - Whether to enable split-panel artifact viewing (default: true)
+- `DefaultSplitRatio`: number - Default ratio for split panels (0-1, default: 0.6)
+
+#### Outputs
+- `DialogClosed`: EventEmitter<void> - Fires when the dialog is closed
+- `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is selected
+- `ArtifactViewed`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is viewed
+
+### SkipChatWrapperComponent
+
+#### Inputs
+- `EnableArtifactSplitView`: boolean - Whether to enable split-panel artifact viewing (default: true)
+- `DefaultSplitRatio`: number - Default ratio for split panels (0-1, default: 0.6)
+
+#### Outputs
+- `NavigateToMatchingReport`: EventEmitter<string> - Fires when a report link is clicked
+- `ConversationSelected`: EventEmitter<string> - Fires when a conversation is selected
+- `DrillDownEvent`: EventEmitter<DrillDownInfo> - Fires when drill-down is requested
+- `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is selected
+- `ArtifactViewed`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is viewed
 
 ## Dependencies
 

@@ -1,3 +1,5 @@
+-- 2.37.x Migration to add new columns
+
 -- Add ArtifactID and ArtifactVersionID columns to the ${flyway:defaultSchema}.ConversationDetail table
 ALTER TABLE [${flyway:defaultSchema}].[ConversationDetail]
 ADD 
