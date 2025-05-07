@@ -1,0 +1,80 @@
+.skip-split-panel-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.skip-split-panel-left, 
+.skip-split-panel-right {
+  height: 100%;
+  overflow: auto;
+  position: relative;
+  transition: width 0.1s ease;
+}
+
+.skip-split-panel-divider {
+  width: 8px;
+  height: 100%;
+  background-color: #f0f0f0;
+  cursor: col-resize;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  z-index: 10;
+}
+
+.divider-handle {
+  width: 4px;
+  height: 36px;
+  background-color: #ccc;
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+.skip-split-panel-divider:hover .divider-handle {
+  background-color: #999;
+  opacity: 0.8;
+}
+
+.skip-split-panel-container.dragging {
+  cursor: col-resize;
+}
+
+.skip-split-panel-container.dragging .skip-split-panel-left,
+.skip-split-panel-container.dragging .skip-split-panel-right {
+  pointer-events: none;
+  user-select: none;
+}
+
+.skip-split-panel-right-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.skip-split-panel-close-button {
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.skip-split-panel-close-button:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.skip-split-panel-right-content {
+  height: calc(100% - 41px); /* Account for header height */
+  overflow: auto;
+  padding: 12px;
+}

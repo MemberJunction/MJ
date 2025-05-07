@@ -92,6 +92,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * This array of emails will be excluded from the list of possible roles to share the conversation with.
    */
   @Input() public SharingExcludeEmails: string[] = [];
+  
+  /**
+   * Whether to enable the split-panel viewing for artifacts. Default is true.
+   */
+  @Input() public EnableArtifactSplitView: boolean = true;
+  
+  /**
+   * Default ratio for split panels when viewing artifacts (0-1). Default is 0.6 (left panel takes 60% of width).
+   */
+  @Input() public DefaultSplitRatio: number = 0.6;
 
   /**
    * This property is used to set the placeholder text for the textbox where the user types their message to Skip.   
@@ -123,6 +133,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * This event fires whenever a drill down is requested within a given report.
    */
   @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();  
+  
+  /**
+   * This event fires when an artifact is selected
+   */
+  @Output() ArtifactSelected = new EventEmitter<any>();
+  
+  /**
+   * This event fires when an artifact is viewed in the split panel
+   */
+  @Output() ArtifactViewed = new EventEmitter<any>();
 
   
   @ViewChild(Container, { static: true }) askSkip!: Container;
@@ -166,6 +186,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   private _intersectionObserver: IntersectionObserver | undefined;
   private static __skipChatWindowsCurrentlyVisible: number = 0;
   private sub?: Subscription;
+  
+  /**
+   * Currently selected artifact for viewing in the split panel
+   */
+  public selectedArtifact: any = null;
+  
+  /**
+   * Current split ratio for the split panel
+   */
+  public SplitRatio: number = this.DefaultSplitRatio;
 
   /**
    * The questions that will be displayed in the welcome screen.
@@ -1262,6 +1292,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     obj.DrillDownEvent.subscribe((drillDownInfo: DrillDownInfo) => {
       this.DrillDownEvent.emit(drillDownInfo);
     });
+    obj.ArtifactSelected.subscribe((artifact: any) => {
+      this.onArtifactSelected(artifact);
+    });
 
     obj.Provider = this.ProviderToUse;
     obj.SkipMarkOnlyLogoURL = this.SkipMarkOnlyLogoURL;
@@ -1623,5 +1656,53 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     if (this.ShowSharingButton && this.SelectedConversationCurrentUserPermissionLevel === 'Owner') 
       count++;
     return count;
+  }
+
+  /**
+   * Handles when an artifact is selected from a message
+   * @param artifact The artifact information
+   */
+  public onArtifactSelected(artifact: any): void {
+    if (this.EnableArtifactSplitView) {
+      this.selectedArtifact = artifact;
+      this.SplitRatio = this.DefaultSplitRatio;
+      this.ArtifactSelected.emit(artifact);
+      
+      // If the artifact has a messageId, we also emit the ArtifactViewed event
+      if (artifact && artifact.messageId) {
+        this.ArtifactViewed.emit(artifact);
+      }
+    }
+  }
+
+  /**
+   * Handles when an artifact is selected from the artifacts counter/badge
+   * @param artifact The artifact information
+   */
+  public onArtifactSelectedFromCounter(artifact: any): void {
+    if (this.EnableArtifactSplitView) {
+      this.selectedArtifact = {
+        artifactId: artifact.ID,
+        artifactVersionId: null
+      };
+      this.SplitRatio = this.DefaultSplitRatio;
+      this.ArtifactSelected.emit(artifact);
+      this.ArtifactViewed.emit(artifact);
+    }
+  }
+
+  /**
+   * Handles when the split ratio changes
+   * @param ratio The new split ratio
+   */
+  public onSplitRatioChanged(ratio: number): void {
+    this.SplitRatio = ratio;
+  }
+
+  /**
+   * Clears the selected artifact and closes the split panel
+   */
+  public closeArtifactPanel(): void {
+    this.selectedArtifact = null;
   }
 }

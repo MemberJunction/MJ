@@ -41,6 +41,9 @@ import { SkipDynamicChartComponent } from './dynamic-report/dynamic-chart';
 import { SkipDynamicGridComponent } from './dynamic-report/dynamic-grid';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-report';
+import { SkipSplitPanelComponent } from './split-panel/skip-split-panel.component';
+import { SkipArtifactViewerComponent } from './artifacts/skip-artifact-viewer.component';
+import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counter.component';
 
 
 @NgModule({
@@ -51,7 +54,10 @@ import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-re
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicHTMLReportComponent
+    SkipDynamicHTMLReportComponent,
+    SkipSplitPanelComponent,
+    SkipArtifactViewerComponent,
+    SkipArtifactsCounterComponent
   ],
   imports: [
     CommonModule,
@@ -81,7 +87,10 @@ import { SkipDynamicHTMLReportComponent } from './dynamic-report/dynamic-html-re
     SkipDynamicReportWrapperComponent,
     SkipDynamicChartComponent,
     SkipDynamicGridComponent,
-    SkipDynamicHTMLReportComponent
+    SkipDynamicHTMLReportComponent,
+    SkipSplitPanelComponent,
+    SkipArtifactViewerComponent,
+    SkipArtifactsCounterComponent
   ]
 })
 export class SkipChatModule { 

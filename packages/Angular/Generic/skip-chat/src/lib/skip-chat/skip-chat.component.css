@@ -39,7 +39,36 @@
 
 .right-panel {
     flex: 1; /* Take up the remaining space */
-    overflow-y: auto; /* Enable scrolling for the conversation content */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden; /* Hide overflow to prevent double scrollbars */
+}
+
+.conversation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: #f5f7f9;
+    border-bottom: 1px solid #dde4ee;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.conversation-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+.artifact-counter-container {
+    display: flex;
+    align-items: center;
 }
 
 
