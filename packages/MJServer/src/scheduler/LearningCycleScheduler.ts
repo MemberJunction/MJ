@@ -41,13 +41,7 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
    * @param intervalMinutes The interval in minutes between runs
    * @param skipLearningAPIurl The URL for the learning cycle API endpoint
    */
-  public start(intervalMinutes: number = 60, skipLearningAPIurl?: string): void {
-    // Check if we have a valid endpoint before attempting any calls
-    if (!skipLearningAPIurl || skipLearningAPIurl.trim() === '') {
-      LogStatus(`Learning cycle scheduler not started: No learning cycle API endpoint configured`);
-      return; 
-    }
-    
+  public start(intervalMinutes: number = 60): void {
     LogStatus(`Starting learning cycle scheduler with interval of ${intervalMinutes} minutes`);
     
     // Set up the interval for recurring calls
