@@ -18,7 +18,6 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
   
   private lastRunTime: Date | null = null;
   private dataSources: DataSourceInfo[] = [];
-  private initialLearningCycleFailed: boolean = false;
   
   // Protected constructor to enforce singleton pattern via BaseSingleton
   protected constructor() {
@@ -45,30 +44,22 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
   public start(intervalMinutes: number = 60, skipLearningAPIurl?: string): void {
     // Check if we have a valid endpoint before attempting any calls
     if (!skipLearningAPIurl || skipLearningAPIurl.trim() === '') {
-      return; // No API endpoint configured, don't start the scheduler
+      LogStatus(`Learning cycle scheduler not started: No learning cycle API endpoint configured`);
+      return; 
     }
     
-    // start learning cycle immediately upon the server start
+    LogStatus(`Starting learning cycle scheduler with interval of ${intervalMinutes} minutes`);
+    
+    // Set up the interval for recurring calls
+    const intervalMs = intervalMinutes * 60 * 1000;
+    this.intervalId = setInterval(() => {
+      this.runLearningCycle()
+        .catch(error => LogError(`Error in scheduled learning cycle: ${error}`));
+    }, intervalMs);
+    
+    // Start learning cycle immediately upon the server start
     this.runLearningCycle()
-      .then(success => {
-        // Only set up interval if the initial run was successful
-        if (success) {
-          const intervalMs = intervalMinutes * 60 * 1000;
-          
-          // Schedule the recurring task
-          this.intervalId = setInterval(() => {
-            this.runLearningCycle()
-              .catch(error => LogError(`Error in scheduled learning cycle`));
-          }, intervalMs);
-        } else {
-          this.initialLearningCycleFailed = true;
-          LogError(`Error in initial learning cycle, disabling further calls to the endpoint.`);
-        }
-      })
-      .catch(error => {
-        this.initialLearningCycleFailed = true;
-        LogError(`Error in initial learning cycle, disabling further calls to the endpoint.`);
-      });
+      .catch(error => LogError(`Error in initial learning cycle: ${error}`));
   }
   
   /**
@@ -147,7 +138,6 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
     return {
       isSchedulerRunning: this.intervalId !== null,
       lastRunTime: this.lastRunTime,
-      initialLearningCycleFailed: this.initialLearningCycleFailed,
       runningOrganizations: Array.from(this.runningOrganizations.entries()).map(([orgId, info]) => ({
         organizationId: orgId,
         learningCycleId: info.learningCycleId,

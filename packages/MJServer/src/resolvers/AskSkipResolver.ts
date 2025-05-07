@@ -136,9 +136,6 @@ export class LearningCycleStatusType {
   @Field(() => String, { nullable: true })
   LastRunTime: string;
   
-  @Field(() => Boolean)
-  InitialLearningCycleFailed: boolean;
-  
   @Field(() => [RunningOrganizationType], { nullable: true })
   RunningOrganizations: RunningOrganizationType[];
 }
@@ -2155,7 +2152,6 @@ cycle.`);
       return {
         IsSchedulerRunning: status.isSchedulerRunning,
         LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
-        InitialLearningCycleFailed: status.initialLearningCycleFailed,
         RunningOrganizations: status.runningOrganizations ? status.runningOrganizations.map(org => ({
           OrganizationId: org.organizationId,
           LearningCycleId: org.learningCycleId,
@@ -2169,7 +2165,6 @@ cycle.`);
       return {
         IsSchedulerRunning: false,
         LastRunTime: null,
-        InitialLearningCycleFailed: false,
         RunningOrganizations: []
       };
     }
