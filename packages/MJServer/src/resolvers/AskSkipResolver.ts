@@ -136,6 +136,9 @@ export class LearningCycleStatusType {
   @Field(() => String, { nullable: true })
   LastRunTime: string;
   
+  @Field(() => Boolean)
+  InitialLearningCycleFailed: boolean;
+  
   @Field(() => [RunningOrganizationType], { nullable: true })
   RunningOrganizations: RunningOrganizationType[];
 }
@@ -162,8 +165,6 @@ export class AskSkipResolver {
   // Static initializer that runs when the class is loaded - initializes the learning cycle scheduler
   static {
     try {
-      LogStatus('Initializing Skip AI Learning Cycle Scheduler');
-      
       // Set up event listener for server initialization
       const eventListener = MJGlobal.Instance.GetEventListener(true);
       eventListener.subscribe(event => {
@@ -180,8 +181,10 @@ export class AskSkipResolver {
               
               // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
               const interval = ___skipLearningCycleIntervalInMinutes ?? 60;
-              scheduler.start(interval);
-              LogStatus(`📅 Skip AI Learning cycle scheduler started with ${interval} minute interval`);
+              scheduler.start(interval, ___skipLearningAPIurl);
+              if (___skipLearningAPIurl) {
+                LogStatus(`📅 Skip AI Learning cycle scheduler started with ${interval} minute interval`);
+              }
             } else {
               LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
             }
@@ -190,8 +193,6 @@ export class AskSkipResolver {
           }
         }
       });
-      
-      LogStatus('Skip AI Learning Cycle Scheduler initialization listener registered');
     } catch (error) {
       // Handle any errors from the static initializer
       LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
@@ -342,7 +343,7 @@ export class AskSkipResolver {
       try {
         // Build the request to Skip learning API
         LogStatus(`Building Skip Learning API request`);
-        const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, true, dataSource, user, ForceEntityRefresh || false);
+        const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, false, dataSource, user, ForceEntityRefresh || false);
 
         // Make the API request
         const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
@@ -2154,6 +2155,7 @@ cycle.`);
       return {
         IsSchedulerRunning: status.isSchedulerRunning,
         LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
+        InitialLearningCycleFailed: status.initialLearningCycleFailed,
         RunningOrganizations: status.runningOrganizations ? status.runningOrganizations.map(org => ({
           OrganizationId: org.organizationId,
           LearningCycleId: org.learningCycleId,
@@ -2167,6 +2169,7 @@ cycle.`);
       return {
         IsSchedulerRunning: false,
         LastRunTime: null,
+        InitialLearningCycleFailed: false,
         RunningOrganizations: []
       };
     }
