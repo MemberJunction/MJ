@@ -85,6 +85,13 @@ const configInfoSchema = z.object({
   ___skipAPIurl: z.string().optional(),
   ___skipLearningAPIurl: z.string().optional(),
   ___skipLearningCycleIntervalInMinutes: z.coerce.number().optional(),
+  ___skipRunLearningCycles: z.string()
+  .optional()
+  .default("0")
+  .transform((v) => {
+    const enabled = v === "1";
+    return enabled ? 'Y' : 'N';
+  }),
   ___skipAPIOrgId: z.string().optional(),
   auth0Domain: z.string().optional(),
   auth0WebClientID: z.string().optional(),
@@ -121,6 +128,7 @@ export const {
   ___skipAPIurl,
   ___skipLearningAPIurl,
   ___skipLearningCycleIntervalInMinutes,
+  ___skipRunLearningCycles,
   ___skipAPIOrgId,
   auth0Domain,
   auth0WebClientID,

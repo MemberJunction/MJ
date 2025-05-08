@@ -84,13 +84,14 @@ export class AzureFileStorage extends FileStorageBase {
   }
 
   public CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
+    const now = new Date();
     const sasOptions: AccountSASSignatureValues = {
       services: AccountSASServices.parse('b').toString(), // blobs
       resourceTypes: AccountSASResourceTypes.parse('o').toString(), // object
       permissions: AccountSASPermissions.parse('r'), // read-only permissions
       protocol: SASProtocol.Https,
-      startsOn: new Date(),
-      expiresOn: new Date(new Date().valueOf() + 10 * 60 * 1000), // 10 minutes
+      startsOn: new Date(now.valueOf() - 60 * 1000), // now minus 1 minute
+      expiresOn: new Date(now.valueOf() + 10 * 60 * 1000), // 10 minutes from now
     };
 
     const sasToken = generateAccountSASQueryParameters(sasOptions, this._sharedKeyCredential).toString();
@@ -283,10 +284,14 @@ export class AzureFileStorage extends FileStorageBase {
       // Read the stream into a buffer
       const chunks: Buffer[] = [];
       for await (const chunk of downloadResponse.readableStreamBody) {
-        chunks.push(Buffer.from(chunk));
+        if (typeof chunk === 'string') {
+          chunks.push(Buffer.from(chunk, 'utf8')); // or appropriate encoding
+        } else {
+          chunks.push(chunk); // already a Buffer
+        }
       }
       
-      return Buffer.concat(chunks);
+      return Buffer.concat(chunks as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);

@@ -1,0 +1,79 @@
+.skip-split-panel-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Add specific styles for the Kendo splitter */
+.skip-splitter {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+}
+
+.skip-split-panel-left, 
+.skip-split-panel-right {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Ensure the right panel content fills the available space */
+.skip-split-panel-right-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.skip-split-panel-right-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  background-color: #f8f8f8;
+  min-height: 24px;
+  z-index: 10;
+}
+
+.skip-split-panel-close-button {
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.skip-split-panel-close-button:hover {
+  background-color: #f0f0f0;
+  color: #333;
+}
+
+.skip-split-panel-right-content {
+  height: calc(100% - 41px); /* Account for header height */
+  overflow: auto;
+  padding: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Improve the appearance of the Kendo Splitter's handle */
+::ng-deep .k-splitbar {
+  background-color: #f0f0f0;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+}
+
+::ng-deep .k-splitbar:hover,
+::ng-deep .k-splitbar.k-splitbar-dragging-to {
+  background-color: #e0e0e0;
+}
+
+::ng-deep .k-splitbar .k-resize-handle {
+  background-color: #666;
+}

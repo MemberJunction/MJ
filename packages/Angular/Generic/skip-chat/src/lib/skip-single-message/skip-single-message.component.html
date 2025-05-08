@@ -19,15 +19,25 @@
                 {{Message}}
                 @if(!IsTemporaryMessage && !IsAIMessage && ShowMessageEditPanel && !ConversationProcessing) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
-                    <div class="message-actions">
-                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()"></span>
-                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()"></span>
+                    <div class="message-actions" title="Message actions">
+                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()" title="Edit message"></span>
+                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()" title="Delete message"></span>
+                    </div>
+                }
+                
+                @if(HasArtifact) {
+                    <!-- Artifact indicator for messages with associated artifacts -->
+                    <div class="artifact-indicator" (click)="onArtifactIndicatorClick()">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span class="artifact-label">{{ArtifactName || 'View Artifact'}}{{ArtifactVersion ? ' v' + ArtifactVersion : ''}}</span>
                     </div>
                 }
             </div>
-            <div #reportContainer>
-                <!-- this is where the report will go - dynamically instantiated -->
-            </div>
+            @if (!HasArtifact) {
+                <div #reportContainer>
+                    <!-- this is where the report will go - dynamically instantiated -->
+                </div>
+            }
             <div *ngIf="IsAIMessage && 
                         SuggestedQuestions.length > 0 && 
                         IsLastMessageInConversation && 

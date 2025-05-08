@@ -342,6 +342,7 @@ const config = {
   ___skipAPIurl: process.env.ASK_SKIP_API_URL,
   ___skipLearningAPIurl: process.env.ASK_SKIP_LEARNING_API_URL,
   ___skipLearningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
+  ___skipRunLearningCycles: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
   ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,

@@ -406,6 +406,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Resource Links" [Visible]="record.IsSaved"> 
+                        Resource Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','UserID')"  
+                            [NewRecordValues]="NewRecordValues('Resource Links')"
+                            [AllowLoad]="IsCurrentTab('Resource Links')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="List Categories" [Visible]="record.IsSaved"> 
                         List Categories
                     </mj-tab>
@@ -445,19 +458,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="Resource Links" [Visible]="record.IsSaved"> 
-                        Resource Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Links','UserID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Links')"
-                            [AllowLoad]="IsCurrentTab('Resource Links')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Report User States" [Visible]="record.IsSaved"> 
                         MJ: Report User States
                     </mj-tab>
@@ -484,6 +484,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
+                        Resource Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','UserID')"  
+                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
+                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AI Agent Requests" [Visible]="record.IsSaved"> 
                         AI Agent Requests
                     </mj-tab>
@@ -505,19 +518,6 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','UserID')"  
                             [NewRecordValues]="NewRecordValues('Conversation Details')"
                             [AllowLoad]="IsCurrentTab('Conversation Details')"  
-                            [EditMode]="GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
-                        Resource Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('Resource Permissions','UserID')"  
-                            [NewRecordValues]="NewRecordValues('Resource Permissions')"
-                            [AllowLoad]="IsCurrentTab('Resource Permissions')"  
                             [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    

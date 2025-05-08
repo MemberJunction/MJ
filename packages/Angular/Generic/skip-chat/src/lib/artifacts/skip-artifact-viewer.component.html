@@ -1,0 +1,62 @@
+<div class="skip-artifact-viewer-container">
+  <div class="skip-artifact-viewer-header">
+    <div class="artifact-info">
+      <h3 class="artifact-title">{{ artifactTitle }}</h3>
+      <span class="artifact-type">{{ artifactTypeName }}</span>
+      @if (artifact.Description?.trim().length > 0) {
+        <div class="artifact-description">
+          <p>{{ artifact.Description }}</p>
+        </div>
+      }
+    </div>
+
+    @if (artifactVersions && artifactVersions.length > 0) {
+      <div class="version-selector">
+        <label for="version-dropdown">Version:</label>
+        <select id="version-dropdown" [(ngModel)]="selectedVersionId" (change)="onVersionChange()">
+          @for (version of artifactVersions; track version.ID) {
+            <option [value]="version.ID">{{ version.Version }}</option>
+          }
+        </select>
+      </div>
+    }
+  </div>
+
+  <div class="skip-artifact-viewer-content">
+    @if (isLoading) {
+      <div class="loading-container">
+        <kendo-loader size="large"></kendo-loader>
+        <div class="loading-text">Loading artifact...</div>
+      </div>
+    } @else if (error) {
+      <div class="error-container">
+        <div class="error-icon">
+          <i class="fa-solid fa-exclamation-circle"></i>
+        </div>
+        <div class="error-message">{{ error }}</div>
+      </div>
+    } @else if (!artifact) {
+      <div class="empty-state">
+        <div class="empty-icon">
+          <i class="fa-solid fa-file-alt"></i>
+        </div>
+        <div class="empty-message">No artifact selected</div>
+      </div>
+    } @else {
+      <div class="report-container" #reportContainer>
+        <!-- The dynamic report component will be inserted here -->
+      </div>
+
+      @if (artifactVersion) {
+        <div class="artifact-metadata">
+          @if (artifactVersion.CreatedAt) {
+            <div class="metadata-item">
+              <span class="metadata-label">Created:</span>
+              <span class="metadata-value">{{ artifactVersion.CreatedAt | date:'medium' }}</span>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>
