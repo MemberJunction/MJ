@@ -52,6 +52,7 @@
 
         <div class="right-panel">
             <skip-split-panel 
+                #splitPanel
                 [Mode]="EnableArtifactSplitView && selectedArtifact ? 'BothSides' : 'LeftOnly'" 
                 [SplitRatio]="SplitRatio" 
                 (SplitRatioChanged)="onSplitRatioChanged($event)"

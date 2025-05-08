@@ -106,6 +106,8 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements Aft
       return;
     }
 
+    event.preventDefault(); // Prevent text selection while dragging
+    
     const dx = event.clientX - this.startX;
     const newLeftWidth = this.startWidth + dx;
     

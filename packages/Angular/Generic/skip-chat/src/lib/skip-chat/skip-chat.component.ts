@@ -1669,6 +1669,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     return count;
   }
 
+  @ViewChild('splitPanel') splitPanel: any;
+
   /**
    * Handles when an artifact is selected from a message
    * @param artifact The artifact information
@@ -1677,12 +1679,21 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     if (this.EnableArtifactSplitView) {
       this.selectedArtifact = artifact;
       this.SplitRatio = this.DefaultSplitRatio;
-      this.ArtifactSelected.emit(artifact);
       
-      // If the artifact has a messageId, we also emit the ArtifactViewed event
-      if (artifact && artifact.messageId) {
-        this.ArtifactViewed.emit(artifact);
-      }
+      // Force the split panel to BothSides mode when an artifact is selected
+      setTimeout(() => {
+        if (this.selectedArtifact && this.splitPanel) {
+          // Explicitly set the split panel to BothSides mode
+          this.splitPanel.setMode('BothSides');
+          
+          this.ArtifactSelected.emit(artifact);
+          
+          // If the artifact has a messageId, we also emit the ArtifactViewed event
+          if (artifact && artifact.messageId) {
+            this.ArtifactViewed.emit(artifact);
+          }
+        }
+      }, 0);
     }
   }
 

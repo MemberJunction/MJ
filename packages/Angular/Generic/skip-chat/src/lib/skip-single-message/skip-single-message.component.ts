@@ -1,4 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
+import { ConversationArtifactEntity } from '@memberjunction/core-entities';
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
@@ -65,6 +66,16 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * This is an internal property that is turned on just after a user succesfully rates a message, and is never true otherwise. This allows the UI to show a thank you message for the rating.
      */
     public UserJustRated: boolean = false;
+
+    /**
+     * Name of the artifact associated with this message, if any
+     */
+    public ArtifactName: string | null = null;
+
+    /**
+     * Description of the artifact associated with this message, if any
+     */
+    public ArtifactDescription: string | null = null;
 
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
@@ -174,6 +185,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         this.cdRef.detectChanges();  
 
         this._loadTime = Date.now();
+        
+        // Load artifact info if available
+        if (this.HasArtifact) {
+            this.loadArtifactInfo();
+        }
     }
  
 
@@ -297,7 +313,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         if (resultObject.success) {
           if (resultObject.responsePhase ===  SkipResponsePhase.analysis_complete ) {
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
-            const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);
+            const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);            
             
             // Pass the data to the new chart
             const report = componentRef.instance;
@@ -313,6 +329,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
             report.Provider = this.ProviderToUse;
             report.SkipData = analysisResult;
             this.SuggestedQuestions = analysisResult.suggestedQuestions ? analysisResult.suggestedQuestions : [];
+          
             report.DataContext = this.DataContext;
             report.AllowDrillDown = false; // we don't want this within the chat, it's too much
     
@@ -413,8 +430,31 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         this.ArtifactSelected.emit({
           artifactId: this.ConversationDetailRecord.ArtifactID,
           artifactVersionId: this.ConversationDetailRecord.ArtifactVersionID,
-          messageId: this.ConversationDetailRecord.ID
+          messageId: this.ConversationDetailRecord.ID,
+          name: this.ArtifactName,
+          description: this.ArtifactDescription
         });
+      }
+    }
+
+    /**
+     * Loads the artifact information if available
+     */
+    private async loadArtifactInfo(): Promise<void> {
+      if (!this.HasArtifact || !this.ConversationDetailRecord.ArtifactID) {
+        return;
+      }
+
+      try {
+        const provider = this.ProviderToUse;
+        const artifactEntity = await provider.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
+        
+        if (await artifactEntity.Load(this.ConversationDetailRecord.ArtifactID as string)) {
+          this.ArtifactName = artifactEntity.Name;
+          this.ArtifactDescription = artifactEntity.Description;
+        }
+      } catch (err) {
+        console.error('Error loading artifact information', err);
       }
     }
 }
