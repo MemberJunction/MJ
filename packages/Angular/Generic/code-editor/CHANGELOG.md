@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-code-editor
 
+## 2.37.0
+
+### Patch Changes
+
+- Updated dependencies [1418b71]
+- Updated dependencies [6a75f8d]
+  - @memberjunction/core-entities@2.37.0
+  - @memberjunction/ng-container-directives@2.37.0
+  - @memberjunction/core@2.37.0
+  - @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

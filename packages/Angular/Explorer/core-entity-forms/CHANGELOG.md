@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.37.0
+
+### Minor Changes
+
+- 1418b71: Added ArtifactID/ArtifactVersionID as optional fkeys to ConversationDetail
+
+### Patch Changes
+
+- Updated dependencies [1418b71]
+- Updated dependencies [6a75f8d]
+  - @memberjunction/core-entities@2.37.0
+  - @memberjunction/ng-container-directives@2.37.0
+  - @memberjunction/ng-explorer-core@2.37.0
+  - @memberjunction/ng-code-editor@2.37.0
+  - @memberjunction/ng-join-grid@2.37.0
+  - @memberjunction/ng-timeline@2.37.0
+  - @memberjunction/ng-base-forms@2.37.0
+  - @memberjunction/ng-form-toolbar@2.37.0
+  - @memberjunction/ng-tabstrip@2.37.0
+  - @memberjunction/core@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

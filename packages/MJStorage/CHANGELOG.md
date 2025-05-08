@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/storage
 
+## 2.37.0
+
+### Patch Changes
+
+- 78ffaa6: Update AzureFileStorage for Clock Skew and Type Safety
+- a1a7a52: Handling Box token refresh
+- Updated dependencies [1418b71]
+  - @memberjunction/core-entities@2.37.0
+  - @memberjunction/core@2.37.0
+  - @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-container-directives
 
+## 2.37.0
+
+### Patch Changes
+
+- 6a75f8d: Documentation improvements for ng-container-directives package
+  - @memberjunction/core@2.37.0
+  - @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes
