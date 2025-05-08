@@ -1677,15 +1677,24 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public onArtifactSelected(artifact: any): void {
     if (this.EnableArtifactSplitView) {
+      // Store artifact in component state
       this.selectedArtifact = artifact;
-      this.SplitRatio = this.DefaultSplitRatio;
       
-      // Force the split panel to BothSides mode when an artifact is selected
+      // Ensure a delay to allow Angular's change detection to catch up
       setTimeout(() => {
         if (this.selectedArtifact && this.splitPanel) {
-          // Explicitly set the split panel to BothSides mode
+          // First, check if we're already in BothSides mode
+          const currentMode = this.splitPanel.Mode;
+          
+          if (currentMode === 'LeftOnly') {
+            // If previously closed, use the stored default ratio or previously saved ratio
+            this.SplitRatio = this.splitPanel._lastRatioBeforeClosing || this.DefaultSplitRatio;
+          }
+          
+          // Explicitly set the split panel to BothSides mode with the correct ratio
           this.splitPanel.setMode('BothSides');
           
+          // Emit events for parent components
           this.ArtifactSelected.emit(artifact);
           
           // If the artifact has a messageId, we also emit the ArtifactViewed event
@@ -1693,10 +1702,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
             this.ArtifactViewed.emit(artifact);
           }
         }
-      }, 0);
+      }, 50); // Slightly longer timeout to ensure DOM updates complete
     }
   }
-
+  
   /**
    * Handles when an artifact is selected from the artifacts counter/badge
    * @param artifact The artifact information
@@ -1718,6 +1727,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * @param ratio The new split ratio
    */
   public onSplitRatioChanged(ratio: number): void {
+    // Store the updated ratio
     this.SplitRatio = ratio;
   }
 

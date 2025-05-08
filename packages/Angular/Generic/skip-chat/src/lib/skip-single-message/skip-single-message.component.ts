@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
-import { ConversationArtifactEntity } from '@memberjunction/core-entities';
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
+import { IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
@@ -76,6 +76,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * Description of the artifact associated with this message, if any
      */
     public ArtifactDescription: string | null = null;
+
+    /**
+     * Version of the artifact associated with this message, if any
+     */
+    public ArtifactVersion: number | null = null;
 
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
     @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
@@ -447,11 +452,42 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
 
       try {
         const provider = this.ProviderToUse;
-        const artifactEntity = await provider.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
-        
-        if (await artifactEntity.Load(this.ConversationDetailRecord.ArtifactID as string)) {
-          this.ArtifactName = artifactEntity.Name;
-          this.ArtifactDescription = artifactEntity.Description;
+        const rv = new RunView(this.RunViewToUse);
+        const params: RunViewParams[] = [                  
+          {
+            EntityName: 'MJ: Conversation Artifacts',
+            ExtraFilter: "ID = '" + this.ConversationDetailRecord.ArtifactID + "'",
+            ResultType: 'simple'
+          }
+        ];
+        if (this.ConversationDetailRecord.ArtifactVersionID) {
+          params.push(
+            {
+              EntityName: 'MJ: Conversation Artifact Versions',
+              ExtraFilter: "ID = '" + this.ConversationDetailRecord.ArtifactVersionID + "'",
+              ResultType: 'simple'
+            }
+          );
+        }
+        const results = await rv.RunViews(params, this.ProviderToUse.CurrentUser);
+        if (results) {
+          const artifactResult = results[0];
+          if (artifactResult && artifactResult.Results?.length > 0) {
+            const artifact = artifactResult.Results[0];
+            if (artifact) {
+              this.ArtifactName = artifact.Name;
+              this.ArtifactDescription = artifact.Description;
+            }
+          }
+          if (this.ConversationDetailRecord.ArtifactVersionID) {
+            const versionResult = results[1];
+            if (versionResult && versionResult.Results?.length > 0) {
+              const version = <ConversationArtifactVersionEntity>versionResult.Results[0];
+              if (version) {
+                this.ArtifactVersion = version.Version;
+              }
+            }
+          }
         }
       } catch (err) {
         console.error('Error loading artifact information', err);

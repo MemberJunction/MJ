@@ -1,19 +1,36 @@
-<div #container class="skip-split-panel-container">
-  <div #leftPanel class="skip-split-panel-left" mjFillContainer [fillWidth]="false" [fillHeight]="true">
-    <ng-content select="[left-panel]"></ng-content>
-  </div>
-  <div #divider class="skip-split-panel-divider" 
-       (mousedown)="startDrag($event)">
-    <div class="divider-handle"></div>
-  </div>
-  <div #rightPanel class="skip-split-panel-right" mjFillContainer [fillWidth]="false" [fillHeight]="true">
-    <div class="skip-split-panel-right-header">
-      <button class="skip-split-panel-close-button" (click)="closeRightPanel()">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-    <div class="skip-split-panel-right-content">
-      <ng-content select="[right-panel]"></ng-content>
-    </div>
-  </div>
+<div class="skip-split-panel-container">
+  <kendo-splitter 
+    [orientation]="'horizontal'"
+    (resize)="onResize($event)"
+    class="skip-splitter">
+    
+    <!-- Left Panel -->
+    <kendo-splitter-pane 
+      [size]="Mode === 'LeftOnly' ? '100%' : leftPaneSize"
+      [min]="MinLeftPanelWidth"
+      [resizable]="true"
+      [collapsible]="true"
+      [style.display]="Mode === 'RightOnly' ? 'none' : 'block'">
+      <ng-content select="[left-panel]"></ng-content>
+    </kendo-splitter-pane>
+    
+    <!-- Right Panel -->
+    <kendo-splitter-pane 
+      [size]="Mode === 'RightOnly' ? '100%' : rightPaneSize"
+      [min]="MinRightPanelWidth"
+      [collapsible]="false"
+      [resizable]="true"
+      [style.display]="Mode === 'LeftOnly' ? 'none' : 'block'">
+      <div class="skip-split-panel-right-wrapper">
+        <div class="skip-split-panel-right-header">
+          <button class="skip-split-panel-close-button" (click)="closeRightPanel()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="skip-split-panel-right-content">
+          <ng-content select="[right-panel]"></ng-content>
+        </div>
+      </div>
+    </kendo-splitter-pane>
+  </kendo-splitter>
 </div>
