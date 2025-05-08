@@ -142,7 +142,11 @@
                     <skip-artifact-viewer
                         *ngIf="selectedArtifact"
                         [ArtifactID]="selectedArtifact.artifactId"
-                        [ArtifactVersionID]="selectedArtifact.artifactVersionId">
+                        [ArtifactVersionID]="selectedArtifact.artifactVersionId"
+                        [DataContext]="DataContext"
+                        (NavigateToMatchingReport)="NavigateToMatchingReport.emit($event)"
+                        (NewReportCreated)="NewReportCreated.emit($event)"
+                        (DrillDownEvent)="DrillDownEvent.emit($event)">
                     </skip-artifact-viewer>
                 </div>
             </skip-split-panel>

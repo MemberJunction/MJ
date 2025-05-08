@@ -1,11 +1,13 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector } from '@angular/core';
-import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
-import { RunView } from '@memberjunction/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { RunView, LogError } from '@memberjunction/core';
+import { DataContext } from '@memberjunction/data-context';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { LogError } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
+import { SkipAPIResponse, SkipAPIAnalysisCompleteResponse, SkipResponsePhase } from '@memberjunction/skip-types';
+import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-artifact-viewer',
@@ -15,8 +17,24 @@ import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynami
 export class SkipArtifactViewerComponent extends BaseAngularComponent implements OnInit, OnChanges, AfterViewInit {
   @Input() public ArtifactID: string = '';
   @Input() public ArtifactVersionID: string = '';
+  @Input() public DataContext: DataContext | null = null;
   
   @ViewChild('reportContainer', { read: ViewContainerRef, static: false }) reportContainer!: ViewContainerRef;
+  
+  /**
+   * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
+   */
+  @Output() NavigateToMatchingReport = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a new report is created.
+   */
+  @Output() NewReportCreated = new EventEmitter<string>();
+
+  /**
+   * This event fires whenever a drill down is requested within a given report.
+   */
+  @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
   
   public isLoading: boolean = false;
   public artifact: any = null;
@@ -28,10 +46,12 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   public artifactVersions: any[] = [];
   public selectedVersionId: string = '';
   private reportComponentRef: ComponentRef<any> | null = null;
+  private conversationDetailRecord: ConversationDetailEntity | null = null;
 
   constructor(
     private notificationService: MJNotificationService,
     private componentFactoryResolver: ComponentFactoryResolver,
+    private cdRef: ChangeDetectorRef,
     private injector: Injector) {
     super();
   }
@@ -52,8 +72,23 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   ngAfterViewInit(): void {
     // If the artifact is already loaded (happens when component is created with initial inputs),
     // we need to create the report component once the view is initialized
-    if (this.artifact && this.artifactVersion && this.reportContainer) {
-      this.createReportComponent();
+    if (this.artifact && this.artifactVersion) {
+      // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+      // and to ensure reportContainer is properly initialized
+      setTimeout(async () => {
+        if (this.reportContainer) {
+          await this.createReportComponent();
+        } else {
+          // If the container is still not available, try once more after a longer delay
+          setTimeout(async () => {
+            if (this.reportContainer) {
+              await this.createReportComponent();
+            } else {
+              LogError('Report container still not available after multiple attempts');
+            }
+          }, 100);
+        }
+      }, 0);
     }
   }
 
@@ -90,7 +125,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
       // Load the specific artifact version if provided, otherwise use the latest version
       if (this.ArtifactVersionID) {
-        await this.loadSpecificArtifactVersion(this.ArtifactVersionID);
+        this.loadSpecificArtifactVersion(this.ArtifactVersionID);
       } else if (this.artifactVersions.length > 0) {
         // Use the latest version (first in the list since we sort by Version DESC)
         this.artifactVersion = this.artifactVersions[0];
@@ -99,10 +134,18 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         throw new Error('No artifact versions found');
       }
       
-      // Create the report component if view has been initialized
-      if (this.reportContainer) {
-        this.createReportComponent();
-      }
+      // Create the report component after a short delay to ensure Angular has time to initialize the view
+      this.isLoading = false;
+      this.cdRef.detectChanges(); // Trigger change detection to update the view
+      setTimeout(() => {
+        // Check again if view is initialized
+        if (this.reportContainer) {
+          this.createReportComponent();
+        } else {
+          // If still not initialized, we'll try again in ngAfterViewInit
+          LogError('Report container not yet initialized, will try in ngAfterViewInit');
+        }
+      }, 0);
     } catch (err) {
       LogError('Error loading artifact', err instanceof Error ? err.message : String(err));
       this.error = err instanceof Error ? err.message : 'Unknown error loading artifact';
@@ -125,7 +168,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       EntityName: 'MJ: Conversation Artifact Versions',
       ResultType: 'entity_object',
       OrderBy: 'Version DESC',
-      ExtraFilter: `ArtifactID = '${this.ArtifactID}'`
+      ExtraFilter: `ConversationArtifactID = '${this.ArtifactID}'`
     });
 
     if (versionResult && versionResult.Success && versionResult.Results.length > 0) {
@@ -138,19 +181,13 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   /**
    * Loads a specific artifact version by ID
    */
-  private async loadSpecificArtifactVersion(versionId: string): Promise<void> {
-    const runView = new RunView(this.RunViewToUse);
-    const versionResult = await runView.RunView<ConversationArtifactVersionEntity>({
-      EntityName: 'MJ: Conversation Artifact Versions',
-      ResultType: 'entity_object',
-      ExtraFilter: `ID = '${versionId}'`
-    });
-
-    if (!versionResult || !versionResult.Success || versionResult.Results.length === 0) {
-      throw new Error(`Failed to load artifact version: ${versionId}`);
+  private loadSpecificArtifactVersion(versionId: string) {
+    // grab the version from the this.artifactVersions array
+    const version = this.artifactVersions.find((v) => v.ID === versionId);
+    if (!version) {
+      throw new Error(`Artifact version with ID ${versionId} not found`);
     }
-
-    this.artifactVersion = versionResult.Results[0];
+    this.artifactVersion = version;
     this.selectedVersionId = this.artifactVersion.ID;
   }
 
@@ -165,10 +202,26 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         this.destroyReportComponent();
 
         // Load the selected version
-        await this.loadSpecificArtifactVersion(this.selectedVersionId);
+        this.loadSpecificArtifactVersion(this.selectedVersionId);
 
-        // Create the new report component
-        this.createReportComponent();
+        this.isLoading = false;
+        this.cdRef.detectChanges(); // Trigger change detection to update the view
+
+        // Wait for the next Angular cycle and ensure reportContainer is available
+        setTimeout(async () => {
+          if (this.reportContainer) {
+            await this.createReportComponent();
+          } else {
+            // If the container is still not available, try once more after a longer delay
+            setTimeout(async () => {
+              if (this.reportContainer) {
+                await this.createReportComponent();
+              } else {
+                LogError('Report container not available when changing versions');
+              }
+            }, 100);
+          }
+        }, 0);
       } catch (err) {
         LogError('Error changing artifact version', err instanceof Error ? err.message : String(err));
         this.error = err instanceof Error ? err.message : 'Unknown error loading artifact version';
@@ -177,7 +230,6 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
           'error',
           3000
         );
-      } finally {
         this.isLoading = false;
       }
     }
@@ -186,7 +238,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   /**
    * Creates the report component using the current artifact version Configuration
    */
-  private createReportComponent(): void {
+  private async createReportComponent(): Promise<void> {
     if (!this.reportContainer || !this.artifactVersion) {
       return;
     }
@@ -196,6 +248,9 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     this.reportContainer.clear();
 
     try {
+      // Load conversation detail record to get AI message
+      await this.loadConversationDetail();
+
       // Create the report component based on Configuration
       const componentFactory = this.componentFactoryResolver.resolveComponentFactory(SkipDynamicReportWrapperComponent);
       this.reportComponentRef = this.reportContainer.createComponent(componentFactory);
@@ -203,29 +258,104 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       if (this.reportComponentRef) {
         const instance = this.reportComponentRef.instance;
         
-        // Parse the Configuration JSON if it's a string
-        let configData;
-        try {
-          if (typeof this.artifactVersion.Configuration === 'string') {
-            configData = JSON.parse(this.artifactVersion.Configuration);
-          } else {
-            // If it's already an object, use it directly
-            configData = this.artifactVersion.Configuration;
+        // Initialize from AI message or Configuration
+        let configData = null;
+        
+        if (this.conversationDetailRecord && 
+            this.conversationDetailRecord.Role.trim().toLowerCase() === 'ai' &&
+            this.conversationDetailRecord.ID?.length > 0) {
+          try {
+            const resultObject = <SkipAPIResponse>JSON.parse(this.conversationDetailRecord.Message);
+            
+            if (resultObject.success && resultObject.responsePhase === SkipResponsePhase.analysis_complete) {
+              // Use the Skip API response data directly
+              configData = <SkipAPIAnalysisCompleteResponse>resultObject;
+            }
+          } catch (parseErr) {
+            LogError('Error parsing AI message', parseErr instanceof Error ? parseErr.message : String(parseErr));
           }
-        } catch (parseErr) {
-          LogError('Error parsing artifact configuration', parseErr instanceof Error ? parseErr.message : String(parseErr));
-          configData = null;
+        }
+        
+        // If we couldn't get data from AI message, try using the artifact version Configuration
+        if (!configData) {
+          try {
+            if (typeof this.artifactVersion.Configuration === 'string') {
+              configData = JSON.parse(this.artifactVersion.Configuration);
+            } else {
+              // If it's already an object, use it directly
+              configData = this.artifactVersion.Configuration;
+            }
+          } catch (parseErr) {
+            LogError('Error parsing artifact configuration', parseErr instanceof Error ? parseErr.message : String(parseErr));
+            configData = null;
+          }
+        }
+        
+        if (!configData) {
+          throw new Error('No valid configuration data found');
         }
 
         // Set properties on the report component
         instance.SkipData = configData;
         instance.Provider = this.ProviderToUse;
         instance.RunViewProvider = this.RunViewToUse;
+        
+        // Set up event handlers
+        instance.NavigateToMatchingReport.subscribe((reportID: string) => {
+          this.NavigateToMatchingReport.emit(reportID); // bubble up
+        });
+        
+        instance.NewReportCreated.subscribe((reportID: string) => {
+          this.NewReportCreated.emit(reportID); // bubble up
+        });
+        
+        instance.DrillDownEvent.subscribe((drillDownInfo: any) => {
+          this.DrillDownEvent.emit(drillDownInfo); // bubble up
+        });
+        
+        // Set additional properties
+        if (this.DataContext) {
+          instance.DataContext = this.DataContext;
+        }
+        
         instance.AllowDrillDown = false; // Disable drill-down in artifact viewer for simplicity
+        
+        // Set conversation info if available
+        if (this.conversationDetailRecord) {
+          instance.ConversationID = this.conversationDetailRecord.ConversationID;
+          instance.ConversationDetailID = this.conversationDetailRecord.ID;
+        }
       }
     } catch (err) {
       LogError('Error creating report component', err instanceof Error ? err.message : String(err));
-      this.error = 'Failed to create artifact viewer component';
+      this.error = 'Failed to create artifact viewer component: ' + (err instanceof Error ? err.message : String(err));
+    }
+  }
+  
+  /**
+   * Loads the conversation detail record associated with this artifact
+   */
+  private async loadConversationDetail(): Promise<void> {
+    if (!this.artifact || !this.artifact.ID) {
+      return;
+    }
+    
+    try {
+      // Get the conversation detail record
+      const runView = new RunView(this.RunViewToUse);
+      const detailsResult = await runView.RunView<ConversationDetailEntity>({
+        EntityName: 'Conversation Details',
+        ResultType: 'entity_object',
+        ExtraFilter: `ArtifactID = '${this.artifact.ID}' ${this.artifactVersion ? `AND ArtifactVersionID = '${this.artifactVersion.ID}'` : ''}`,
+        OrderBy: '__mj_CreatedAt DESC' // Get most recent first
+      });
+      
+      if (detailsResult && detailsResult.Success && detailsResult.Results.length > 0) {
+        this.conversationDetailRecord = detailsResult.Results[0];
+      }
+    } catch (err) {
+      LogError('Error loading conversation detail for artifact', err instanceof Error ? err.message : String(err));
+      // Don't set an error here, as this is non-critical - we can still try to use Configuration
     }
   }
 

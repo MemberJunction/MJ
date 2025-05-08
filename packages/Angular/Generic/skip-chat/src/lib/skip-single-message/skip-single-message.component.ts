@@ -307,7 +307,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
-      if (detail?.ID?.length > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
+      if (this.reportContainerRef && detail?.ID?.length > 0 && detail.Role.trim().toLowerCase() === 'ai' ) {
         const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
   
         if (resultObject.success) {
