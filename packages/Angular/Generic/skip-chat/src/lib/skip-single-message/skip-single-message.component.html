@@ -19,9 +19,9 @@
                 {{Message}}
                 @if(!IsTemporaryMessage && !IsAIMessage && ShowMessageEditPanel && !ConversationProcessing) {
                     <!-- this is a user message, so we need to offer the ability to edit/delete the message. -->
-                    <div class="message-actions">
-                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()"></span>
-                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()"></span>
+                    <div class="message-actions" title="Message actions">
+                        <span class="fa-solid fa-edit" (click)="RaiseMessageEditRequest()" title="Edit message"></span>
+                        <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()" title="Delete message"></span>
                     </div>
                 }
                 

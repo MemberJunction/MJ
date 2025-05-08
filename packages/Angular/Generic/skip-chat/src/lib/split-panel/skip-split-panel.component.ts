@@ -31,9 +31,9 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
   @Output() public SplitRatioChanged = new EventEmitter<number>();
 
   // Properties for pane sizes
-  public leftPaneSize: string = '60%';
-  public rightPaneSize: string = '40%';
-  private _lastRatioBeforeClosing: number = 0.6; // Default value
+  public leftPaneSize: string = '50%';
+  public rightPaneSize: string = '50%';
+  private _lastRatioBeforeClosing: number = 0.5; // Default value
 
   constructor() {
     super();

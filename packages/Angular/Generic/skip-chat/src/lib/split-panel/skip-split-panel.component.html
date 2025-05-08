@@ -8,6 +8,7 @@
     <kendo-splitter-pane 
       [size]="Mode === 'LeftOnly' ? '100%' : leftPaneSize"
       [min]="MinLeftPanelWidth"
+      [resizable]="true"
       [collapsible]="true"
       [style.display]="Mode === 'RightOnly' ? 'none' : 'block'">
       <ng-content select="[left-panel]"></ng-content>
@@ -18,7 +19,7 @@
       [size]="Mode === 'RightOnly' ? '100%' : rightPaneSize"
       [min]="MinRightPanelWidth"
       [collapsible]="false"
-      mjFillContainer [fillWidth]="false" [fillHeight]="true"
+      [resizable]="true"
       [style.display]="Mode === 'LeftOnly' ? 'none' : 'block'">
       <div class="skip-split-panel-right-wrapper">
         <div class="skip-split-panel-right-header">
