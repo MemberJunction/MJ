@@ -39,22 +39,21 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
   /**
    * Start the scheduler with the specified interval in minutes
    * @param intervalMinutes The interval in minutes between runs
+   * @param skipLearningAPIurl The URL for the learning cycle API endpoint
    */
   public start(intervalMinutes: number = 60): void {
-    
-    // start learning cycle immediately upon the server start
-    this.runLearningCycle()
-      .catch(error => LogError(`Error in initial learning cycle: ${error}`));
-    
-    const intervalMs = intervalMinutes * 60 * 1000;
-    
     LogStatus(`Starting learning cycle scheduler with interval of ${intervalMinutes} minutes`);
     
-    // Schedule the recurring task
+    // Set up the interval for recurring calls
+    const intervalMs = intervalMinutes * 60 * 1000;
     this.intervalId = setInterval(() => {
       this.runLearningCycle()
         .catch(error => LogError(`Error in scheduled learning cycle: ${error}`));
     }, intervalMs);
+    
+    // Start learning cycle immediately upon the server start
+    this.runLearningCycle()
+      .catch(error => LogError(`Error in initial learning cycle: ${error}`));
   }
   
   /**
@@ -76,8 +75,6 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
     const startTime = new Date();
     
     try {
-      LogStatus('Starting scheduled learning cycle execution');
-
       // Make sure we have data sources
       if (!this.dataSources || this.dataSources.length === 0) {
         throw new Error('No data sources available for the learning cycle');
