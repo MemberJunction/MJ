@@ -29,7 +29,7 @@
                     <!-- Artifact indicator for messages with associated artifacts -->
                     <div class="artifact-indicator" (click)="onArtifactIndicatorClick()">
                         <i class="fa-solid fa-file-lines"></i>
-                        <span class="artifact-label">{{ArtifactName || 'View Artifact'}}</span>
+                        <span class="artifact-label">{{ArtifactName || 'View Artifact'}}{{ArtifactVersion ? ' v' + ArtifactVersion : ''}}</span>
                     </div>
                 }
             </div>

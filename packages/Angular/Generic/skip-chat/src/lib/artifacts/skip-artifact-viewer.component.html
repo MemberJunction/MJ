@@ -3,6 +3,11 @@
     <div class="artifact-info">
       <h3 class="artifact-title">{{ artifactTitle }}</h3>
       <span class="artifact-type">{{ artifactTypeName }}</span>
+      @if (artifact.Description?.trim().length > 0) {
+        <div class="artifact-description">
+          <p>{{ artifact.Description }}</p>
+        </div>
+      }
     </div>
 
     @if (artifactVersions && artifactVersions.length > 0) {
@@ -38,12 +43,6 @@
         <div class="empty-message">No artifact selected</div>
       </div>
     } @else {
-      @if (artifact.Description) {
-        <div class="artifact-description">
-          <p>{{ artifact.Description }}</p>
-        </div>
-      }
-
       <div class="report-container" #reportContainer>
         <!-- The dynamic report component will be inserted here -->
       </div>
