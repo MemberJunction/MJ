@@ -24,10 +24,20 @@
                         <span class="fa-solid fa-trash" (click)="RaiseMessageDeleteRequest()"></span>
                     </div>
                 }
+                
+                @if(HasArtifact) {
+                    <!-- Artifact indicator for messages with associated artifacts -->
+                    <div class="artifact-indicator" (click)="onArtifactIndicatorClick()">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span class="artifact-label">{{ArtifactName || 'View Artifact'}}</span>
+                    </div>
+                }
             </div>
-            <div #reportContainer>
-                <!-- this is where the report will go - dynamically instantiated -->
-            </div>
+            @if (!HasArtifact) {
+                <div #reportContainer>
+                    <!-- this is where the report will go - dynamically instantiated -->
+                </div>
+            }
             <div *ngIf="IsAIMessage && 
                         SuggestedQuestions.length > 0 && 
                         IsLastMessageInConversation && 
