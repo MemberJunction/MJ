@@ -2097,7 +2097,7 @@ cycle.`);
     // Save the data context items...
     // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it
     // we need a better strategy to persist because the cost of storage and retrieval/parsing is higher than just running the query again in many/most cases
-    dataContext.SaveItems(user, false);
+    await dataContext.SaveItems(user, false);
 
     // send a UI update trhough pub-sub
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
