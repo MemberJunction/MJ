@@ -1,5 +1,5 @@
-import { Arg, Ctx, Field, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, KeyValuePair, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, AllMetadataArrays } from '@memberjunction/core';
+import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
@@ -32,6 +32,9 @@ import {
   SkipConversation,
   SkipAPIArtifact,
   SkipAPIAgentRequest,
+  SkipAPIArtifactRequest,
+  SkipAPIArtifactType,
+  SkipAPIArtifactVersion,
 } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
@@ -40,6 +43,7 @@ import {
   AIAgentLearningCycleEntity,
   AIAgentNoteEntity,
   AIAgentRequestEntity,
+  ArtifactTypeEntity,
   ConversationArtifactEntity,
   ConversationArtifactVersionEntity,
   ConversationDetailEntity,
@@ -59,6 +63,7 @@ import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
+import { Skip } from '@graphql-tools/utils';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -158,6 +163,23 @@ export class StopLearningCycleResultType {
   CycleDetails: CycleDetailsType;
 }
 
+/**
+ * Internally used type
+ */
+type BaseSkipRequest = {
+  entities: SkipEntityInfo[],
+  queries: SkipQueryInfo[],
+  notes: SkipAPIAgentNote[],
+  noteTypes: SkipAPIAgentNoteType[],
+  requests: SkipAPIAgentRequest[], 
+  accessToken: GetDataAccessToken,
+  organizationID: string,
+  organizationInfo: any,
+  apiKeys: SkipAPIRequestAPIKey[],
+  callingServerURL: string,
+  callingServerAPIKey: string,
+  callingServerAccessToken: string
+}
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
@@ -656,7 +678,7 @@ cycle.`);
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false,
     additionalTokenInfo: any = {}
-  ) {
+  ): Promise<BaseSkipRequest> {
     
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
@@ -688,7 +710,7 @@ cycle.`);
       noteTypes,
       requests, 
       accessToken,
-      organizationId: ___skipAPIOrgId,
+      organizationID: ___skipAPIOrgId,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
       callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
@@ -729,7 +751,7 @@ cycle.`);
 
     // Create the learning-specific request object
     const input: SkipAPILearningCycleRequest = {
-      organizationId: baseRequest.organizationId,
+      organizationId: baseRequest.organizationID,
       organizationInfo: baseRequest.organizationInfo,
       learningCycleId,
       lastLearningCycleDate,
@@ -889,22 +911,100 @@ cycle.`);
       additionalTokenInfo
     );
 
+    const artifacts: SkipAPIArtifact[] = await this.buildSkipAPIArtifacts(contextUser, dataSource, conversationId);
+
     // Create the chat-specific request object
     const input: SkipAPIRequest = {
+      ...baseRequest,
       messages,
       conversationID: conversationId.toString(),
       dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
-      organizationID: baseRequest.organizationId,
       requestPhase,
-      entities: baseRequest.entities,
-      queries: baseRequest.queries,
-      notes: baseRequest.notes,
-      noteTypes: baseRequest.noteTypes,
-      apiKeys: baseRequest.apiKeys,
+      artifacts: artifacts
     };
     
     return input;
   }
+
+  /**
+   * Builds up an array of SkipAPIArtifact types to send across information about the artifacts associated with this particular
+   * conversation.
+   * @param contextUser 
+   * @param dataSource 
+   * @param conversationId 
+   * @returns 
+   */
+  protected async buildSkipAPIArtifacts(contextUser: UserInfo, dataSource: DataSource, conversationId: string): Promise<SkipAPIArtifact[]> {
+    const md = new Metadata();
+    const ei = md.EntityByName('MJ: Conversation Artifacts');
+    const rv = new RunView();
+    const results = await rv.RunViews([
+      {
+        EntityName: "MJ: Conversation Artifacts",
+        ExtraFilter: `ConversationID='${conversationId}'`, // get artifacts linked to this convo
+        OrderBy: "__mj_CreatedAt"
+      },
+      {
+        EntityName: "MJ: Artifact Types", // get all artifact types
+        OrderBy: "Name"
+      },
+      {
+        EntityName: "MJ: Conversation Artifact Versions",
+        ExtraFilter: `ConversationArtifactID IN (SELECT ID FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationID='${conversationId}')`,
+        OrderBy: 'ConversationArtifactID, __mj_CreatedAt'
+      }
+    ], contextUser);
+    if (results && results.length > 0 && results.every((r) => r.Success)) {
+      const types: SkipAPIArtifactType[] = results[1].Results.map((a: ArtifactTypeEntity) => {
+        const retVal: SkipAPIArtifactType = {
+          id: a.ID,
+          name: a.Name,
+          description: a.Description,
+          contentType: a.ContentType,
+          enabled: a.IsEnabled,
+          createdAt: a.__mj_CreatedAt,
+          updatedAt: a.__mj_UpdatedAt
+        }
+        return retVal;
+      });
+      const allConvoArtifacts = results[0].Results.map((a: ConversationArtifactEntity) => {
+        const rawVersions: ConversationArtifactVersionEntity[] = results[2].Results as ConversationArtifactVersionEntity[];
+        const thisArtifactsVersions = rawVersions.filter(rv => rv.ConversationArtifactID === a.ID);
+        const versionsForThisArtifact: SkipAPIArtifactVersion[] = thisArtifactsVersions.map((v: ConversationArtifactVersionEntity) => {
+          const versionRetVal: SkipAPIArtifactVersion = {
+            id: v.ID,
+            artifactId: v.ConversationArtifactID,
+            version: v.Version,
+            configuration: v.Configuration,
+            content: v.Content,
+            comments: v.Comments,
+            createdAt: v.__mj_CreatedAt,
+            updatedAt: v.__mj_UpdatedAt
+          };
+          return versionRetVal;
+        });
+        const artifactRetVal: SkipAPIArtifact = {
+          id: a.ID,
+          name: a.Name,
+          description: a.Description,
+          comments: a.Comments,
+          sharingScope: a.SharingScope as 'None' |'SpecificUsers' |'Everyone' |'Public',
+          versions: versionsForThisArtifact,
+          conversationId: a.ConversationID,
+          artifactType: types.find((t => t.id === a.ArtifactTypeID)),
+          createdAt: a.__mj_CreatedAt,
+          updatedAt: a.__mj_UpdatedAt
+        };
+        return artifactRetVal;
+      });
+
+      return allConvoArtifacts;
+    }
+    else {
+      return [];
+    }
+  }
+
 
   /**
    * Executes a script in the context of a data context and returns the results
