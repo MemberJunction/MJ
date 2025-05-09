@@ -64,13 +64,14 @@ export class AzureFileStorage extends FileStorageBase {
   }
 
   public CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload> {
+    const now = new Date();
     const sasOptions: AccountSASSignatureValues = {
       services: AccountSASServices.parse('b').toString(), // blobs
       resourceTypes: AccountSASResourceTypes.parse('o').toString(), // object
       permissions: AccountSASPermissions.parse('w'), // write-only permissions
       protocol: SASProtocol.Https,
-      startsOn: new Date(),
-      expiresOn: new Date(new Date().valueOf() + 10 * 60 * 1000), // 10 minutes
+      startsOn: new Date(now.valueOf() - 60 * 1000), // now minus 1 minute
+      expiresOn: new Date(now.valueOf() + 10 * 60 * 1000), // 10 minutes from now
     };
 
     // Using the SAS url to upload e.g.
