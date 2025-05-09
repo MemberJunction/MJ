@@ -2052,7 +2052,6 @@ cycle.`);
     convoDetailEntityAI.Message = sResult;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
-    convoDetailEntityAI.Set('Sequence', 2); // using weakly typed here because we're going to get rid of this field soon
     const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
