@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.37.1
+
+### Patch Changes
+
+- 3798dbb: Fixed AzureFileStorage clock skew issue when creating pre authenticated upload urls.
+  - @memberjunction/core@2.37.1
+  - @memberjunction/core-entities@2.37.1
+  - @memberjunction/global@2.37.1
+
 ## 2.37.0
 
 ### Patch Changes

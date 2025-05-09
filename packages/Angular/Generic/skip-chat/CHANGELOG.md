@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.37.1
+
+### Patch Changes
+
+- 65b4c60: Artifact support in AskSkipResolver + some UI cleanup
+  - @memberjunction/ng-base-types@2.37.1
+  - @memberjunction/ng-container-directives@2.37.1
+  - @memberjunction/ng-data-context@2.37.1
+  - @memberjunction/ng-notifications@2.37.1
+  - @memberjunction/ng-resource-permissions@2.37.1
+  - @memberjunction/graphql-dataprovider@2.37.1
+  - @memberjunction/core@2.37.1
+  - @memberjunction/core-entities@2.37.1
+  - @memberjunction/data-context@2.37.1
+  - @memberjunction/global@2.37.1
+  - @memberjunction/skip-types@2.37.1
+
 ## 2.37.0
 
 ### Patch Changes

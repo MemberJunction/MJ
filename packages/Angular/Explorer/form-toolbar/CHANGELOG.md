@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-form-toolbar
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/ng-ask-skip@2.37.1
+- @memberjunction/ng-base-forms@2.37.1
+- @memberjunction/ng-record-changes@2.37.1
+- @memberjunction/ng-shared@2.37.1
+- @memberjunction/ng-container-directives@2.37.1
+- @memberjunction/core@2.37.1
+- @memberjunction/global@2.37.1
+
 ## 2.37.0
 
 ### Patch Changes

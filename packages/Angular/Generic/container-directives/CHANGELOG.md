@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-container-directives
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/core@2.37.1
+- @memberjunction/global@2.37.1
+
 ## 2.37.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/entity-communications-server
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/communication-engine@2.37.1
+- @memberjunction/entity-communications-base@2.37.1
+- @memberjunction/core@2.37.1
+- @memberjunction/core-entities@2.37.1
+- @memberjunction/global@2.37.1
+
 ## 2.37.0
 
 ### Patch Changes
