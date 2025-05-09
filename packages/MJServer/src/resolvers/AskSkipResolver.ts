@@ -40,6 +40,8 @@ import {
   AIAgentLearningCycleEntity,
   AIAgentNoteEntity,
   AIAgentRequestEntity,
+  ConversationArtifactEntity,
+  ConversationArtifactVersionEntity,
   ConversationDetailEntity,
   ConversationEntity,
   DataContextEntity,
@@ -56,6 +58,7 @@ import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
+import e from 'express';
 
 enum SkipResponsePhase {
   ClarifyingQuestion = 'clarifying_question',
@@ -1480,7 +1483,6 @@ cycle.`);
     convoDetailEntity.Message = UserQuestion;
     convoDetailEntity.Role = 'User';
     convoDetailEntity.HiddenToUser = false;
-    convoDetailEntity.Set('Sequence', 1); // using weakly typed here because we're going to get rid of this field soon
     let convoDetailSaveResult: boolean = await convoDetailEntity.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
@@ -1810,7 +1812,8 @@ cycle.`);
       user,
       convoEntity,
       pubSub,
-      userPayload
+      userPayload,
+      dataSource
     );
     const response: AskSkipResultType = {
       Success: true,
@@ -2040,10 +2043,65 @@ cycle.`);
     user: UserInfo,
     convoEntity: ConversationEntity,
     pubSub: PubSubEngine,
-    userPayload: UserPayload
+    userPayload: UserPayload,
+    dataSource: DataSource
   ): Promise<{ AIMessageConversationDetailID: string }> {
     const sTitle = apiResponse.reportTitle;
     const sResult = JSON.stringify(apiResponse);
+
+    // first up, let's see if Skip asked us to create an artifact or add a new version to an existing artifact, or NOT
+    // use artifacts at all...
+    let artifactId: string = null;
+    let artifactVersionId: string = null;
+
+    if (apiResponse.artifactRequest?.action === 'new_artifact' || apiResponse.artifactRequest?.action === 'new_artifact_version') {
+      // Skip has requested that we create a new artifact or add a new version to an existing artifact
+      artifactId = apiResponse.artifactRequest.artifactId; // will only be populated if action == new_artifact_version
+      let newVersion: number = 0;
+      if (apiResponse.artifactRequest?.action === 'new_artifact') {
+        const artifactEntity = await md.GetEntityObject<ConversationArtifactEntity>('MJ: Convesration Artifacts', user);
+        // create the new artifact here
+        artifactEntity.NewRecord();
+        artifactEntity.ConversationID = convoEntity.ID;
+        artifactEntity.Name = apiResponse.artifactRequest.name;
+        artifactEntity.Description = apiResponse.artifactRequest.description;
+        if (await artifactEntity.Save()) {
+          // saved, grab the new ID
+          artifactId = artifactEntity.ID;
+        }
+        else {
+          LogError(`Error saving artifact entity for conversation: ${convoEntity.ID}`, undefined, artifactEntity.LatestResult);
+        }
+        newVersion = 1;
+      }
+      else {
+        // we are updating an existing artifact with a new vesrion so we need to get the old max version and increment it
+        const ei = md.EntityByName("MJ: Convesration Artifacts");        
+        const sSQL = `SELECT ISNULL(MAX(Version),0) AS MaxVersion FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ID = '${artifactId}'`;
+        const result = await dataSource.query(sSQL);
+        if (result && result.length > 0) {
+          newVersion = result[0].MaxVersion + 1;
+        } else {
+          LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, result);
+        }
+      }
+      if (artifactId && newVersion > 0) {
+        // only do this if we were provided an artifact ID or we saved a new one above successfully
+        const artifactVersionEntity = await md.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', user);
+        // create the new artifact version here
+        artifactVersionEntity.NewRecord();
+        artifactVersionEntity.ConversationArtifactID = artifactId;
+        artifactVersionEntity.Version = newVersion;
+        artifactVersionEntity.Configuration = sResult; // store the full response here
+        if (await artifactVersionEntity.Save()) {
+          // success saving the new version, set the artifactVersionId
+          artifactVersionId = artifactVersionEntity.ID;
+        }
+        else {
+          LogError(`Error saving Artifact Version record`)
+        }
+      }
+    }
 
     // Create a conversation detail record for the Skip response
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
@@ -2052,6 +2110,13 @@ cycle.`);
     convoDetailEntityAI.Message = sResult;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
+    if (artifactId && artifactId.length > 0) {
+      // bind the new convo detail record to the artifact + version for this response
+      convoDetailEntityAI.ArtifactID = artifactId;
+      if (artifactVersionId && artifactVersionId.length > 0) {
+        convoDetailEntityAI.ArtifactVersionID = artifactVersionId;
+      }
+    }    
     const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
