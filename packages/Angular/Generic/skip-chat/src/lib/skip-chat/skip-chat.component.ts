@@ -940,14 +940,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         LogStatus('Skip Chat: Time to load data context: ' + (new Date().getTime() - start) + 'ms');
         // cache it for later
         convoAny._DataContext = this.DataContext;
-
-        // // client side we call the graphql data provider directly for efficiency to load entire context in one network call
-        // const gqlProvider = <GraphQLDataProvider>this.ProviderToUse;
-        // const dataContextData = await gqlProvider.GetDataContextData(this.DataContextID);
-        // if (dataContextData) {
-        //   this.DataContext.LoadDataFromObject(dataContextData);
-        // }
-        // console.log(this.DataContext.ConvertToSimpleObject())
       }
 
       const convoShouldReload = this._conversationsToReload[conversation.ID];
