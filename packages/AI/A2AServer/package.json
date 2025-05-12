@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/a2aserver",
   "version": "0.1.0",
-  "description": "MemberJunction A2A Server Implementation",
+  "description": "MemberJunction Agent-To-Agent (A2A) Server Implementation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
