@@ -1,6 +1,7 @@
 /** @import { ConfigInfo as CodeGenConfig } from "./packages/CodeGenLib/src/Config/config" */
 /** @import { ConfigInfo as MJServerConfig } from "./packages/MJServer/src/config" */
 /** @import { ConfigInfo as MCPServerConfig } from "./packages/AI/MCPServer/src/config" */
+/** @import { ConfigInfo as A2AServerConfig } from "./packages/AI/A2AServer/src/config" */
 /** @import { MJConfig } from "./packages/MJCLI/src/config" */
 
 /** @type {CodeGenConfig} */
@@ -299,11 +300,34 @@ const mcpServerConfig = {
   }
 }
 
-/** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig} */
+/** @type {A2AServerConfig} */
+const a2aServerConfig = {
+  a2aServerSettings: {
+    port: 3200,
+    enableA2AServer: true,
+    agentName: "MemberJunction",
+    agentDescription: "Access MemberJunction data and capabilities via the A2A protocol",
+    streamingEnabled: true,
+    entityCapabilities: [
+      {
+        schemaName: 'CRM',
+        entityName: '*',
+        get: true,
+        create: true,
+        update: true,
+        delete: true,
+        runView: true,
+      },
+    ]
+  }
+}
+
+/** @type {CodeGenConfig & MJConfig & MJServerConfig & MCPServerConfig & A2AServerConfig} */
 const config = {
   ...codegenConfig,
   ...mjServerConfig,
   ...mcpServerConfig,
+  ...a2aServerConfig,
 
   /**
    * Shared Configuration and Environment Variables
