@@ -1,10 +1,11 @@
-import { BaseEntity, EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import express from 'express';
 import { DataSource } from "typeorm";
 import { z } from "zod";
 import { DataSourceOptions } from 'typeorm';
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
+import { EntityOperations, OperationResult } from './EntityOperations.js';
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -325,7 +326,7 @@ function handleTaskSend(requestBody: any) {
         
         tasks.set(newTaskId, task);
         
-        // Process the task (in a real implementation, this would likely be done asynchronously)
+        // Process the task asynchronously
         processTask(task);
         
         return {
@@ -430,25 +431,66 @@ function handleTaskSendSubscribe(requestBody: any, res: any) {
     });
 }
 
-// Process a task (simplified implementation for now)
+// Process a task using MemberJunction APIs
 async function processTask(task: Task) {
     try {
         task.status = 'in_progress';
         task.updated = new Date();
-        
+
         // Get the last user message
         const lastMessage = task.messages.filter(m => m.role === 'user').pop();
-        
+
         if (!lastMessage) {
             throw new Error("No user message found");
         }
-        
-        // Extract text content from the message
+
+        // Initialize entity operations
+        const entityOps = new EntityOperations();
+
+        // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');
-        const textContent = textParts.map(p => p.content).join(" ");
+        const textContent = textParts.map(p => typeof p.content === 'string' ? p.content : JSON.stringify(p.content)).join(" ");
+
+        // Extract structured data if any
+        const dataParts = lastMessage.parts.filter(p => p.type === 'data');
+        const dataContent = dataParts.length > 0 ? dataParts[0].content : null;
+
+        // Parse the command and parameters
+        let operation = 'unknown';
+        let entityName = '';
+        let parameters: any = {};
+
+        // Try to extract command and parameters from structured data first
+        if (dataContent && typeof dataContent === 'object') {
+            operation = (dataContent as any).operation || 'unknown';
+            entityName = (dataContent as any).entity || '';
+            parameters = (dataContent as any).parameters || {};
+        }
+        // Otherwise parse from text
+        else if (textContent) {
+            const parsedCommand = entityOps.parseCommandFromText(textContent);
+            operation = parsedCommand.operation;
+            entityName = parsedCommand.entityName;
+            parameters = parsedCommand.parameters;
+        }
+
+        // Perform the operation
+        let operationResult: OperationResult;
+
+        try {
+            if (!entityName) {
+                throw new Error("Entity name not specified");
+            }
+
+            operationResult = await entityOps.processOperation(operation, entityName, parameters);
+        } catch (error) {
+            operationResult = {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error)
+            };
+        }
         
-        // TODO: Implement actual task processing logic based on entity capabilities
-        // This is a placeholder response
+        // Create response message
         const responseMessage: Message = {
             id: generateId(),
             taskId: task.id,
@@ -457,39 +499,81 @@ async function processTask(task: Task) {
                 {
                     id: generateId(),
                     type: 'text',
-                    content: `Processed your request: "${textContent}"`
+                    content: operationResult.success
+                        ? `Successfully performed ${operation} operation on ${entityName}`
+                        : `Failed to perform ${operation} operation on ${entityName}: ${operationResult.errorMessage}`
                 }
             ],
             created: new Date()
         };
-        
-        // Add a simple artifact as example
+
+        // Create artifact with result data
         const artifact: Artifact = {
             id: generateId(),
             taskId: task.id,
-            name: 'response',
+            name: `${operation}_result`,
             parts: [
                 {
                     id: generateId(),
                     type: 'data',
                     content: {
-                        result: "This is a sample response artifact",
+                        success: operationResult.success,
+                        operation,
+                        entity: entityName,
+                        result: operationResult.result,
+                        error: operationResult.success ? undefined : operationResult.errorMessage,
                         timestamp: new Date().toISOString()
                     }
                 }
             ],
             created: new Date()
         };
-        
-        // Update the task with response and artifact
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing time
+
+        // Update the task
         task.messages.push(responseMessage);
         task.artifacts.push(artifact);
         task.status = 'completed';
         task.updated = new Date();
-        
+
     } catch (error) {
         console.error("Error processing task:", error);
+
+        // Create error response
+        const errorMessage: Message = {
+            id: generateId(),
+            taskId: task.id,
+            role: 'agent',
+            parts: [
+                {
+                    id: generateId(),
+                    type: 'text',
+                    content: `An error occurred while processing your request: ${error instanceof Error ? error.message : String(error)}`
+                }
+            ],
+            created: new Date()
+        };
+
+        // Create error artifact
+        const errorArtifact: Artifact = {
+            id: generateId(),
+            taskId: task.id,
+            name: 'error',
+            parts: [
+                {
+                    id: generateId(),
+                    type: 'data',
+                    content: {
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error),
+                        timestamp: new Date().toISOString()
+                    }
+                }
+            ],
+            created: new Date()
+        };
+
+        task.messages.push(errorMessage);
+        task.artifacts.push(errorArtifact);
         task.status = 'failed';
         task.updated = new Date();
     }

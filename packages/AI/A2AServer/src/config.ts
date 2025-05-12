@@ -32,6 +32,7 @@ const a2aServerInfoSchema = z.object({
   agentName: z.string().optional().default("MemberJunction"),
   agentDescription: z.string().optional().default("MemberJunction A2A Agent"),
   streamingEnabled: z.boolean().optional().default(true),
+  userEmail: z.string().optional().describe("Email address of the user to use for entity operations"),
 });
 
 const configInfoSchema = z.object({
