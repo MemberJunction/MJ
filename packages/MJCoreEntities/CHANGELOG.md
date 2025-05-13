@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/core@2.37.1
+- @memberjunction/global@2.37.1
+
+## 2.37.0
+
+### Minor Changes
+
+- 1418b71: Added ArtifactID/ArtifactVersionID as optional fkeys to ConversationDetail
+
+### Patch Changes
+
+- @memberjunction/core@2.37.0
+- @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

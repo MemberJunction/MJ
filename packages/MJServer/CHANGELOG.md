@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/server
 
+## 2.37.1
+
+### Patch Changes
+
+- 65b4c60: Artifact support in AskSkipResolver + some UI cleanup
+- Updated dependencies [3798dbb]
+  - @memberjunction/storage@2.37.1
+  - @memberjunction/ai@2.37.1
+  - @memberjunction/aiengine@2.37.1
+  - @memberjunction/ai-mistral@2.37.1
+  - @memberjunction/ai-openai@2.37.1
+  - @memberjunction/ai-vectors-pinecone@2.37.1
+  - @memberjunction/core-actions@2.37.1
+  - @memberjunction/actions@2.37.1
+  - @memberjunction/entity-communications-server@2.37.1
+  - @memberjunction/doc-utils@2.37.1
+  - @memberjunction/external-change-detection@2.37.1
+  - @memberjunction/graphql-dataprovider@2.37.1
+  - @memberjunction/core@2.37.1
+  - @memberjunction/core-entities@2.37.1
+  - @memberjunction/data-context@2.37.1
+  - @memberjunction/data-context-server@2.37.1
+  - @memberjunction/global@2.37.1
+  - @memberjunction/queue@2.37.1
+  - @memberjunction/sqlserver-dataprovider@2.37.1
+  - @memberjunction/skip-types@2.37.1
+  - @memberjunction/templates@2.37.1
+
+## 2.37.0
+
+### Minor Changes
+
+- 526bffb: Add mapping for an environment variable that indicates whether or not we should run learning cycles. Then, if disabled, we do not start up the learning cycle process at all. If enabled but no endpoint provided, we throw an error idicating as much as disable the recurring calls to the endpoint.
+
+### Patch Changes
+
+- dff8688: Updated ResolverBase's UpdateRecord to handle decimal values
+- cd1557a: Added a check of the learning cycle endpoint provided from the env file such that, in the case the not endpoint is set we simply disable the calls to the learning cycle. In the case that an endpoint is set but fails immediately, we throw an error once and disable the recurring calls to the invalid endpoint.
+- Updated dependencies [1418b71]
+- Updated dependencies [78ffaa6]
+- Updated dependencies [a1a7a52]
+  - @memberjunction/core-entities@2.37.0
+  - @memberjunction/storage@2.37.0
+  - @memberjunction/aiengine@2.37.0
+  - @memberjunction/core-actions@2.37.0
+  - @memberjunction/actions@2.37.0
+  - @memberjunction/entity-communications-server@2.37.0
+  - @memberjunction/doc-utils@2.37.0
+  - @memberjunction/external-change-detection@2.37.0
+  - @memberjunction/graphql-dataprovider@2.37.0
+  - @memberjunction/data-context@2.37.0
+  - @memberjunction/queue@2.37.0
+  - @memberjunction/sqlserver-dataprovider@2.37.0
+  - @memberjunction/skip-types@2.37.0
+  - @memberjunction/templates@2.37.0
+  - @memberjunction/ai-vectors-pinecone@2.37.0
+  - @memberjunction/data-context-server@2.37.0
+  - @memberjunction/ai@2.37.0
+  - @memberjunction/ai-mistral@2.37.0
+  - @memberjunction/ai-openai@2.37.0
+  - @memberjunction/core@2.37.0
+  - @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

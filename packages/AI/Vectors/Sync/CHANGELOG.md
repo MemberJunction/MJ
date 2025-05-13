@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.37.1
+- @memberjunction/aiengine@2.37.1
+- @memberjunction/ai-mistral@2.37.1
+- @memberjunction/ai-openai@2.37.1
+- @memberjunction/ai-vectors-pinecone@2.37.1
+- @memberjunction/ai-vectors@2.37.1
+- @memberjunction/ai-vectordb@2.37.1
+- @memberjunction/core@2.37.1
+- @memberjunction/global@2.37.1
+- @memberjunction/templates-base-types@2.37.1
+- @memberjunction/templates@2.37.1
+
+## 2.37.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.37.0
+- @memberjunction/ai-vectors@2.37.0
+- @memberjunction/templates-base-types@2.37.0
+- @memberjunction/templates@2.37.0
+- @memberjunction/ai-vectors-pinecone@2.37.0
+- @memberjunction/ai@2.37.0
+- @memberjunction/ai-mistral@2.37.0
+- @memberjunction/ai-openai@2.37.0
+- @memberjunction/ai-vectordb@2.37.0
+- @memberjunction/core@2.37.0
+- @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes

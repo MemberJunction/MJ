@@ -11,27 +11,65 @@
     word-wrap: break-word;
     width: 100%;
     margin-right: 20px;
-    padding-bottom: 25px;
+    padding-bottom: 30px; /* Increased to ensure space for action buttons */
+    min-height: 60px; /* Ensure minimum height for short messages */
+    position: relative; /* Ensure position relative for absolute positioning of child elements */
     @media (min-width: 1280px) {
         max-width: 48rem;
     }
 }
 
 .message-actions {
-    margin-top: 5px;
-    top: 0; /* Align to the top of the parent container */
-    left: 0; /* Align to the right edge */
-    display: none; /* Hide by default */
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 6px 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    border: 1px solid #e0e0e0;
+    opacity: 0;
+    transform: translateY(5px) scale(0.95);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .message:hover .message-actions {
-    display: flex; /* Show the actions when the message is hovered */
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
 }
  
 .message-actions > span {
-    margin-right: 5px;
+    margin: 0 5px;
     color: #6e7072;
     cursor: pointer;
+    font-size: 14px;
+    padding: 3px;
+    transition: all 0.2s ease;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.message-actions > span:hover {
+    color: #333;
+    background-color: #f5f5f5;
+}
+
+.message-actions > span.fa-edit:hover {
+    color: #4285f4;
+}
+
+.message-actions > span.fa-trash:hover {
+    color: #ea4335;
 }
 
 .message-image {
@@ -177,4 +215,36 @@
 
 .rating-icon-selected {
     font-size: 0.9rem;
+}
+
+/* Artifact indicator styles */
+.artifact-indicator {
+    display: flex;
+    align-items: center;
+    margin-top: 12px;
+    padding: 12px 16px;
+    background-color: #eef6ff;
+    border: 1px solid #d0e1fd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.artifact-indicator:hover {
+    background-color: #d2e5ff;
+    border-color: #a9c9fc;
+}
+
+.artifact-indicator i {
+    font-size: 16px;
+    color: #4285f4;
+    margin-right: 10px;
+}
+
+.artifact-label {
+    font-size: 14px;
+    color: #4285f4;
+    font-weight: 500;
 }

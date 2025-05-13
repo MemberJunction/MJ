@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.37.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.37.1
+- @memberjunction/aiengine@2.37.1
+- @memberjunction/ai-anthropic@2.37.1
+- @memberjunction/ai-groq@2.37.1
+- @memberjunction/ai-mistral@2.37.1
+- @memberjunction/ai-openai@2.37.1
+- @memberjunction/actions@2.37.1
+- @memberjunction/core@2.37.1
+- @memberjunction/core-entities@2.37.1
+- @memberjunction/global@2.37.1
+- @memberjunction/sqlserver-dataprovider@2.37.1
+
+## 2.37.0
+
+### Patch Changes
+
+- Updated dependencies [1418b71]
+  - @memberjunction/core-entities@2.37.0
+  - @memberjunction/aiengine@2.37.0
+  - @memberjunction/actions@2.37.0
+  - @memberjunction/sqlserver-dataprovider@2.37.0
+  - @memberjunction/ai@2.37.0
+  - @memberjunction/ai-anthropic@2.37.0
+  - @memberjunction/ai-groq@2.37.0
+  - @memberjunction/ai-mistral@2.37.0
+  - @memberjunction/ai-openai@2.37.0
+  - @memberjunction/core@2.37.0
+  - @memberjunction/global@2.37.0
+
 ## 2.36.1
 
 ### Patch Changes
