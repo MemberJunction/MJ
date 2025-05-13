@@ -1,0 +1,4 @@
+{
+    "extends": "../../../typedoc.base.json",
+    "name": "MemberJunction A2A Server"
+}
