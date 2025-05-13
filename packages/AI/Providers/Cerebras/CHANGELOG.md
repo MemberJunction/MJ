@@ -1,6 +1,6 @@
 # Change Log - @memberjunction/ai-cerebras
 
-## 2.36.1
+## 2.37.1
 
 Mon, 13 May 2025 12:00:00 GMT
 
