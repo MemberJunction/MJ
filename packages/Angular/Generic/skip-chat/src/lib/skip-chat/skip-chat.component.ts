@@ -99,9 +99,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   @Input() public EnableArtifactSplitView: boolean = true;
   
   /**
-   * Default ratio for split panels when viewing artifacts (0-1). Default is 0.6 (left panel takes 60% of width).
+   * Default ratio for split panels when viewing artifacts (0-1). Default is 0.5 (left panel takes 50% of width).
    */
-  @Input() public DefaultSplitRatio: number = 0.6;
+  @Input() public DefaultSplitRatio: number = 0.5;
 
   /**
    * This property is used to set the placeholder text for the textbox where the user types their message to Skip.   
