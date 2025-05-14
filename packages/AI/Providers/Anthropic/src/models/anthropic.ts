@@ -89,7 +89,7 @@ export class AnthropicLLM extends BaseLLM {
             
             // Add thinking parameter if effort level is set
             // Note: Requires minimum 1024 tokens and must be less than max_tokens
-            if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
+            if (params.effortLevel && params.reasoningBudgetTokens >= 1) {
                 createParams.thinking = {
                     type: "enabled" as const,
                     budget_tokens: params.reasoningBudgetTokens
@@ -171,7 +171,7 @@ export class AnthropicLLM extends BaseLLM {
         
         // Add thinking parameter if effort level is set
         // Note: Requires minimum 1024 tokens and must be less than max_tokens
-        if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
+        if (params.effortLevel && params.reasoningBudgetTokens >= 1) {
             createParams.thinking = {
                 type: "enabled" as const,
                 budget_tokens: params.reasoningBudgetTokens
