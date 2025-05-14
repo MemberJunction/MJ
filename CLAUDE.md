@@ -1,5 +1,8 @@
 # MemberJunction Development Guide
 
+## IMPORTANT
+- Before starting a new line of work always check the local branch we're on and see if it is (a) separate from the default branch in the remote repo - we always want to work in local feature branches and (b) if we aren't in such a feature branch that is named for the work being requested and empty, cut a new one but ask first and then switch to it
+
 ## Build Commands
 - Build all packages: `npm run build`
 - Build specific packages: `turbo build --filter="@memberjunction/package-name"`
