@@ -44,6 +44,10 @@ export abstract class BaseLLM extends BaseModel {
      * this will route to the streaming implementation.
      */
     public async ChatCompletion(params: ChatParams): Promise<ChatResult> {
+        if (params.enableCaching === undefined) {
+            params.enableCaching = true; // default to true            
+        }
+
         // Check if streaming is requested and if we support it
         if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
             return this.handleStreamingChatCompletion(params);
