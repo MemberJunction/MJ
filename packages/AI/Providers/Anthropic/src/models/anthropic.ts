@@ -74,15 +74,27 @@ export class AnthropicLLM extends BaseLLM {
         const startTime = new Date();
         let result: any = null;
         try {
-            const createParams = {
+            const createParams: {
+                model: string;
+                max_tokens: number;
+                system: string;
+                messages: MessageParam[];
+                thinking?: { type: "enabled"; budget_tokens: number };
+            } = {
                 model: params.model,
                 max_tokens: params.maxOutputTokens, 
                 system: params.messages.find(m => m.role === "system").content,
                 messages: this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"))
             };
             
-            // Note: Thinking parameter is removed as it may no longer be supported in the same way
-            // in the latest API version
+            // Add thinking parameter if effort level is set
+            // Note: Requires minimum 1024 tokens and must be less than max_tokens
+            if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
+                createParams.thinking = {
+                    type: "enabled" as const,
+                    budget_tokens: params.reasoningBudgetTokens
+                };
+            }
             
             result = await this.AnthropicClient.messages.create(createParams);
             const endTime = new Date();
@@ -142,16 +154,29 @@ export class AnthropicLLM extends BaseLLM {
         const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
         const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
         
-        const createParams = {
+        const createParams: {
+            model: string;
+            max_tokens: number;
+            system: string;
+            messages: MessageParam[];
+            stream: true;
+            thinking?: { type: "enabled"; budget_tokens: number };
+        } = {
             model: params.model,
             max_tokens: params.maxOutputTokens,
             system: systemMessage,
             messages: nonSystemMessages,
-            stream: true
+            stream: true as const
         };
         
-        // Note: Thinking parameter is removed as it may no longer be supported in the same way
-        // in the latest API version
+        // Add thinking parameter if effort level is set
+        // Note: Requires minimum 1024 tokens and must be less than max_tokens
+        if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
+            createParams.thinking = {
+                type: "enabled" as const,
+                budget_tokens: params.reasoningBudgetTokens
+            };
+        }
         
         return this.AnthropicClient.messages.create(createParams);
     }
