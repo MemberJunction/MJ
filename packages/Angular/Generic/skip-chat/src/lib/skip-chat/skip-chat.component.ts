@@ -920,6 +920,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         return;
       }
 
+      this.selectedArtifact = null;
       this.SelectedConversationCurrentUserPermissionLevel = await this.GetUserConversationPermissionLevel(this.ProviderToUse.CurrentUser, conversation);
       this._conversationLoadComplete = false;
       this.ClearMessages();
@@ -1085,6 +1086,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       convoDetail.Role = 'User';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true, true);
+      this.scrollToBottom();
 
       this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
@@ -1139,6 +1141,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           const aiDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
+          this.scrollToBottom();
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }

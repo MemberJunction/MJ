@@ -34,14 +34,14 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Formatted content object
      */
-    private formatContentWithCaching(text: string, enableCaching?: boolean): any {
+    private formatContentWithCaching(text: string, enableCaching: boolean = true): any {
         const content: any = {
             type: "text",
             text: text
         };
         
         // Add cache_control if caching is enabled (default to true)
-        if (enableCaching !== false) {
+        if (enableCaching) {
             content.cache_control = { type: "ephemeral" };
         }
         
@@ -54,7 +54,7 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
-    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): any[] {
+    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
         const result: any[] = [];
         let lastRole = "assistant";
         
@@ -96,7 +96,7 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
-    protected formatSystemMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): any[] {
+    protected formatSystemMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
         const result: any[] = [];
         
         for (let i = 0; i < messages.length; i++) {
@@ -144,21 +144,22 @@ export class AnthropicLLM extends BaseLLM {
             // Create the request parameters
             const createParams: any = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens
+                max_tokens: params.maxOutputTokens || 64000, // large default for max_tokens if not provided
+                stream: true // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
             };
-            
+ 
             // Add system message(s), if present
             if (systemMsgs) {
                 createParams.system = this.formatSystemMessagesWithCaching(
                     systemMsgs, 
-                    params.enableCaching
+                    params.enableCaching || true
                 );
             }
             
             // Add messages with caching applied to the last user message
             createParams.messages = this.formatMessagesWithCaching(
                 nonSystemMsgs, 
-                params.enableCaching
+                params.enableCaching || true
             );
             
             // Add thinking parameter if effort level is set
@@ -172,7 +173,10 @@ export class AnthropicLLM extends BaseLLM {
                 }
             }
             
-            result = await this.AnthropicClient.messages.create(createParams);
+            const stream = this.AnthropicClient.messages.stream(createParams).on('text', (chunk: any) => {
+                // too noisy to log this -- console.log('stream chunk', chunk);
+            });;
+            result = await stream.finalMessage();
             const endTime = new Date();
             
             const chatResult: ChatResult = {
