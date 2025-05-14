@@ -2181,13 +2181,19 @@ cycle.`);
       }
       else {
         // we are updating an existing artifact with a new vesrion so we need to get the old max version and increment it
-        const ei = md.EntityByName("MJ: Conversation Artifacts");        
-        const sSQL = `SELECT ISNULL(MAX(Version),0) AS MaxVersion FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ID = '${artifactId}'`;
-        const result = await dataSource.query(sSQL);
-        if (result && result.length > 0) {
-          newVersion = result[0].MaxVersion + 1;
-        } else {
-          LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, result);
+        const ei = md.EntityByName("MJ: Conversation Artifact Versions");        
+        const sSQL = `SELECT ISNULL(MAX(Version),0) AS MaxVersion FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationArtifactID = '${artifactId}'`;
+        try {
+          const result = await dataSource.query(sSQL);
+          if (result && result.length > 0) {
+            newVersion = result[0].MaxVersion + 1;
+          } 
+          else {
+            LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, result);
+          }
+        }
+        catch (e) {
+          LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, e);
         }
       }
       if (artifactId && newVersion > 0) {
