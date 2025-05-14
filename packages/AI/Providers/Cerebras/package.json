@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai-groq",
+  "name": "@memberjunction/ai-cerebras",
   "version": "2.37.1",
-  "description": "MemberJunction Wrapper for Groq AI LPU inference engine",
+  "description": "MemberJunction Wrapper for Cerebras AI inference engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -21,6 +21,6 @@
   "dependencies": {
     "@memberjunction/ai": "2.37.1",
     "@memberjunction/global": "2.37.1",
-    "groq-sdk": "0.21.0"
+    "@cerebras/cerebras_cloud_sdk": "^1.29.0"
   }
 }
