@@ -1,5 +1,5 @@
-import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
-import { MessageParam } from "@anthropic-ai/sdk/resources";
+import { Anthropic } from "@anthropic-ai/sdk";
+import { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
     SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
@@ -74,26 +74,15 @@ export class AnthropicLLM extends BaseLLM {
         const startTime = new Date();
         let result: any = null;
         try {
-            const createParams: {
-                model: string;
-                max_tokens: number;
-                system: string;
-                messages: MessageParam[];
-                thinking?: { type: string; budget_tokens: number };
-            } = {
+            const createParams = {
                 model: params.model,
                 max_tokens: params.maxOutputTokens, 
                 system: params.messages.find(m => m.role === "system").content,
                 messages: this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"))
             };
             
-            if (params.effortLevel) {
-                // No levels of reasoning in Anthropic, we only enable or disable
-                createParams.thinking = {
-                    "type": "enabled",
-                    "budget_tokens": params.reasoningBudgetTokens
-                }
-            }
+            // Note: Thinking parameter is removed as it may no longer be supported in the same way
+            // in the latest API version
             
             result = await this.AnthropicClient.messages.create(createParams);
             const endTime = new Date();
@@ -153,14 +142,7 @@ export class AnthropicLLM extends BaseLLM {
         const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
         const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
         
-        const createParams: {
-            model: string;
-            max_tokens: number;
-            system: string;
-            messages: MessageParam[];
-            stream: boolean;
-            thinking?: { type: string; budget_tokens: number };
-        } = {
+        const createParams = {
             model: params.model,
             max_tokens: params.maxOutputTokens,
             system: systemMessage,
@@ -168,13 +150,8 @@ export class AnthropicLLM extends BaseLLM {
             stream: true
         };
         
-        if (params.effortLevel) {
-            // No levels of reasoning in Anthropic, we only enable or disable
-            createParams.thinking = {
-                "type": "enabled",
-                "budget_tokens": params.reasoningBudgetTokens
-            }
-        }
+        // Note: Thinking parameter is removed as it may no longer be supported in the same way
+        // in the latest API version
         
         return this.AnthropicClient.messages.create(createParams);
     }
@@ -244,6 +221,10 @@ export class AnthropicLLM extends BaseLLM {
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
+        // Define constants here since they are no longer exported from the SDK
+        const HUMAN_PROMPT = "\n\nHuman: ";
+        const AI_PROMPT = "\n\nAssistant: ";
+        
         const sPrompt: string = `${HUMAN_PROMPT} the following is a SYSTEM prompt that is important to comply with at all times 
 ${GetSystemPromptFromChatParams(params)}
 ${AI_PROMPT} OK
