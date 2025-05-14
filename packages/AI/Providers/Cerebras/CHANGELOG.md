@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 2.38.0
+
+### Patch Changes
+
+- de65840: initial implementation of Cerebras AI provider for MJ
+  - @memberjunction/ai@2.38.0
+  - @memberjunction/global@2.38.0
+
 ## 2.37.1
 
 Mon, 13 May 2025 12:00:00 GMT

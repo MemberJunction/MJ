@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-azure",
-  "version": "2.37.1",
+  "version": "2.38.0",
   "description": "Azure AI Provider for MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.38.0
+
+### Patch Changes
+
+- e635eaa: updated to latest Groq SDK
+  - @memberjunction/ai@2.38.0
+  - @memberjunction/global@2.38.0
+
 ## 2.37.1
 
 ### Patch Changes

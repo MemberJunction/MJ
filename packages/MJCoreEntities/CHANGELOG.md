@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.38.0
+
+### Minor Changes
+
+- c835ded: flagging this package to trigger a minor version bump. No actual code changes, but we have a new migration file to clean up and add new AI models
+
+### Patch Changes
+
+- @memberjunction/core@2.38.0
+- @memberjunction/global@2.38.0
+
 ## 2.37.1
 
 ### Patch Changes
