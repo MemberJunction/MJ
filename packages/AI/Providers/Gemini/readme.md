@@ -4,7 +4,7 @@ A comprehensive wrapper for Google's Gemini AI models that seamlessly integrates
 
 ## Features
 
-- **Google Gemini Integration**: Connect to Google's state-of-the-art Gemini models
+- **Google Gemini Integration**: Connect to Google's state-of-the-art Gemini models using the official @google/genai SDK
 - **Standardized Interface**: Implements MemberJunction's BaseLLM abstract class
 - **Message Formatting**: Handles conversion between MemberJunction and Gemini message formats
 - **Error Handling**: Robust error handling with detailed reporting
@@ -68,13 +68,15 @@ try {
 ### Direct Access to Gemini Client
 
 ```typescript
-// Access the underlying Google Generative AI client for advanced usage
+// Access the underlying GoogleGenAI client for advanced usage
 const geminiClient = geminiLLM.GeminiClient;
 
 // Use the client directly if needed
-const model = geminiClient.getGenerativeModel({ model: 'gemini-pro' });
-const result = await model.generateContent('Tell me a short joke about programming');
-console.log(result.response.text());
+const result = await geminiClient.models.generateContent({
+  model: 'gemini-pro',
+  contents: 'Tell me a short joke about programming'
+});
+console.log(result.candidates[0].content.parts[0].text);
 ```
 
 ## Supported Models
@@ -101,7 +103,7 @@ new GeminiLLM(apiKey: string)
 
 #### Properties
 
-- `GeminiClient`: (read-only) Returns the underlying Google Generative AI client instance
+- `GeminiClient`: (read-only) Returns the underlying GoogleGenAI client instance
 
 #### Methods
 
@@ -169,7 +171,7 @@ Future implementations may include:
 
 ## Dependencies
 
-- `@google/generative-ai`: Official Google Generative AI SDK
+- `@google/genai`: Official Google GenAI SDK (replaces the deprecated @google/generative-ai)
 - `@memberjunction/ai`: MemberJunction AI core framework
 - `@memberjunction/global`: MemberJunction global utilities
 

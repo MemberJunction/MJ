@@ -1,7 +1,17 @@
 
 
 // Google Gemini Import
-import { Content, GenerationConfig, GoogleGenerativeAI, TextPart } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
+
+// Define our own types to match the structure we need
+interface TextPart {
+    text: string;
+}
+
+interface Content {
+    role: 'user' | 'model';
+    parts: TextPart[];
+}
 
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
@@ -9,17 +19,17 @@ import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
-    private _gemini: GoogleGenerativeAI;
+    private _gemini: GoogleGenAI;
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._gemini = new GoogleGenerativeAI(apiKey);
+        this._gemini = new GoogleGenAI({ apiKey });
     }
 
     /**
      * Read only getter method to get the Gemini client instance
      */
-    public get GeminiClient(): GoogleGenerativeAI {
+    public get GeminiClient(): GoogleGenAI {
         return this._gemini;
     }
     
@@ -56,19 +66,33 @@ export class GeminiLLM extends BaseLLM {
         try {
             // For text-only input, use the gemini-pro model
             const startTime = new Date();
-            const config: GenerationConfig = {
-                temperature: params.temperature || 0.5,
-                responseMimeType: params.responseFormat
-            };
-            const model = this.GeminiClient.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config}, {apiVersion: "v1beta"});
+            const modelName = params.model || "gemini-pro";
+            
             const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
-            const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m))
+            const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
-            const chat = model.startChat({
+            
+            // Create the model and then chat
+            const modelOptions = {
+                temperature: params.temperature || 0.5,
+                responseType: params.responseFormat,
+            };
+            
+            // Use the new API structure
+            const chat = this.GeminiClient.chats.create({
+                model: modelName,
                 history: tempMessages
             });
+            
+            // Send the latest message
             const latestMessage = params.messages[params.messages.length - 1].content;
-            const result = await chat.sendMessage(latestMessage);
+            const result = await chat.sendMessage({
+                message: latestMessage,
+                ...modelOptions
+            });
+            
+            const responseContent = result.candidates?.[0]?.content?.parts?.find(part => part.text)?.text || '';
+            
             const endTime = new Date();
             return {
                 success: true,
@@ -78,7 +102,7 @@ export class GeminiLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: [{
-                        message: { role: 'assistant', content: result.response.text() },
+                        message: { role: 'assistant', content: responseContent },
                         finish_reason: "completed",
                         index: 0
                     }],
@@ -109,7 +133,6 @@ export class GeminiLLM extends BaseLLM {
                 },
                 errorMessage: e.message,
                 exception: e
-            
             }
         }
     }
@@ -118,30 +141,34 @@ export class GeminiLLM extends BaseLLM {
      * Create a streaming request for Gemini
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
-        const config: GenerationConfig = {
-            temperature: params.temperature || 0.5,
-            responseMimeType: params.responseFormat
-        };
-        
-        const model = this.GeminiClient.getGenerativeModel({ 
-            model: params.model || "gemini-pro", 
-            generationConfig: config
-        }, {apiVersion: "v1beta"});
+        const modelName = params.model || "gemini-pro";
         
         const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
         const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
         
-        const chat = model.startChat({
+        // Create the model and then chat
+        const modelOptions = {
+            temperature: params.temperature || 0.5,
+            responseType: params.responseFormat,
+        };
+        
+        // Use the new API structure
+        const chat = this.GeminiClient.chats.create({
+            model: modelName,
             history: tempMessages
         });
         
         const latestMessage = params.messages[params.messages.length - 1].content;
         
-        // Return an object with a stream property
-        const streamResult = await chat.sendMessageStream(latestMessage);
-        // Return the stream directly for the for-await loop to work
-        return streamResult.stream;
+        // Send message with streaming
+        const streamResult = await chat.sendMessageStream({
+            message: latestMessage,
+            ...modelOptions
+        });
+        
+        // Return the stream for the for-await loop to work
+        return streamResult;
     }
     
     /**
@@ -152,8 +179,18 @@ export class GeminiLLM extends BaseLLM {
         finishReason?: string;
         usage?: any;
     } {
-        // Gemini chunks provide text via the text() method
-        const content = chunk.text();
+        // Extract text from the chunk with the new SDK
+        let content = '';
+        if (chunk.candidates && 
+            chunk.candidates[0] && 
+            chunk.candidates[0].content && 
+            chunk.candidates[0].content[0] && 
+            chunk.candidates[0].content[0].parts) {
+            
+            // Find the text part
+            const textPart = chunk.candidates[0].content[0].parts.find((part: any) => part.text);
+            content = textPart?.text || '';
+        }
         
         // Gemini doesn't provide finish reason or usage in chunks
         return {
