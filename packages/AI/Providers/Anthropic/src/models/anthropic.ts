@@ -28,27 +28,90 @@ export class AnthropicLLM extends BaseLLM {
         return true;
     }
 
-    protected anthropicMessageFormatting(messages: ChatMessage[]): MessageParam[] {
-        // this method is simple, it makes sure that we alternate messages between user and assistant, otherwise Anthropic will
-        // have a problem. If we find two user messages in a row, we insert an assistant message between them with just "OK"
-        const result: MessageParam[] = [];
+    /**
+     * Format a text message with optional caching
+     * @param text The message text
+     * @param enableCaching Whether to enable caching
+     * @returns Formatted content object
+     */
+    private formatContentWithCaching(text: string, enableCaching?: boolean): any {
+        const content: any = {
+            type: "text",
+            text: text
+        };
+        
+        // Add cache_control if caching is enabled (default to true)
+        if (enableCaching !== false) {
+            content.cache_control = { type: "ephemeral" };
+        }
+        
+        return content;
+    }
+
+    /**
+     * Format messages for Anthropic API with caching support
+     * @param messages Messages to format
+     * @param enableCaching Whether to enable caching
+     * @returns Formatted messages
+     */
+    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): any[] {
+        const result: any[] = [];
         let lastRole = "assistant";
+        
         for (let i = 0; i < messages.length; i++) {
+            // If we have two messages with the same role back-to-back, insert an assistant message
             if (messages[i].role === lastRole) {
                 result.push({
                     role: "assistant",
-                    content: "OK"
+                    content: [{ type: "text", text: "OK" }]
                 });
             }
-            result.push({
-                role: this.ConvertMJToAnthropicRole(messages[i].role),
-                content: messages[i].content
-            });
+            
+            const formattedMsg: any = {
+                content: [],
+                role: this.ConvertMJToAnthropicRole(messages[i].role)
+            };
+            
+            // Apply caching only to the last message
+            const isLastMessage = i === (messages.length - 1);
+            
+            // Format the content with or without caching based on message position
+            // Add caching to the last message
+            formattedMsg.content.push(
+                this.formatContentWithCaching(messages[i].content, enableCaching && isLastMessage)
+            );
+            
+            result.push(formattedMsg);
+
             lastRole = messages[i].role;
         }
+        
         return result;
     }
 
+
+    /**
+     * Format messages for Anthropic API with caching support
+     * @param messages Messages to format
+     * @param enableCaching Whether to enable caching
+     * @returns Formatted messages
+     */
+    protected formatSystemMessagesWithCaching(messages: ChatMessage[], enableCaching?: boolean): any[] {
+        const result: any[] = [];
+        
+        for (let i = 0; i < messages.length; i++) {
+            // Apply caching only to the last message
+            const isLastMessage = i === (messages.length - 1);
+            
+            // Format the content with or without caching based on message position
+            // Add caching to the last message
+            result.push(this.formatContentWithCaching(messages[i].content, enableCaching && isLastMessage));
+        }
+        
+        return result;
+    }
+
+     
     /**
      * Utility method to map a MemberJunction role to OpenAI role
      *  - user maps to user
@@ -74,31 +137,45 @@ export class AnthropicLLM extends BaseLLM {
         const startTime = new Date();
         let result: any = null;
         try {
-            const createParams: {
-                model: string;
-                max_tokens: number;
-                system: string;
-                messages: MessageParam[];
-                thinking?: { type: "enabled"; budget_tokens: number };
-            } = {
+            // Find system message and non-system messages
+            const systemMsgs = params.messages.filter(m => m.role === "system");
+            const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
+            
+            // Create the request parameters
+            const createParams: any = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens, 
-                system: params.messages.find(m => m.role === "system").content,
-                messages: this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"))
+                max_tokens: params.maxOutputTokens
             };
             
+            // Add system message(s), if present
+            if (systemMsgs) {
+                createParams.system = this.formatSystemMessagesWithCaching(
+                    systemMsgs, 
+                    params.enableCaching
+                );
+            }
+            
+            // Add messages with caching applied to the last user message
+            createParams.messages = this.formatMessagesWithCaching(
+                nonSystemMsgs, 
+                params.enableCaching
+            );
+            
             // Add thinking parameter if effort level is set
-            // Note: Requires minimum 1024 tokens and must be less than max_tokens
-            if (params.effortLevel && params.reasoningBudgetTokens >= 1) {
+            // Note: Requires minimum 1 tokens or not budget set
+            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
                 createParams.thinking = {
-                    type: "enabled" as const,
-                    budget_tokens: params.reasoningBudgetTokens
+                    type: "enabled" as const
                 };
+                if (params.reasoningBudgetTokens) {
+                    createParams.thinking.budget_tokens = params.reasoningBudgetTokens;
+                }
             }
             
             result = await this.AnthropicClient.messages.create(createParams);
             const endTime = new Date();
-            return {
+            
+            const chatResult: ChatResult = {
                 data: {
                     choices: [
                         {
@@ -123,7 +200,17 @@ export class AnthropicLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 errorMessage: '',
                 exception: ''
-            };    
+            };
+            
+            // Add cache metadata if available
+            if (result.usage.cached_tokens !== undefined) {
+                chatResult.cacheInfo = {
+                    cacheHit: result.usage.cached_tokens > 0,
+                    cachedTokenCount: result.usage.cached_tokens
+                };
+            }
+            
+            return chatResult;   
         }
         catch (e) {
             const endTime = new Date();
@@ -151,27 +238,34 @@ export class AnthropicLLM extends BaseLLM {
      * Create a streaming request for Anthropic
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
-        const systemMessage = params.messages.find(m => m.role === "system")?.content || "";
-        const nonSystemMessages = this.anthropicMessageFormatting(params.messages.filter(m => m.role !== "system"));
+        // Find system message and non-system messages
+        const systemMsg = params.messages.find(m => m.role === "system");
+        const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
         
-        const createParams: {
-            model: string;
-            max_tokens: number;
-            system: string;
-            messages: MessageParam[];
-            stream: true;
-            thinking?: { type: "enabled"; budget_tokens: number };
-        } = {
+        // Create the request parameters
+        const createParams: any = {
             model: params.model,
             max_tokens: params.maxOutputTokens,
-            system: systemMessage,
-            messages: nonSystemMessages,
             stream: true as const
         };
         
+        // Add system with caching if present
+        if (systemMsg) {
+            createParams.system = this.formatContentWithCaching(
+                systemMsg.content, 
+                params.enableCaching
+            );
+        }
+        
+        // Add messages with caching applied
+        createParams.messages = this.formatMessagesWithCaching(
+            nonSystemMsgs, 
+            params.enableCaching
+        );
+        
         // Add thinking parameter if effort level is set
         // Note: Requires minimum 1024 tokens and must be less than max_tokens
-        if (params.effortLevel && params.reasoningBudgetTokens >= 1) {
+        if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
             createParams.thinking = {
                 type: "enabled" as const,
                 budget_tokens: params.reasoningBudgetTokens
@@ -241,6 +335,15 @@ export class AnthropicLLM extends BaseLLM {
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
+        
+        // Add cache info if available
+        if (usage?.cached_tokens !== undefined || lastChunk?.usage?.cached_tokens !== undefined) {
+            const cachedTokens = usage?.cached_tokens || lastChunk?.usage?.cached_tokens || 0;
+            result.cacheInfo = {
+                cacheHit: cachedTokens > 0,
+                cachedTokenCount: cachedTokens
+            };
+        }
         
         return result;
     }
