@@ -326,7 +326,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
             const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);            
             
-            // Pass the data to the new chart
+            // Pass the data to the new report
             const report = componentRef.instance;
             report.NavigateToMatchingReport.subscribe((reportID: string) => {
               this.NavigateToMatchingReport.emit(reportID); // bubble up
