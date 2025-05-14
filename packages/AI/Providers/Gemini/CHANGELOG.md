@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.38.0
+
+### Patch Changes
+
+- 6c26f49: Update to use new google gen ai library
+  - @memberjunction/ai@2.38.0
+  - @memberjunction/global@2.38.0
+
 ## 2.37.1
 
 ### Patch Changes

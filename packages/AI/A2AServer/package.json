@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/a2aserver",
-  "version": "0.1.0",
+  "version": "2.38.0",
   "description": "MemberJunction Agent-To-Agent (A2A) Server Implementation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,9 +22,9 @@
   "author": "MemberJunction",
   "license": "MIT",
   "dependencies": {
-    "@memberjunction/core": "^0.9.127",
-    "@memberjunction/global": "^0.9.125",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.161",
+    "@memberjunction/core": "^2.38.0",
+    "@memberjunction/global": "^2.38.0",
+    "@memberjunction/sqlserver-dataprovider": "^2.38.0",
     "cosmiconfig": "^8.0.0",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
