@@ -14,6 +14,28 @@ export const ChatMessageRole = {
 export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRole];
 
 
+/**
+ * Defines the shape of a content block in a chat message.
+ * This can be used to represent different types of content in a message.
+ */
+export type ChatMessageContentBlock = {
+    /**
+     * The type of content block.
+     * Can be 'text', 'image_url', 'video_url', 'audio_url', or 'file_url'.
+     */
+    type: 'text' | 'image_url' | 'video_url' | 'audio_url' | 'file_url';
+    /**
+     * The content of the block.
+     * This can be a string. In the case of 'image_url', 'video_url', 'audio_url', or 'file_url', it should be a URL to the resource, OR it can be a base64 encoded string.
+     * representing the content of the item.
+     */
+    content: string;
+}
+
+/**
+ * Union type for the content of a chat message.
+ */
+export type ChatMessageContent = string | ChatMessageContentBlock[];
 
 /**
  * Defines the shape of an individual chat message.
@@ -24,9 +46,9 @@ export type ChatMessage = {
      */
     role: ChatMessageRole;
     /**
-     * Content of the message, can be any string.
+     * Content of the message, can be any string or an array of content blocks.
      */
-    content: string;
+    content: ChatMessageContent;
 }
 
 /**
@@ -118,7 +140,7 @@ export class ChatParams extends BaseParams  {
  * @param p 
  * @returns 
  */
-export function GetUserMessageFromChatParams(p: ChatParams): string | undefined {
+export function GetUserMessageFromChatParams(p: ChatParams): ChatMessageContent | undefined {
     return p.messages.find(m => m.role === ChatMessageRole.user)?.content;
 }
 /**
@@ -126,7 +148,7 @@ export function GetUserMessageFromChatParams(p: ChatParams): string | undefined 
  * @param p 
  * @returns 
  */
-export function GetSystemPromptFromChatParams(p: ChatParams): string | undefined {
+export function GetSystemPromptFromChatParams(p: ChatParams): ChatMessageContent | undefined {
     return p.messages.find(m => m.role === ChatMessageRole.system)?.content;
 }
 

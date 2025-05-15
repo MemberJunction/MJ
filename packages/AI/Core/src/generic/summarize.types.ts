@@ -1,5 +1,5 @@
 import { BaseParams, BaseResult } from "./baseModel"
-import { ChatParams } from "./chat.types";
+import { ChatMessageContent, ChatMessageContentBlock, ChatParams } from "./chat.types";
 
 
 /**
@@ -11,8 +11,13 @@ export class SummarizeParams extends ChatParams {
 export class SummarizeResult extends BaseResult {
     text: string
     summaryText: string
-    constructor (text: string, summaryText: string, success: boolean, startTime: Date, endTime: Date) {
+    constructor (text: ChatMessageContent, summaryText: string, success: boolean, startTime: Date, endTime: Date) {
         super(success, startTime, endTime);
+
+        // if text is an array of ChatMessageContentBlock, filter it down to only text blocks and then concatenate them
+        if (text instanceof Array) {
+            text = text.filter((block: ChatMessageContentBlock) => block.type === 'text').map((block: ChatMessageContentBlock) => block.content).join('\n\n');
+        }
         this.text = text;
         this.summaryText = summaryText;
     }
