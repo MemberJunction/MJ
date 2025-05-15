@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey } from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { a2aServerSettings } from './config.js';
 
@@ -105,7 +105,7 @@ export class EntityOperations {
             const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(keyPairs);
+            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 const result = await this.convertEntityObjectToJSON(record);
                 return { success: true, result };
@@ -173,7 +173,7 @@ export class EntityOperations {
             const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(keyPairs);
+            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 // Remove primary keys from update parameters
                 const updateParams = { ...parameters };
@@ -220,7 +220,7 @@ export class EntityOperations {
             const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(keyPairs);
+            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
             if (loaded) {
                 const success = await record.Delete();
                 
