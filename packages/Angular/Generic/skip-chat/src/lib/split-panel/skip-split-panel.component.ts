@@ -1,5 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, AfterViewInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, AfterViewInit, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { SplitterPaneComponent } from '@progress/kendo-angular-layout';
 
 export type SplitPanelMode = 'LeftOnly' | 'RightOnly' | 'BothSides';
 
@@ -29,6 +30,9 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
   }
   
   @Output() public SplitRatioChanged = new EventEmitter<number>();
+
+  @ViewChild('leftSplitterPane', { static: false }) leftSplitterPane!: SplitterPaneComponent;
+
 
   // Properties for pane sizes
   public leftPaneSize: string = '50%';
@@ -94,6 +98,9 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
     // Store the current ratio before closing, so we can restore it later when reopening
     this._lastRatioBeforeClosing = this.SplitRatio;
     
+    if (this.leftSplitterPane) {
+      this.leftSplitterPane.collapsed = false; // make sure we're not collapsed
+    }
     // Close the right panel by switching to LeftOnly mode
     this.Mode = 'LeftOnly';
     this.SplitRatioChanged.emit(this.SplitRatio);

@@ -101,6 +101,17 @@ export class ChatParams extends BaseParams  {
      * If the model supports effort levels, this parameter can be used to specify the effort level.
      */
     effortLevel?: string;
+    
+    /**
+     * Whether to enable caching for this request.
+     * Implementation depends on the specific provider (the below are examples, many other providers exist):
+     * - For Anthropic: Uses Anthropic's ephemeral cache control to cache system prompt and last user message.
+     * - For OpenAI: Uses automatic caching (provider handles it).
+     * - For other providers: May be a no-op if caching isn't supported.
+     * 
+     * @default true - Caching is enabled by default for providers that support it.
+     */
+    enableCaching?: boolean = true;
 }
 /**
  * Returns the first user message from the chat params
@@ -130,9 +141,29 @@ export type ChatResultData = {
     usage: ModelUsage
 }
 
+/**
+ * Cache metadata returned from the provider
+ */
+export interface CacheMetadata {
+    /**
+     * Whether the request had a cache hit
+     */
+    cacheHit?: boolean;
+    
+    /**
+     * The number of tokens retrieved from cache
+     */
+    cachedTokenCount?: number;
+}
+
 export class ChatResult extends BaseResult {
     data: ChatResultData;
     success: boolean;
-    statusText: string
+    statusText: string;
+    
+    /**
+     * Cache-related metadata if available from the provider
+     */
+    cacheInfo?: CacheMetadata;
 }
  

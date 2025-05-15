@@ -37,13 +37,13 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
   
   public isLoading: boolean = false;
-  public artifact: any = null;
-  public artifactVersion: any = null;
+  public artifact: ConversationArtifactEntity | null = null;
+  public artifactVersion: ConversationArtifactVersionEntity | null = null;
   public artifactType: any = null;
   public contentType: string = '';
   public displayContent: any = null;
   public error: string | null = null;
-  public artifactVersions: any[] = [];
+  public artifactVersions: ConversationArtifactVersionEntity[] = [];
   public selectedVersionId: string = '';
   private reportComponentRef: ComponentRef<any> | null = null;
   private conversationDetailRecord: ConversationDetailEntity | null = null;
@@ -256,7 +256,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       this.reportComponentRef = this.reportContainer.createComponent(componentFactory);
 
       if (this.reportComponentRef) {
-        const instance = this.reportComponentRef.instance;
+        const instance = this.reportComponentRef.instance as SkipDynamicReportWrapperComponent
         
         // Initialize from AI message or Configuration
         let configData = null;
@@ -298,7 +298,6 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         // Set properties on the report component
         instance.SkipData = configData;
         instance.Provider = this.ProviderToUse;
-        instance.RunViewProvider = this.RunViewToUse;
         
         // Set up event handlers
         instance.NavigateToMatchingReport.subscribe((reportID: string) => {
@@ -324,6 +323,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         if (this.conversationDetailRecord) {
           instance.ConversationID = this.conversationDetailRecord.ConversationID;
           instance.ConversationDetailID = this.conversationDetailRecord.ID;
+          instance.ConversationName = this.conversationDetailRecord.Conversation;
         }
       }
     } catch (err) {

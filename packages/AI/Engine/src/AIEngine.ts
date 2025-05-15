@@ -4,7 +4,7 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEngine, BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
 import { AIAgentEntityExtended } from "./AIAgentExtended";
 
@@ -38,6 +38,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _artifactTypes: ArtifactTypeEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -92,6 +93,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_agents',
                 EntityName: 'AI Agents'
+            },
+            {
+                PropertyName: '_artifactTypes',
+                EntityName: 'MJ: Artifact Types'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -372,6 +377,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
     public get Models(): AIModelEntityExtended[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
+    }
+
+    public get ArtifactTypes(): ArtifactTypeEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._artifactTypes;
     }
 
     /**

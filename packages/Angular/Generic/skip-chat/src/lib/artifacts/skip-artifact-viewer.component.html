@@ -3,9 +3,9 @@
     <div class="artifact-info">
       <h3 class="artifact-title">{{ artifactTitle }}</h3>
       <span class="artifact-type">{{ artifactTypeName }}</span>
-      @if (artifact.Description?.trim().length > 0) {
+      @if (artifact?.Description) {
         <div class="artifact-description">
-          <p>{{ artifact.Description }}</p>
+          <p>{{ artifact!.Description }}</p>
         </div>
       }
     </div>
@@ -49,10 +49,10 @@
 
       @if (artifactVersion) {
         <div class="artifact-metadata">
-          @if (artifactVersion.CreatedAt) {
+          @if (artifactVersion.__mj_CreatedAt) {
             <div class="metadata-item">
               <span class="metadata-label">Created:</span>
-              <span class="metadata-value">{{ artifactVersion.CreatedAt | date:'medium' }}</span>
+              <span class="metadata-value">{{ artifactVersion.__mj_CreatedAt | date:'medium' }}</span>
             </div>
           }
         </div>

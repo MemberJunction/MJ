@@ -215,7 +215,13 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
                 this._cachedMessage = clarifyingQuestion.clarifyingQuestion;
                 break;
               case SkipResponsePhase.analysis_complete:
-                this._cachedMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+                // check to see if we have an artifact, if we do, then we want _cachedMessage to be the explanation of the report, otherwise we want it to be empty
+                if (this.ConversationDetailRecord.ArtifactID && this.ConversationDetailRecord.ArtifactID.length > 0) {
+                  this._cachedMessage = (<SkipAPIAnalysisCompleteResponse>resultObject).userExplanation || '';
+                }
+                else {
+                  this._cachedMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+                }
                 break;
               default:
                 this._cachedMessage = "";
@@ -320,7 +326,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
             const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
             const componentRef = this.reportContainerRef.createComponent(SkipDynamicReportWrapperComponent);            
             
-            // Pass the data to the new chart
+            // Pass the data to the new report
             const report = componentRef.instance;
             report.NavigateToMatchingReport.subscribe((reportID: string) => {
               this.NavigateToMatchingReport.emit(reportID); // bubble up
