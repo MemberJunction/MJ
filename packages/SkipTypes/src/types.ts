@@ -947,8 +947,8 @@ export interface SkipHTMLReportCallbacks {
     /**
      * If an action occurs inside an HTML Report where it would be desirable for the containing UI to open a specific 
      * record, if supported, this event can be listened to and the container UI can then open the record.
-     * @param entityName 
-     * @param key 
+     * @param entityName - this is the Entity NAME from the Entity metadata, not the table name or base view name. Use Entity Metadata to provide the entity name here
+     * @param key - this is an array of key/value pairs representing the primary key. The format of a Composite Key is an array of KeyValuePair objects and KeyValuePair objects simply have FieldName and Value properties. In most cases entities have single-valued primary keys but this structure is here for complex entity types that have composite primary keys
      * @returns 
      */
     OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
