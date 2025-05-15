@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import * as Config from '../config';
@@ -49,7 +49,7 @@ export class BettyBotLLM extends BaseLLM {
                 }
             };
 
-            const userMessage = params.messages.find(m => m.role === 'user');
+            const userMessage = params.messages.find(m => m.role === ChatMessageRole.user);
             if(!userMessage){
                 // Create an error result
                 const errorResult = new ChatResult(false, startTime, startTime);
@@ -82,18 +82,14 @@ export class BettyBotLLM extends BaseLLM {
                 choices: [
                     {
                         message: {
-                            role: 'assistant',
+                            role: ChatMessageRole.assistant,
                             content: bettyResponse.data.response
                         },
                         finish_reason: "",
                         index: 0
                     }
                 ],
-                usage: {
-                    totalTokens: 0,
-                    promptTokens: 0,
-                    completionTokens: 0,
-                }
+                usage: new ModelUsage(0, 0)
             };
             response.errorMessage = "";
             response.exception = null;
@@ -111,7 +107,7 @@ export class BettyBotLLM extends BaseLLM {
 
                 response.data.choices.push({
                     message: {
-                        role: 'assistant',
+                        role: ChatMessageRole.assistant,
                         content: text
                     },
                     finish_reason: "",
@@ -142,11 +138,7 @@ export class BettyBotLLM extends BaseLLM {
             errorResult.errorMessage = 'Error getting response from Betty';
             errorResult.data = {
                 choices: [],
-                usage: {
-                    promptTokens: 0,
-                    completionTokens: 0,
-                    totalTokens: 0
-                }
+                usage: new ModelUsage(0, 0)
             };
             
             return errorResult;

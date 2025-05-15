@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey} from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { a2aServerSettings } from './config.js';
 

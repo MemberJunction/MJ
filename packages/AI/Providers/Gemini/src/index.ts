@@ -1,20 +1,10 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI } from "@google/genai";
-
-// Define our own types to match the structure we need
-interface TextPart {
-    text: string;
-}
-
-interface Content {
-    role: 'user' | 'model';
-    parts: TextPart[];
-}
+import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -41,15 +31,15 @@ export class GeminiLLM extends BaseLLM {
     }
 
     protected geminiMessageSpacing(messages: Content[]): Content[] {
-        // this method is simple, it makes sure that we alternate messages between user and assistant, otherwise Anthropic will
-        // have a problem. If we find two user messages in a row, we insert an assistant message between them with just "OK"
-        const result: any[] = [];
+        // This method makes sure that we alternate messages between user and model
+        // If we find two messages in a row with the same role, we insert a message 
+        // with the opposite role between them with just "OK"
+        const result: Content[] = [];
         let lastRole = "model";
         for (let i = 0; i < messages.length; i++) {
             if (messages[i].role === lastRole) {
                 result.push({
-                    role: "model", // we are using the ChatMessage type from the MJ package, so we need to use the role "assistant" instead of "model"
-                                       // later on the role will be converted to "model" in the MapMJMessageToGeminiHistoryEntry method
+                    role: "model", // we are using the ChatMessage type from the MJ package
                     parts: [{text: "OK"}]
                 });
             }
@@ -73,21 +63,31 @@ export class GeminiLLM extends BaseLLM {
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
             
             // Create the model and then chat
-            const modelOptions = {
+            const modelOptions: Record<string, any> = {
                 temperature: params.temperature || 0.5,
                 responseType: params.responseFormat,
             };
             
+            // Add generationConfig with reasoningMode if effortLevel is provided
+            if (params.effortLevel) {
+                // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
+                // reasoning but at increased cost and latency
+                modelOptions.generationConfig = {
+                    ...(modelOptions.generationConfig || {}),
+                    reasoningMode: 'full'
+                };
+            }
+            
             // Use the new API structure
             const chat = this.GeminiClient.chats.create({
                 model: modelName,
-                history: tempMessages
+                history: tempMessages 
             });
             
             // Send the latest message
             const latestMessage = params.messages[params.messages.length - 1].content;
             const result = await chat.sendMessage({
-                message: latestMessage,
+                message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
                 ...modelOptions
             });
             
@@ -106,11 +106,7 @@ export class GeminiLLM extends BaseLLM {
                         finish_reason: "completed",
                         index: 0
                     }],
-                    usage: {
-                        totalTokens: 0,
-                        promptTokens: 0,
-                        completionTokens: 0 // to do map this from google
-                    }
+                    usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
                 },
                 errorMessage: "",
                 exception: null,
@@ -125,11 +121,7 @@ export class GeminiLLM extends BaseLLM {
                 timeElapsed: 0,
                 data: {
                     choices: [],
-                    usage: {
-                        totalTokens: 0,
-                        promptTokens: 0,
-                        completionTokens: 0
-                    }
+                    usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
                 },
                 errorMessage: e.message,
                 exception: e
@@ -148,10 +140,20 @@ export class GeminiLLM extends BaseLLM {
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
         
         // Create the model and then chat
-        const modelOptions = {
+        const modelOptions: Record<string, any> = {
             temperature: params.temperature || 0.5,
             responseType: params.responseFormat,
         };
+        
+        // Add generationConfig with reasoningMode if effortLevel is provided
+        if (params.effortLevel) {
+            // Gemini has generationConfig.reasoningMode which can be set to 'full' for higher quality
+            // reasoning but at increased cost and latency
+            modelOptions.generationConfig = {
+                ...(modelOptions.generationConfig || {}),
+                reasoningMode: 'full'
+            };
+        }
         
         // Use the new API structure
         const chat = this.GeminiClient.chats.create({
@@ -163,7 +165,7 @@ export class GeminiLLM extends BaseLLM {
         
         // Send message with streaming
         const streamResult = await chat.sendMessageStream({
-            message: latestMessage,
+            message: GeminiLLM.MapMJContentToGeminiParts(latestMessage),
             ...modelOptions
         });
         
@@ -226,11 +228,7 @@ export class GeminiLLM extends BaseLLM {
                 finish_reason: 'stop',
                 index: 0
             }],
-            usage: {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0
-            }
+            usage: new ModelUsage(0, 0) // Gemini doesn't provide detailed token usage
         };
         
         result.statusText = 'success';
@@ -246,13 +244,47 @@ export class GeminiLLM extends BaseLLM {
         throw new Error("Method not implemented.");   
     }
 
-    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
-        const textPart: TextPart = {
-            text: message.content
+    public static MapMJContentToGeminiParts(content: ChatMessageContent): Array<Part> {
+        const parts: Array<Part> = [];
+        if (Array.isArray(content)) {
+            for (const part of content) {
+                if (part.type === 'text') {
+                    parts.push({text: part.content});
+                }
+                else {
+                    // use the inlineData property which expects a Blob property which consists of data and mimeType
+                    const blob: Blob = {
+                        data: part.content
+                    }
+                    switch (part.type) {
+                        case 'image_url':
+                            blob.mimeType = 'image/jpeg';
+                            break;
+                        case 'audio_url':
+                            blob.mimeType = 'audio/mpeg';
+                            break;
+                        case 'video_url':
+                            blob.mimeType = 'video/mp4';
+                            break;
+                        case 'file_url':
+                            blob.mimeType = 'application/octet-stream';
+                            break;
+                    }
+                    parts.push({inlineData: blob});
+                }
+            }
         }
+        else {
+            // we know that message.content is a string
+            parts.push({text: content});
+        }
+        return parts;
+    }
+
+    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
-            parts: [textPart]
+            parts: GeminiLLM.MapMJContentToGeminiParts(message.content)
         }
     }
 }
