@@ -12023,6 +12023,9 @@ export class AIModel_ {
     @MaxLength(200)
     SupportedResponseFormats: string;
         
+    @Field(() => Boolean, {description: `Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`}) 
+    SupportsEffortLevel: boolean;
+        
     @Field() 
     @MaxLength(100)
     AIModelType: string;
@@ -12102,6 +12105,9 @@ export class CreateAIModelInput {
 
     @Field({ nullable: true })
     SupportedResponseFormats?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEffortLevel?: boolean;
 }
     
 
@@ -12154,6 +12160,9 @@ export class UpdateAIModelInput {
 
     @Field({ nullable: true })
     SupportedResponseFormats?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsEffortLevel?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
