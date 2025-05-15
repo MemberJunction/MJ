@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.39.0
+
+### Patch Changes
+
+- e93f580: Various minor updates for Skip
+- Updated dependencies [f73ea0e]
+- Updated dependencies [c9ccc36]
+  - @memberjunction/ai@2.39.0
+  - @memberjunction/core-entities@2.39.0
+  - @memberjunction/core@2.39.0
+  - @memberjunction/global@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes

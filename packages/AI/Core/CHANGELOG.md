@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.39.0
+
+### Minor Changes
+
+- f73ea0e: New Claude Models - bumping to 2.39.0
+
+### Patch Changes
+
+- @memberjunction/global@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes

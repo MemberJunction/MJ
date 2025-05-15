@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 2.39.0
+
+### Minor Changes
+
+- f73ea0e: New Claude Models - bumping to 2.39.0
+
+### Patch Changes
+
+- 0583a20: updated to include latest SDKs from openai/anthropic
+- Updated dependencies [f73ea0e]
+  - @memberjunction/ai@2.39.0
+  - @memberjunction/global@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes
