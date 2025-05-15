@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.39.0
+
+### Patch Changes
+
+- c9ccc36: Added SupportsEffortLevel to AIModels entity - generated artifacts to suit...
+- Updated dependencies [c9ccc36]
+  - @memberjunction/core-entities@2.39.0
+  - @memberjunction/ng-explorer-core@2.39.0
+  - @memberjunction/ng-form-toolbar@2.39.0
+  - @memberjunction/ng-code-editor@2.39.0
+  - @memberjunction/ng-join-grid@2.39.0
+  - @memberjunction/ng-timeline@2.39.0
+  - @memberjunction/ng-base-forms@2.39.0
+  - @memberjunction/ng-container-directives@2.39.0
+  - @memberjunction/ng-tabstrip@2.39.0
+  - @memberjunction/core@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes

@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/server
 
+## 2.39.0
+
+### Patch Changes
+
+- e93f580: Various minor updates for Skip
+- a827f49: minor bug fixes
+- c9ccc36: Added SupportsEffortLevel to AIModels entity - generated artifacts to suit...
+- Updated dependencies [f73ea0e]
+- Updated dependencies [0583a20]
+- Updated dependencies [e93f580]
+- Updated dependencies [f3fa7ec]
+- Updated dependencies [c9ccc36]
+  - @memberjunction/ai@2.39.0
+  - @memberjunction/ai-openai@2.39.0
+  - @memberjunction/aiengine@2.39.0
+  - @memberjunction/skip-types@2.39.0
+  - @memberjunction/core-entities@2.39.0
+  - @memberjunction/ai-mistral@2.39.0
+  - @memberjunction/actions@2.39.0
+  - @memberjunction/queue@2.39.0
+  - @memberjunction/sqlserver-dataprovider@2.39.0
+  - @memberjunction/templates@2.39.0
+  - @memberjunction/ai-vectors-pinecone@2.39.0
+  - @memberjunction/core-actions@2.39.0
+  - @memberjunction/entity-communications-server@2.39.0
+  - @memberjunction/doc-utils@2.39.0
+  - @memberjunction/external-change-detection@2.39.0
+  - @memberjunction/graphql-dataprovider@2.39.0
+  - @memberjunction/data-context@2.39.0
+  - @memberjunction/storage@2.39.0
+  - @memberjunction/data-context-server@2.39.0
+  - @memberjunction/core@2.39.0
+  - @memberjunction/global@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.39.0
+
+### Patch Changes
+
+- f3fa7ec: clean up types
+- Updated dependencies [c9ccc36]
+  - @memberjunction/core-entities@2.39.0
+  - @memberjunction/data-context@2.39.0
+
 ## 2.38.0
 
 ### Patch Changes

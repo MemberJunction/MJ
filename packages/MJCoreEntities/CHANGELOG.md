@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.39.0
+
+### Patch Changes
+
+- c9ccc36: Added SupportsEffortLevel to AIModels entity - generated artifacts to suit...
+  - @memberjunction/core@2.39.0
+  - @memberjunction/global@2.39.0
+
 ## 2.38.0
 
 ### Minor Changes
