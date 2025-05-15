@@ -61,9 +61,9 @@ export type ChatCompletionMessage = {
     role: 'assistant';
 
     /**
-     * Content of the message, can be any string or null.
+     * Content of the message, can be any string 
      */
-    content: string | null;
+    content: string;
 }
 
 /**
