@@ -15,7 +15,7 @@ export class SummarizeResult extends BaseResult {
         super(success, startTime, endTime);
 
         // if text is an array of ChatMessageContentBlock, filter it down to only text blocks and then concatenate them
-        if (text instanceof Array) {
+        if (Array.isArray(text)) {
             text = text.filter((block: ChatMessageContentBlock) => block.type === 'text').map((block: ChatMessageContentBlock) => block.content).join('\n\n');
         }
         this.text = text;
