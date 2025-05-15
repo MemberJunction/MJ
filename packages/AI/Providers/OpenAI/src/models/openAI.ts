@@ -214,24 +214,24 @@ export class OpenAILLM extends BaseLLM {
     public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
         return messages.map(m => {
             const role = this.ConvertMJToOpenAIRole(m.role);
-            let content: any = m.content;
+            let content: unknown = m.content;
             
             // Process content if it's an array
-            if (content instanceof Array) {
+            if (Array.isArray(content)) {
                 // Filter out unsupported types and convert to OpenAI's expected format
                 const contentParts = content
                     .map(c => {
                         // For text type
                         if (c.type === 'text') {
                             return {
-                                type: 'text',
+                                type: 'text' as const,
                                 text: c.content
                             };
                         } 
                         // For image_url type
                         else if (c.type === 'image_url') {
                             return {
-                                type: 'image_url',
+                                type: 'image_url' as const,
                                 image_url: { url: c.content }
                             };
                         }
@@ -241,7 +241,7 @@ export class OpenAILLM extends BaseLLM {
                             return null;
                         }
                     })
-                    .filter(part => part !== null) as ChatCompletionContentPart[];
+                    .filter(part => part !== null);
                 
                 content = contentParts;
             }
@@ -250,20 +250,20 @@ export class OpenAILLM extends BaseLLM {
             switch (role) {
                 case 'system':
                     return { 
-                        role: 'system', 
-                        content: content as string | ChatCompletionContentPart[]
+                        role: 'system' as const, 
+                        content 
                     } as ChatCompletionSystemMessageParam;
                 
                 case 'user':
                     return { 
-                        role: 'user', 
-                        content: content as string | ChatCompletionContentPart[]
+                        role: 'user' as const, 
+                        content 
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
                     return { 
-                        role: 'assistant', 
-                        content: content as string | ChatCompletionContentPart[]
+                        role: 'assistant' as const, 
+                        content 
                     } as ChatCompletionAssistantMessageParam;
                 
                 default:

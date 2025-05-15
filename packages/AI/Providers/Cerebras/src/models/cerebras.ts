@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
-import { Chat } from '@cerebras/cerebras_cloud_sdk/resources/chat';
+import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
 
 /**
  * Cerebras implementation of the BaseLLM class
@@ -65,7 +65,7 @@ export class CerebrasLLM extends BaseLLM {
                     content: contentStr
                 };
             }
-        }) as any; // Use any to bypass type checking
+        })  
         
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,
@@ -92,8 +92,7 @@ export class CerebrasLLM extends BaseLLM {
         const endTime = new Date();
 
         // Cast to any to extract the choices
-        const responseObj = chatResponse as any;
-        const choices: ChatResultChoice[] = (responseObj.choices || []).map((choice: any) => {
+        const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice) => {
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
@@ -104,9 +103,9 @@ export class CerebrasLLM extends BaseLLM {
             };
             return res;
         });
-        
-        const usage = responseObj.usage || { prompt_tokens: 0, completion_tokens: 0 };
-        
+         
+         
+        const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
         return {
             success: true,
             statusText: "OK",
@@ -145,7 +144,7 @@ export class CerebrasLLM extends BaseLLM {
                     content: contentStr
                 };
             }
-        }) as any; // Use any to bypass type checking
+        })  
         
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,

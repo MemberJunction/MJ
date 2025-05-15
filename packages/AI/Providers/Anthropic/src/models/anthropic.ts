@@ -1,5 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk";
-import { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
     SummarizeResult, ModelUsage } from "@memberjunction/ai";
@@ -158,10 +158,11 @@ export class AnthropicLLM extends BaseLLM {
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
             // Create the request parameters
-            const createParams: any = {
+            const createParams: MessageCreateParams = {
                 model: params.model,
                 max_tokens: params.maxOutputTokens || 64000, // large default for max_tokens if not provided
-                stream: true // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
+                stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
+                messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
  
             // Add system message(s), if present
@@ -172,17 +173,12 @@ export class AnthropicLLM extends BaseLLM {
                 );
             }
             
-            // Add messages with caching applied to the last user message
-            createParams.messages = this.formatMessagesWithCaching(
-                nonSystemMsgs, 
-                params.enableCaching || true
-            );
-            
             // Add thinking parameter if effort level is set
             // Note: Requires minimum 1 tokens or not budget set
             if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
                 createParams.thinking = {
-                    type: "enabled" as const
+                    type: "enabled" as const,
+                    budget_tokens: params.reasoningBudgetTokens || 1000000 // default to 1000000 if not set
                 };
                 if (params.reasoningBudgetTokens) {
                     createParams.thinking.budget_tokens = params.reasoningBudgetTokens;

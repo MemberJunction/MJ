@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import Groq from 'groq-sdk';
-import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from 'groq-sdk/resources/chat/completions';
+import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam } from 'groq-sdk/resources/chat/completions';
 
 /**
  * Groq implementation of the BaseLLM class
@@ -45,14 +45,25 @@ export class GroqLLM extends BaseLLM {
         const messages = params.messages.map(m => ({
             role: m.role,
             content: m.content,
-        })) as any; // Use any to bypass type checking
+        }))  
 
         const groqParams: ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
-            messages: messages, 
+            messages: messages.map(m => {
+                return {
+                    role: m.role,
+                    content: Array.isArray(m.content) ? m.content.map(block => {
+                        return {
+                            content: block.content,
+                            type: block.type,
+                        }
+                    }) : m.content,
+                };
+            }) as Array<ChatCompletionMessageParam>, 
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
+         
         switch (params.responseFormat) {
             case 'Any':
             case 'Text':
@@ -113,6 +124,12 @@ export class GroqLLM extends BaseLLM {
             temperature: params.temperature,
             stream: true
         };
+        
+        // Add reasoning_effort if supported by the model
+        if (params.effortLevel) {
+            // Note: This is still experimental in Groq, so we add it only if explicitly requested
+            (groqParams as any).reasoning_effort = params.effortLevel;
+        }
         
         // Set response format if specified
         switch (params.responseFormat) {

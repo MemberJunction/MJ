@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
-import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice } from '@mistralai/mistralai/models/components';
+import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
@@ -55,14 +55,20 @@ export class MistralLLM extends BaseLLM {
                     content: contentStr
                 };
             }
-        }) as any; // Use any to bypass type checking
+        })  
         
-        const chatResponse = await this.Client.chat.complete({
+        // Create params object
+        const params_obj: any = {
             model: params.model,
             messages: messages, 
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat
-        });
+        };
+        
+        // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
+        // If/when Mistral adds this functionality, it should be added here
+
+        const chatResponse = await this.Client.chat.complete(params_obj);
 
         const endTime = new Date();
 
@@ -130,14 +136,20 @@ export class MistralLLM extends BaseLLM {
                     content: contentStr
                 };
             }
-        }) as any; // Use any to bypass type checking
+        })  
         
-        return this.Client.chat.stream({
+        // Create params object
+        const params_obj: ChatCompletionStreamRequest = {
             model: params.model,
             messages: messages,
             maxTokens: params.maxOutputTokens,
-            responseFormat: responseFormat
-        });
+            responseFormat: responseFormat,
+        };
+        
+        // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
+        // If/when Mistral adds this functionality, it should be added here
+        
+        return this.Client.chat.stream(params_obj);
     }
     
     /**
