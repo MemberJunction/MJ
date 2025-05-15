@@ -44,7 +44,8 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
-            max_completion_tokens: params.maxOutputTokens
+            max_completion_tokens: params.maxOutputTokens,
+            logprobs: params.includeLogProbs === true ? true : false,
         };
         
         if (params.effortLevel) {
@@ -73,7 +74,7 @@ export class OpenAILLM extends BaseLLM {
                 choices: result.choices.map((c: { message: { role: string | number; content: any; }; finish_reason: any; index: any; }) => {
                     return {
                         message: {
-                            role: <ChatMessageRole>c.message.role,
+                            role: ChatMessageRole.assistant,
                             content: c.message.content
                         },
                         finish_reason: c.finish_reason,
@@ -103,7 +104,8 @@ export class OpenAILLM extends BaseLLM {
             messages: messages,
             temperature: params.temperature,
             max_tokens: params.maxOutputTokens,
-            stream: true
+            stream: true,
+            logprobs: params.includeLogProbs === true ? true : false,
         };
         
         if (params.effortLevel) {

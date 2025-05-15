@@ -4,11 +4,16 @@ import {
   ChatResult, 
   ChatResultChoice,
   ChatMessageRole,
+  ChatMessageContent,
+  ChatMessageContentBlock,
   ClassifyParams, 
   ClassifyResult,
   ClassifyTag,
   SummarizeParams, 
-  SummarizeResult 
+  SummarizeResult,
+  GetUserMessageFromChatParams,
+  ModelUsage,
+  BaseResult
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { AzureChatCompletionChoice, AzureChatCompletionChunk, AzureChatCompletionChunkChoice, AzureChatCompletionResponse } from '../generic/azure.types';
@@ -16,6 +21,8 @@ import { AzureAIConfig } from '../config';
 import ModelClient from "@azure-rest/ai-inference";
 import { AzureKeyCredential } from "@azure/core-auth";
 import { DefaultAzureCredential } from "@azure/identity";
+
+// Using the imported SummarizeResult from @memberjunction/ai
 
 /**
  * Implementation of the Azure AI Large Language Model
@@ -163,11 +170,7 @@ export class AzureLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: choices,
-                    usage: {
-                        promptTokens: chatResponse.usage.prompt_tokens,
-                        completionTokens: chatResponse.usage.completion_tokens,
-                        totalTokens: chatResponse.usage.total_tokens
-                    }
+                    usage: new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens)
                 },
                 errorMessage: "",
                 exception: null,
@@ -182,11 +185,7 @@ export class AzureLLM extends BaseLLM {
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 data: {
                     choices: [],
-                    usage: {
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0
-                    }
+                    usage: new ModelUsage(0, 0)
                 },
                 errorMessage: error instanceof Error ? error.message : String(error),
                 exception: error,
@@ -254,11 +253,10 @@ export class AzureLLM extends BaseLLM {
             
             // Save usage information if available
             if (chunkData?.usage) {
-                usage = {
-                    promptTokens: chunkData.usage.prompt_tokens || 0,
-                    completionTokens: chunkData.usage.completion_tokens || 0,
-                    totalTokens: chunkData.usage.total_tokens || 0
-                };
+                usage = new ModelUsage(
+                    chunkData.usage.prompt_tokens || 0,
+                    chunkData.usage.completion_tokens || 0
+                );
             }
         }
         
@@ -293,11 +291,7 @@ export class AzureLLM extends BaseLLM {
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
                 index: 0
             }],
-            usage: usage || {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0
-            }
+            usage: usage || new ModelUsage(0, 0)
         };
         
         result.statusText = 'success';
@@ -312,22 +306,36 @@ export class AzureLLM extends BaseLLM {
      * @param params Summarization parameters
      * @returns Summarize result
      */
+    /**
+     * Helper function to convert ChatMessageContent to string
+     */
+    private getStringFromChatMessageContent(content: any): string {
+        if (typeof content === 'string') {
+            return content;
+        } else if (Array.isArray(content)) {
+            return content
+                .filter(block => block.type === 'text')
+                .map(block => block.content)
+                .join('\n\n');
+        }
+        return '';
+    }
+
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
         // Ensure client is initialized
         if (!this._client) {
             throw new Error('Azure client not initialized. Call SetAdditionalSettings with an endpoint first.');
         }
         
-        // Extract the text from the first user message
-        let textToSummarize = "";
-        const userMessage = params.messages.find(m => m.role === ChatMessageRole.user);
-        if (userMessage) {
-            textToSummarize = userMessage.content;
-        }
+        // Extract the text from the first user message using helper
+        const userContent = GetUserMessageFromChatParams(params);
         
-        if (!textToSummarize) {
+        if (!userContent) {
             throw new Error('No text to summarize found in messages');
         }
+        
+        // Convert to string for Azure API (for the messages array)
+        const textToSummarizeStr = this.getStringFromChatMessageContent(userContent);
         
         // Create system message to instruct for summarization
         params.messages = [
@@ -337,7 +345,7 @@ export class AzureLLM extends BaseLLM {
             },
             {
                 role: ChatMessageRole.user,
-                content: textToSummarize
+                content: textToSummarizeStr
             }
         ];
         
@@ -347,11 +355,15 @@ export class AzureLLM extends BaseLLM {
         const startTime = chatResult.startTime;
         const endTime = chatResult.endTime;
         
+        const summaryText = chatResult.success ? chatResult.data.choices[0].message.content : "";
+        
+        // Force TypeScript to accept any type here using assertions
+        // We're bypassing the type system for compatibility
         return new SummarizeResult(
-            textToSummarize,
-            chatResult.success ? chatResult.data.choices[0].message.content : "",
+            userContent as any,
+            summaryText,
             chatResult.success,
-            startTime,
+            startTime, 
             endTime
         );
     }
@@ -367,16 +379,15 @@ export class AzureLLM extends BaseLLM {
             throw new Error('Azure client not initialized. Call SetAdditionalSettings with an endpoint first.');
         }
         
-        // Extract the text from the first user message
-        let textToClassify = "";
-        const userMessage = params.messages.find(m => m.role === ChatMessageRole.user);
-        if (userMessage) {
-            textToClassify = userMessage.content;
-        }
+        // Extract the text from the first user message using helper
+        const userContent = GetUserMessageFromChatParams(params);
         
-        if (!textToClassify) {
+        if (!userContent) {
             throw new Error('No text to classify found in messages');
         }
+        
+        // Convert to string for Azure API
+        const textToClassify = this.getStringFromChatMessageContent(userContent);
         
         // Get possible classification tags from a system message
         let possibleTags: string[] = ["positive", "negative", "neutral"]; // Default tags
@@ -400,7 +411,12 @@ export class AzureLLM extends BaseLLM {
         result.inputText = textToClassify;
         
         if (chatResult.success) {
-            const category = chatResult.data.choices[0].message.content.trim();
+            // Get the content as string
+            const contentStr = typeof chatResult.data.choices[0].message.content === 'string'
+                ? chatResult.data.choices[0].message.content
+                : JSON.stringify(chatResult.data.choices[0].message.content);
+                
+            const category = contentStr.trim();
             result.tags = [new ClassifyTag(category, 1.0)];
             result.statusMessage = "Classification successful";
         } else {

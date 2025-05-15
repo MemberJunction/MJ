@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice } from '@mistralai/mistralai/models/components';
@@ -36,9 +36,30 @@ export class MistralLLM extends BaseLLM {
             }
         }
 
+        // Convert messages to format expected by Mistral
+        const messages = params.messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                // Multimodal content not fully supported yet in Mistral
+                // Convert to string by joining text content
+                const contentStr = m.content
+                    .filter(block => block.type === 'text')
+                    .map(block => block.content)
+                    .join('\n\n');
+                return {
+                    role: m.role,
+                    content: contentStr
+                };
+            }
+        }) as any; // Use any to bypass type checking
+        
         const chatResponse = await this.Client.chat.complete({
             model: params.model,
-            messages: params.messages, 
+            messages: messages, 
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat
         });
@@ -57,7 +78,7 @@ export class MistralLLM extends BaseLLM {
 
             const res: ChatResultChoice = {
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: content
                 },
                 finish_reason: choice.finishReason,
@@ -74,11 +95,7 @@ export class MistralLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: {
-                    totalTokens: chatResponse.usage.totalTokens,
-                    promptTokens: chatResponse.usage.promptTokens,
-                    completionTokens: chatResponse.usage.completionTokens
-                }
+                usage: new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens)
             },
             errorMessage: "",
             exception: null,
@@ -94,9 +111,30 @@ export class MistralLLM extends BaseLLM {
             responseFormat = { type: "json_object" };
         }
         
+        // Convert messages to format expected by Mistral
+        const messages = params.messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                // Multimodal content not fully supported yet in Mistral
+                // Convert to string by joining text content
+                const contentStr = m.content
+                    .filter(block => block.type === 'text')
+                    .map(block => block.content)
+                    .join('\n\n');
+                return {
+                    role: m.role,
+                    content: contentStr
+                };
+            }
+        }) as any; // Use any to bypass type checking
+        
         return this.Client.chat.stream({
             model: params.model,
-            messages: params.messages,
+            messages: messages,
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat
         });
@@ -127,11 +165,10 @@ export class MistralLLM extends BaseLLM {
             
             // Save usage information if available
             if (chunk?.data?.usage) {
-                usage = {
-                    promptTokens: chunk.data.usage.promptTokens || 0,
-                    completionTokens: chunk.data.usage.completionTokens || 0,
-                    totalTokens: chunk.data.usage.totalTokens || 0
-                };
+                usage = new ModelUsage(
+                    chunk.data.usage.promptTokens || 0,
+                    chunk.data.usage.completionTokens || 0
+                );
             }
         }
         
@@ -160,17 +197,13 @@ export class MistralLLM extends BaseLLM {
         result.data = {
             choices: [{
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: accumulatedContent ? accumulatedContent : ''
                 },
                 finish_reason: lastChunk?.data?.choices?.[0]?.finishReason || 'stop',
                 index: 0
             }],
-            usage: usage || {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0
-            }
+            usage: usage || new ModelUsage(0, 0)
         };
         
         result.statusText = 'success';
