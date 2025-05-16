@@ -11,8 +11,8 @@ export type SplitPanelMode = 'LeftOnly' | 'RightOnly' | 'BothSides';
 })
 export class SkipSplitPanelComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnChanges {
   @Input() public SplitRatio: number = 0.6; // Default left panel takes 60% of width
-  @Input() public MinLeftPanelWidth: string = '30%';
-  @Input() public MinRightPanelWidth: string = '30%';
+  @Input() public MinLeftPanelWidth: string = '20%';
+  @Input() public MinRightPanelWidth: string = '20%';
   
   private _mode: SplitPanelMode = 'BothSides';
   @Input() 
