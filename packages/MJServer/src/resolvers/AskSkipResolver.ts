@@ -588,17 +588,11 @@ export class AskSkipResolver {
           return false;
         }
       } else {
-        // For new notes, ensure the note type is not "Human"
-        if (change.note.agentNoteType === "Human") {
-          LogStatus(`WARNING: Cannot create a new Human note with the learning cycle. Operation ignored.`);
-          return false;
-        }
-
         // Create a new note
         noteEntity.NewRecord();
         noteEntity.AgentID = agentID;
       }
-      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI');
+      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
       noteEntity.Note = change.note.note;
       noteEntity.Type = change.note.type;
 
@@ -2309,15 +2303,15 @@ cycle.`);
     };
   }
 
-  protected getAgentNoteTypeIDByName(name: string): string {
+  protected getAgentNoteTypeIDByName(name: string, defaultNoteType: string = 'AI'): string {
     const noteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
     if (noteTypeID) { 
       return noteTypeID;
     }
     else{ 
-      // default to AI note ID
-      const AINoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === 'AI')?.ID;
-      return AINoteTypeID
+      // default  
+      const defaultNoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === defaultNoteType.trim().toLowerCase())?.ID;
+      return defaultNoteTypeID;
     }
   }
 
