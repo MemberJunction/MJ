@@ -53,7 +53,7 @@ import {
   UserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl, ___skipLearningAPIurl, ___skipLearningCycleIntervalInMinutes, ___skipRunLearningCycles, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -164,6 +164,61 @@ export class StopLearningCycleResultType {
 }
 
 /**
+ * This function initializes the Skip learning cycle scheduler. It sets up an event listener for the server's setup complete event and starts the scheduler if learning cycles are enabled and a valid API endpoint is configured.
+ */
+function initializeSkipLearningCycleScheduler() {
+  try {
+    // Set up event listener for server initialization
+    const eventListener = MJGlobal.Instance.GetEventListener(true);
+    eventListener.subscribe(event => {
+      // Filter for our server's setup complete event
+      if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
+        try {
+          const skipConfigInfo = configInfo.askSkip;
+          if (!skipConfigInfo) {
+            LogStatus('Skip AI Learning Cycle Scheduler not started: Skip configuration not found');
+            return;
+          }
+          if (!skipConfigInfo.learningCycleEnabled) {
+            LogStatus('Skip AI Learning Cycles not enabled in configuration');
+            return;
+          }
+          
+          // Check if we have a valid endpoint when cycles are enabled
+          if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+            LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
+            return;
+          }
+          
+          const dataSources = event.args.dataSources;
+          if (dataSources && dataSources.length > 0) {
+            // Initialize the scheduler
+            const scheduler = LearningCycleScheduler.Instance;
+            
+            // Set the data sources for the scheduler
+            scheduler.setDataSources(dataSources);
+            
+            // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
+            const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
+            //scheduler.start(interval);
+            scheduler.runLearningCycle(); // runs a test cycle immediately
+          } else {
+            LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
+          }
+        } catch (error) {
+          LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
+        }
+      }
+    });
+  } catch (error) {
+    // Handle any errors from the static initializer
+    LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
+  }
+}
+// now call the function to initialize the scheduler
+initializeSkipLearningCycleScheduler();
+
+/**
  * Internally used type
  */
 type BaseSkipRequest = {
@@ -184,50 +239,6 @@ type BaseSkipRequest = {
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
   
-  // Static initializer that runs when the class is loaded - initializes the learning cycle scheduler
-  static {
-    try {
-      // Set up event listener for server initialization
-      const eventListener = MJGlobal.Instance.GetEventListener(true);
-      eventListener.subscribe(event => {
-        // Filter for our server's setup complete event
-        if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
-          try {
-            if (___skipRunLearningCycles !== 'Y') {
-              LogStatus('Skip AI Learning cycle scheduler not started: Disabled in configuration');
-              return;
-            }
-            
-            // Check if we have a valid endpoint when cycles are enabled
-            if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
-              LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no API endpoint is configured');
-              return;
-            }
-            
-            const dataSources = event.args.dataSources;
-            if (dataSources && dataSources.length > 0) {
-              // Initialize the scheduler
-              const scheduler = LearningCycleScheduler.Instance;
-              
-              // Set the data sources for the scheduler
-              scheduler.setDataSources(dataSources);
-              
-              // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
-              const interval = ___skipLearningCycleIntervalInMinutes ?? 60;
-              scheduler.start(interval);
-            } else {
-              LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
-            }
-          } catch (error) {
-            LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
-          }
-        }
-      });
-    } catch (error) {
-      // Handle any errors from the static initializer
-      LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
-    }
-  }
   private static _maxHistoricalMessages = 30;
 
   /**
@@ -314,11 +325,12 @@ export class AskSkipResolver {
     @Ctx() { dataSource, userPayload }: AppContext,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
   ) {
+      const skipConfigInfo = configInfo.askSkip;
       // First check if learning cycles are enabled in configuration
-      if (___skipRunLearningCycles !== 'Y') {
+      if (!skipConfigInfo.learningCycleEnabled) {
         return {
           success: false,
-          error: 'Learning cycles are disabled in configuration',
+          error: 'Learning cycles are not enabled in configuration',
           elapsedTime: 0,
           noteChanges: [],
           queryChanges: [],
@@ -327,7 +339,7 @@ export class AskSkipResolver {
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
+      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
         return {
           success: false,
           error: 'Learning cycle API endpoint is not configured',
@@ -347,7 +359,7 @@ export class AskSkipResolver {
       await AIEngine.Instance.Config(false, user); 
 
       // Check if this organization is already running a learning cycle using their organization ID
-      const organizationId = ___skipAPIOrgId;
+      const organizationId = skipConfigInfo.orgID;
       const scheduler = LearningCycleScheduler.Instance;
       const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
       
@@ -442,9 +454,10 @@ export class AskSkipResolver {
     learningCycleId: string,
     agentID: string
   ): Promise<SkipAPILearningCycleResponse> {
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${___skipLearningAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
 
-    const response = await sendPostRequest(___skipLearningAPIurl, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -489,9 +502,10 @@ export class AskSkipResolver {
     createAIMessageConversationDetail: boolean = false,
     user: UserInfo = null
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
-    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -679,7 +693,7 @@ cycle.`);
     includeCallBackKeyAndAccessToken: boolean = false,
     additionalTokenInfo: any = {}
   ): Promise<BaseSkipRequest> {
-    
+    const skipConfigInfo = configInfo.askSkip;
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
     const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
@@ -710,7 +724,7 @@ cycle.`);
       noteTypes,
       requests, 
       accessToken,
-      organizationID: ___skipAPIOrgId,
+      organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
       callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
@@ -1322,7 +1336,7 @@ cycle.`);
   private async refreshSkipEntities(dataSource: DataSource): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
-      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSendSkip?.includeEntitiesFromExcludedSchemas ?? [])
+      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
         .map((e) => e.trim().toLowerCase());
   
       // get the list of entities
@@ -1710,7 +1724,8 @@ cycle.`);
     dataContextEntity: DataContextEntity, 
     conversationDetailCount: number
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
     if (conversationDetailCount > 10) {
       // At this point it is likely that we are stuck in a loop, so we stop here
@@ -1736,7 +1751,7 @@ cycle.`);
     }
 
     const response = await sendPostRequest(
-      ___skipAPIurl,
+      skipConfigInfo.chatURL,
       input,
       true,
       null,
@@ -2323,17 +2338,17 @@ cycle.`);
   ): Promise<ManualLearningCycleResultType> {
     try {
       LogStatus('Manual execution of Skip learning cycle requested via API');
-      
+      const skipConfigInfo = configInfo.askSkip;
       // First check if learning cycles are enabled in configuration
-      if (___skipRunLearningCycles !== 'Y') {
+      if (!skipConfigInfo.learningCycleEnabled) {
         return {
           Success: false,
-          Message: 'Learning cycles are disabled in configuration'
+          Message: 'Learning cycles are not enabled in configuration'
         };
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
+      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
         return {
           Success: false,
           Message: 'Learning cycle API endpoint is not configured'
@@ -2341,7 +2356,7 @@ cycle.`);
       }
       
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || skipConfigInfo.orgID;
       
       // Call the scheduler's manual execution method with org ID
       const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
@@ -2400,8 +2415,9 @@ cycle.`);
     @Arg('OrganizationId', () => String) OrganizationId: string
   ): Promise<RunningOrganizationType | null> {
     try {
+      const skipConfigInfo = configInfo.askSkip;
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || skipConfigInfo.orgID;
       
       const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
       
@@ -2432,7 +2448,7 @@ cycle.`);
   ): Promise<StopLearningCycleResultType> {
     try {
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || configInfo.askSkip.orgID;
       
       const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
       
