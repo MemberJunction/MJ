@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
@@ -37,26 +37,7 @@ export class MistralLLM extends BaseLLM {
         }
 
         // Convert messages to format expected by Mistral
-        const messages = params.messages.map(m => {
-            if (typeof m.content === 'string') {
-                return {
-                    role: m.role,
-                    content: m.content
-                };
-            } else {
-                // Multimodal content not fully supported yet in Mistral
-                // Convert to string by joining text content
-                const contentStr = m.content
-                    .filter(block => block.type === 'text')
-                    .map(block => block.content)
-                    .join('\n\n');
-                return {
-                    role: m.role,
-                    content: contentStr
-                };
-            }
-        })  
-        
+        const messages = this.MapMJMessagesToMistral(params.messages);
         // Create params object
         const params_obj: any = {
             model: params.model,
@@ -118,25 +99,7 @@ export class MistralLLM extends BaseLLM {
         }
         
         // Convert messages to format expected by Mistral
-        const messages = params.messages.map(m => {
-            if (typeof m.content === 'string') {
-                return {
-                    role: m.role,
-                    content: m.content
-                };
-            } else {
-                // Multimodal content not fully supported yet in Mistral
-                // Convert to string by joining text content
-                const contentStr = m.content
-                    .filter(block => block.type === 'text')
-                    .map(block => block.content)
-                    .join('\n\n');
-                return {
-                    role: m.role,
-                    content: contentStr
-                };
-            }
-        })  
+        const messages = this.MapMJMessagesToMistral(params.messages);
         
         // Create params object
         const params_obj: ChatCompletionStreamRequest = {
@@ -231,6 +194,54 @@ export class MistralLLM extends BaseLLM {
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
+    }
+
+    protected MapMJMessagesToMistral(messages: ChatMessage[]): Array<any> {
+        const returnMessages = messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                return { 
+                    role: m.role,
+                    content: m.content.map(block => {
+                        let mistralType = undefined;
+                        switch (block.type) {
+                            case 'text':
+                                mistralType = 'text';
+                                break;
+                            case 'image_url':
+                                mistralType = 'image_url';
+                                break;
+                            case 'file_url':
+                                mistralType = 'document_url';
+                                break;
+                            default:
+                                console.warn(`${block.type} type is not supported in Mistral`);
+                                break;
+                        }
+                        return {
+                            type: block.type,
+                            content: block.content
+                        }
+                    }).filter(block => block.type !== undefined)
+                }
+            }
+        });
+        
+        // Mistral expects the last message to either be a user message or a tool message
+        if (returnMessages.length > 0) {
+            const lastMessage = returnMessages[returnMessages.length - 1];
+            if (lastMessage.role !== 'user' /*&& lastMessage.role !== 'tool' -- in future if BaseLLM supports tool messages*/) {
+                returnMessages.push({
+                    role: 'user',
+                    content: 'ok' // Placeholder message to satisfy Mistral's requirement
+                })
+            }
+        }
+        return returnMessages;
     }
 }
 
