@@ -37,13 +37,36 @@ const restApiOptionsSchema = z.object({
 });
 
 const askSkipInfoSchema = z.object({
+  apiKey: z.string().optional(),
+  orgID: z.string().optional(),
   organizationInfo: z.string().optional(),
-  entitiesToSendSkip: z
+  entitiesToSend: z
     .object({
       excludeSchemas: z.array(z.string()).optional(),
       includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
     })
     .optional(),
+  chatURL: z.string().optional(),
+  learningCycleEnabled: z
+    .union([z.boolean(), z.string(), z.number()])
+        .optional()
+        .default(false)
+        .transform((v) => {
+          if (typeof v === 'string') {
+            return v === '1' || v.toLowerCase() === 'true';
+          }
+          else if (typeof v === 'number') {
+            return v === 1;
+          }
+          else if (typeof v === 'boolean') {
+            return v;
+          }
+          else {
+            return false;
+          }
+        }),  
+  learningCycleURL: z.string().optional(),
+  learningCycleIntervalInMinutes: z.coerce.number().optional(),
 });
 
 const configInfoSchema = z.object({
@@ -82,17 +105,6 @@ const configInfoSchema = z.object({
     .string()
     .transform((val) => z.record(z.string()).parse(JSON.parse(val)))
     .optional(),
-  ___skipAPIurl: z.string().optional(),
-  ___skipLearningAPIurl: z.string().optional(),
-  ___skipLearningCycleIntervalInMinutes: z.coerce.number().optional(),
-  ___skipRunLearningCycles: z.string()
-  .optional()
-  .default("0")
-  .transform((v) => {
-    const enabled = v === "1";
-    return enabled ? 'Y' : 'N';
-  }),
-  ___skipAPIOrgId: z.string().optional(),
   auth0Domain: z.string().optional(),
   auth0WebClientID: z.string().optional(),
   auth0ClientSecret: z.string().optional(),
@@ -103,6 +115,7 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
+export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();
@@ -125,11 +138,6 @@ export const {
   enableIntrospection,
   websiteRunFromPackage,
   userEmailMap,
-  ___skipAPIurl,
-  ___skipLearningAPIurl,
-  ___skipLearningCycleIntervalInMinutes,
-  ___skipRunLearningCycles,
-  ___skipAPIOrgId,
   auth0Domain,
   auth0WebClientID,
   auth0ClientSecret,
