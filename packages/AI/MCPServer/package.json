@@ -7,7 +7,7 @@
     "MemberJunction": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && chmod 755 dist/index.js",
+    "build": "tsc",
     "start": "node dist/index.js"
   },
   "files": [
