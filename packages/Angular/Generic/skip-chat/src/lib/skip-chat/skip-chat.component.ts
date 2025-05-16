@@ -431,6 +431,117 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
     return null;
   }
+  
+  /**
+   * Checks for conversations that are in 'Processing' status and updates the client-side state
+   */
+  protected async checkForProcessingConversations() {
+    try {
+      // First, load all conversations for the user
+      const result = await this.RunViewToUse.RunView({
+        EntityName: 'Conversations',
+        ExtraFilter: `UserID='${this.ProviderToUse.CurrentUser.ID}'`,
+      });
+      
+      if (result && result.Success) {
+        const conversations = <ConversationEntity[]>result.Results;
+        
+        // Check each conversation's status
+        for (const convo of conversations) {
+          if (convo.Status === 'Processing') {
+            // This conversation is currently being processed
+            this._conversationsInProgress[convo.ID] = true;
+            this._conversationsToReload[convo.ID] = true;
+            
+            // If this is the currently selected conversation, update the UI
+            if (this.SelectedConversation && this.SelectedConversation.ID === convo.ID) {
+              this.setProcessingStatus(convo.ID, true);
+              this.startRequestStatusPolling(convo.ID);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      LogError(`Error checking for processing conversations: ${error}`);
+    }
+  }
+  
+  // Track the polling intervals so we can clear them when needed
+  private _requestStatusPollingIntervals: { [key: string]: any } = {};
+  
+  /**
+   * Starts polling for conversation status updates
+   * @param conversationId The ID of the conversation to poll for
+   */
+  protected startRequestStatusPolling(conversationId: string) {
+    // Clear any existing polling for this conversation
+    this.stopRequestStatusPolling(conversationId);
+    
+    // Set up polling every 3 seconds
+    this._requestStatusPollingIntervals[conversationId] = setInterval(async () => {
+      await this.checkRequestStatus(conversationId);
+    }, 3000);
+  }
+  
+  /**
+   * Stops polling for conversation status updates
+   * @param conversationId The ID of the conversation to stop polling for
+   */
+  protected stopRequestStatusPolling(conversationId: string) {
+    if (this._requestStatusPollingIntervals[conversationId]) {
+      clearInterval(this._requestStatusPollingIntervals[conversationId]);
+      delete this._requestStatusPollingIntervals[conversationId];
+    }
+  }
+  
+  /**
+   * Checks the status of a conversation request
+   * @param conversationId The ID of the conversation to check
+   */
+  protected async checkRequestStatus(conversationId: string) {
+    try {
+      const gql = `query GetAskSkipRequestStatus($conversationId: String!) {
+        GetAskSkipRequestStatus(ConversationId: $conversationId) {
+          Success
+          Status
+          ConversationId
+          IsProcessing
+          LastMessage
+        }
+      }`;
+      
+      const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
+      const result = await gqlProvider.ExecuteGQL(gql, {
+        conversationId: conversationId,
+      });
+      
+      const status = result?.GetAskSkipRequestStatus;
+      
+      if (status?.Success) {
+        if (!status.IsProcessing) {
+          // Conversation is no longer processing, stop polling and refresh the conversation
+          this.stopRequestStatusPolling(conversationId);
+          this._conversationsInProgress[conversationId] = false;
+          
+          // If this is the currently selected conversation, reload it to show the final result
+          if (this.SelectedConversation && this.SelectedConversation.ID === conversationId) {
+            this.setProcessingStatus(conversationId, false);
+            this._conversationsToReload[conversationId] = true;
+            
+            // Reload the conversation to get the new messages
+            const convo = this.SelectedConversation;
+            this.SelectedConversation = undefined; // Clear it to force reload
+            await this.SelectConversation(convo);
+          }
+        } else if (status.LastMessage && status.LastMessage.length > 0) {
+          // Still processing, update the status message
+          this.SetSkipStatusMessage(status.LastMessage, 0);
+        }
+      }
+    } catch (error) {
+      LogError(`Error checking request status for conversation ${conversationId}: ${error}`);
+    }
+  }
 
   ngOnDestroy() {
     // Unsubscribe to prevent memory leaks
@@ -439,6 +550,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
     if (this._intersectionObserver) {
       this._intersectionObserver.disconnect();
+    }
+    
+    // Clear any active polling intervals
+    for (const conversationId in this._requestStatusPollingIntervals) {
+      this.stopRequestStatusPolling(conversationId);
+    }
+    
+    // Unsubscribe from MJ event listeners
+    if (this._mjGlobalEventSub) {
+      this._mjGlobalEventSub.unsubscribe();
+    }
+    if (this._providerPushStatusSub) {
+      this._providerPushStatusSub.unsubscribe();
     }
   }
 
@@ -493,6 +617,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
       this.updateParentTabPanelStyling();
       SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // set to zero each time we are called here
+      
+      // Check for in-progress conversations from the server
+      await this.checkForProcessingConversations();
 
       // create an intersection observer to see if we are visible
       this._intersectionObserver = new IntersectionObserver(async (entries) => {
@@ -891,6 +1018,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public async SelectConversation(conversation: ConversationEntity) {
     if (this.IsSkipProcessing(conversation)) {
+      // If processing, start polling for status updates
+      this.startRequestStatusPolling(conversation.ID);
       return; // already processing this conversation so don't go back and forth
     }
     
