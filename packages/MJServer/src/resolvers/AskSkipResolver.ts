@@ -827,6 +827,7 @@ cycle.`);
     includeEntities: boolean,
     includeQueries: boolean,
     includeNotes: boolean,
+    filterUserNotesToContextUser: boolean,
     includeRequests: boolean,
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false,
@@ -835,7 +836,7 @@ cycle.`);
     const skipConfigInfo = configInfo.askSkip;
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
+    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser, filterUserNotesToContextUser) : {notes: [], noteTypes: []};
     const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
     
     // Setup access token if needed
@@ -907,6 +908,7 @@ cycle.`);
       includeEntities,
       includeQueries,
       includeNotes,
+      false,
       includeRequests,
       forceEntitiesRefresh,
       includeCallBackKeyAndAccessToken
@@ -1099,6 +1101,7 @@ cycle.`);
       includeEntities,
       includeQueries,
       includeNotes,
+      true,
       includeRequests,
       forceEntitiesRefresh,
       includeCallBackKeyAndAccessToken,
@@ -1377,7 +1380,7 @@ cycle.`);
    * @param contextUser User context for the request
    * @returns Object containing arrays of notes and note types
    */
-  protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
+  protected async BuildSkipAgentNotes(contextUser: UserInfo, filterUserNotesToContextUser: boolean): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
     try {
       // if already configured this does nothing, just makes sure we're configured
       await AIEngine.Instance.Config(false, contextUser); 
@@ -1400,6 +1403,12 @@ cycle.`);
             updatedAt: r.__mj_UpdatedAt,
           }
         });
+
+        if (filterUserNotesToContextUser){
+          // filter out any notes that are not for this user
+          notes = notes.filter((n) => n.type === 'Global' || 
+                                      (n.type === 'User' && n.userId === contextUser.ID));
+        }
 
         noteTypes = AIEngine.Instance.AgentNoteTypes.map((r) => {
           return {
