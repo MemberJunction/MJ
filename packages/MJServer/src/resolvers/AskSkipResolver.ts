@@ -1895,6 +1895,15 @@ cycle.`);
     return { dataContext, convoEntity, dataContextEntity, convoDetailEntity };
   }
 
+  /**
+   * Loads conversation details from the database and transforms them into Skip message format
+   * Used to provide Skip with conversation history for context
+   * 
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation to load details for
+   * @param maxHistoricalMessages Maximum number of historical messages to include
+   * @returns Array of messages in Skip format
+   */
   protected async LoadConversationDetailsIntoSkipMessages(
     dataSource: DataSource,
     ConversationId: string,
@@ -1986,6 +1995,13 @@ cycle.`);
     }
   }
 
+  /**
+   * Maps database role values to Skip API role format
+   * Converts role names from database format to the format expected by Skip API
+   * 
+   * @param role Database role value
+   * @returns Skip API role value ('user' or 'system')
+   */
   protected MapDBRoleToSkipRole(role: string): 'user' | 'system' {
     switch (role.trim().toLowerCase()) {
       case 'ai':
@@ -1997,6 +2013,25 @@ cycle.`);
     }
   }
 
+  /**
+   * Handles the main Skip chat request processing flow
+   * Routes the request through the different phases based on the Skip API response
+   * 
+   * @param input Skip API request to send
+   * @param UserQuestion The question or message from the user
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param md Metadata instance
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param conversationDetailCount Tracking count to prevent infinite loops
+   * @returns Result of the Skip interaction
+   */
   protected async HandleSkipChatRequest(
     input: SkipAPIRequest,
     UserQuestion: string,
@@ -2152,6 +2187,15 @@ cycle.`);
     }
   }
 
+  /**
+   * Publishes a status update message to the user based on the Skip API response
+   * Provides feedback about what phase of processing is happening
+   * 
+   * @param apiResponse The response from the Skip API
+   * @param userPayload User payload from context
+   * @param conversationID ID of the conversation
+   * @param pubSub Publisher/subscriber for events
+   */
   protected async PublishApiResponseUserUpdateMessage(
     apiResponse: SkipAPIResponse,
     userPayload: UserPayload,
@@ -2184,6 +2228,24 @@ cycle.`);
     });
   }
 
+  /**
+   * Handles the analysis complete phase of the Skip chat process
+   * Finalizes the conversation and creates necessary artifacts
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The analysis complete response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @returns Result of the Skip interaction
+   */
   protected async HandleAnalysisComplete(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIAnalysisCompleteResponse,
@@ -2230,6 +2292,22 @@ cycle.`);
     return response;
   }
 
+  /**
+   * Handles the clarifying question phase of the Skip chat process
+   * Creates a conversation detail for the clarifying question from Skip
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The clarifying question response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @returns Result of the Skip interaction
+   */
   protected async HandleClarifyingQuestionPhase(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIClarifyingQuestionResponse,
@@ -2278,6 +2356,25 @@ cycle.`);
     }
   }
 
+  /**
+   * Handles the data request phase of the Skip chat process
+   * Processes data requests from Skip and loads requested data
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The data request response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param conversationDetailCount Tracking count to prevent infinite loops
+   * @returns Result of the Skip interaction
+   */
   protected async HandleDataRequestPhase(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIDataRequestResponse,
@@ -2429,14 +2526,19 @@ cycle.`);
   }
 
   /**
-   * This method will handle the process for an end of successful request where a user is notified of an AI message. The AI message is either the finished report or a clarifying question.
-   * @param apiResponse
-   * @param md
-   * @param user
-   * @param convoEntity
-   * @param pubSub
-   * @param userPayload
-   * @returns
+   * Finishes a successful conversation and notifies the user
+   * Creates necessary records, artifacts, and notifications
+   * 
+   * @param apiResponse The analysis complete response from Skip
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param md Metadata instance
+   * @param user User information
+   * @param convoEntity Conversation entity
+   * @param pubSub Publisher/subscriber for events
+   * @param userPayload User payload from context
+   * @param dataSource Database connection
+   * @returns The ID of the AI message conversation detail
    */
   protected async FinishConversationAndNotifyUser(
     apiResponse: SkipAPIAnalysisCompleteResponse,
@@ -2597,6 +2699,14 @@ cycle.`);
     };
   }
 
+  /**
+   * Gets the ID of an agent note type by its name
+   * Falls back to a default note type if the specified one is not found
+   * 
+   * @param name Name of the agent note type
+   * @param defaultNoteType Default note type to use if the specified one is not found
+   * @returns ID of the agent note type
+   */
   protected getAgentNoteTypeIDByName(name: string, defaultNoteType: string = 'AI'): string {
     const noteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
     if (noteTypeID) { 
@@ -2609,6 +2719,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Gets data from a view
+   * Helper method to run a view and retrieve its data
+   * 
+   * @param ViewId ID of the view to run
+   * @param user User context for the query
+   * @returns Results of the view query
+   */
   protected async getViewData(ViewId: string, user: UserInfo): Promise<any> {
     const rv = new RunView();
     const result = await rv.RunView({ ViewID: ViewId, IgnoreMaxRows: true }, user);
@@ -2617,8 +2735,11 @@ cycle.`);
   }
 
   /**
-   * Manually executes the Skip AI learning cycle.
+   * Manually executes the Skip AI learning cycle
+   * Allows triggering a learning cycle on demand rather than waiting for scheduled execution
+   * 
    * @param OrganizationId Optional organization ID to register for this run
+   * @returns Result of the manual learning cycle execution
    */
   @Mutation(() => ManualLearningCycleResultType)
   async ManuallyExecuteSkipLearningCycle(
@@ -2667,6 +2788,9 @@ cycle.`);
   
   /**
    * Gets the current status of the learning cycle scheduler
+   * Provides information about the scheduler state and any running cycles
+   * 
+   * @returns Status information about the learning cycle scheduler
    */
   @Query(() => LearningCycleStatusType)
   async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
@@ -2696,7 +2820,10 @@ cycle.`);
   
   /**
    * Checks if a specific organization is running a learning cycle
+   * Used to determine if a new learning cycle can be started for an organization
+   * 
    * @param OrganizationId The organization ID to check
+   * @returns Information about the running cycle, or null if no cycle is running
    */
   @Query(() => RunningOrganizationType, { nullable: true })
   async IsOrganizationRunningLearningCycle(
@@ -2728,7 +2855,10 @@ cycle.`);
   
   /**
    * Stops a running learning cycle for a specific organization
+   * Allows manual intervention to stop a learning cycle that is taking too long or causing issues
+   * 
    * @param OrganizationId The organization ID to stop the cycle for
+   * @returns Result of the stop operation, including details about the stopped cycle
    */
   @Mutation(() => StopLearningCycleResultType)
   async StopLearningCycleForOrganization(
