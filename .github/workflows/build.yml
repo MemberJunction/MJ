@@ -2,7 +2,11 @@ name: Build all packages for testing
 
 on:
   workflow_dispatch:
-
+  push:
+    branches:
+      - next
+    paths:
+      - 'packages/**'
 
 jobs:
   build-only:
