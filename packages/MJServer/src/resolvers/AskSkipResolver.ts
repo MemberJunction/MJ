@@ -101,6 +101,24 @@ export class AskSkipResultType {
 }
 
 @ObjectType()
+export class AskSkipRequestStatusType {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String)
+  Status: string; // 'Available' or 'Processing'
+
+  @Field(() => String)
+  ConversationId: string;
+
+  @Field(() => Boolean)
+  IsProcessing: boolean;
+
+  @Field(() => String, { nullable: true })
+  LastMessage: string; // The last message in the conversation
+}
+
+@ObjectType()
 export class ManualLearningCycleResultType {
   @Field(() => Boolean)
   Success: boolean;
@@ -183,6 +201,46 @@ type BaseSkipRequest = {
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
+  
+  // Map to track the timestamps of when user conversation details are created
+  // Key is the ConversationDetailID, value is the timestamp
+  private static _userMessageTimestamps: Map<string, Date> = new Map<string, Date>();
+  
+  /**
+   * Helper function to calculate and set the completion time for an AI message based on the user message
+   * @param dataSource The data source to use for database operations
+   * @param convoEntity The conversation entity
+   * @param convoDetailEntityAI The AI conversation detail entity to set the completion time on
+   */
+  protected async calculateAndSetCompletionTime(
+    dataSource: DataSource, 
+    convoEntity: ConversationEntity, 
+    convoDetailEntityAI: ConversationDetailEntity
+  ): Promise<void> {
+    // Calculate completion time if we have the corresponding user message timestamp
+    // First find the most recent user message in the conversation
+    const userMessages = await this.LoadConversationDetailsIntoSkipMessages(
+      dataSource,
+      convoEntity.ID,
+      10, // Just look at the last few messages
+      'User' // Only get User messages
+    );
+    
+    if (userMessages && userMessages.length > 0) {
+      const lastUserMessageId = userMessages[userMessages.length - 1].conversationDetailID;
+      if (lastUserMessageId && AskSkipResolver._userMessageTimestamps.has(lastUserMessageId)) {
+        const startTime = AskSkipResolver._userMessageTimestamps.get(lastUserMessageId);
+        const endTime = new Date();
+        const completionTimeMs = endTime.getTime() - startTime.getTime();
+        
+        // Set the completion time in milliseconds
+        convoDetailEntityAI.CompletionTime = new Date(completionTimeMs);
+        
+        // Remove the timestamp from the map to prevent memory leaks
+        AskSkipResolver._userMessageTimestamps.delete(lastUserMessageId);
+      }
+    }
+  }
   
   // Static initializer that runs when the class is loaded - initializes the learning cycle scheduler
   static {
@@ -1053,6 +1111,78 @@ cycle.`);
     ];
   }
 
+  @Query(() => AskSkipRequestStatusType)
+  async GetAskSkipRequestStatus(
+    @Arg('ConversationId', () => String) ConversationId: string,
+    @Ctx() { dataSource, userPayload }: AppContext
+  ) {
+    try {
+      const md = new Metadata();
+      const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+      if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
+
+      // Load the conversation
+      const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
+      const loadResult = await convoEntity.Load(ConversationId);
+      
+      if (!loadResult) {
+        return {
+          Success: false,
+          Status: 'Error',
+          ConversationId: ConversationId,
+          IsProcessing: false,
+          LastMessage: 'Conversation not found'
+        };
+      }
+
+      // Check user access permissions
+      if (convoEntity.UserID !== user.ID) {
+        // This is not the user's conversation, check if they have access
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: 'Resource Permissions',
+          ExtraFilter: `ResourceTypeID = (SELECT ID FROM __mj.ResourceTypes WHERE Name = 'Conversations') AND ResourceRecordID = '${ConversationId}' AND UserID = '${user.ID}'`,
+        });
+        
+        if (!result.Success || result.Results.length === 0) {
+          return {
+            Success: false,
+            Status: 'Error',
+            ConversationId: ConversationId,
+            IsProcessing: false,
+            LastMessage: 'User does not have permission to access this conversation'
+          };
+        }
+      }
+
+      // Get the latest message in the conversation
+      const messages = await this.LoadConversationDetailsIntoSkipMessages(
+        dataSource,
+        ConversationId,
+        1 // Just get the most recent message
+      );
+      
+      const lastMessage = messages.length > 0 ? messages[0].content : '';
+      
+      return {
+        Success: true,
+        Status: convoEntity.Status || 'Available', // Default to 'Available' if status is not set
+        ConversationId: ConversationId,
+        IsProcessing: convoEntity.Status === 'Processing',
+        LastMessage: lastMessage
+      };
+    } catch (error) {
+      LogError(`Error in GetAskSkipRequestStatus: ${error}`);
+      return {
+        Success: false,
+        Status: 'Error',
+        ConversationId: ConversationId,
+        IsProcessing: false,
+        LastMessage: `Error: ${(error as any).message}`
+      };
+    }
+  }
+
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipAnalysisQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,
@@ -1075,6 +1205,13 @@ cycle.`);
       md,
       DataContextId
     );
+
+    // Set the conversation status to 'Processing' when a request is initiated
+    convoEntity.Status = 'Processing';
+    const convoSaveResult = await convoEntity.Save();
+    if (!convoSaveResult) {
+      LogError(`Error updating conversation status to 'Processing'`, undefined, convoEntity.LatestResult);
+    }
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -1491,6 +1628,8 @@ cycle.`);
       if (user) {
         convoEntity.UserID = user.ID;
         convoEntity.Name = AskSkipResolver._defaultNewChatName;
+        // Set initial status to Available since no processing has started yet
+        convoEntity.Status = 'Available';
 
         dataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', user);
         if (!DataContextId || DataContextId.length === 0) {
@@ -1586,6 +1725,9 @@ cycle.`);
     let convoDetailSaveResult: boolean = await convoDetailEntity.Save();
     if (!convoDetailSaveResult) {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
+    } else {
+      // Record the timestamp when this user message was created
+      AskSkipResolver._userMessageTimestamps.set(convoDetailEntity.ID, new Date());
     }
 
     const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext);  
@@ -1596,7 +1738,8 @@ cycle.`);
   protected async LoadConversationDetailsIntoSkipMessages(
     dataSource: DataSource,
     ConversationId: string,
-    maxHistoricalMessages?: number
+    maxHistoricalMessages?: number,
+    roleFilter?: string
   ): Promise<SkipMessage[]> {
     try {
       if (!ConversationId || ConversationId.length === 0) {
@@ -1606,12 +1749,16 @@ cycle.`);
       // load up all the conversation details from the database server
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
+      
+      // Add role filter if specified
+      const roleFilterClause = roleFilter ? ` AND Role = '${roleFilter}'` : '';
+      
       const sql = `SELECT
                       ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} *
                    FROM
                       ${e.SchemaName}.${e.BaseView}
                    WHERE
-                      ConversationID = '${ConversationId}'
+                      ConversationID = '${ConversationId}'${roleFilterClause}
                    ORDER
                       BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);
@@ -1947,6 +2094,19 @@ cycle.`);
     convoDetailEntityAI.Message = JSON.stringify(apiResponse); //.clarifyingQuestion;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
+    
+    // Calculate and set completion time
+    await this.calculateAndSetCompletionTime(dataSource, convoEntity, convoDetailEntityAI);
+    
+    // Set conversation status back to Available since we need user input for the clarifying question
+    if (convoEntity.Status === 'Processing') {
+      convoEntity.Status = 'Available';
+      const convoSaveResult = await convoEntity.Save();
+      if (!convoSaveResult) {
+        LogError(`Error updating conversation status to 'Available' after clarifying question`, undefined, convoEntity.LatestResult);
+      }
+    }
+    
     if (await convoDetailEntityAI.Save()) {
       return {
         Success: true,
@@ -2221,6 +2381,10 @@ cycle.`);
     convoDetailEntityAI.Message = sResult;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
+    
+    // Calculate and set completion time
+    await this.calculateAndSetCompletionTime(dataSource, convoEntity, convoDetailEntityAI);
+    
     if (artifactId && artifactId.length > 0) {
       // bind the new convo detail record to the artifact + version for this response
       convoDetailEntityAI.ArtifactID = artifactId;
@@ -2233,9 +2397,23 @@ cycle.`);
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
     }
 
-    // finally update the convo name if it is still the default
+    // Update the conversation properties: name if it's the default, and set status back to 'Available'
+    let needToSaveConvo = false;
+    
+    // Update name if still default
     if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle && sTitle !== AskSkipResolver._defaultNewChatName) {
       convoEntity.Name = sTitle; // use the title from the response
+      needToSaveConvo = true;
+    }
+    
+    // Set status back to 'Available' since processing is complete
+    if (convoEntity.Status === 'Processing') {
+      convoEntity.Status = 'Available';
+      needToSaveConvo = true;
+    }
+    
+    // Save if any changes were made
+    if (needToSaveConvo) {
       const convoEntitySaveResult: boolean = await convoEntity.Save();
       if (!convoEntitySaveResult) {
         LogError(`Error saving conversation entity for AI message: ${sResult}`, undefined, convoEntity.LatestResult);
