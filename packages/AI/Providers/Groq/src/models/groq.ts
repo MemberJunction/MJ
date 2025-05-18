@@ -47,6 +47,14 @@ export class GroqLLM extends BaseLLM {
             content: m.content,
         }))  
 
+        // Groq requires the last message to be a user message
+        if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
+            messages.push({
+                role: 'user',
+                content: 'OK' // Dummy message to satisfy Groq's requirement
+            });
+        }
+
         const groqParams: ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: messages.map(m => {
