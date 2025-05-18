@@ -905,6 +905,11 @@ export class SkipAPILearningCycleResponse {
      */
     success: boolean;
 
+    /**
+     * If a learning cycle is skipped because there is no new conversation data to learn from, this property will be set to true
+     */
+    learningCycleSkipped?: boolean;
+
     /** 
      * If the learning cycle was not successful, this property will contain an error message that describes the reason for the failure
      */

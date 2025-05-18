@@ -112,10 +112,15 @@ export class LearningCycleScheduler extends BaseSingleton<LearningCycleScheduler
       
       this.lastRunTime = startTime;
       
-      if (result.success) {
+      if (result.learningCycleSkipped) {
+        // skipped the learning cycle - no messages to process, already logged..
+        return true;
+      }
+      else if (result.success) {
         LogStatus(`Learning cycle completed successfully in ${elapsedMs}ms`);
         return true;
-      } else {
+      } 
+      else {
         LogError(`Learning cycle failed after ${elapsedMs}ms: ${result.error}`);
         return false;
       }

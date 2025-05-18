@@ -257,6 +257,7 @@ const mjServerConfig = {
     learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,
     learningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
     learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
+    learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP,
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
     apiKey: process.env.ASK_SKIP_API_KEY,  
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,

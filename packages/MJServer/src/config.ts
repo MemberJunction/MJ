@@ -36,6 +36,31 @@ const restApiOptionsSchema = z.object({
   excludeSchemas: z.array(z.string()).optional(),
 });
 
+/**
+ * Returns a new Zod object that accepts boolean, string, or number values and transforms them to boolean.
+ * @returns 
+ */
+const zodBooleanWithTransforms = () => {
+  return z
+      .union([z.boolean(), z.string(), z.number()])
+          .optional()
+          .default(false)
+          .transform((v) => {
+            if (typeof v === 'string') {
+              return v === '1' || v.toLowerCase() === 'true';
+            }
+            else if (typeof v === 'number') {
+              return v === 1;
+            }
+            else if (typeof v === 'boolean') {
+              return v;
+            }
+            else {
+              return false;
+            }
+          })
+}
+
 const askSkipInfoSchema = z.object({
   apiKey: z.string().optional(),
   orgID: z.string().optional(),
@@ -47,24 +72,8 @@ const askSkipInfoSchema = z.object({
     })
     .optional(),
   chatURL: z.string().optional(),
-  learningCycleEnabled: z
-    .union([z.boolean(), z.string(), z.number()])
-        .optional()
-        .default(false)
-        .transform((v) => {
-          if (typeof v === 'string') {
-            return v === '1' || v.toLowerCase() === 'true';
-          }
-          else if (typeof v === 'number') {
-            return v === 1;
-          }
-          else if (typeof v === 'boolean') {
-            return v;
-          }
-          else {
-            return false;
-          }
-        }),  
+  learningCycleRunUponStartup: zodBooleanWithTransforms(),  
+  learningCycleEnabled: zodBooleanWithTransforms(),  
   learningCycleURL: z.string().optional(),
   learningCycleIntervalInMinutes: z.coerce.number().optional(),
 });
