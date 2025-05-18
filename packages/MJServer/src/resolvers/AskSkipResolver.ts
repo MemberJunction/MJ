@@ -255,8 +255,24 @@ function initializeSkipLearningCycleScheduler() {
             
             // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
             const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
-            //scheduler.start(interval);
-            scheduler.runLearningCycle(); // runs a test cycle immediately
+
+
+            if (skipConfigInfo.learningCycleRunUponStartup) {
+              // If configured to run immediately, run the learning cycle
+              LogStatus('Skip API Learning Cycle: Run Upon Startup is enabled, running learning cycle immediately');
+              // Start the scheduler
+              scheduler.start(interval);
+            }
+            else {
+              // not asked to start right away, just start the scheduler after the interval
+              LogStatus(`Skip API Learning Cycle: Scheduler first run will start after interval of ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+
+              // create a one time timer to start the scheduler
+              setTimeout(() => {
+                LogStatus(`Skip API Learning Cycle: Starting scheduler after ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+                scheduler.start(interval);
+              }, interval * 60 * 1000); // convert minutes to milliseconds
+            }
           } else {
             LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
           }
@@ -499,43 +515,68 @@ export class AskSkipResolver {
         // Build the request to Skip learning API
         LogStatus(`Building Skip Learning API request`);
         const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, false, dataSource, user, ForceEntityRefresh || false);
-
-        // Make the API request
-        const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
-
-        // Update learning cycle to completed
-        const endTime = new Date();
-        const elapsedTimeMs = endTime.getTime() - startTime.getTime();
-
-        LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
-
-        learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
-        learningCycleEntity.EndedAt = endTime;
-
-        if (!(await learningCycleEntity.Save())) {
-          LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+        if (input.newConversations.length === 0) {
+          // no new conversations to process
+          LogStatus(`  Skip Learning Cycles: No new conversations to process for learning cycle`);
+          learningCycleEntity.Status = 'Complete';
+          learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
+          learningCycleEntity.EndedAt = new Date();
+          if (!(await learningCycleEntity.Save())) {
+            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+          }
+          const result: SkipAPILearningCycleResponse = {
+            success: true,
+            learningCycleSkipped: true,
+            elapsedTime: 0,
+            noteChanges: [],
+            queryChanges: [],
+            requestChanges: [],
+          }
+          return result;
         }
-        
-        // Unregister the organization after completion
-        scheduler.unregisterRunningCycle(organizationId);
-        
-        return response;
-      } catch (error) {
+        else {
+          // Make the API request
+          const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
+
+          // Update learning cycle to completed
+          const endTime = new Date();
+          const elapsedTimeMs = endTime.getTime() - startTime.getTime();
+
+          LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
+
+          learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
+          learningCycleEntity.EndedAt = endTime;
+
+          if (!(await learningCycleEntity.Save())) {
+            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+          }
+          
+          return response;
+        }
+      } 
+      catch (error) {
         // Make sure to update the learning cycle record as failed
         learningCycleEntity.Status = 'Failed';
         learningCycleEntity.EndedAt = new Date();
         
         try {
           await learningCycleEntity.Save();
-        } catch (saveError) {
+        } 
+        catch (saveError) {
           LogError(`Failed to update learning cycle record after error: ${saveError}`);
         }
         
-        // Unregister the organization on error
-        scheduler.unregisterRunningCycle(organizationId);
-        
         // Re-throw the original error
         throw error;
+      }
+      finally {
+        // Unregister the cycle/organizationId safely
+        try {
+          scheduler.unregisterRunningCycle(organizationId);          
+        }
+        catch (error) {
+          LogError(`Failed to unregister organization ${organizationId} from running cycles: ${error}`);
+        }
       }
   }
 
