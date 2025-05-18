@@ -53,7 +53,7 @@ import {
   UserNotificationEntity,
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl, ___skipLearningAPIurl, ___skipLearningCycleIntervalInMinutes, ___skipRunLearningCycles, apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
+import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
 
 import { registerEnumType } from 'type-graphql';
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
@@ -65,9 +65,16 @@ import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists
 import e from 'express';
 import { Skip } from '@graphql-tools/utils';
 
+/**
+ * Enumeration representing the different phases of a Skip response
+ * Corresponds to the lifecycle of a Skip AI interaction
+ */
 enum SkipResponsePhase {
+  /** Skip is asking for clarification before proceeding */
   ClarifyingQuestion = 'clarifying_question',
+  /** Skip is requesting data from the system to process the request */
   DataRequest = 'data_request',
+  /** Skip has completed its analysis and has returned a final response */
   AnalysisComplete = 'analysis_complete',
 }
 
@@ -76,165 +83,267 @@ registerEnumType(SkipResponsePhase, {
   description: 'The phase of the respons: clarifying_question, data_request, or analysis_complete',
 });
 
+/**
+ * Result type for Skip AI interactions
+ * Contains the status of the request, the response phase, the result payload,
+ * and references to the conversation and message IDs
+ */
 @ObjectType()
 export class AskSkipResultType {
+  /** Whether the interaction was successful */
   @Field(() => Boolean)
   Success: boolean;
 
+  /** Status message of the interaction */
   @Field(() => String)
   Status: string; // required
 
+  /** The phase of the response from Skip */
   @Field(() => SkipResponsePhase)
   ResponsePhase: SkipResponsePhase;
 
+  /** The result payload, usually a JSON string of the full response */
   @Field(() => String)
   Result: string;
 
+  /** The ID of the conversation this interaction belongs to */
   @Field(() => String)
   ConversationId: string;
 
+  /** The ID of the user message in the conversation */
   @Field(() => String)
   UserMessageConversationDetailId: string;
 
+  /** The ID of the AI response message in the conversation */
   @Field(() => String)
   AIMessageConversationDetailId: string;
 }
 
+/**
+ * Result type for manual learning cycle operations
+ * Contains success status and a message describing the result
+ */
 @ObjectType()
 export class ManualLearningCycleResultType {
+  /** Whether the learning cycle operation was successful */
   @Field(() => Boolean)
   Success: boolean;
 
+  /** Descriptive message about the learning cycle operation */
   @Field(() => String)
   Message: string;
 }
 
+/**
+ * Contains details about a specific learning cycle
+ * Includes identifier, start time, and duration information
+ */
 @ObjectType()
 export class CycleDetailsType {
+  /** Unique identifier for the learning cycle */
   @Field(() => String)
   LearningCycleId: string;
   
+  /** ISO timestamp when the cycle started */
   @Field(() => String)
   StartTime: string;
   
+  /** Duration of the cycle in minutes */
   @Field(() => Number)
   RunningForMinutes: number;
 }
 
+/**
+ * Information about an organization that is currently running a learning cycle
+ * Links organization to specific learning cycle and provides timing details
+ */
 @ObjectType()
 export class RunningOrganizationType {
+  /** Identifier of the organization running the cycle */
   @Field(() => String)
   OrganizationId: string;
   
+  /** Unique identifier for the learning cycle */
   @Field(() => String)
   LearningCycleId: string;
   
+  /** ISO timestamp when the cycle started */
   @Field(() => String)
   StartTime: string;
   
+  /** Duration the cycle has been running in minutes */
   @Field(() => Number)
   RunningForMinutes: number;
 }
 
+/**
+ * Status information about the learning cycle scheduler and running cycles
+ * Provides overall scheduler status and details about active learning cycles
+ */
 @ObjectType()
 export class LearningCycleStatusType {
+  /** Whether the scheduler process is currently active */
   @Field(() => Boolean)
   IsSchedulerRunning: boolean;
   
+  /** ISO timestamp of the last time the scheduler ran a cycle */
   @Field(() => String, { nullable: true })
   LastRunTime: string;
   
+  /** List of organizations that are currently running learning cycles */
   @Field(() => [RunningOrganizationType], { nullable: true })
   RunningOrganizations: RunningOrganizationType[];
 }
 
+/**
+ * Result of an attempt to stop a learning cycle
+ * Provides status information about the stop operation
+ */
 @ObjectType()
 export class StopLearningCycleResultType {
+  /** Whether the stop operation succeeded */
   @Field(() => Boolean)
   Success: boolean;
   
+  /** Descriptive message about the result of the stop operation */
   @Field(() => String)
   Message: string;
   
+  /** Whether the cycle was actually running when the stop was attempted */
   @Field(() => Boolean)
   WasRunning: boolean;
   
+  /** Details about the cycle that was stopped (if any) */
   @Field(() => CycleDetailsType, { nullable: true })
   CycleDetails: CycleDetailsType;
 }
 
 /**
- * Internally used type
+ * This function initializes the Skip learning cycle scheduler. It sets up an event listener for the server's setup complete event and starts the scheduler if learning cycles are enabled and a valid API endpoint is configured.
+ */
+function initializeSkipLearningCycleScheduler() {
+  try {
+    // Set up event listener for server initialization
+    const eventListener = MJGlobal.Instance.GetEventListener(true);
+    eventListener.subscribe(event => {
+      // Filter for our server's setup complete event
+      if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
+        try {
+          const skipConfigInfo = configInfo.askSkip;
+          if (!skipConfigInfo) {
+            LogStatus('Skip AI Learning Cycle Scheduler not started: Skip configuration not found');
+            return;
+          }
+          if (!skipConfigInfo.learningCycleEnabled) {
+            LogStatus('Skip AI Learning Cycles not enabled in configuration');
+            return;
+          }
+          
+          // Check if we have a valid endpoint when cycles are enabled
+          if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+            LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
+            return;
+          }
+          
+          const dataSources = event.args.dataSources;
+          if (dataSources && dataSources.length > 0) {
+            // Initialize the scheduler
+            const scheduler = LearningCycleScheduler.Instance;
+            
+            // Set the data sources for the scheduler
+            scheduler.setDataSources(dataSources);
+            
+            // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
+            const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
+
+
+            if (skipConfigInfo.learningCycleRunUponStartup) {
+              // If configured to run immediately, run the learning cycle
+              LogStatus('Skip API Learning Cycle: Run Upon Startup is enabled, running learning cycle immediately');
+              // Start the scheduler
+              scheduler.start(interval);
+            }
+            else {
+              // not asked to start right away, just start the scheduler after the interval
+              LogStatus(`Skip API Learning Cycle: Scheduler first run will start after interval of ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+
+              // create a one time timer to start the scheduler
+              setTimeout(() => {
+                LogStatus(`Skip API Learning Cycle: Starting scheduler after ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+                scheduler.start(interval);
+              }, interval * 60 * 1000); // convert minutes to milliseconds
+            }
+          } else {
+            LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
+          }
+        } catch (error) {
+          LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
+        }
+      }
+    });
+  } catch (error) {
+    // Handle any errors from the static initializer
+    LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
+  }
+}
+// now call the function to initialize the scheduler
+initializeSkipLearningCycleScheduler();
+
+/**
+ * Base type for Skip API requests containing common fields
+ * Used as the foundation for both chat and learning cycle requests
  */
 type BaseSkipRequest = {
+  /** Entity metadata to send to Skip */
   entities: SkipEntityInfo[],
+  /** Query metadata to send to Skip */
   queries: SkipQueryInfo[],
+  /** Agent notes to send to Skip */
   notes: SkipAPIAgentNote[],
+  /** Note type definitions to send to Skip */
   noteTypes: SkipAPIAgentNoteType[],
+  /** Agent requests to send to Skip */
   requests: SkipAPIAgentRequest[], 
+  /** Access token for authorizing Skip to call back to MemberJunction */
   accessToken: GetDataAccessToken,
+  /** Organization identifier */
   organizationID: string,
+  /** Additional organization-specific information */
   organizationInfo: any,
+  /** API keys for various AI services to be used by Skip */
   apiKeys: SkipAPIRequestAPIKey[],
+  /** URL of the calling server for callback purposes */
   callingServerURL: string,
+  /** API key for the calling server */
   callingServerAPIKey: string,
+  /** Access token for the calling server */
   callingServerAccessToken: string
 }
+/**
+ * Resolver for Skip AI interactions
+ * Handles conversations with Skip, learning cycles, and related operations.
+ * Skip is an AI agent that can analyze data, answer questions, and learn from interactions.
+ */
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
+  /** Default name for new conversations */
   private static _defaultNewChatName = 'New Chat';
   
-  // Static initializer that runs when the class is loaded - initializes the learning cycle scheduler
-  static {
-    try {
-      // Set up event listener for server initialization
-      const eventListener = MJGlobal.Instance.GetEventListener(true);
-      eventListener.subscribe(event => {
-        // Filter for our server's setup complete event
-        if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
-          try {
-            if (___skipRunLearningCycles !== 'Y') {
-              LogStatus('Skip AI Learning cycle scheduler not started: Disabled in configuration');
-              return;
-            }
-            
-            // Check if we have a valid endpoint when cycles are enabled
-            if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
-              LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no API endpoint is configured');
-              return;
-            }
-            
-            const dataSources = event.args.dataSources;
-            if (dataSources && dataSources.length > 0) {
-              // Initialize the scheduler
-              const scheduler = LearningCycleScheduler.Instance;
-              
-              // Set the data sources for the scheduler
-              scheduler.setDataSources(dataSources);
-              
-              // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
-              const interval = ___skipLearningCycleIntervalInMinutes ?? 60;
-              scheduler.start(interval);
-            } else {
-              LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
-            }
-          } catch (error) {
-            LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
-          }
-        }
-      });
-    } catch (error) {
-      // Handle any errors from the static initializer
-      LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
-    }
-  }
+  /** Maximum number of historical messages to include in a conversation context */
   private static _maxHistoricalMessages = 30;
 
   /**
-   * Handles a simple chat request from a user to Skip, using a particular data record
-   * @param UserQuestion the user's question
-   * @param EntityName the name of the entity for the record the user is discussing
-   * @param PrimaryKeys the primary keys of the record the user is discussing
+   * Handles a chat interaction with Skip about a specific data record
+   * Allows users to ask questions about a particular entity record
+   * 
+   * @param UserQuestion The question or message from the user
+   * @param ConversationId ID of an existing conversation, or empty for a new conversation
+   * @param EntityName The name of the entity the record belongs to
+   * @param compositeKey The primary key values that identify the specific record
+   * @param dataSource Database connection
+   * @param userPayload Information about the authenticated user
+   * @param pubSub Publisher/subscriber for events
+   * @returns Result of the Skip interaction
    */
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipRecordChat(
@@ -309,16 +418,26 @@ export class AskSkipResolver {
     return this.handleSimpleSkipChatPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
   }
 
+  /**
+   * Executes a Skip learning cycle
+   * Learning cycles allow Skip to analyze conversations and improve its knowledge and capabilities
+   * 
+   * @param dataSource Database connection
+   * @param userPayload Information about the authenticated user
+   * @param ForceEntityRefresh Whether to force a refresh of entity metadata
+   * @returns Result of the learning cycle execution
+   */
   @Mutation(() => AskSkipResultType)
   async ExecuteAskSkipLearningCycle(
     @Ctx() { dataSource, userPayload }: AppContext,
     @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
   ) {
+      const skipConfigInfo = configInfo.askSkip;
       // First check if learning cycles are enabled in configuration
-      if (___skipRunLearningCycles !== 'Y') {
+      if (!skipConfigInfo.learningCycleEnabled) {
         return {
           success: false,
-          error: 'Learning cycles are disabled in configuration',
+          error: 'Learning cycles are not enabled in configuration',
           elapsedTime: 0,
           noteChanges: [],
           queryChanges: [],
@@ -327,7 +446,7 @@ export class AskSkipResolver {
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
+      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
         return {
           success: false,
           error: 'Learning cycle API endpoint is not configured',
@@ -347,7 +466,7 @@ export class AskSkipResolver {
       await AIEngine.Instance.Config(false, user); 
 
       // Check if this organization is already running a learning cycle using their organization ID
-      const organizationId = ___skipAPIOrgId;
+      const organizationId = skipConfigInfo.orgID;
       const scheduler = LearningCycleScheduler.Instance;
       const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
       
@@ -396,55 +515,91 @@ export class AskSkipResolver {
         // Build the request to Skip learning API
         LogStatus(`Building Skip Learning API request`);
         const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, false, dataSource, user, ForceEntityRefresh || false);
-
-        // Make the API request
-        const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
-
-        // Update learning cycle to completed
-        const endTime = new Date();
-        const elapsedTimeMs = endTime.getTime() - startTime.getTime();
-
-        LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
-
-        learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
-        learningCycleEntity.EndedAt = endTime;
-
-        if (!(await learningCycleEntity.Save())) {
-          LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+        if (input.newConversations.length === 0) {
+          // no new conversations to process
+          LogStatus(`  Skip Learning Cycles: No new conversations to process for learning cycle`);
+          learningCycleEntity.Status = 'Complete';
+          learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
+          learningCycleEntity.EndedAt = new Date();
+          if (!(await learningCycleEntity.Save())) {
+            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+          }
+          const result: SkipAPILearningCycleResponse = {
+            success: true,
+            learningCycleSkipped: true,
+            elapsedTime: 0,
+            noteChanges: [],
+            queryChanges: [],
+            requestChanges: [],
+          }
+          return result;
         }
-        
-        // Unregister the organization after completion
-        scheduler.unregisterRunningCycle(organizationId);
-        
-        return response;
-      } catch (error) {
+        else {
+          // Make the API request
+          const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID);
+
+          // Update learning cycle to completed
+          const endTime = new Date();
+          const elapsedTimeMs = endTime.getTime() - startTime.getTime();
+
+          LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
+
+          learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
+          learningCycleEntity.EndedAt = endTime;
+
+          if (!(await learningCycleEntity.Save())) {
+            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+          }
+          
+          return response;
+        }
+      } 
+      catch (error) {
         // Make sure to update the learning cycle record as failed
         learningCycleEntity.Status = 'Failed';
         learningCycleEntity.EndedAt = new Date();
         
         try {
           await learningCycleEntity.Save();
-        } catch (saveError) {
+        } 
+        catch (saveError) {
           LogError(`Failed to update learning cycle record after error: ${saveError}`);
         }
-        
-        // Unregister the organization on error
-        scheduler.unregisterRunningCycle(organizationId);
         
         // Re-throw the original error
         throw error;
       }
+      finally {
+        // Unregister the cycle/organizationId safely
+        try {
+          scheduler.unregisterRunningCycle(organizationId);          
+        }
+        catch (error) {
+          LogError(`Failed to unregister organization ${organizationId} from running cycles: ${error}`);
+        }
+      }
   }
 
+  /**
+   * Handles the HTTP POST request to the Skip learning cycle API
+   * Sends the learning cycle request and processes the response
+   * 
+   * @param input The learning cycle request payload
+   * @param user User context for the request
+   * @param learningCycleId ID of the current learning cycle
+   * @param agentID ID of the Skip agent
+   * @returns Response from the Skip learning cycle API
+   */
   protected async handleSimpleSkipLearningPostRequest(
     input: SkipAPILearningCycleRequest, 
     user: UserInfo, 
     learningCycleId: string,
     agentID: string
   ): Promise<SkipAPILearningCycleResponse> {
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${___skipLearningAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
 
-    const response = await sendPostRequest(___skipLearningAPIurl, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -482,6 +637,17 @@ export class AskSkipResolver {
     }
   }
 
+  /**
+   * Handles the HTTP POST request to the Skip chat API
+   * Sends the chat request and processes the response
+   * 
+   * @param input The chat request payload
+   * @param conversationID ID of the conversation, or empty for a new conversation
+   * @param UserMessageConversationDetailId ID of the user's message in the conversation
+   * @param createAIMessageConversationDetail Whether to create a conversation detail for the AI response
+   * @param user User context for the request
+   * @returns Result of the Skip interaction
+   */
   protected async handleSimpleSkipChatPostRequest(
     input: SkipAPIRequest,
     conversationID: string = '',
@@ -489,9 +655,10 @@ export class AskSkipResolver {
     createAIMessageConversationDetail: boolean = false,
     user: UserInfo = null
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${___skipAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
-    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+    const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -524,9 +691,13 @@ export class AskSkipResolver {
   }
 
   /**
-   * Processes note changes received from the Skip API learning cycle. 
+   * Processes note changes received from the Skip API learning cycle
+   * Applies changes to agent notes based on the learning cycle response
+   * 
    * @param noteChanges Changes to agent notes
-   * @param user The user making the request
+   * @param agentID ID of the Skip agent
+   * @param user User context for the request
+   * @returns Promise that resolves when processing is complete
    */
   protected async processLearningCycleNoteChanges(
     noteChanges: SkipLearningCycleNoteChange[], 
@@ -560,6 +731,15 @@ export class AskSkipResolver {
       }));
   }
 
+  /**
+   * Processes an add or update operation for a Skip agent note
+   * Creates a new note or updates an existing one based on the change type
+   * 
+   * @param change The note change information
+   * @param agentID ID of the Skip agent
+   * @param user User context for the operation
+   * @returns Whether the operation was successful
+   */
   protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo): Promise<boolean> {
     try {  
       // Get the note entity object
@@ -574,17 +754,11 @@ export class AskSkipResolver {
           return false;
         }
       } else {
-        // For new notes, ensure the note type is not "Human"
-        if (change.note.agentNoteType === "Human") {
-          LogStatus(`WARNING: Cannot create a new Human note with the learning cycle. Operation ignored.`);
-          return false;
-        }
-
         // Create a new note
         noteEntity.NewRecord();
         noteEntity.AgentID = agentID;
       }
-      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI');
+      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
       noteEntity.Note = change.note.note;
       noteEntity.Type = change.note.type;
 
@@ -605,6 +779,14 @@ export class AskSkipResolver {
     }
   }
 
+  /**
+   * Processes a delete operation for a Skip agent note
+   * Removes the specified note from the database
+   * 
+   * @param change The note change information
+   * @param user User context for the operation
+   * @returns Whether the deletion was successful
+   */
   protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo): Promise<boolean> {
     // Get the note entity object
     const md = new Metadata();
@@ -634,6 +816,15 @@ cycle.`);
     return true;
   }
 
+  /**
+   * Creates a conversation detail entry for an AI message
+   * Stores the AI response in the conversation history
+   * 
+   * @param apiResponse The response from the Skip API
+   * @param conversationID ID of the conversation
+   * @param user User context for the operation
+   * @returns ID of the created conversation detail, or empty string if creation failed
+   */
   protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: string, user: UserInfo): Promise<string> {
     const md = new Metadata();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
@@ -658,11 +849,14 @@ cycle.`);
 
   /**
    * Builds the base Skip API request with common fields and data
+   * Creates the foundation for both chat and learning cycle requests
+   * 
    * @param contextUser The user making the request
    * @param dataSource The data source to use
    * @param includeEntities Whether to include entities in the request
    * @param includeQueries Whether to include queries in the request
    * @param includeNotes Whether to include agent notes in the request
+   * @param includeRequests Whether to include agent requests in the request
    * @param forceEntitiesRefresh Whether to force refresh of entities
    * @param includeCallBackKeyAndAccessToken Whether to include a callback key and access token
    * @param additionalTokenInfo Additional info to include in the access token
@@ -674,15 +868,16 @@ cycle.`);
     includeEntities: boolean,
     includeQueries: boolean,
     includeNotes: boolean,
+    filterUserNotesToContextUser: boolean,
     includeRequests: boolean,
     forceEntitiesRefresh: boolean = false,
     includeCallBackKeyAndAccessToken: boolean = false,
     additionalTokenInfo: any = {}
   ): Promise<BaseSkipRequest> {
-    
+    const skipConfigInfo = configInfo.askSkip;
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser) : {notes: [], noteTypes: []};
+    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser, filterUserNotesToContextUser) : {notes: [], noteTypes: []};
     const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
     
     // Setup access token if needed
@@ -710,7 +905,7 @@ cycle.`);
       noteTypes,
       requests, 
       accessToken,
-      organizationID: ___skipAPIOrgId,
+      organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
       callingServerURL: accessToken ? `${baseUrl}:${graphqlPort}` : undefined,
@@ -721,6 +916,19 @@ cycle.`);
 
   /**
    * Builds the learning API request for Skip
+   * Creates a request specific to the learning cycle operation
+   * 
+   * @param learningCycleId ID of the current learning cycle
+   * @param lastLearningCycleDate Date of the last completed learning cycle
+   * @param includeEntities Whether to include entities in the request
+   * @param includeQueries Whether to include queries in the request
+   * @param includeNotes Whether to include agent notes in the request
+   * @param includeRequests Whether to include agent requests in the request
+   * @param dataSource Database connection
+   * @param contextUser User context for the request
+   * @param forceEntitiesRefresh Whether to force refresh of entities
+   * @param includeCallBackKeyAndAccessToken Whether to include a callback key and access token
+   * @returns Complete learning cycle request object
    */
   protected async buildSkipLearningAPIRequest(
     learningCycleId: string,
@@ -741,6 +949,7 @@ cycle.`);
       includeEntities,
       includeQueries,
       includeNotes,
+      false,
       includeRequests,
       forceEntitiesRefresh,
       includeCallBackKeyAndAccessToken
@@ -768,11 +977,14 @@ cycle.`);
   }
 
   /**
-   * Loads the conversations that have have an updated or new conversation detail since the last learning cycle
-   * @param dataSource the data source to use
-   * @param lastLearningCycleDate the date of the last learning cycle
-   * @param contextUser the user context
-   */ 
+   * Loads the conversations that have been updated or added since the last learning cycle
+   * These are used to train Skip and improve its understanding
+   * 
+   * @param lastLearningCycleDate The date of the last learning cycle
+   * @param dataSource Database connection
+   * @param contextUser User context for the request
+   * @returns Array of conversations that are new or have been updated since the last cycle
+   */
   protected async BuildSkipLearningCycleNewConversations(
     lastLearningCycleDate: Date,
     dataSource: DataSource,
@@ -813,9 +1025,11 @@ cycle.`);
   }
 
   /**
-   * Builds an array of agent requests 
-   * @param contextUser the user context to load the requests
-   * @returns Array of SkipAPIAgentRequest objects
+   * Builds an array of agent requests
+   * These are requests that have been made to the AI agent
+   * 
+   * @param contextUser User context for loading the requests
+   * @returns Array of agent request objects
    */
   protected async BuildSkipRequests(
     contextUser: UserInfo
@@ -852,6 +1066,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Gets the date of the last complete learning cycle for the Skip agent
+   * Used to determine which data to include in the next learning cycle
+   * 
+   * @param agentID ID of the Skip agent
+   * @param user User context for the query
+   * @returns Date of the last complete learning cycle, or epoch if none exists
+   */
   protected async GetLastCompleteLearningCycleDate(agentID: string, user: UserInfo): Promise<Date> {
     const md = new Metadata();
     const rv = new RunView();
@@ -877,6 +1099,21 @@ cycle.`);
 
   /**
    * Builds the chat API request for Skip
+   * Creates a request specific to a chat interaction
+   * 
+   * @param messages Array of messages in the conversation
+   * @param conversationId ID of the conversation
+   * @param dataContext Data context associated with the conversation
+   * @param requestPhase The phase of the request (initial, clarifying, etc.)
+   * @param includeEntities Whether to include entities in the request
+   * @param includeQueries Whether to include queries in the request
+   * @param includeNotes Whether to include agent notes in the request
+   * @param includeRequests Whether to include agent requests in the request
+   * @param contextUser User context for the request
+   * @param dataSource Database connection
+   * @param forceEntitiesRefresh Whether to force refresh of entities
+   * @param includeCallBackKeyAndAccessToken Whether to include a callback key and access token
+   * @returns Complete chat request object
    */
   protected async buildSkipChatAPIRequest(
     messages: SkipMessage[],
@@ -905,6 +1142,7 @@ cycle.`);
       includeEntities,
       includeQueries,
       includeNotes,
+      true,
       includeRequests,
       forceEntitiesRefresh,
       includeCallBackKeyAndAccessToken,
@@ -927,12 +1165,13 @@ cycle.`);
   }
 
   /**
-   * Builds up an array of SkipAPIArtifact types to send across information about the artifacts associated with this particular
-   * conversation.
-   * @param contextUser 
-   * @param dataSource 
-   * @param conversationId 
-   * @returns 
+   * Builds up an array of artifacts associated with a conversation
+   * Artifacts are content or documents generated during conversations
+   * 
+   * @param contextUser User context for the query
+   * @param dataSource Database connection
+   * @param conversationId ID of the conversation
+   * @returns Array of artifacts associated with the conversation
    */
   protected async buildSkipAPIArtifacts(contextUser: UserInfo, dataSource: DataSource, conversationId: string): Promise<SkipAPIArtifact[]> {
     const md = new Metadata();
@@ -1007,10 +1246,15 @@ cycle.`);
 
 
   /**
-   * Executes a script in the context of a data context and returns the results
-   * @param pubSub
-   * @param DataContextId
-   * @param ScriptText
+   * Executes a script in the context of a data context
+   * Allows running code against data context objects
+   * 
+   * @param dataSource Database connection
+   * @param userPayload Information about the authenticated user
+   * @param pubSub Publisher/subscriber for events
+   * @param DataContextId ID of the data context to run the script against
+   * @param ScriptText The script to execute
+   * @returns Result of the script execution
    */
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipRunScript(
@@ -1028,6 +1272,12 @@ cycle.`);
     return this.handleSimpleSkipChatPostRequest(input);
   }
 
+  /**
+   * Builds the array of API keys for various AI services
+   * These are used by Skip to call external AI services
+   * 
+   * @returns Array of API keys for different vendor services
+   */
   protected buildSkipAPIKeys(): SkipAPIRequestAPIKey[] {
     return [
       {
@@ -1053,6 +1303,19 @@ cycle.`);
     ];
   }
 
+  /**
+   * Executes an analysis query with Skip
+   * This is the primary entry point for general Skip conversations
+   * 
+   * @param UserQuestion The question or message from the user
+   * @param ConversationId ID of an existing conversation, or empty for a new conversation
+   * @param dataSource Database connection
+   * @param userPayload Information about the authenticated user
+   * @param pubSub Publisher/subscriber for events
+   * @param DataContextId Optional ID of a data context to use
+   * @param ForceEntityRefresh Whether to force a refresh of entity metadata
+   * @returns Result of the Skip interaction
+   */
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipAnalysisQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,
@@ -1104,8 +1367,11 @@ cycle.`);
   }
 
   /**
-   * Packages up the Approved queries from the metadata
-   * @returns 
+   * Packages up queries from the metadata based on their status
+   * Used to provide Skip with information about available queries
+   * 
+   * @param status The status of queries to include
+   * @returns Array of query information objects
    */
   protected BuildSkipQueries(status: "Pending" | "In-Review" | "Approved" | "Rejected" | "Obsolete" = 'Approved'): SkipQueryInfo[] {
     const md = new Metadata();
@@ -1149,9 +1415,13 @@ cycle.`);
   }
 
   /**
-   * Builds up the array of notes that are applicable for Skip to receive from MJAPI
+   * Builds up the array of notes and note types for Skip
+   * These notes are used to provide Skip with domain knowledge and context
+   * 
+   * @param contextUser User context for the request
+   * @returns Object containing arrays of notes and note types
    */
-  protected async BuildSkipAgentNotes(contextUser: UserInfo): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
+  protected async BuildSkipAgentNotes(contextUser: UserInfo, filterUserNotesToContextUser: boolean): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
     try {
       // if already configured this does nothing, just makes sure we're configured
       await AIEngine.Instance.Config(false, contextUser); 
@@ -1175,6 +1445,12 @@ cycle.`);
           }
         });
 
+        if (filterUserNotesToContextUser){
+          // filter out any notes that are not for this user
+          notes = notes.filter((n) => n.type === 'Global' || 
+                                      (n.type === 'User' && n.userId === contextUser.ID));
+        }
+
         noteTypes = AIEngine.Instance.AgentNoteTypes.map((r) => {
           return {
             id: r.ID,
@@ -1197,6 +1473,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Packs entity rows for inclusion in Skip requests
+   * Provides sample data based on entity configuration
+   * 
+   * @param e Entity information
+   * @param dataSource Database connection
+   * @returns Array of entity rows based on packing configuration
+   */
   protected async PackEntityRows(e: EntityInfo, dataSource: DataSource): Promise<any[]> {
     try {
       if (e.RowsToPackWithSchema === 'None')
@@ -1249,6 +1533,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Packs possible values for an entity field
+   * These values help Skip understand the domain and valid values for fields
+   * 
+   * @param f Field information
+   * @param dataSource Database connection
+   * @returns Array of possible values for the field
+   */
   protected async PackFieldPossibleValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
     try {
       if (f.ValuesToPackWithSchema === 'None') {
@@ -1291,6 +1583,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Gets distinct values for a field from the database
+   * Used to provide Skip with information about the possible values
+   * 
+   * @param f Field information
+   * @param dataSource Database connection
+   * @returns Array of distinct values for the field
+   */
   protected async GetFieldDistinctValues(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldValueInfo[]> {
     try {
       const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
@@ -1319,10 +1619,17 @@ cycle.`);
   private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
   private static __lastRefreshTime: number = 0;
 
+  /**
+   * Refreshes the Skip entities cache
+   * Rebuilds the entity information that is provided to Skip
+   * 
+   * @param dataSource Database connection
+   * @returns Updated array of entity information
+   */
   private async refreshSkipEntities(dataSource: DataSource): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
-      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSendSkip?.includeEntitiesFromExcludedSchemas ?? [])
+      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
         .map((e) => e.trim().toLowerCase());
   
       // get the list of entities
@@ -1352,6 +1659,15 @@ cycle.`);
     }
   }
 
+  /**
+   * Builds or retrieves Skip entities from cache
+   * Uses caching to avoid expensive rebuilding of entity information
+   * 
+   * @param dataSource Database connection
+   * @param forceRefresh Whether to force a refresh regardless of cache state
+   * @param refreshIntervalMinutes Minutes before cache expires
+   * @returns Array of entity information
+   */
   public async BuildSkipEntities(dataSource: DataSource, forceRefresh: boolean = false, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
     try {
       const now = Date.now();
@@ -1372,6 +1688,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Packs information about a single entity for Skip
+   * Includes fields, relationships, and sample data
+   * 
+   * @param e Entity information
+   * @param dataSource Database connection
+   * @returns Packaged entity information
+   */
   protected async PackSingleSkipEntityInfo(e: EntityInfo, dataSource: DataSource): Promise<SkipEntityInfo> {
     try {
       const ret: SkipEntityInfo = {
@@ -1405,6 +1729,13 @@ cycle.`);
     }
   }
 
+  /**
+   * Packs information about a single entity relationship
+   * These relationships help Skip understand the data model
+   * 
+   * @param r Relationship information
+   * @returns Packaged relationship information
+   */
   protected PackSingleSkipEntityRelationship(r: EntityRelationshipInfo): SkipEntityRelationshipInfo {
     try {
       return {
@@ -1428,6 +1759,14 @@ cycle.`);
     }
   }
 
+  /**
+   * Packs information about a single entity field
+   * Includes metadata and possible values
+   * 
+   * @param f Field information
+   * @param dataSource Database connection
+   * @returns Packaged field information
+   */
   protected async PackSingleSkipEntityField(f: EntityFieldInfo, dataSource: DataSource): Promise<SkipEntityFieldInfo> {
     try {
       return {
@@ -1468,6 +1807,19 @@ cycle.`);
     }
   }
 
+  /**
+   * Handles initial object loading for Skip chat interactions
+   * Creates or loads conversation objects, data contexts, and other required entities
+   * 
+   * @param dataSource Database connection
+   * @param ConversationId ID of an existing conversation, or empty for a new one
+   * @param UserQuestion The user's question or message
+   * @param user User information
+   * @param userPayload User payload from context
+   * @param md Metadata instance
+   * @param DataContextId Optional ID of a data context to use
+   * @returns Object containing loaded entities and contexts
+   */
   protected async HandleSkipChatInitialObjectLoading(
     dataSource: DataSource,
     ConversationId: string,
@@ -1593,6 +1945,15 @@ cycle.`);
     return { dataContext, convoEntity, dataContextEntity, convoDetailEntity };
   }
 
+  /**
+   * Loads conversation details from the database and transforms them into Skip message format
+   * Used to provide Skip with conversation history for context
+   * 
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation to load details for
+   * @param maxHistoricalMessages Maximum number of historical messages to include
+   * @returns Array of messages in Skip format
+   */
   protected async LoadConversationDetailsIntoSkipMessages(
     dataSource: DataSource,
     ConversationId: string,
@@ -1684,6 +2045,13 @@ cycle.`);
     }
   }
 
+  /**
+   * Maps database role values to Skip API role format
+   * Converts role names from database format to the format expected by Skip API
+   * 
+   * @param role Database role value
+   * @returns Skip API role value ('user' or 'system')
+   */
   protected MapDBRoleToSkipRole(role: string): 'user' | 'system' {
     switch (role.trim().toLowerCase()) {
       case 'ai':
@@ -1695,6 +2063,25 @@ cycle.`);
     }
   }
 
+  /**
+   * Handles the main Skip chat request processing flow
+   * Routes the request through the different phases based on the Skip API response
+   * 
+   * @param input Skip API request to send
+   * @param UserQuestion The question or message from the user
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param md Metadata instance
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param conversationDetailCount Tracking count to prevent infinite loops
+   * @returns Result of the Skip interaction
+   */
   protected async HandleSkipChatRequest(
     input: SkipAPIRequest,
     UserQuestion: string,
@@ -1710,7 +2097,8 @@ cycle.`);
     dataContextEntity: DataContextEntity, 
     conversationDetailCount: number
   ): Promise<AskSkipResultType> {
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
+    const skipConfigInfo = configInfo.askSkip;
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
     if (conversationDetailCount > 10) {
       // At this point it is likely that we are stuck in a loop, so we stop here
@@ -1736,7 +2124,7 @@ cycle.`);
     }
 
     const response = await sendPostRequest(
-      ___skipAPIurl,
+      skipConfigInfo.chatURL,
       input,
       true,
       null,
@@ -1849,6 +2237,15 @@ cycle.`);
     }
   }
 
+  /**
+   * Publishes a status update message to the user based on the Skip API response
+   * Provides feedback about what phase of processing is happening
+   * 
+   * @param apiResponse The response from the Skip API
+   * @param userPayload User payload from context
+   * @param conversationID ID of the conversation
+   * @param pubSub Publisher/subscriber for events
+   */
   protected async PublishApiResponseUserUpdateMessage(
     apiResponse: SkipAPIResponse,
     userPayload: UserPayload,
@@ -1881,6 +2278,24 @@ cycle.`);
     });
   }
 
+  /**
+   * Handles the analysis complete phase of the Skip chat process
+   * Finalizes the conversation and creates necessary artifacts
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The analysis complete response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @returns Result of the Skip interaction
+   */
   protected async HandleAnalysisComplete(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIAnalysisCompleteResponse,
@@ -1927,6 +2342,22 @@ cycle.`);
     return response;
   }
 
+  /**
+   * Handles the clarifying question phase of the Skip chat process
+   * Creates a conversation detail for the clarifying question from Skip
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The clarifying question response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @returns Result of the Skip interaction
+   */
   protected async HandleClarifyingQuestionPhase(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIClarifyingQuestionResponse,
@@ -1975,6 +2406,25 @@ cycle.`);
     }
   }
 
+  /**
+   * Handles the data request phase of the Skip chat process
+   * Processes data requests from Skip and loads requested data
+   * 
+   * @param apiRequest The original request sent to Skip
+   * @param apiResponse The data request response from Skip
+   * @param UserQuestion The original user question
+   * @param user User information
+   * @param dataSource Database connection
+   * @param ConversationId ID of the conversation
+   * @param userPayload User payload from context
+   * @param pubSub Publisher/subscriber for events
+   * @param convoEntity Conversation entity
+   * @param convoDetailEntity Conversation detail entity for the user message
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param conversationDetailCount Tracking count to prevent infinite loops
+   * @returns Result of the Skip interaction
+   */
   protected async HandleDataRequestPhase(
     apiRequest: SkipAPIRequest,
     apiResponse: SkipAPIDataRequestResponse,
@@ -2126,14 +2576,19 @@ cycle.`);
   }
 
   /**
-   * This method will handle the process for an end of successful request where a user is notified of an AI message. The AI message is either the finished report or a clarifying question.
-   * @param apiResponse
-   * @param md
-   * @param user
-   * @param convoEntity
-   * @param pubSub
-   * @param userPayload
-   * @returns
+   * Finishes a successful conversation and notifies the user
+   * Creates necessary records, artifacts, and notifications
+   * 
+   * @param apiResponse The analysis complete response from Skip
+   * @param dataContext Data context associated with the conversation
+   * @param dataContextEntity Data context entity
+   * @param md Metadata instance
+   * @param user User information
+   * @param convoEntity Conversation entity
+   * @param pubSub Publisher/subscriber for events
+   * @param userPayload User payload from context
+   * @param dataSource Database connection
+   * @returns The ID of the AI message conversation detail
    */
   protected async FinishConversationAndNotifyUser(
     apiResponse: SkipAPIAnalysisCompleteResponse,
@@ -2294,18 +2749,34 @@ cycle.`);
     };
   }
 
-  protected getAgentNoteTypeIDByName(name: string): string {
+  /**
+   * Gets the ID of an agent note type by its name
+   * Falls back to a default note type if the specified one is not found
+   * 
+   * @param name Name of the agent note type
+   * @param defaultNoteType Default note type to use if the specified one is not found
+   * @returns ID of the agent note type
+   */
+  protected getAgentNoteTypeIDByName(name: string, defaultNoteType: string = 'AI'): string {
     const noteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
     if (noteTypeID) { 
       return noteTypeID;
     }
     else{ 
-      // default to AI note ID
-      const AINoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === 'AI')?.ID;
-      return AINoteTypeID
+      // default  
+      const defaultNoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === defaultNoteType.trim().toLowerCase())?.ID;
+      return defaultNoteTypeID;
     }
   }
 
+  /**
+   * Gets data from a view
+   * Helper method to run a view and retrieve its data
+   * 
+   * @param ViewId ID of the view to run
+   * @param user User context for the query
+   * @returns Results of the view query
+   */
   protected async getViewData(ViewId: string, user: UserInfo): Promise<any> {
     const rv = new RunView();
     const result = await rv.RunView({ ViewID: ViewId, IgnoreMaxRows: true }, user);
@@ -2314,8 +2785,11 @@ cycle.`);
   }
 
   /**
-   * Manually executes the Skip AI learning cycle.
+   * Manually executes the Skip AI learning cycle
+   * Allows triggering a learning cycle on demand rather than waiting for scheduled execution
+   * 
    * @param OrganizationId Optional organization ID to register for this run
+   * @returns Result of the manual learning cycle execution
    */
   @Mutation(() => ManualLearningCycleResultType)
   async ManuallyExecuteSkipLearningCycle(
@@ -2323,17 +2797,17 @@ cycle.`);
   ): Promise<ManualLearningCycleResultType> {
     try {
       LogStatus('Manual execution of Skip learning cycle requested via API');
-      
+      const skipConfigInfo = configInfo.askSkip;
       // First check if learning cycles are enabled in configuration
-      if (___skipRunLearningCycles !== 'Y') {
+      if (!skipConfigInfo.learningCycleEnabled) {
         return {
           Success: false,
-          Message: 'Learning cycles are disabled in configuration'
+          Message: 'Learning cycles are not enabled in configuration'
         };
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!___skipLearningAPIurl || ___skipLearningAPIurl.trim() === '') {
+      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
         return {
           Success: false,
           Message: 'Learning cycle API endpoint is not configured'
@@ -2341,7 +2815,7 @@ cycle.`);
       }
       
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || skipConfigInfo.orgID;
       
       // Call the scheduler's manual execution method with org ID
       const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
@@ -2364,6 +2838,9 @@ cycle.`);
   
   /**
    * Gets the current status of the learning cycle scheduler
+   * Provides information about the scheduler state and any running cycles
+   * 
+   * @returns Status information about the learning cycle scheduler
    */
   @Query(() => LearningCycleStatusType)
   async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
@@ -2393,15 +2870,19 @@ cycle.`);
   
   /**
    * Checks if a specific organization is running a learning cycle
+   * Used to determine if a new learning cycle can be started for an organization
+   * 
    * @param OrganizationId The organization ID to check
+   * @returns Information about the running cycle, or null if no cycle is running
    */
   @Query(() => RunningOrganizationType, { nullable: true })
   async IsOrganizationRunningLearningCycle(
     @Arg('OrganizationId', () => String) OrganizationId: string
   ): Promise<RunningOrganizationType | null> {
     try {
+      const skipConfigInfo = configInfo.askSkip;
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || skipConfigInfo.orgID;
       
       const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
       
@@ -2424,7 +2905,10 @@ cycle.`);
   
   /**
    * Stops a running learning cycle for a specific organization
+   * Allows manual intervention to stop a learning cycle that is taking too long or causing issues
+   * 
    * @param OrganizationId The organization ID to stop the cycle for
+   * @returns Result of the stop operation, including details about the stopped cycle
    */
   @Mutation(() => StopLearningCycleResultType)
   async StopLearningCycleForOrganization(
@@ -2432,7 +2916,7 @@ cycle.`);
   ): Promise<StopLearningCycleResultType> {
     try {
       // Use the organization ID from config if not provided
-      const orgId = OrganizationId || ___skipAPIOrgId;
+      const orgId = OrganizationId || configInfo.askSkip.orgID;
       
       const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
       

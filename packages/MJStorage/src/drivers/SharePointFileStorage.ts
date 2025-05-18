@@ -12,16 +12,55 @@ import {
 } from '../generic/FileStorageBase';
 
 /**
- * Simple implementation of AuthenticationProvider that uses client credentials flow
+ * Implementation of the Microsoft Graph API AuthenticationProvider interface 
+ * that uses the OAuth2 client credentials flow for authentication.
+ * 
+ * This provider handles token acquisition, caching, and automatic token refresh
+ * when tokens expire, providing seamless authentication for SharePoint operations.
+ * 
+ * @remarks
+ * This class is designed for server-to-server authentication scenarios where
+ * user interaction isn't possible. It requires an Azure AD application with
+ * appropriate permissions to access SharePoint/OneDrive resources.
  */
 class ClientCredentialsAuthProvider implements AuthenticationProvider {
+  /**
+   * Azure AD application (client) ID
+   */
   private clientId: string;
+  
+  /**
+   * Azure AD application client secret
+   */
   private clientSecret: string;
+  
+  /**
+   * Azure AD tenant ID
+   */
   private tenantId: string;
+  
+  /**
+   * OAuth2 token endpoint URL
+   */
   private tokenEndpoint: string;
+  
+  /**
+   * Cached access token
+   */
   private accessToken: string | null = null;
+  
+  /**
+   * Expiration timestamp for the cached token
+   */
   private tokenExpiration: Date | null = null;
 
+  /**
+   * Creates a new ClientCredentialsAuthProvider instance
+   * 
+   * @param clientId - The Azure AD application (client) ID
+   * @param clientSecret - The Azure AD application client secret
+   * @param tenantId - The Azure AD tenant ID
+   */
   constructor(clientId: string, clientSecret: string, tenantId: string) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
@@ -30,7 +69,14 @@ class ClientCredentialsAuthProvider implements AuthenticationProvider {
   }
 
   /**
-   * Get access token for the specified resource
+   * Gets an access token for Microsoft Graph API
+   * 
+   * This method implements the AuthenticationProvider interface required by the
+   * Microsoft Graph client. It acquires a new token or returns a cached token
+   * if it's still valid.
+   * 
+   * @returns A Promise that resolves to the access token string
+   * @throws Error if token acquisition fails
    */
   public async getAccessToken(): Promise<string> {
     if (this.accessToken && this.tokenExpiration && this.tokenExpiration > new Date()) {
@@ -67,14 +113,87 @@ class ClientCredentialsAuthProvider implements AuthenticationProvider {
   }
 }
 
+/**
+ * FileStorageBase implementation for Microsoft SharePoint using the Microsoft Graph API
+ * 
+ * This provider allows working with files stored in SharePoint document libraries.
+ * It uses the Microsoft Graph API and client credentials authentication flow to
+ * securely access and manipulate SharePoint files and folders.
+ * 
+ * @remarks
+ * This implementation requires the following environment variables:
+ * - STORAGE_SHAREPOINT_CLIENT_ID - Azure AD application (client) ID
+ * - STORAGE_SHAREPOINT_CLIENT_SECRET - Azure AD application client secret
+ * - STORAGE_SHAREPOINT_TENANT_ID - Azure AD tenant ID
+ * - STORAGE_SHAREPOINT_SITE_ID - The SharePoint site ID
+ * - STORAGE_SHAREPOINT_DRIVE_ID - The ID of the document library (drive)
+ * - STORAGE_SHAREPOINT_ROOT_FOLDER_ID (optional) - ID of a subfolder to use as the root
+ * 
+ * To use this provider, you need to:
+ * 1. Register an Azure AD application with appropriate Microsoft Graph API permissions
+ *    (typically Files.ReadWrite.All and Sites.ReadWrite.All)
+ * 2. Create a client secret for the application
+ * 3. Grant admin consent for the permissions
+ * 4. Find your SharePoint site ID and document library (drive) ID using the Microsoft Graph Explorer
+ * 
+ * @example
+ * ```typescript
+ * // Set required environment variables before creating the provider
+ * process.env.STORAGE_SHAREPOINT_CLIENT_ID = 'your-client-id';
+ * process.env.STORAGE_SHAREPOINT_CLIENT_SECRET = 'your-client-secret';
+ * process.env.STORAGE_SHAREPOINT_TENANT_ID = 'your-tenant-id';
+ * process.env.STORAGE_SHAREPOINT_SITE_ID = 'your-site-id';
+ * process.env.STORAGE_SHAREPOINT_DRIVE_ID = 'your-drive-id';
+ * 
+ * // Create the provider
+ * const storage = new SharePointFileStorage();
+ * 
+ * // Upload a file
+ * const fileContent = Buffer.from('Hello, SharePoint!');
+ * await storage.PutObject('documents/hello.txt', fileContent, 'text/plain');
+ * 
+ * // Download a file
+ * const downloadedContent = await storage.GetObject('documents/hello.txt');
+ * 
+ * // Get a temporary download URL
+ * const downloadUrl = await storage.CreatePreAuthDownloadUrl('documents/hello.txt');
+ * ```
+ */
 @RegisterClass(FileStorageBase, 'SharePoint Storage')
 export class SharePointFileStorage extends FileStorageBase {
+  /**
+   * The name of this storage provider
+   */
   protected readonly providerName = 'SharePoint';
+  
+  /**
+   * Microsoft Graph API client
+   */
   private _client: Client;
+  
+  /**
+   * The ID of the SharePoint document library (drive)
+   */
   private _driveId: string;
+  
+  /**
+   * The ID of the SharePoint site
+   */
   private _siteId: string;
+  
+  /**
+   * Optional ID of a subfolder to use as the root folder (if specified)
+   */
   private _rootFolderId?: string;
   
+  /**
+   * Creates a new SharePointFileStorage instance
+   * 
+   * This constructor reads required configuration from environment variables
+   * and initializes the Microsoft Graph client.
+   * 
+   * @throws Error if required environment variables are missing
+   */
   constructor() {
     super();
     
@@ -95,10 +214,15 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Get the parent item ID for a given path
+   * Gets the SharePoint item ID for a folder at the specified path
    * 
-   * @param path The path to get the parent folder for
-   * @returns The parent folder ID
+   * This helper method navigates the folder hierarchy in SharePoint to find
+   * the folder specified by the path, returning its item ID.
+   * 
+   * @param path - The path to get the parent folder for (e.g., 'documents/reports')
+   * @returns A Promise that resolves to the parent folder ID
+   * @throws Error if any folder in the path doesn't exist
+   * @private
    */
   private async _getParentFolderIdByPath(path: string): Promise<string> {
     if (!path || path === '/' || path === '') {
@@ -125,10 +249,15 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Get an item by path
+   * Gets a SharePoint item by its path
    * 
-   * @param path The path of the item
-   * @returns The item
+   * This helper method retrieves a SharePoint item (file or folder) using
+   * its path. It handles path normalization and root folder redirection.
+   * 
+   * @param path - The path of the item to retrieve (e.g., 'documents/reports/report.docx')
+   * @returns A Promise that resolves to the SharePoint item
+   * @throws Error if the item doesn't exist or cannot be accessed
+   * @private
    */
   private async _getItemByPath(path: string): Promise<any> {
     if (!path || path === '/' || path === '') {
@@ -153,7 +282,14 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Convert a SharePoint item to a StorageObjectMetadata object
+   * Converts a SharePoint item to a StorageObjectMetadata object
+   * 
+   * This helper method transforms the Microsoft Graph API item representation
+   * into the standard StorageObjectMetadata format used by the FileStorageBase interface.
+   * 
+   * @param item - The SharePoint item from the Microsoft Graph API
+   * @returns A StorageObjectMetadata object representing the item
+   * @private
    */
   private _itemToMetadata(item: any): StorageObjectMetadata {
     const isDirectory = !!item.folder;
@@ -185,7 +321,27 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Create a pre-authenticated upload URL is not directly supported in SharePoint/OneDrive
+   * Creates a pre-authenticated upload URL (not supported in SharePoint)
+   * 
+   * This method is not supported for SharePoint storage as SharePoint doesn't provide
+   * a way to generate pre-authenticated upload URLs like object storage services.
+   * Instead, use the PutObject method for file uploads.
+   * 
+   * @param objectName - The object name (path) to create a pre-auth URL for
+   * @throws UnsupportedOperationError always, as this operation is not supported
+   * @example
+   * ```typescript
+   * // This will throw an UnsupportedOperationError
+   * try {
+   *   await storage.CreatePreAuthUploadUrl('documents/report.docx');
+   * } catch (error) {
+   *   if (error instanceof UnsupportedOperationError) {
+   *     console.log('Pre-authenticated upload URLs are not supported in SharePoint.');
+   *     // Use PutObject instead
+   *     await storage.PutObject('documents/report.docx', fileContent, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+   *   }
+   * }
+   * ```
    */
   public async CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload> {
     // SharePoint doesn't provide a way to get pre-authenticated upload URLs like S3
@@ -194,7 +350,24 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Create a pre-authenticated download URL for an object
+   * Creates a pre-authenticated download URL for an object
+   * 
+   * This method generates a time-limited, publicly accessible URL that can be used
+   * to download a file without authentication. The URL expires after 10 minutes.
+   * 
+   * @param objectName - Path to the object to create a download URL for (e.g., 'documents/report.pdf')
+   * @returns A Promise that resolves to the pre-authenticated download URL
+   * @throws Error if the object doesn't exist or the URL creation fails
+   * 
+   * @example
+   * ```typescript
+   * // Generate a pre-authenticated download URL that will work for 10 minutes
+   * const downloadUrl = await storage.CreatePreAuthDownloadUrl('presentations/quarterly-update.pptx');
+   * console.log(`Download the file using this URL: ${downloadUrl}`);
+   * 
+   * // You can share this URL with users who don't have SharePoint access
+   * // The URL will expire after 10 minutes
+   * ```
    */
   public async CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
     try {
@@ -216,7 +389,29 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Move an object from one location to another
+   * Moves an object from one location to another
+   * 
+   * This method moves a file or folder from one location in SharePoint to another.
+   * It handles both renaming and changing the parent folder.
+   * 
+   * @param oldObjectName - Current path of the object (e.g., 'old-folder/document.docx')
+   * @param newObjectName - New path for the object (e.g., 'new-folder/renamed-document.docx')
+   * @returns A Promise that resolves to true if successful, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * // Move a file to a different folder
+   * const moveResult = await storage.MoveObject(
+   *   'documents/old-report.pdf', 
+   *   'archive/2023/annual-report.pdf'
+   * );
+   * 
+   * if (moveResult) {
+   *   console.log('File moved successfully');
+   * } else {
+   *   console.error('Failed to move file');
+   * }
+   * ```
    */
   public async MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean> {
     try {
@@ -248,7 +443,30 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Delete an object
+   * Deletes an object (file) from SharePoint
+   * 
+   * This method permanently deletes a file from SharePoint storage.
+   * Note that deleted files may be recoverable from the SharePoint recycle bin
+   * depending on your SharePoint configuration.
+   * 
+   * @param objectName - Path to the object to delete (e.g., 'documents/old-report.docx')
+   * @returns A Promise that resolves to true if successful, false if an error occurs
+   * 
+   * @remarks
+   * - Returns true if the object doesn't exist (for idempotency)
+   * - Handles 404 errors by returning true since the end result is the same
+   * 
+   * @example
+   * ```typescript
+   * // Delete a file
+   * const deleteResult = await storage.DeleteObject('temp/draft-document.docx');
+   * 
+   * if (deleteResult) {
+   *   console.log('File deleted successfully or already didn\'t exist');
+   * } else {
+   *   console.error('Failed to delete file');
+   * }
+   * ```
    */
   public async DeleteObject(objectName: string): Promise<boolean> {
     try {
@@ -271,7 +489,35 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * List objects in a given directory
+   * Lists objects in a given directory (folder)
+   * 
+   * This method retrieves all files and subfolders in the specified directory.
+   * It returns both a list of object metadata and a list of directory prefixes.
+   * 
+   * @param prefix - Path to the directory to list (e.g., 'documents/reports')
+   * @param delimiter - Optional delimiter character (not used in this implementation)
+   * @returns A Promise that resolves to a StorageListResult containing objects and prefixes
+   * 
+   * @remarks
+   * - The `objects` array in the result includes both files and folders
+   * - The `prefixes` array includes only folder paths (with trailing slashes)
+   * - Returns empty arrays if the directory doesn't exist or an error occurs
+   * 
+   * @example
+   * ```typescript
+   * // List all files and folders in the 'documents' directory
+   * const result = await storage.ListObjects('documents');
+   * 
+   * // Process files
+   * for (const obj of result.objects) {
+   *   console.log(`Name: ${obj.name}, Size: ${obj.size}, Type: ${obj.isDirectory ? 'Folder' : 'File'}`);
+   * }
+   * 
+   * // Process subfolders
+   * for (const prefix of result.prefixes) {
+   *   console.log(`Subfolder: ${prefix}`);
+   * }
+   * ```
    */
   public async ListObjects(prefix: string, delimiter?: string): Promise<StorageListResult> {
     try {
@@ -306,7 +552,37 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Create a directory
+   * Creates a directory (folder) in SharePoint
+   * 
+   * This method creates a new folder at the specified path. The parent directory
+   * must already exist.
+   * 
+   * @param directoryPath - Path where the directory should be created (e.g., 'documents/new-folder')
+   * @returns A Promise that resolves to true if successful, false if an error occurs
+   * 
+   * @remarks
+   * - If a folder with the same name already exists, the operation will fail
+   * - The parent directory must exist for the operation to succeed
+   * - Trailing slashes in the path are automatically removed
+   * 
+   * @example
+   * ```typescript
+   * // Create a new folder
+   * const createResult = await storage.CreateDirectory('documents/2024-reports');
+   * 
+   * if (createResult) {
+   *   console.log('Folder created successfully');
+   *   
+   *   // Now we can put files in this folder
+   *   await storage.PutObject(
+   *     'documents/2024-reports/q1-results.xlsx',
+   *     fileContent,
+   *     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+   *   );
+   * } else {
+   *   console.error('Failed to create folder');
+   * }
+   * ```
    */
   public async CreateDirectory(directoryPath: string): Promise<boolean> {
     try {
@@ -339,7 +615,34 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Delete a directory and optionally its contents
+   * Deletes a directory (folder) and optionally its contents
+   * 
+   * This method deletes a folder from SharePoint. By default, it will only delete
+   * empty folders unless the recursive parameter is set to true.
+   * 
+   * @param directoryPath - Path to the directory to delete (e.g., 'archive/old-reports')
+   * @param recursive - If true, delete the directory and all its contents; if false, only delete if empty
+   * @returns A Promise that resolves to true if successful, false if an error occurs
+   * 
+   * @remarks
+   * - If recursive=false and the directory contains files, the operation will fail
+   * - SharePoint deleted items may be recoverable from the recycle bin depending on site settings
+   * - Trailing slashes in the path are automatically removed
+   * 
+   * @example
+   * ```typescript
+   * // Attempt to delete an empty folder
+   * const deleteResult = await storage.DeleteDirectory('temp/empty-folder');
+   * 
+   * // Delete a folder and all its contents
+   * const recursiveDeleteResult = await storage.DeleteDirectory('archive/old-data', true);
+   * 
+   * if (recursiveDeleteResult) {
+   *   console.log('Folder and all its contents deleted successfully');
+   * } else {
+   *   console.error('Failed to delete folder');
+   * }
+   * ```
    */
   public async DeleteDirectory(directoryPath: string, recursive = false): Promise<boolean> {
     try {
@@ -371,7 +674,30 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Get object metadata
+   * Gets metadata for a file or folder
+   * 
+   * This method retrieves metadata information about a file or folder, such as
+   * its name, size, content type, and last modified date.
+   * 
+   * @param objectName - Path to the object to get metadata for (e.g., 'documents/report.pdf')
+   * @returns A Promise that resolves to a StorageObjectMetadata object
+   * @throws Error if the object doesn't exist or cannot be accessed
+   * 
+   * @example
+   * ```typescript
+   * try {
+   *   // Get metadata for a file
+   *   const metadata = await storage.GetObjectMetadata('presentations/quarterly-update.pptx');
+   *   
+   *   console.log(`Name: ${metadata.name}`);
+   *   console.log(`Size: ${metadata.size} bytes`);
+   *   console.log(`Content Type: ${metadata.contentType}`);
+   *   console.log(`Last Modified: ${metadata.lastModified}`);
+   *   console.log(`Is Directory: ${metadata.isDirectory}`);
+   * } catch (error) {
+   *   console.error('Error getting metadata:', error.message);
+   * }
+   * ```
    */
   public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
     try {
@@ -384,7 +710,35 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Get an object's contents
+   * Downloads a file's contents
+   * 
+   * This method retrieves the raw content of a file as a Buffer.
+   * 
+   * @param objectName - Path to the file to download (e.g., 'documents/report.pdf')
+   * @returns A Promise that resolves to a Buffer containing the file's contents
+   * @throws Error if the file doesn't exist or cannot be downloaded
+   * 
+   * @remarks
+   * - This method uses the Graph API's download URL to retrieve the file contents
+   * - The method will throw an error if the object is a folder
+   * - For large files, consider using CreatePreAuthDownloadUrl instead
+   * 
+   * @example
+   * ```typescript
+   * try {
+   *   // Download a text file
+   *   const fileContent = await storage.GetObject('documents/notes.txt');
+   *   
+   *   // Convert Buffer to string for text files
+   *   const textContent = fileContent.toString('utf8');
+   *   console.log('File content:', textContent);
+   *   
+   *   // For binary files, you can write the buffer to a local file
+   *   // or process it as needed
+   * } catch (error) {
+   *   console.error('Error downloading file:', error.message);
+   * }
+   * ```
    */
   public async GetObject(objectName: string): Promise<Buffer> {
     try {
@@ -407,7 +761,47 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Upload an object directly
+   * Uploads a file to SharePoint
+   * 
+   * This method uploads a file to SharePoint at the specified path. It automatically
+   * determines whether to use a simple upload or a chunked upload based on file size.
+   * 
+   * @param objectName - Path where the file should be uploaded (e.g., 'documents/report.pdf')
+   * @param data - Buffer containing the file content
+   * @param contentType - Optional MIME type of the file (if not provided, it will be guessed from the filename)
+   * @param metadata - Optional metadata to associate with the file (not used in SharePoint implementation)
+   * @returns A Promise that resolves to true if successful, false if an error occurs
+   * 
+   * @remarks
+   * - Files smaller than 4MB use a simple upload
+   * - Files 4MB or larger use a chunked upload session for better reliability
+   * - Automatically creates the parent folder structure if it doesn't exist
+   * - If a file with the same name exists, it will be replaced
+   * 
+   * @example
+   * ```typescript
+   * // Create a text file
+   * const textContent = Buffer.from('This is a sample document', 'utf8');
+   * const uploadResult = await storage.PutObject(
+   *   'documents/sample.txt',
+   *   textContent,
+   *   'text/plain'
+   * );
+   * 
+   * // Upload a large file using chunked upload
+   * const largeFileBuffer = fs.readFileSync('/path/to/large-presentation.pptx');
+   * const largeUploadResult = await storage.PutObject(
+   *   'presentations/quarterly-results.pptx',
+   *   largeFileBuffer,
+   *   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+   * );
+   * 
+   * if (largeUploadResult) {
+   *   console.log('Large file uploaded successfully');
+   * } else {
+   *   console.error('Failed to upload large file');
+   * }
+   * ```
    */
   public async PutObject(
     objectName: string, 
@@ -466,7 +860,34 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Copy an object
+   * Copies a file from one location to another
+   * 
+   * This method creates a copy of a file at a new location. The original file
+   * remains unchanged.
+   * 
+   * @param sourceObjectName - Path to the source file (e.g., 'templates/report-template.docx')
+   * @param destinationObjectName - Path where the copy should be created (e.g., 'documents/new-report.docx')
+   * @returns A Promise that resolves to true if successful, false if an error occurs
+   * 
+   * @remarks
+   * - The parent folder of the destination must exist
+   * - Both files and folders can be copied
+   * - The operation is asynchronous in SharePoint and may not complete immediately
+   * 
+   * @example
+   * ```typescript
+   * // Copy a file to a new location with a different name
+   * const copyResult = await storage.CopyObject(
+   *   'templates/financial-report.xlsx',
+   *   'reports/2024/q1-financial-report.xlsx'
+   * );
+   * 
+   * if (copyResult) {
+   *   console.log('File copied successfully');
+   * } else {
+   *   console.error('Failed to copy file');
+   * }
+   * ```
    */
   public async CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean> {
     try {
@@ -498,7 +919,26 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Check if an object exists
+   * Checks if a file or folder exists
+   * 
+   * This method verifies whether an object (file or folder) exists at the specified path.
+   * 
+   * @param objectName - Path to check (e.g., 'documents/report.pdf')
+   * @returns A Promise that resolves to true if the object exists, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * // Check if a file exists before attempting to download it
+   * const exists = await storage.ObjectExists('presentations/quarterly-update.pptx');
+   * 
+   * if (exists) {
+   *   // File exists, proceed with download
+   *   const fileContent = await storage.GetObject('presentations/quarterly-update.pptx');
+   *   // Process the file...
+   * } else {
+   *   console.log('File does not exist');
+   * }
+   * ```
    */
   public async ObjectExists(objectName: string): Promise<boolean> {
     try {
@@ -515,7 +955,31 @@ export class SharePointFileStorage extends FileStorageBase {
   }
   
   /**
-   * Check if a directory exists
+   * Checks if a directory exists
+   * 
+   * This method verifies whether a folder exists at the specified path.
+   * Unlike ObjectExists, this method also checks that the item is a folder.
+   * 
+   * @param directoryPath - Path to check (e.g., 'documents/reports')
+   * @returns A Promise that resolves to true if the directory exists, false otherwise
+   * 
+   * @remarks
+   * - Returns false if the path exists but points to a file instead of a folder
+   * - Trailing slashes in the path are automatically removed
+   * 
+   * @example
+   * ```typescript
+   * // Check if a directory exists before creating a file in it
+   * const dirExists = await storage.DirectoryExists('documents/reports');
+   * 
+   * if (!dirExists) {
+   *   // Create the directory first
+   *   await storage.CreateDirectory('documents/reports');
+   * }
+   * 
+   * // Now we can safely put a file in this directory
+   * await storage.PutObject('documents/reports/annual-summary.pdf', fileContent, 'application/pdf');
+   * ```
    */
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {

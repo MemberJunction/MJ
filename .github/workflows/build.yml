@@ -1,0 +1,39 @@
+name: Build all packages for testing
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - next
+    paths:
+      - 'packages/**'
+
+jobs:
+  build-only:
+    name: Build new versions of NPM packages
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    env:
+      BRANCH: ${{ github.base_ref || github.ref_name }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build

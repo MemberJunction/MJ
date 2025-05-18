@@ -1,7 +1,7 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
-import { ChatCompletionMessageParam } from "openai/resources";
+import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
 
 /**
  * OpenAI implementation of the BaseLLM class
@@ -44,7 +44,8 @@ export class OpenAILLM extends BaseLLM {
             model: params.model,
             messages: messages,
             temperature: params.temperature,
-            max_completion_tokens: params.maxOutputTokens
+            max_completion_tokens: params.maxOutputTokens,
+            logprobs: params.includeLogProbs === true ? true : false,
         };
         
         if (params.effortLevel) {
@@ -73,7 +74,7 @@ export class OpenAILLM extends BaseLLM {
                 choices: result.choices.map((c: { message: { role: string | number; content: any; }; finish_reason: any; index: any; }) => {
                     return {
                         message: {
-                            role: <ChatMessageRole>c.message.role,
+                            role: ChatMessageRole.assistant,
                             content: c.message.content
                         },
                         finish_reason: c.finish_reason,
@@ -103,7 +104,8 @@ export class OpenAILLM extends BaseLLM {
             messages: messages,
             temperature: params.temperature,
             max_tokens: params.maxOutputTokens,
-            stream: true
+            stream: true,
+            logprobs: params.includeLogProbs === true ? true : false,
         };
         
         if (params.effortLevel) {
@@ -210,14 +212,66 @@ export class OpenAILLM extends BaseLLM {
     }
 
     public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
-        // add user messages - using types OpenAI likes
         return messages.map(m => {
-            return {
-                role: this.ConvertMJToOpenAIRole(m.role), 
-                content: m.content
+            const role = this.ConvertMJToOpenAIRole(m.role);
+            let content: unknown = m.content;
+            
+            // Process content if it's an array
+            if (Array.isArray(content)) {
+                // Filter out unsupported types and convert to OpenAI's expected format
+                const contentParts = content
+                    .map(c => {
+                        // For text type
+                        if (c.type === 'text') {
+                            return {
+                                type: 'text' as const,
+                                text: c.content
+                            };
+                        } 
+                        // For image_url type
+                        else if (c.type === 'image_url') {
+                            return {
+                                type: 'image_url' as const,
+                                image_url: { url: c.content }
+                            };
+                        }
+                        // Warn about unsupported types
+                        else {
+                            console.warn(`Unsupported content type for OpenAI API: ${c.type}. This content will be skipped.`);
+                            return null;
+                        }
+                    })
+                    .filter(part => part !== null);
+                
+                content = contentParts;
+            }
+            
+            // Create the appropriate message type based on role
+            switch (role) {
+                case 'system':
+                    return { 
+                        role: 'system' as const, 
+                        content 
+                    } as ChatCompletionSystemMessageParam;
+                
+                case 'user':
+                    return { 
+                        role: 'user' as const, 
+                        content 
+                    } as ChatCompletionUserMessageParam;
+                
+                case 'assistant':
+                    return { 
+                        role: 'assistant' as const, 
+                        content 
+                    } as ChatCompletionAssistantMessageParam;
+                
+                default:
+                    throw new Error(`Unknown role ${m.role}`);
             }
         });
-    }
+    }    
+
 
     /**
      * Utility method to map a MemberJunction role to OpenAI role
@@ -229,7 +283,7 @@ export class OpenAILLM extends BaseLLM {
      * @param role 
      * @returns 
      */
-    public ConvertMJToOpenAIRole(role: string) {//}: ChatCompletionRequestMessageRoleEnum {
+    public ConvertMJToOpenAIRole(role: string): 'system' | 'user' | 'assistant' {
         switch (role.trim().toLowerCase()) {
             case 'system':
                 return 'system';

@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
-import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice } from '@mistralai/mistralai/models/components';
+import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
@@ -36,12 +36,20 @@ export class MistralLLM extends BaseLLM {
             }
         }
 
-        const chatResponse = await this.Client.chat.complete({
+        // Convert messages to format expected by Mistral
+        const messages = this.MapMJMessagesToMistral(params.messages);
+        // Create params object
+        const params_obj: any = {
             model: params.model,
-            messages: params.messages, 
+            messages: messages, 
             maxTokens: params.maxOutputTokens,
             responseFormat: responseFormat
-        });
+        };
+        
+        // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
+        // If/when Mistral adds this functionality, it should be added here
+
+        const chatResponse = await this.Client.chat.complete(params_obj);
 
         const endTime = new Date();
 
@@ -57,7 +65,7 @@ export class MistralLLM extends BaseLLM {
 
             const res: ChatResultChoice = {
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: content
                 },
                 finish_reason: choice.finishReason,
@@ -74,11 +82,7 @@ export class MistralLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: {
-                    totalTokens: chatResponse.usage.totalTokens,
-                    promptTokens: chatResponse.usage.promptTokens,
-                    completionTokens: chatResponse.usage.completionTokens
-                }
+                usage: new ModelUsage(chatResponse.usage.promptTokens, chatResponse.usage.completionTokens)
             },
             errorMessage: "",
             exception: null,
@@ -94,12 +98,21 @@ export class MistralLLM extends BaseLLM {
             responseFormat = { type: "json_object" };
         }
         
-        return this.Client.chat.stream({
+        // Convert messages to format expected by Mistral
+        const messages = this.MapMJMessagesToMistral(params.messages);
+        
+        // Create params object
+        const params_obj: ChatCompletionStreamRequest = {
             model: params.model,
-            messages: params.messages,
+            messages: messages,
             maxTokens: params.maxOutputTokens,
-            responseFormat: responseFormat
-        });
+            responseFormat: responseFormat,
+        };
+        
+        // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
+        // If/when Mistral adds this functionality, it should be added here
+        
+        return this.Client.chat.stream(params_obj);
     }
     
     /**
@@ -127,11 +140,10 @@ export class MistralLLM extends BaseLLM {
             
             // Save usage information if available
             if (chunk?.data?.usage) {
-                usage = {
-                    promptTokens: chunk.data.usage.promptTokens || 0,
-                    completionTokens: chunk.data.usage.completionTokens || 0,
-                    totalTokens: chunk.data.usage.totalTokens || 0
-                };
+                usage = new ModelUsage(
+                    chunk.data.usage.promptTokens || 0,
+                    chunk.data.usage.completionTokens || 0
+                );
             }
         }
         
@@ -160,17 +172,13 @@ export class MistralLLM extends BaseLLM {
         result.data = {
             choices: [{
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: accumulatedContent ? accumulatedContent : ''
                 },
                 finish_reason: lastChunk?.data?.choices?.[0]?.finishReason || 'stop',
                 index: 0
             }],
-            usage: usage || {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0
-            }
+            usage: usage || new ModelUsage(0, 0)
         };
         
         result.statusText = 'success';
@@ -186,6 +194,54 @@ export class MistralLLM extends BaseLLM {
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
+    }
+
+    protected MapMJMessagesToMistral(messages: ChatMessage[]): Array<any> {
+        const returnMessages = messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                return { 
+                    role: m.role,
+                    content: m.content.map(block => {
+                        let mistralType = undefined;
+                        switch (block.type) {
+                            case 'text':
+                                mistralType = 'text';
+                                break;
+                            case 'image_url':
+                                mistralType = 'image_url';
+                                break;
+                            case 'file_url':
+                                mistralType = 'document_url';
+                                break;
+                            default:
+                                console.warn(`${block.type} type is not supported in Mistral`);
+                                break;
+                        }
+                        return {
+                            type: block.type,
+                            content: block.content
+                        }
+                    }).filter(block => block.type !== undefined)
+                }
+            }
+        });
+        
+        // Mistral expects the last message to either be a user message or a tool message
+        if (returnMessages.length > 0) {
+            const lastMessage = returnMessages[returnMessages.length - 1];
+            if (lastMessage.role !== 'user' /*&& lastMessage.role !== 'tool' -- in future if BaseLLM supports tool messages*/) {
+                returnMessages.push({
+                    role: 'user',
+                    content: 'ok' // Placeholder message to satisfy Mistral's requirement
+                })
+            }
+        }
+        return returnMessages;
     }
 }
 

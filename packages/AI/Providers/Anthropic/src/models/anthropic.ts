@@ -1,8 +1,8 @@
 import { Anthropic } from "@anthropic-ai/sdk";
-import { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
-    SummarizeResult, StreamingChatCallbacks } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -30,22 +30,38 @@ export class AnthropicLLM extends BaseLLM {
 
     /**
      * Format a text message with optional caching
-     * @param text The message text
+     * @param content The message content (string or content blocks)
      * @param enableCaching Whether to enable caching
      * @returns Formatted content object
      */
-    private formatContentWithCaching(text: string, enableCaching: boolean = true): any {
-        const content: any = {
+    private formatContentWithCaching(content: any, enableCaching: boolean = true): any {
+        let text: string;
+        
+        // Convert content to string if it's an array of content blocks
+        if (typeof content === 'string') {
+            text = content;
+        } else if (Array.isArray(content)) {
+            // Process array of content blocks - for now only text is supported
+            text = content
+                .filter(block => block.type === 'text')
+                .map(block => block.content)
+                .join('\n\n');
+        } else {
+            // Fallback for any other type
+            text = String(content);
+        }
+        
+        const formattedContent: any = {
             type: "text",
             text: text
         };
         
         // Add cache_control if caching is enabled (default to true)
         if (enableCaching) {
-            content.cache_control = { type: "ephemeral" };
+            formattedContent.cache_control = { type: "ephemeral" };
         }
         
-        return content;
+        return formattedContent;
     }
 
     /**
@@ -142,10 +158,11 @@ export class AnthropicLLM extends BaseLLM {
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
             // Create the request parameters
-            const createParams: any = {
+            const createParams: MessageCreateParams = {
                 model: params.model,
                 max_tokens: params.maxOutputTokens || 64000, // large default for max_tokens if not provided
-                stream: true // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
+                stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
+                messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
  
             // Add system message(s), if present
@@ -156,17 +173,12 @@ export class AnthropicLLM extends BaseLLM {
                 );
             }
             
-            // Add messages with caching applied to the last user message
-            createParams.messages = this.formatMessagesWithCaching(
-                nonSystemMsgs, 
-                params.enableCaching || true
-            );
-            
             // Add thinking parameter if effort level is set
             // Note: Requires minimum 1 tokens or not budget set
             if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
                 createParams.thinking = {
-                    type: "enabled" as const
+                    type: "enabled" as const,
+                    budget_tokens: params.reasoningBudgetTokens || 1000000 // default to 1000000 if not set
                 };
                 if (params.reasoningBudgetTokens) {
                     createParams.thinking.budget_tokens = params.reasoningBudgetTokens;
@@ -191,11 +203,7 @@ export class AnthropicLLM extends BaseLLM {
                             index: 0
                         }
                     ],
-                    usage: {
-                        promptTokens: result.usage.input_tokens,
-                        completionTokens: result.usage.output_tokens,
-                        totalTokens: result.usage.input_tokens + result.usage.output_tokens
-                    }
+                    usage: new ModelUsage(result.usage.input_tokens, result.usage.output_tokens)
                 },
                 success: true,
                 statusText: 'success',
@@ -221,11 +229,7 @@ export class AnthropicLLM extends BaseLLM {
             return {
                 data: {
                     choices: [],
-                    usage: {
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0
-                    }
+                    usage: new ModelUsage(0, 0)
                 },
                 success: false,
                 statusText: 'error',
@@ -329,11 +333,7 @@ export class AnthropicLLM extends BaseLLM {
                 finish_reason: 'stop',
                 index: 0
             }],
-            usage: {
-                promptTokens,
-                completionTokens,
-                totalTokens: promptTokens + completionTokens
-            }
+            usage: new ModelUsage(promptTokens, completionTokens)
         };
         
         result.statusText = 'success';

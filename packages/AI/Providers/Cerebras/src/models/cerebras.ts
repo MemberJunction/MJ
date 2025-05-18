@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
-import { Chat } from '@cerebras/cerebras_cloud_sdk/resources/chat';
+import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
 
 /**
  * Cerebras implementation of the BaseLLM class
@@ -46,9 +46,30 @@ export class CerebrasLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
+        // Convert messages to format expected by Cerebras
+        const messages = params.messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                // Multimodal content not fully supported yet
+                // Convert to string by joining text content
+                const contentStr = m.content
+                    .filter(block => block.type === 'text')
+                    .map(block => block.content)
+                    .join('\n\n');
+                return {
+                    role: m.role,
+                    content: contentStr
+                };
+            }
+        })  
+        
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,
-            messages: params.messages,
+            messages: messages,
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
@@ -70,10 +91,11 @@ export class CerebrasLLM extends BaseLLM {
         const chatResponse = await this.client.chat.completions.create(cerebrasParams);
         const endTime = new Date();
 
-        const choices: ChatResultChoice[] = (chatResponse.choices as any[]).map((choice: any) => {
+        // Cast to any to extract the choices
+        const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice) => {
             const res: ChatResultChoice = {
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: choice.message.content
                 },
                 finish_reason: choice.finish_reason,
@@ -81,9 +103,9 @@ export class CerebrasLLM extends BaseLLM {
             };
             return res;
         });
-        
-        const usage = chatResponse.usage as any;
-        
+         
+         
+        const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
         return {
             success: true,
             statusText: "OK",
@@ -92,11 +114,7 @@ export class CerebrasLLM extends BaseLLM {
             timeElapsed: endTime.getTime() - startTime.getTime(),
             data: {
                 choices: choices,
-                usage: {
-                    totalTokens: usage.total_tokens,
-                    promptTokens: usage.prompt_tokens,
-                    completionTokens: usage.completion_tokens
-                }
+                usage: new ModelUsage(usage.prompt_tokens, usage.completion_tokens)
             },
             errorMessage: "",
             exception: null,
@@ -107,9 +125,30 @@ export class CerebrasLLM extends BaseLLM {
      * Create a streaming request for Cerebras
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
+        // Convert messages to format expected by Cerebras
+        const messages = params.messages.map(m => {
+            if (typeof m.content === 'string') {
+                return {
+                    role: m.role,
+                    content: m.content
+                };
+            } else {
+                // Multimodal content not fully supported yet
+                // Convert to string by joining text content
+                const contentStr = m.content
+                    .filter(block => block.type === 'text')
+                    .map(block => block.content)
+                    .join('\n\n');
+                return {
+                    role: m.role,
+                    content: contentStr
+                };
+            }
+        })  
+        
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,
-            messages: params.messages,
+            messages: messages,
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature,
             stream: true
@@ -154,11 +193,10 @@ export class CerebrasLLM extends BaseLLM {
         
         // Cerebras sends usage metrics in the final chunk 
         if (chunk?.usage) {
-            usage = {
-                promptTokens: chunk.usage.prompt_tokens,
-                completionTokens: chunk.usage.completion_tokens,
-                totalTokens: chunk.usage.total_tokens
-            };
+            usage = new ModelUsage(
+                chunk.usage.prompt_tokens,
+                chunk.usage.completion_tokens
+            );
         }
         
         return {
@@ -196,17 +234,13 @@ export class CerebrasLLM extends BaseLLM {
         result.data = {
             choices: [{
                 message: {
-                    role: 'assistant',
+                    role: ChatMessageRole.assistant,
                     content: accumulatedContent ? accumulatedContent : ''
                 },
                 finish_reason: finishReason,
                 index: 0
             }],
-            usage: {
-                promptTokens,
-                completionTokens,
-                totalTokens: promptTokens + completionTokens
-            }
+            usage: new ModelUsage(promptTokens, completionTokens)
         };
         
         result.statusText = 'success';
