@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.40.0
+
+### Patch Changes
+
+- 2309d02: Documentation for storage package and fixed splitter bug in skip-chat
+- Updated dependencies [23d08d8]
+  - @memberjunction/skip-types@2.40.0
+  - @memberjunction/ng-base-types@2.40.0
+  - @memberjunction/ng-container-directives@2.40.0
+  - @memberjunction/ng-data-context@2.40.0
+  - @memberjunction/ng-notifications@2.40.0
+  - @memberjunction/ng-resource-permissions@2.40.0
+  - @memberjunction/graphql-dataprovider@2.40.0
+  - @memberjunction/core@2.40.0
+  - @memberjunction/core-entities@2.40.0
+  - @memberjunction/data-context@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

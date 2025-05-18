@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.40.0
+
+### Patch Changes
+
+- 2309d02: Documentation for storage package and fixed splitter bug in skip-chat
+  - @memberjunction/core@2.40.0
+  - @memberjunction/core-entities@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes
