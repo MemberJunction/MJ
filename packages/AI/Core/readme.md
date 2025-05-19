@@ -290,8 +290,10 @@ The following provider packages implement the MemberJunction AI abstractions:
 - [`@memberjunction/ai-anthropic`](../Providers/Anthropic/readme.md) - Anthropic (Claude models)
 - [`@memberjunction/ai-mistral`](../Providers/Mistral/readme.md) - Mistral AI
 - [`@memberjunction/ai-gemini`](../Providers/Gemini/readme.md) - Google's Gemini models
-- [`@memberjunction/ai-groq`](../Providers/Groq/readme.md) - Groq's optimized inference(https://www.groq.com)
-- [`@memberjunction/ai-bettybot`](../Providers/BettyBot/readme.md) - Betty AI(https://www.meetbetty.ai)
+- [`@memberjunction/ai-vertex`](../Providers/Vertex/readme.md) - Google Vertex AI (various models including Gemini, others)
+- [`@memberjunction/ai-bedrock`](../Providers/Bedrock/readme.md) - Amazon Bedrock (Claude, Llama, Titan, etc.)
+- [`@memberjunction/ai-groq`](../Providers/Groq/readme.md) - Groq's optimized inference (https://www.groq.com)
+- [`@memberjunction/ai-bettybot`](../Providers/BettyBot/readme.md) - Betty AI (https://www.meetbetty.ai)
 - [`@memberjunction/ai-azure`](../Providers/Azure/readme.md) - Azure AI Foundry with support for OpenAI, Mistral, Phi, more
 - [`@memberjunction/ai-cerebras`](../Providers/Cerebras/readme.md) - Cerebras models
 - [`@memberjunction/ai-elevenlabs`](../Providers/ElevenLabs/readme.md) - ElevenLabs audio models
