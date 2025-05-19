@@ -31,3 +31,18 @@
 - Packages organized under /packages directory by function
 - Each package has its own tsconfig.json and package.json
 - Use package.json and turbo.json for build dependencies
+
+## NPM Workspace Management
+- This is an NPM workspace monorepo
+- **IMPORTANT**: To add dependencies to a specific package:
+  - Define dependencies in the individual package's package.json
+  - Run `npm install` at the repository root (NOT within the package directory)
+  - Never run `npm install` inside individual package directories
+  - The workspace manager will handle installing all dependencies across packages
+- To update dependencies:
+  - Edit the package.json file for the relevant package
+  - Run `npm install` at the repo root
+- When creating new packages:
+  - Create the package structure with its own package.json
+  - Add dependencies to the package.json
+  - Run `npm install` at the repo root to update the workspace
