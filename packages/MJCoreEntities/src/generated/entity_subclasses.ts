@@ -3119,6 +3119,11 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
     * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
+    CompletionTime: z.number().nullable().describe(`
+        * * Field Name: CompletionTime
+        * * Display Name: Completion Time
+        * * SQL Data Type: bigint
+    * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -3195,6 +3200,16 @@ export const ConversationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Status: z.union([z.literal('Processing'), z.literal('Available')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Available
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Processing
+    *   * Available
+    * * Description: Tracks the processing status of the conversation: Available, Processing`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -18568,6 +18583,19 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: CompletionTime
+    * * Display Name: Completion Time
+    * * SQL Data Type: bigint
+    * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.
+    */
+    get CompletionTime(): number | null {
+        return this.Get('CompletionTime');
+    }
+    set CompletionTime(value: number | null) {
+        this.Set('CompletionTime', value);
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -18766,6 +18794,24 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Available
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Processing
+    *   * Available
+    * * Description: Tracks the processing status of the conversation: Available, Processing
+    */
+    get Status(): 'Processing' | 'Available' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Processing' | 'Available') {
+        this.Set('Status', value);
     }
 
     /**
