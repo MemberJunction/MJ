@@ -1,6 +1,17 @@
 # @memberjunction/ai
 
-The MemberJunction AI Core package provides a comprehensive abstraction layer for working with various AI models (LLMs, embedding models, etc.) in a provider-agnostic way, allowing your application to easily switch between different AI providers without refactoring your code.
+The MemberJunction AI Core package provides a comprehensive abstraction layer for working with various AI models (LLMs, Video and Audio Generation, Text-To-Speech (TTS), embedding models, etc.) in a provider-agnostic way, allowing your application to easily switch between different AI providers without refactoring your code.
+
+## Standalone Usage
+
+**IMPORTANT**: This package can be used completely independently from the rest of the MemberJunction framework:
+
+- **Zero** database setup required
+- No environment variables or other settings expected (you are responsible for this and pass in API keys to the constructors)
+- Works in any TypeScript environment that can safely make API calls (e.g. don't use in browsers)
+- Perfect for server-side applications, backend services, and CLI tools
+
+The `@memberjunction/ai` package and all provider packages in `@memberjunction/ai-*` are designed to be lightweight, standalone modules that can be used in any TypeScript project.
 
 ## Features
 
@@ -30,29 +41,7 @@ npm install @memberjunction/ai-mistral
 
 ## Usage
 
-### Direct Provider Usage
-
-Directly use a specific AI provider when you know which one you need:
-
-```typescript
-import { OpenAILLM } from '@memberjunction/ai-openai';
-
-// Create an instance with your API key
-const llm = new OpenAILLM('your-openai-api-key');
-
-// Use the provider-specific implementation
-const result = await llm.ChatCompletion({
-  model: 'gpt-4',
-  messages: [
-    { role: 'system', content: 'You are a helpful assistant.' },
-    { role: 'user', content: 'What is AI abstraction?' }
-  ]
-});
-
-console.log(result.data.choices[0].message.content);
-```
-
-### Provider-Agnostic Usage
+### Provider-Agnostic Usage (Recommended)
 
 For maximum flexibility, use the class factory approach to select the provider at runtime:
 
@@ -60,7 +49,7 @@ For maximum flexibility, use the class factory approach to select the provider a
 import { BaseLLM, ChatParams } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
-// Get the highest registered implementation of BaseLLM
+// Get an implementation of BaseLLM by provider name
 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
   BaseLLM, 
   'MistralLLM',  // Provider class name
@@ -100,6 +89,28 @@ const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
 );
 ```
 
+### Direct Provider Usage
+
+When necessary, you can directly use a specific AI provider:
+
+```typescript
+import { OpenAILLM } from '@memberjunction/ai-openai';
+
+// Create an instance with your API key
+const llm = new OpenAILLM('your-openai-api-key');
+
+// Use the provider-specific implementation
+const result = await llm.ChatCompletion({
+  model: 'gpt-4',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'What is AI abstraction?' }
+  ]
+});
+
+console.log(result.data.choices[0].message.content);
+```
+
 ## Core Abstractions
 
 ### Base Models
@@ -136,7 +147,7 @@ const result: ChatResult = await llm.ChatCompletion(params);
 
 ### Streaming Chat Completion
 
-For real-time streaming of responses (supported by most modern LLM providers):
+For real-time streaming of responses:
 
 ```typescript
 import { ChatParams, ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
@@ -179,26 +190,6 @@ const params: ChatParams = {
 // The ChatCompletion API remains the same, but will stream results
 await llm.ChatCompletion(params);
 ```
-
-### Checking Streaming Support
-
-Check if a provider supports streaming before enabling it:
-
-```typescript
-// Check if the provider supports streaming
-if (llm.SupportsStreaming) {
-  console.log("Provider supports streaming!");
-  params.streaming = true;
-  params.streamingCallbacks = callbacks;
-} else {
-  console.log("Provider doesn't support streaming, using standard request");
-  params.streaming = false;
-}
-
-// The call automatically handles both streaming and non-streaming paths
-await llm.ChatCompletion(params);
-```
- 
 
 ### Text Summarization
 
@@ -282,29 +273,22 @@ console.log('Completion Tokens:', result.data.usage.completionTokens);
 console.log('Total Tokens:', result.data.usage.totalTokens);
 ```
 
-## Provider Streaming Support
-
-The following providers support streaming in the current implementation:
-
-| Provider | Streaming Support |
-|----------|------------------|
-| OpenAI   | ✅ Full support   |
-| Anthropic | ✅ Full support  |
-| Mistral  | ✅ Full support   |
-| Groq     | ✅ Full support   |
-| Gemini   | ✅ Full support   |
-| BettyBot | ❌ Not supported  |
-
 ## Available Providers
 
 The following provider packages implement the MemberJunction AI abstractions:
 
-- `@memberjunction/ai-openai` - OpenAI (GPT models)
-- `@memberjunction/ai-anthropic` - Anthropic (Claude models)
-- `@memberjunction/ai-mistral` - Mistral AI
-- `@memberjunction/ai-gemini` - Google's Gemini models
-- `@memberjunction/ai-groq` - Groq's optimized inference
-- `@memberjunction/ai-bettybot` - BettyBot AI
+- [`@memberjunction/ai-openai`](../Providers/OpenAI/readme.md) - OpenAI (GPT models)
+- [`@memberjunction/ai-anthropic`](../Providers/Anthropic/readme.md) - Anthropic (Claude models)
+- [`@memberjunction/ai-mistral`](../Providers/Mistral/readme.md) - Mistral AI
+- [`@memberjunction/ai-gemini`](../Providers/Gemini/readme.md) - Google's Gemini models
+- [`@memberjunction/ai-groq`](../Providers/Groq/readme.md) - Groq's optimized inference(https://www.groq.com)
+- [`@memberjunction/ai-bettybot`](../Providers/BettyBot/readme.md) - Betty AI(https://www.meetbetty.ai)
+- [`@memberjunction/ai-azure`](../Providers/Azure/readme.md) - Azure OpenAI
+- [`@memberjunction/ai-cerebras`](../Providers/Cerebras/readme.md) - Cerebras models
+- [`@memberjunction/ai-elevenlabs`](../Providers/ElevenLabs/readme.md) - ElevenLabs audio models
+- [`@memberjunction/ai-heygen`](../Providers/HeyGen/readme.md) - HeyGen video models
+
+Note: Each provider implements the features they support. See individual provider documentation for specific capabilities.
 
 ## Implementation Details
 
@@ -325,8 +309,6 @@ This architecture allows for a clean separation between common streaming logic a
 
 - `@memberjunction/global` - MemberJunction global utilities including class factory
 - `rxjs` - Reactive extensions for JavaScript
-- `typeorm` - ORM for database operations
 
 ## License
-
-ISC
+See the [repository root](../../../LICENSE) for license information.
