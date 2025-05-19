@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 2.40.0
+
+### Patch Changes
+
+- Updated dependencies [b6ce661]
+  - @memberjunction/ai@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

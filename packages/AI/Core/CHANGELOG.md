@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai
 
+## 2.40.0
+
+### Patch Changes
+
+- b6ce661: Proposed implementation for handling more complex `content` types in BaseLLM
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Minor Changes

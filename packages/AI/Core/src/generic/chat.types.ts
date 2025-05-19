@@ -56,7 +56,7 @@ export type ChatMessage = {
  */
 export type ChatCompletionMessage = {
     /**
-     * Role of the message in the conversation. For compleations, this is always 'assistant'.
+     * Role of the message in the conversation. For completions, this is always 'assistant'.
      */
     role: 'assistant';
 
