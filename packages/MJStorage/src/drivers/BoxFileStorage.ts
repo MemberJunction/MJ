@@ -7,6 +7,17 @@ import {
   StorageListResult, 
   StorageObjectMetadata 
 } from '../generic/FileStorageBase';
+import BoxSDK from 'box-node-sdk';
+import * as https from 'https';
+
+// Define types for Box items
+interface BoxItem {
+  id: string;
+  type: string;
+  name: string;
+  size?: number;
+  modified_at?: string;
+}
 
 /**
  * FileStorageBase implementation for Box.com cloud storage
@@ -108,6 +119,11 @@ export class BoxFileStorage extends FileStorageBase {
   private _enterpriseId: string;
 
   /**
+   * Box Client
+   */
+  private _client;
+
+  /**
    * Creates a new BoxFileStorage instance
    * 
    * This constructor reads the required Box authentication configuration
@@ -153,6 +169,14 @@ export class BoxFileStorage extends FileStorageBase {
     if (!this._accessToken && this._clientId && this._clientSecret && this._enterpriseId) {
       await this._setAccessToken();
     }
+    await this._setClient();
+  }
+
+  private async _setClient(): Promise<void> {
+      this._client = new BoxSDK({
+        clientId: this._clientId,
+        clientSecret: this._clientSecret
+      }).getBasicClient(this._accessToken);
   }
 
   /**
@@ -193,6 +217,16 @@ export class BoxFileStorage extends FileStorageBase {
       console.error('Error getting Box access token', error);
       throw new Error('Failed to authenticate with Box: ' + error.message);
     }
+  }
+
+  public async AccessToken(): Promise<string> {
+    await this._ensureValidToken();
+    return this._accessToken;
+  }
+
+  public async BoxClient() {
+    await this._ensureValidToken();
+    return this._client;
   }
 
   
@@ -236,6 +270,8 @@ export class BoxFileStorage extends FileStorageBase {
         this._accessToken = data.access_token;
         this._refreshToken = data.refresh_token || this._refreshToken;
         this._tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000; // Subtract 1 minute for safety
+
+        await this._setClient();
         
         return this._accessToken;
       } catch (error) {
@@ -372,35 +408,64 @@ export class BoxFileStorage extends FileStorageBase {
    * @throws Error if the item does not exist
    */
   private async _getIdFromPath(path: string): Promise<string> {
-    const parsedPath = this._parsePath(path);
-    
-    // If we already have the ID, return it
-    if (parsedPath.id) {
-      return parsedPath.id;
+    try {
+      console.log(`_getIdFromPath: ${path}`);
+      
+      // Parse the path
+      const parsedPath = this._parsePath(path);
+      console.log(`Parsed path: parent=${parsedPath.parent}, name=${parsedPath.name}`);
+      
+      // If the id is already in the path, return it
+      if (parsedPath.id) {
+        return parsedPath.id;
+      }
+      
+      // If it's root, return root folder id
+      if (!parsedPath.name) {
+        return this._rootFolderId;
+      }
+      
+      // First, find the parent folder ID
+      let parentFolderId = this._rootFolderId;
+      if (parsedPath.parent) {
+        parentFolderId = await this._findFolderIdByPath(parsedPath.parent);
+      }
+      
+      // Search for the item with pagination support
+      let offset = 0;
+      let hasMoreItems = true;
+      const LIMIT = 1000;
+      
+      while (hasMoreItems) {
+        console.log(`Fetching items from offset ${offset} (limit ${LIMIT})`);
+        const items = await this._client.folders.getItems(parentFolderId, {
+          fields: 'name,type,id',
+          limit: LIMIT,
+          offset: offset
+        });
+        
+        // Look for the item by name
+        const item = items.entries.find((i: BoxItem) => i.name === parsedPath.name);
+        
+        if (item) {
+          console.log(`Found item "${parsedPath.name}" with ID: ${item.id}`);
+          return item.id;
+        }
+        
+        // Update pagination variables
+        offset += items.entries.length;
+        
+        // Check if we've processed all items
+        hasMoreItems = items.entries.length === LIMIT && offset < items.total_count;
+      }
+      
+      // If we get here, the item was not found
+      console.log(`Item not found: ${parsedPath.name}`);
+      return null;
+    } catch (error) {
+      console.error('Error in _getIdFromPath', { path, error });
+      return null;
     }
-    
-    // If it's the root, return the root folder ID
-    if (!parsedPath.name) {
-      return this._rootFolderId;
-    }
-    
-    // Get the parent folder ID
-    let parentId = this._rootFolderId;
-    if (parsedPath.parent) {
-      parentId = await this._getIdFromPath(parsedPath.parent);
-    }
-    
-    // Search for the item in the parent folder
-    const result = await this._apiRequest(`/folders/${parentId}/items`, 'GET', null, {
-      'fields': 'id,name,type'
-    });
-    
-    const item = result.entries.find(entry => entry.name === parsedPath.name);
-    if (!item) {
-      throw new Error(`Item not found: ${path}`);
-    }
-    
-    return item.id;
   }
   
   /**
@@ -798,45 +863,131 @@ export class BoxFileStorage extends FileStorageBase {
    */
   public async CreateDirectory(directoryPath: string): Promise<boolean> {
     try {
-      // Remove trailing slash if present
-      const normalizedPath = directoryPath.endsWith('/') 
-        ? directoryPath.substring(0, directoryPath.length - 1) 
-        : directoryPath;
-      
-      // Check if directory already exists
-      try {
-        await this._getIdFromPath(normalizedPath);
-        return true; // Directory already exists
-      } catch (error) {
-        // Directory doesn't exist, create it
+      // Root directory always exists
+      if (!directoryPath || directoryPath === '/' || directoryPath === '') {
+        return true;
       }
-      
-      // Get parent folder info
-      const parsedPath = this._parsePath(normalizedPath);
-      let parentId = this._rootFolderId;
-      
-      if (parsedPath.parent) {
+
+      // Remove trailing slash if present
+      const normalizedPath = directoryPath.endsWith('/')
+        ? directoryPath.substring(0, directoryPath.length - 1)
+        : directoryPath;
+
+      // First check if directory already exists
+      try {
+        if (await this.DirectoryExists(normalizedPath)) {
+          console.log(`Directory already exists: ${normalizedPath}`);
+          return true;
+        }
+      } catch (error) {
+        // Ignore error, we'll try to create it anyway
+        console.log(`Error checking if directory exists: ${error.message}`);
+      }
+      // Parse the path to get parent folder and name
+      const lastSlashIndex = normalizedPath.lastIndexOf('/');
+      const parentPath = lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
+      const folderName = lastSlashIndex > 0 ? normalizedPath.substring(lastSlashIndex + 1) : normalizedPath;
+
+      console.log(`Creating folder "${folderName}" in parent path "${parentPath}"`);
+
+      // Make sure parent folder exists
+      let parentFolderId = '0'; // Default to root
+      if (parentPath) {
         try {
-          parentId = await this._getIdFromPath(parsedPath.parent);
+          // Recursive call to ensure parent directory exists
+          const parentDirExists = await this.CreateDirectory(parentPath);
+          if (!parentDirExists) {
+            console.log(`Failed to create parent directory: ${parentPath}`);
+            return false;
+          }
+
+          // Get the parent folder ID
+          parentFolderId = await this._findFolderIdByPath(parentPath);
+          console.log(`Using parent folder ID: ${parentFolderId}`);
         } catch (error) {
-          // Create parent directory recursively
-          await this.CreateDirectory(parsedPath.parent);
-          parentId = await this._getIdFromPath(parsedPath.parent);
+          console.error(`Error ensuring parent folder exists: ${error.message}`);
+          return false;
         }
       }
-      
+
       // Create the folder
-      await this._apiRequest('/folders', 'POST', {
-        name: parsedPath.name,
-        parent: { id: parentId }
-      });
-      
-      return true;
+      try {
+        console.log(`Creating folder "${folderName}" in parent folder ID: ${parentFolderId}`);
+        await this._client.folders.create(parentFolderId, folderName);
+        console.log(`✅ Folder created successfully: ${normalizedPath}`);
+        return true;
+      } catch (error) {
+        // Handle conflicts - if the folder already exists, that's a success
+        if (error.statusCode === 409 ||
+            (error.message && error.message.includes('item_name_in_use'))) {
+          console.log(`Folder already exists (conflict): ${normalizedPath}`);
+          return true;
+        }
+
+        console.error(`Error creating folder: ${error.message || JSON.stringify(error)}`);
+        return false;
+      }
     } catch (error) {
       console.error('Error creating directory', { directoryPath, error });
       return false;
     }
-  }
+  };
+
+  public async GetFileRepresentations(fileId: string, repHints: string = 'png?dimensions=2048x2048'): Promise<JSON> {
+    try {
+      await this._setAccessToken()
+      
+      // Set up the request options with X-Rep-Hints header
+      const options = {
+        hostname: 'api.box.com',
+        port: 443,
+        path: `/2.0/files/${fileId}?fields=representations`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this._accessToken}`,
+          'Content-Type': 'application/json',
+          'X-Rep-Hints': repHints
+        }
+      };
+      
+      // Make the request using our existing makeRequest function
+      const responseData = await this._makeRequest(options);
+      return JSON.parse(responseData);
+    } catch (error) {
+      console.error('Error getting file representations:', error);
+      throw error;
+    }
+  };
+
+    /**
+ * Helper function for making HTTP requests
+ */
+  private async _makeRequest(options: https.RequestOptions, data?: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let responseData = '';
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(responseData);
+        } else {
+          reject(new Error(`Request failed with status code ${res.statusCode}: ${responseData}`));
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    if (data) {
+      req.write(data);
+    }
+    req.end();
+  });
+}
   
   /**
    * Deletes a directory from Box storage
@@ -999,19 +1150,79 @@ export class BoxFileStorage extends FileStorageBase {
    */
   public async GetObject(objectName: string): Promise<Buffer> {
     try {
-      const fileId = await this._getIdFromPath(objectName);
-      
-      // Download the file
-      const response = await this._apiRequest(`/files/${fileId}/content`, 'GET');
-      
-      // Convert response to buffer
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+
+      // Extract directory path and filename
+      const lastSlashIndex = objectName.lastIndexOf('/');
+      if (lastSlashIndex === -1) {
+        throw new Error('Invalid path format, expected directory/filename');
+      }
+
+      const directoryPath = objectName.substring(0, lastSlashIndex);
+      const fileName = objectName.substring(lastSlashIndex + 1);
+
+      // Find folder ID for the directory using the approach from check_file.ts
+      try {
+        const folderId = await this._findFolderIdByPath(directoryPath);
+        console.log(`Found folder ID: ${folderId}`);
+
+        // Use pagination to handle large folders
+        let file = null;
+        let offset = 0;
+        let hasMoreItems = true;
+        const LIMIT = 1000;
+        
+        while (hasMoreItems && !file) {
+          console.log(`Fetching files from offset ${offset} (limit ${LIMIT})`);
+          
+          const folderItems = await this._client.folders.getItems(folderId, {
+            fields: 'name,type,size,created_at,modified_at',
+            limit: LIMIT,
+            offset: offset
+          });
+
+          // Look for the file
+          file = folderItems.entries.find((item: BoxItem) =>
+            item.type === 'file' && item.name === fileName
+          );
+          
+          // If file is found, break out of pagination loop
+          if (file) {
+            break;
+          }
+          
+          // Update pagination variables
+          offset += folderItems.entries.length;
+          
+          // Check if we've processed all items
+          hasMoreItems = folderItems.entries.length === LIMIT && offset < folderItems.total_count;
+        }
+
+        if (file) {
+          console.log(`✅ File found: ${file.name} (${file.id})`);
+
+          // Use the file ID to get the content
+          const stream = await this._client.files.getReadStream(file.id);
+
+          // Convert stream to buffer
+          return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+            stream.on('error', reject);
+            stream.on('end', () => resolve(Buffer.concat(chunks)));
+          });
+        } else {
+          console.log(`❌ File not found in directory`);
+          throw new Error(`File not found: ${fileName}`);
+        }
+      } catch (error) {
+        console.log(`❌ Error finding file: ${error}`);
+        throw error;
+      }
     } catch (error) {
       console.error('Error getting object', { objectName, error });
       throw new Error(`Failed to get object: ${objectName}`);
     }
-  }
+  };
   
   /**
    * Uploads a file to Box storage
@@ -1063,108 +1274,73 @@ export class BoxFileStorage extends FileStorageBase {
     metadata?: Record<string, string>
   ): Promise<boolean> {
     try {
+      console.log(`PutObject: ${objectName}`);
+
       // Get the parent folder ID and file name
       const parsedPath = this._parsePath(objectName);
+
       let parentId = this._rootFolderId;
-      
       if (parsedPath.parent) {
         try {
-          parentId = await this._getIdFromPath(parsedPath.parent);
+          // First ensure the parent directory exists (create it if needed)
+          const parentDirExists = await this.CreateDirectory(parsedPath.parent);
+          if (!parentDirExists) {
+            console.error(`Failed to ensure parent directory exists: ${parsedPath.parent}`);
+            return false;
+          }
+
+          // Find folder ID using our improved path resolution from check_file.ts
+          parentId = await this._findFolderIdByPath(parsedPath.parent);
         } catch (error) {
-          // If parent folder doesn't exist, create it recursively
-          await this.CreateDirectory(parsedPath.parent);
-          parentId = await this._getIdFromPath(parsedPath.parent);
+          console.error(`Error resolving parent folder: ${error.message}`);
+          return false;
         }
       }
-      
+
       // Check if file already exists
-      let fileId = null;
-      try {
-        fileId = await this._getIdFromPath(objectName);
-      } catch (error) {
-        // File doesn't exist, will create new
+      const fileId = await this._getIdFromPath(objectName);
+      if (fileId) {
+        console.log(`File already exists with ID: ${fileId}`);
+      } else {
+        console.log(`File doesn't exist yet, will create new file: ${parsedPath.name}`);
       }
-      
-      // Use multipart upload for small files (<50MB)
-      if (data.length < 50 * 1024 * 1024) {
+
         const formData = new FormData();
-        
+
         // Add file metadata
         const fileMetadata = {
           name: parsedPath.name,
           parent: { id: parentId }
         };
-        
+
         formData.append('attributes', JSON.stringify(fileMetadata));
-        
+
         // Create a file blob with the correct content type
         const fileBlob = new Blob([data], { type: contentType || 'application/octet-stream' });
         formData.append('file', fileBlob, parsedPath.name);
-        
+
         // Upload the file
         const endpoint = fileId ? `/files/${fileId}/content` : '/files/content';
-        await this._apiRequest(endpoint, 'POST', formData, {}, this._uploadApiUrl);
-      } else {
-        // Use chunked upload for larger files
-        // Create upload session
-        const session = await this._apiRequest('/files/upload_sessions', 'POST', {
-          folder_id: parentId,
-          file_name: parsedPath.name,
-          file_size: data.length
-        }, {}, this._uploadApiUrl);
-        
-        const sessionId = session.id;
-        const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks
-        let offset = 0;
-        const totalSize = data.length;
-        const parts = [];
-        
-        // Upload chunks
-        while (offset < totalSize) {
-          const chunkEnd = Math.min(offset + CHUNK_SIZE, totalSize);
-          const chunkSize = chunkEnd - offset;
-          const chunk = data.slice(offset, chunkEnd);
-          
-          const headers = {
-            'Content-Type': 'application/octet-stream',
-            'Digest': `sha=1234`, // Replace with actual SHA-1 digest
-            'Content-Range': `bytes ${offset}-${chunkEnd - 1}/${totalSize}`
-          };
-          
-          const uploadResponse = await this._apiRequest(
-            `/files/upload_sessions/${sessionId}`, 
-            'PUT', 
-            chunk, 
-            headers, 
-            this._uploadApiUrl
-          );
-          
-          parts.push({
-            part_id: uploadResponse.part.part_id,
-            offset,
-            size: chunkSize,
-            sha1: uploadResponse.part.sha1
-          });
-          
-          offset = chunkEnd;
+        console.log(`Uploading file using endpoint: ${endpoint}`);
+
+        try {
+          await this._apiRequest(endpoint, 'POST', formData, {}, this._uploadApiUrl);
+          console.log(`✅ File uploaded successfully: ${objectName}`);
+          return true;
+        } catch (uploadError) {
+          console.error(`Error uploading file: ${uploadError.message}`);
+          if (uploadError.message.includes('item_name_in_use')) {
+            console.log(`File already exists (conflict): ${objectName}`);
+            return false;
+          }
+          return false;
         }
-        
-        // Commit the upload session
-        await this._apiRequest(
-          `/files/upload_sessions/${sessionId}/commit`, 
-          'POST', 
-          { parts }, 
-          { 'Content-Type': 'application/json' }, 
-          this._uploadApiUrl
-        );
-      }
-      
-      return true;
     } catch (error) {
       console.error('Error putting object', { objectName, error });
       return false;
     }
-  }
+  };
+
   
   /**
    * Copies a file from one location to another
@@ -1293,17 +1469,107 @@ export class BoxFileStorage extends FileStorageBase {
    */
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
+      // Root directory always exists
+      if (!directoryPath || directoryPath === '/' || directoryPath === '') {
+        return true;
+      }
+
       // Remove trailing slash if present
       const normalizedPath = directoryPath.endsWith('/') 
         ? directoryPath.substring(0, directoryPath.length - 1) 
         : directoryPath;
-      
-      const itemId = await this._getIdFromPath(normalizedPath);
-      const itemInfo = await this._apiRequest(`/folders/${itemId}`);
-      
-      return itemInfo.type === 'folder';
+
+        try {
+          const folderId = await this._findFolderIdByPath(normalizedPath);
+          console.log(`✅ Directory exists with ID: ${folderId}`);
+  
+          // Make a direct call to verify it's a folder
+          try {
+            await this._client.folders.get(folderId);
+            return true;
+          } catch (error) {
+            // If we can't get the folder info, it's not a valid folder
+            console.log(`Item with ID ${folderId} exists but is not a folder`);
+            return false;
+          }
+        } catch (error) {
+          console.log(`Directory does not exist: ${normalizedPath}`);
+          return false;
+        }
+      } catch (error) {
+        console.error('Error checking directory exists', { directoryPath, error });
+        return false;
+      }
+  }
+
+  private async _findFolderIdByPath(path: string): Promise<string> {
+    try {
+      // Split the path into segments
+      const pathSegments = path.split('/').filter(segment => segment.length > 0);
+  
+      // Handle "All Files" special case - it's not an actual folder name in the API
+      if (pathSegments.length > 0 && pathSegments[0] === 'All Files') {
+        pathSegments.shift(); // Remove "All Files" from the path
+      }
+  
+      let currentFolderId = '0'; // Start from root
+  
+      if (pathSegments.length === 0) {
+        return currentFolderId; // Return root folder ID if path is empty
+      }
+  
+      console.log('Traversing path segments:', pathSegments);
+  
+      // Traverse the path
+      for (const segment of pathSegments) {
+        console.log(`Looking for folder: "${segment}" in parent folder: ${currentFolderId}`);
+  
+        // Use pagination to handle large folders
+        let folder = null;
+        let offset = 0;
+        let hasMoreItems = true;
+        const LIMIT = 1000;
+        
+        while (hasMoreItems && !folder) {
+          console.log(`Fetching folders from offset ${offset} (limit ${LIMIT})`);
+          
+          const items = await this._client.folders.getItems(currentFolderId, {
+            fields: 'name,type',
+            limit: LIMIT,
+            offset: offset
+          });
+  
+          // Filter to only folders
+          const folders = items.entries.filter((item: BoxItem) => item.type === 'folder');
+          console.log(`Found ${folders.length} folders in batch at offset ${offset}`);
+  
+          // Look for the target folder
+          folder = folders.find((item: BoxItem) => item.name === segment);
+          
+          // If folder is found, break out of pagination loop
+          if (folder) {
+            break;
+          }
+          
+          // Update pagination variables
+          offset += items.entries.length;
+          
+          // Check if we've processed all items
+          hasMoreItems = items.entries.length === LIMIT && offset < items.total_count;
+        }
+  
+        if (!folder) {
+          throw new Error(`Folder not found: ${segment}`);
+        }
+  
+        console.log(`Found folder "${segment}" with ID: ${folder.id}`);
+        currentFolderId = folder.id;
+      }
+  
+      return currentFolderId;
     } catch (error) {
-      return false;
+      console.error('Error finding folder by path:', error);
+      throw error;
     }
   }
 }
