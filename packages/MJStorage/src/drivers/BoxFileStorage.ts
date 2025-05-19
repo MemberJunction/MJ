@@ -172,11 +172,21 @@ export class BoxFileStorage extends FileStorageBase {
     await this._setClient();
   }
 
+  /**
+   * Initializes the Box client instance
+   * 
+   * This method creates a new Box SDK client using the current credentials
+   * and access token, making it ready for API operations.
+   * 
+   * @private
+   * @returns A Promise that resolves when the client is initialized
+   */
   private async _setClient(): Promise<void> {
-      this._client = new BoxSDK({
-        clientId: this._clientId,
+      const sdk = await new BoxSDK({
+        clientID: this._clientId,
         clientSecret: this._clientSecret
-      }).getBasicClient(this._accessToken);
+      });
+      this._client = await sdk.getBasicClient(this._accessToken);
   }
 
   /**
@@ -219,11 +229,44 @@ export class BoxFileStorage extends FileStorageBase {
     }
   }
 
+  /**
+   * Returns the current Box API access token
+   * 
+   * This method ensures a valid token is available before returning it,
+   * refreshing or generating a new token if necessary.
+   * 
+   * @returns A Promise that resolves to a valid access token string
+   * 
+   * @example
+   * ```typescript
+   * // Get a valid Box access token
+   * const token = await storage.AccessToken();
+   * console.log(`Using access token: ${token}`);
+   * ```
+   */
   public async AccessToken(): Promise<string> {
     await this._ensureValidToken();
     return this._accessToken;
   }
 
+  /**
+   * Returns the current Box client instance
+   * 
+   * This method ensures a valid token is available before returning the client,
+   * refreshing or generating a new token if necessary.
+   * 
+   * @returns A Promise that resolves to the authenticated Box client instance
+   * 
+   * @example
+   * ```typescript
+   * // Get the Box client for direct API access
+   * const client = await storage.BoxClient();
+   * 
+   * // Use the client for Box SDK operations
+   * const user = await client.users.get('me');
+   * console.log(`Current user: ${user.name}`);
+   * ```
+   */
   public async BoxClient() {
     await this._ensureValidToken();
     return this._client;
@@ -284,6 +327,7 @@ export class BoxFileStorage extends FileStorageBase {
     if (this._clientId && this._clientSecret && this._enterpriseId) {
       try {
         await this._setAccessToken();
+        await this._setClient();
         return this._accessToken;
       } catch (error) {
         console.error('Error getting new access token via client credentials', error);
@@ -409,11 +453,8 @@ export class BoxFileStorage extends FileStorageBase {
    */
   private async _getIdFromPath(path: string): Promise<string> {
     try {
-      console.log(`_getIdFromPath: ${path}`);
-      
       // Parse the path
       const parsedPath = this._parsePath(path);
-      console.log(`Parsed path: parent=${parsedPath.parent}, name=${parsedPath.name}`);
       
       // If the id is already in the path, return it
       if (parsedPath.id) {
@@ -437,7 +478,7 @@ export class BoxFileStorage extends FileStorageBase {
       const LIMIT = 1000;
       
       while (hasMoreItems) {
-        console.log(`Fetching items from offset ${offset} (limit ${LIMIT})`);
+        await this._ensureValidToken();
         const items = await this._client.folders.getItems(parentFolderId, {
           fields: 'name,type,id',
           limit: LIMIT,
@@ -448,7 +489,6 @@ export class BoxFileStorage extends FileStorageBase {
         const item = items.entries.find((i: BoxItem) => i.name === parsedPath.name);
         
         if (item) {
-          console.log(`Found item "${parsedPath.name}" with ID: ${item.id}`);
           return item.id;
         }
         
@@ -876,19 +916,15 @@ export class BoxFileStorage extends FileStorageBase {
       // First check if directory already exists
       try {
         if (await this.DirectoryExists(normalizedPath)) {
-          console.log(`Directory already exists: ${normalizedPath}`);
           return true;
         }
       } catch (error) {
         // Ignore error, we'll try to create it anyway
-        console.log(`Error checking if directory exists: ${error.message}`);
       }
       // Parse the path to get parent folder and name
       const lastSlashIndex = normalizedPath.lastIndexOf('/');
       const parentPath = lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
       const folderName = lastSlashIndex > 0 ? normalizedPath.substring(lastSlashIndex + 1) : normalizedPath;
-
-      console.log(`Creating folder "${folderName}" in parent path "${parentPath}"`);
 
       // Make sure parent folder exists
       let parentFolderId = '0'; // Default to root
@@ -903,7 +939,6 @@ export class BoxFileStorage extends FileStorageBase {
 
           // Get the parent folder ID
           parentFolderId = await this._findFolderIdByPath(parentPath);
-          console.log(`Using parent folder ID: ${parentFolderId}`);
         } catch (error) {
           console.error(`Error ensuring parent folder exists: ${error.message}`);
           return false;
@@ -912,7 +947,7 @@ export class BoxFileStorage extends FileStorageBase {
 
       // Create the folder
       try {
-        console.log(`Creating folder "${folderName}" in parent folder ID: ${parentFolderId}`);
+        await this._ensureValidToken();
         await this._client.folders.create(parentFolderId, folderName);
         console.log(`✅ Folder created successfully: ${normalizedPath}`);
         return true;
@@ -933,10 +968,42 @@ export class BoxFileStorage extends FileStorageBase {
     }
   };
 
+  /**
+   * Gets file representation information for a Box file
+   * 
+   * This method retrieves information about available representations
+   * (such as thumbnails, previews, or other formats) for a specific file.
+   * 
+   * @param fileId - The Box file ID to get representations for
+   * @param repHints - The representation hints string (format and options)
+   * @returns A Promise that resolves to a JSON object containing representations data
+   * @throws Error if the request fails
+   * 
+   * @remarks
+   * - Requires a valid file ID (not a path)
+   * - The repHints parameter controls what type of representations are returned
+   * - Common representation types include thumbnails, preview images, and text extractions
+   * 
+   * @example
+   * ```typescript
+   * try {
+   *   // Get a high-resolution PNG representation of a file
+   *   const fileId = '12345';
+   *   const representations = await storage.GetFileRepresentations(
+   *     fileId,
+   *     'png?dimensions=2048x2048'
+   *   );
+   *   
+   *   // Process the representation information
+   *   console.log('Available representations:', representations);
+   * } catch (error) {
+   *   console.error('Error getting representations:', error.message);
+   * }
+   * ```
+   */
   public async GetFileRepresentations(fileId: string, repHints: string = 'png?dimensions=2048x2048'): Promise<JSON> {
     try {
-      await this._setAccessToken()
-      
+      await this._ensureValidToken();
       // Set up the request options with X-Rep-Hints header
       const options = {
         hostname: 'api.box.com',
@@ -959,9 +1026,18 @@ export class BoxFileStorage extends FileStorageBase {
     }
   };
 
-    /**
- * Helper function for making HTTP requests
- */
+  /**
+   * Helper function for making HTTP requests
+   * 
+   * This method provides a Promise-based wrapper around Node.js https requests,
+   * simplifying the process of making API calls to the Box API.
+   * 
+   * @private
+   * @param options - The HTTPS request options (URL, method, headers, etc.)
+   * @param data - Optional string data to send with the request
+   * @returns A Promise that resolves to the response data as a string
+   * @throws Error if the request fails or returns a non-2xx status code
+   */
   private async _makeRequest(options: https.RequestOptions, data?: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const req = https.request(options, (res) => {
@@ -1163,7 +1239,6 @@ export class BoxFileStorage extends FileStorageBase {
       // Find folder ID for the directory using the approach from check_file.ts
       try {
         const folderId = await this._findFolderIdByPath(directoryPath);
-        console.log(`Found folder ID: ${folderId}`);
 
         // Use pagination to handle large folders
         let file = null;
@@ -1172,8 +1247,7 @@ export class BoxFileStorage extends FileStorageBase {
         const LIMIT = 1000;
         
         while (hasMoreItems && !file) {
-          console.log(`Fetching files from offset ${offset} (limit ${LIMIT})`);
-          
+          await this._ensureValidToken();
           const folderItems = await this._client.folders.getItems(folderId, {
             fields: 'name,type,size,created_at,modified_at',
             limit: LIMIT,
@@ -1201,6 +1275,7 @@ export class BoxFileStorage extends FileStorageBase {
           console.log(`✅ File found: ${file.name} (${file.id})`);
 
           // Use the file ID to get the content
+          await this._ensureValidToken();
           const stream = await this._client.files.getReadStream(file.id);
 
           // Convert stream to buffer
@@ -1481,10 +1556,11 @@ export class BoxFileStorage extends FileStorageBase {
 
         try {
           const folderId = await this._findFolderIdByPath(normalizedPath);
-          console.log(`✅ Directory exists with ID: ${folderId}`);
+          console.log(`✅ Directory ${normalizedPath} exists with ID: ${folderId}`);
   
           // Make a direct call to verify it's a folder
           try {
+            await this._ensureValidToken();
             await this._client.folders.get(folderId);
             return true;
           } catch (error) {
@@ -1493,7 +1569,7 @@ export class BoxFileStorage extends FileStorageBase {
             return false;
           }
         } catch (error) {
-          console.log(`Directory does not exist: ${normalizedPath}`);
+          console.log(`❌ Directory ${normalizedPath} does not exist`);
           return false;
         }
       } catch (error) {
@@ -1502,6 +1578,18 @@ export class BoxFileStorage extends FileStorageBase {
       }
   }
 
+  /**
+   * Finds a Box folder ID by traversing a path string
+   * 
+   * This helper method navigates through the Box folder hierarchy,
+   * following each segment of the path to find the ID of the target folder.
+   * It uses pagination to handle large folders efficiently.
+   * 
+   * @private
+   * @param path - The path string to resolve (e.g., 'documents/reports/2023')
+   * @returns A Promise that resolves to the Box folder ID
+   * @throws Error if any segment of the path cannot be found
+   */
   private async _findFolderIdByPath(path: string): Promise<string> {
     try {
       // Split the path into segments
@@ -1518,12 +1606,8 @@ export class BoxFileStorage extends FileStorageBase {
         return currentFolderId; // Return root folder ID if path is empty
       }
   
-      console.log('Traversing path segments:', pathSegments);
-  
       // Traverse the path
       for (const segment of pathSegments) {
-        console.log(`Looking for folder: "${segment}" in parent folder: ${currentFolderId}`);
-  
         // Use pagination to handle large folders
         let folder = null;
         let offset = 0;
@@ -1531,8 +1615,7 @@ export class BoxFileStorage extends FileStorageBase {
         const LIMIT = 1000;
         
         while (hasMoreItems && !folder) {
-          console.log(`Fetching folders from offset ${offset} (limit ${LIMIT})`);
-          
+          await this._ensureValidToken();
           const items = await this._client.folders.getItems(currentFolderId, {
             fields: 'name,type',
             limit: LIMIT,
@@ -1541,7 +1624,6 @@ export class BoxFileStorage extends FileStorageBase {
   
           // Filter to only folders
           const folders = items.entries.filter((item: BoxItem) => item.type === 'folder');
-          console.log(`Found ${folders.length} folders in batch at offset ${offset}`);
   
           // Look for the target folder
           folder = folders.find((item: BoxItem) => item.name === segment);
@@ -1562,7 +1644,6 @@ export class BoxFileStorage extends FileStorageBase {
           throw new Error(`Folder not found: ${segment}`);
         }
   
-        console.log(`Found folder "${segment}" with ID: ${folder.id}`);
         currentFolderId = folder.id;
       }
   
