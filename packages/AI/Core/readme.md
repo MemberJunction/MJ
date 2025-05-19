@@ -49,6 +49,10 @@ For maximum flexibility, use the class factory approach to select the provider a
 import { BaseLLM, ChatParams } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
+// Required to stop tree-shaking of the MistralLLM - since there's no static code path to this class when using Class Factory pattern, you need this to prevent some bundlers from tree-shaking optimization on this class.
+import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+LoadMistralLLM(); 
+
 // Get an implementation of BaseLLM by provider name
 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
   BaseLLM, 
@@ -77,6 +81,10 @@ import { BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import dotenv from 'dotenv';
 
+// Required to stop tree-shaking of the OpenAILLM - since there's no static code path to this class when using Class Factory pattern, you need this to prevent some bundlers from tree-shaking optimization on this class.
+import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+LoadOpenAILLM(); 
+
 dotenv.config();
 
 const providerName = process.env.AI_PROVIDER || 'OpenAILLM';
@@ -96,6 +104,7 @@ When necessary, you can directly use a specific AI provider:
 ```typescript
 import { OpenAILLM } from '@memberjunction/ai-openai';
 
+// Note with direct use of the OpenAILLM class no need for the LoadOpenAILLM call to prevent tree shaking since there is a static code path to the class
 // Create an instance with your API key
 const llm = new OpenAILLM('your-openai-api-key');
 
@@ -283,7 +292,7 @@ The following provider packages implement the MemberJunction AI abstractions:
 - [`@memberjunction/ai-gemini`](../Providers/Gemini/readme.md) - Google's Gemini models
 - [`@memberjunction/ai-groq`](../Providers/Groq/readme.md) - Groq's optimized inference(https://www.groq.com)
 - [`@memberjunction/ai-bettybot`](../Providers/BettyBot/readme.md) - Betty AI(https://www.meetbetty.ai)
-- [`@memberjunction/ai-azure`](../Providers/Azure/readme.md) - Azure OpenAI
+- [`@memberjunction/ai-azure`](../Providers/Azure/readme.md) - Azure AI Foundry with support for OpenAI, Mistral, Phi, more
 - [`@memberjunction/ai-cerebras`](../Providers/Cerebras/readme.md) - Cerebras models
 - [`@memberjunction/ai-elevenlabs`](../Providers/ElevenLabs/readme.md) - ElevenLabs audio models
 - [`@memberjunction/ai-heygen`](../Providers/HeyGen/readme.md) - HeyGen video models
