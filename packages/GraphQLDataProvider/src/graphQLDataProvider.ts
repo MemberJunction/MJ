@@ -154,6 +154,49 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Retrieves the stored session ID from the LocalStorageProvider if available.
+     * If no session ID is found, returns null.
+     * The session ID is stored using the same storage mechanism as other persistent data
+     * with a key specific to the current URL to ensure uniqueness across different 
+     * server connections.
+     * 
+     * @returns The stored session ID or null if not found
+     */
+    public async StoragedSessionID(): Promise<string> {
+        try {
+            const ls = this.LocalStorageProvider;
+            if (ls) {
+                const key = this.LocalStoragePrefix + "sessionId";
+                const storedSession = await ls.getItem(key);
+                return storedSession;
+            }
+            return null;
+        } catch (e) {
+            // If any error occurs, return null
+            return null;
+        }
+    }
+
+    /**
+     * Stores the session ID using the configured LocalStorageProvider for persistence.
+     * Uses the same URL-specific key pattern as other storage methods to ensure
+     * proper isolation between different server connections.
+     * 
+     * @param sessionId The session ID to store
+     */
+    private async StoreSessionID(sessionId: string): Promise<void> {
+        try {
+            const ls = this.LocalStorageProvider;
+            if (ls) {
+                const key = this.LocalStoragePrefix + "sessionId";
+                await ls.setItem(key, sessionId);
+            }
+        } catch (e) {
+            // Silently fail if storage is not available
+        }
+    }
+
+    /**
      * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
      * will affect all callers to the GraphQLDataProvider including via wrappers like the Metadata class. If separateConnection is true, then the instance variables are set
      * and only this instance of the GraphQLDataProvider will be affected by the Config() call.
@@ -163,23 +206,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param separateConnection 
      * @returns 
      */
-    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
+
+    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            const newUUID = this.GenerateUUID();
+            // First try to get the stored session ID asynchronously
+            const oldUUID = await this.StoragedSessionID();
+            const UUID = forceRefreshSessionId || !oldUUID ? this.GenerateUUID() : oldUUID;
+            
             if (separateConnection) {
-                this._sessionId = newUUID;
+                this._sessionId = UUID;
                 this._configData = configData;
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey);
+                // Store the session ID for this connection
+                await this.StoreSessionID(this._sessionId);
             }
             else {
                 if (GraphQLDataProvider.Instance._sessionId === undefined)
-                    GraphQLDataProvider.Instance._sessionId = newUUID;
+                    GraphQLDataProvider.Instance._sessionId = UUID;
     
                 GraphQLDataProvider.Instance._configData = configData;
     
-                // now create the new client, if it isn't alreayd created
+                // now create the new client, if it isn't already created
                 if (!GraphQLDataProvider.Instance._client)
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);    
+                
+                // Store the session ID for the global instance
+                await GraphQLDataProvider.Instance.StoreSessionID(GraphQLDataProvider.Instance._sessionId);
             }
             return super.Config(configData); // now parent class can do it's config
         }
