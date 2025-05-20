@@ -431,6 +431,92 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
     return null;
   }
+  
+  /**
+   * Checks for conversations that are in 'Processing' status and updates the client-side state
+   */
+  protected async checkForProcessingConversations() {
+    try {
+      if (this.Conversations && this.Conversations.length > 0) {
+        
+        // Check each conversation's status
+        for (const convo of this.Conversations) {
+          if (convo.Status === 'Processing') {
+            // This conversation is currently being processed
+            this._conversationsInProgress[convo.ID] = true;
+            this._conversationsToReload[convo.ID] = true;
+            
+            // If this is the currently selected conversation, update the UI
+            if (this.SelectedConversation && this.SelectedConversation.ID === convo.ID) {
+              this.setProcessingStatus(convo.ID, true);
+              this.startRequestStatusPolling(convo);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      LogError(`Error checking for processing conversations: ${error}`);
+    }
+  }
+  
+  // Track the polling intervals so we can clear them when needed
+  private _requestStatusPollingIntervals: { [key: string]: any } = {};
+  
+  /**
+   * Starts polling for conversation status updates
+   * @param conversationId The ID of the conversation to poll for
+   */
+  protected startRequestStatusPolling(conversation: ConversationEntity) {
+    // Clear any existing polling for this conversation
+    this.stopRequestStatusPolling(conversation.ID);
+    
+    // Set up polling every 3 seconds
+    this._requestStatusPollingIntervals[conversation.ID] = setInterval(async () => {
+      await this.checkRequestStatus(conversation);
+    }, 3000);
+  }
+  
+  /**
+   * Stops polling for conversation status updates
+   * @param conversationId The ID of the conversation to stop polling for
+   */
+  protected stopRequestStatusPolling(conversationId: string) {
+    if (this._requestStatusPollingIntervals[conversationId]) {
+      clearInterval(this._requestStatusPollingIntervals[conversationId]);
+      delete this._requestStatusPollingIntervals[conversationId];
+    }
+  }
+  
+  /**
+   * Checks the status of a conversation request
+   * @param conversationId The ID of the conversation to check
+   */
+  protected async checkRequestStatus(conversation: ConversationEntity) {
+    try {
+      const loadResult = await conversation.Load(conversation.ID);
+
+      if (loadResult) {
+        if (conversation.Status === 'Available') {
+          // Conversation is no longer processing, stop polling and refresh the conversation
+          this.stopRequestStatusPolling(conversation.ID);
+          this._conversationsInProgress[conversation.ID] = false;
+          
+          // If this is the currently selected conversation, reload it to show the final result
+          if (this.SelectedConversation && this.SelectedConversation.ID === conversation.ID) {
+            this.setProcessingStatus(conversation.ID, false);
+            this._conversationsToReload[conversation.ID] = true;
+            
+            // Reload the conversation to get the new messages
+            const convo = this.SelectedConversation;
+            this.SelectedConversation = undefined; // Clear it to force reload
+            await this.SelectConversation(convo);
+          }
+        }
+      }
+    } catch (error) {
+      LogError(`Error checking request status for conversation ${conversation.ID}: ${error}`);
+    }
+  }
 
   ngOnDestroy() {
     // Unsubscribe to prevent memory leaks
@@ -439,6 +525,19 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
     if (this._intersectionObserver) {
       this._intersectionObserver.disconnect();
+    }
+    
+    // Clear any active polling intervals
+    for (const conversationId in this._requestStatusPollingIntervals) {
+      this.stopRequestStatusPolling(conversationId);
+    }
+    
+    // Unsubscribe from MJ event listeners
+    if (this._mjGlobalEventSub) {
+      this._mjGlobalEventSub.unsubscribe();
+    }
+    if (this._providerPushStatusSub) {
+      this._providerPushStatusSub.unsubscribe();
     }
   }
 
@@ -654,6 +753,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       // select the first conversation since no param was provided and we have > 0 convos
       await this.SelectConversation(this.Conversations[0]);
     }
+
+    // Update UI for conversations that are processing
+    await this.checkForProcessingConversations();
+
     this._isLoading = false;
     this._numLoads++;
   }
@@ -891,6 +994,8 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public async SelectConversation(conversation: ConversationEntity) {
     if (this.IsSkipProcessing(conversation)) {
+      // If processing, start polling for status updates
+      this.startRequestStatusPolling(conversation);
       return; // already processing this conversation so don't go back and forth
     }
     

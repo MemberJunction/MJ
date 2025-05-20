@@ -63,7 +63,6 @@ import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
-import { Skip } from '@graphql-tools/utils';
 
 /**
  * Enumeration representing the different phases of a Skip response
@@ -1323,11 +1322,15 @@ cycle.`);
     @Ctx() { dataSource, userPayload }: AppContext,
     @PubSub() pubSub: PubSubEngine,
     @Arg('DataContextId', () => String, { nullable: true }) DataContextId?: string,
-    @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
+    @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean,
+    @Arg('StartTime', () => Date, { nullable: true }) StartTime?: Date
   ) {
     const md = new Metadata();
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
+
+    // Record the start time if not provided
+    const requestStartTime = StartTime || new Date();
 
     const { convoEntity, dataContextEntity, convoDetailEntity, dataContext } = await this.HandleSkipChatInitialObjectLoading(
       dataSource,
@@ -1338,6 +1341,13 @@ cycle.`);
       md,
       DataContextId
     );
+
+    // Set the conversation status to 'Processing' when a request is initiated
+    convoEntity.Status = 'Processing';
+    const convoSaveResult = await convoEntity.Save();
+    if (!convoSaveResult) {
+      LogError(`Error updating conversation status to 'Processing'`, undefined, convoEntity.LatestResult);
+    }
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -1363,6 +1373,7 @@ cycle.`);
       dataContext,
       dataContextEntity,
       conversationDetailCount,
+      requestStartTime
     );
   }
 
@@ -1843,6 +1854,8 @@ cycle.`);
       if (user) {
         convoEntity.UserID = user.ID;
         convoEntity.Name = AskSkipResolver._defaultNewChatName;
+        // Set initial status to Available since no processing has started yet
+        convoEntity.Status = 'Available';
 
         dataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', user);
         if (!DataContextId || DataContextId.length === 0) {
@@ -1957,7 +1970,8 @@ cycle.`);
   protected async LoadConversationDetailsIntoSkipMessages(
     dataSource: DataSource,
     ConversationId: string,
-    maxHistoricalMessages?: number
+    maxHistoricalMessages?: number,
+    roleFilter?: string
   ): Promise<SkipMessage[]> {
     try {
       if (!ConversationId || ConversationId.length === 0) {
@@ -1967,12 +1981,16 @@ cycle.`);
       // load up all the conversation details from the database server
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
+      
+      // Add role filter if specified
+      const roleFilterClause = roleFilter ? ` AND Role = '${roleFilter}'` : '';
+      
       const sql = `SELECT
                       ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} *
                    FROM
                       ${e.SchemaName}.${e.BaseView}
                    WHERE
-                      ConversationID = '${ConversationId}'
+                      ConversationID = '${ConversationId}'${roleFilterClause}
                    ORDER
                       BY __mj_CreatedAt DESC`;
       const result = await dataSource.query(sql);
@@ -2095,7 +2113,8 @@ cycle.`);
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
     dataContextEntity: DataContextEntity, 
-    conversationDetailCount: number
+    conversationDetailCount: number,
+    startTime: Date
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${skipConfigInfo.chatURL}`);
@@ -2179,7 +2198,8 @@ cycle.`);
           convoDetailEntity,
           dataContext,
           dataContextEntity, 
-          conversationDetailCount
+          conversationDetailCount,
+          startTime
         );
       } else if (apiResponse.responsePhase === 'clarifying_question') {
         // need to send the request back to the user for a clarifying question
@@ -2193,7 +2213,8 @@ cycle.`);
           userPayload,
           pubSub,
           convoEntity,
-          convoDetailEntity
+          convoDetailEntity,
+          startTime,
         );
       } else if (apiResponse.responsePhase === 'analysis_complete') {
         return await this.HandleAnalysisComplete(
@@ -2208,7 +2229,8 @@ cycle.`);
           convoEntity,
           convoDetailEntity,
           dataContext,
-          dataContextEntity
+          dataContextEntity,
+          startTime
         );
       } else {
         // unknown response phase
@@ -2308,7 +2330,8 @@ cycle.`);
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity
+    dataContextEntity: DataContextEntity,
+    startTime: Date
   ): Promise<AskSkipResultType> {
     // analysis is complete
     // all done, wrap things up
@@ -2328,7 +2351,8 @@ cycle.`);
       convoEntity,
       pubSub,
       userPayload,
-      dataSource
+      dataSource,
+      startTime
     );
     const response: AskSkipResultType = {
       Success: true,
@@ -2368,9 +2392,11 @@ cycle.`);
     userPayload: UserPayload,
     pubSub: PubSubEngine,
     convoEntity: ConversationEntity,
-    convoDetailEntity: ConversationDetailEntity
+    convoDetailEntity: ConversationDetailEntity,
+    startTime: Date
   ): Promise<AskSkipResultType> {
     // need to create a message here in the COnversation and then pass that id below
+    const endTime = new Date();
     const md = new Metadata();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
@@ -2378,6 +2404,17 @@ cycle.`);
     convoDetailEntityAI.Message = JSON.stringify(apiResponse); //.clarifyingQuestion;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
+    convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
+    
+    // Set conversation status back to Available since we need user input for the clarifying question
+    if (convoEntity.Status === 'Processing') {
+      convoEntity.Status = 'Available';
+      const convoSaveResult = await convoEntity.Save();
+      if (!convoSaveResult) {
+        LogError(`Error updating conversation status to 'Available' after clarifying question`, undefined, convoEntity.LatestResult);
+      }
+    }
+    
     if (await convoDetailEntityAI.Save()) {
       return {
         Success: true,
@@ -2438,7 +2475,8 @@ cycle.`);
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
     dataContextEntity: DataContextEntity, 
-    conversationDetailCount: number
+    conversationDetailCount: number,
+    startTime: Date
   ): Promise<AskSkipResultType> {
     // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
     try {
@@ -2567,7 +2605,8 @@ cycle.`);
         convoDetailEntity,
         dataContext,
         dataContextEntity, 
-        conversationDetailCount
+        conversationDetailCount,
+        startTime
       );
     } catch (e) {
       LogError(e);
@@ -2599,7 +2638,8 @@ cycle.`);
     convoEntity: ConversationEntity,
     pubSub: PubSubEngine,
     userPayload: UserPayload,
-    dataSource: DataSource
+    dataSource: DataSource,
+    startTime: Date
   ): Promise<{ AIMessageConversationDetailID: string }> {
     const sTitle = apiResponse.reportTitle;
     const sResult = JSON.stringify(apiResponse);
@@ -2670,12 +2710,15 @@ cycle.`);
     }
 
     // Create a conversation detail record for the Skip response
+    const endTime = new Date();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
     convoDetailEntityAI.ConversationID = convoEntity.ID;
     convoDetailEntityAI.Message = sResult;
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
+    convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
+    
     if (artifactId && artifactId.length > 0) {
       // bind the new convo detail record to the artifact + version for this response
       convoDetailEntityAI.ArtifactID = artifactId;
@@ -2688,9 +2731,23 @@ cycle.`);
       LogError(`Error saving conversation detail entity for AI message: ${sResult}`, undefined, convoDetailEntityAI.LatestResult);
     }
 
-    // finally update the convo name if it is still the default
+    // Update the conversation properties: name if it's the default, and set status back to 'Available'
+    let needToSaveConvo = false;
+    
+    // Update name if still default
     if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle && sTitle !== AskSkipResolver._defaultNewChatName) {
       convoEntity.Name = sTitle; // use the title from the response
+      needToSaveConvo = true;
+    }
+    
+    // Set status back to 'Available' since processing is complete
+    if (convoEntity.Status === 'Processing') {
+      convoEntity.Status = 'Available';
+      needToSaveConvo = true;
+    }
+    
+    // Save if any changes were made
+    if (needToSaveConvo) {
       const convoEntitySaveResult: boolean = await convoEntity.Save();
       if (!convoEntitySaveResult) {
         LogError(`Error saving conversation entity for AI message: ${sResult}`, undefined, convoEntity.LatestResult);
