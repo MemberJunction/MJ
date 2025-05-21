@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/cli
 
+## 2.40.0
+
+### Patch Changes
+
+- @memberjunction/codegen-lib@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

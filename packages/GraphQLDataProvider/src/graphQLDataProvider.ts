@@ -149,9 +149,65 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * normalized to remove special characters and replace anything other than alphanumeric characters with an underscore.
      */
     protected override get LocalStoragePrefix(): string {
+        if (this._configData === undefined || this._configData.URL === undefined) {
+            throw new Error("GraphQLDataProvider: ConfigData is not set. Please call Config() first.");
+        }
+
         const replacementString = this._configData.URL.replace(/[^a-zA-Z0-9]/g, '_');
         return replacementString + "."; // add a period at the end to separate the prefix from the key
     }
+
+    /**
+     * Retrieves the stored session ID from the LocalStorageProvider if available.
+     * If no session ID is found, returns null.
+     * The session ID is stored using the same storage mechanism as other persistent data
+     * with a key specific to the current URL to ensure uniqueness across different 
+     * server connections.
+     * 
+     * @returns The stored session ID or null if not found
+     */
+    public async GetStoredSessionID(): Promise<string> {
+        try {
+            const ls = this.LocalStorageProvider;
+            if (ls) {
+                const key = this.LocalStoragePrefix + "sessionId";
+                const storedSession = await ls.getItem(key);
+                return storedSession;
+            }
+            return null;
+        } catch (e) {
+            // If any error occurs, return null
+            console.error("Error retrieving session ID from local storage:", e);
+            return null;
+        }
+    }
+
+    /**
+     * Stores the session ID using the configured LocalStorageProvider for persistence.
+     * Uses the same URL-specific key pattern as other storage methods to ensure
+     * proper isolation between different server connections.
+     * 
+     * @param sessionId The session ID to store
+     */
+    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+        try {
+            const ls = this.LocalStorageProvider;
+            if (ls) {
+                const key = this.LocalStoragePrefix + "sessionId";
+                await ls.setItem(key, sessionId);
+            }
+        } catch (e) {
+            // Silently fail if storage is not available
+        }
+    }
+
+    public async GetPreferredUUID(forceRefreshSessionId?: boolean): Promise<string> {
+        // Try to get the stored session ID
+        const oldUUID = await this.GetStoredSessionID();
+        const UUID = forceRefreshSessionId || !oldUUID ? this.GenerateUUID() : oldUUID;
+        return UUID;
+    }
+
 
     /**
      * This method configures the class instance. If separateConnection is false or not provided, the global/static variables are set that means that the Config() call
@@ -163,23 +219,30 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param separateConnection 
      * @returns 
      */
-    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean): Promise<boolean> {
+    public async Config(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            const newUUID = this.GenerateUUID();
             if (separateConnection) {
-                this._sessionId = newUUID;
                 this._configData = configData;
+                // Get UUID after setting the configData, so that it can be used to get any stored session ID
+                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey);
+                // Store the session ID for this connection
+                await this.SaveStoredSessionID(this._sessionId);
             }
             else {
-                if (GraphQLDataProvider.Instance._sessionId === undefined)
-                    GraphQLDataProvider.Instance._sessionId = newUUID;
-    
                 GraphQLDataProvider.Instance._configData = configData;
+
+                if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+                }
     
-                // now create the new client, if it isn't alreayd created
+                // now create the new client, if it isn't already created
                 if (!GraphQLDataProvider.Instance._client)
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey);    
+                
+                // Store the session ID for the global instance
+                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
             }
             return super.Config(configData); // now parent class can do it's config
         }

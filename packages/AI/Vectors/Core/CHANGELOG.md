@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 2.40.0
+
+### Patch Changes
+
+- Updated dependencies [b6ce661]
+  - @memberjunction/ai@2.40.0
+  - @memberjunction/aiengine@2.40.0
+  - @memberjunction/ai-vectordb@2.40.0
+  - @memberjunction/core@2.40.0
+  - @memberjunction/core-entities@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 2.40.0
+
+### Patch Changes
+
+- acffa0f: Clean up of AI packages + added Gemini implementaion for new approach to content
+- Updated dependencies [b6ce661]
+  - @memberjunction/ai@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.40.0
+
+### Patch Changes
+
+- 23d08d8: Various
+- Updated dependencies [b6ce661]
+  - @memberjunction/ai@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes

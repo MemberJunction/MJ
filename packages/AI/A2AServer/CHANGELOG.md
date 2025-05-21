@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/a2aserver
 
+## 2.40.0
+
+### Patch Changes
+
+- acffa0f: Clean up of AI packages + added Gemini implementaion for new approach to content
+  - @memberjunction/sqlserver-dataprovider@2.40.0
+  - @memberjunction/core@2.40.0
+  - @memberjunction/global@2.40.0
+
 ## 2.39.0
 
 ### Patch Changes
