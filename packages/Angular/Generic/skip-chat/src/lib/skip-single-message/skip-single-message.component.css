@@ -248,3 +248,11 @@
     color: #4285f4;
     font-weight: 500;
 }
+
+.completion-time {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-top: 5px;
+    display: inline-block;
+}
