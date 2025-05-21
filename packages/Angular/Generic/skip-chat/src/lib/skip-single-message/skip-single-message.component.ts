@@ -43,6 +43,12 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     @Input() public DefaultUserImage: string | Blob | undefined = undefined;
 
     /**
+     * Optional timestamp when the message was loaded/created
+     * If not provided, it will be set to Date.now() in ngAfterViewInit
+     */
+    @Input() public loadTime: Date | undefined = undefined;
+
+    /**
      * If set to true, user messages will be shown with a button to allow delete/edit
      */
     @Input() public ShowMessageEditPanel: boolean = true;
@@ -189,7 +195,8 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         // since we are dynamically adding stuff
         this.cdRef.detectChanges();  
 
-        this._loadTime = Date.now();
+        // Set _loadTime to the provided loadTime if available, otherwise use current time
+        this._loadTime = this.loadTime !== undefined ? this.loadTime instanceof Date ? this.loadTime.getTime() : this.loadTime : Date.now();
         
         // Load artifact info if available
         if (this.HasArtifact) {
