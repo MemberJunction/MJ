@@ -1681,6 +1681,7 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description',
 -- Add the SchemaAutoAddNewEntities column to the ${flyway:defaultSchema}.Application table
   ALTER TABLE [${flyway:defaultSchema}].[Application]
   ADD [SchemaAutoAddNewEntities] NVARCHAR(MAX) NULL;
+  GO
 
   -- Add documentation for the SchemaAutoAddNewEntities column
   EXEC sp_addextendedproperty
@@ -1689,6 +1690,13 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description',
       @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
       @level1type = N'TABLE',  @level1name = N'Application',
       @level2type = N'COLUMN', @level2name = N'SchemaAutoAddNewEntities';
+
+  -- update the existing app record for Admin
+  UPDATE ${flyway:defaultSchema}.Application SET SchemaAutoAddNewEntities='${flyway:defaultSchema}' WHERE ID='EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' --Name='Admin'
+
+  -- refersh the applications view
+  EXEC sp_refreshview '${flyway:defaultSchema}.vwApplications'
+
 
 -- 2) Remove fields from AIPrompt that we removed for Cache... replaced by new fields
   DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN ('F773433E-F36B-1410-883E-00D02208DC50','F673433E-F36B-1410-883E-00D02208DC50') -- Name IN ('CacheResults','CacheExpiration'), AIPrompt table
