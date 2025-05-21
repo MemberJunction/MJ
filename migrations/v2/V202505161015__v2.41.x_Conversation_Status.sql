@@ -41,8 +41,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '55e7c54b-74f7-4e25-bf60-a79c28ad2410'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '55e7c54b-74f7-4e25-bf60-a79c28ad2410'  OR
                (EntityID = '12248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'CompletionTime')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -106,8 +106,8 @@ EXEC sp_addextendedproperty
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '575753a4-c12e-4e48-a835-6fe3face5527'  OR 
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField
+         WHERE ID = '575753a4-c12e-4e48-a835-6fe3face5527'  OR
                (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -197,7 +197,7 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ConversationID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ConversationID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ConversationDetail]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ConversationID ON [${flyway:defaultSchema}].[ConversationDetail] ([ConversationID]);
@@ -206,7 +206,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ConversationID ON [${flyway:def
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_UserID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_UserID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ConversationDetail]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_UserID ON [${flyway:defaultSchema}].[ConversationDetail] ([UserID]);
@@ -215,7 +215,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_UserID ON [${flyway:defaultSche
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ConversationDetail]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactID ON [${flyway:defaultSchema}].[ConversationDetail] ([ArtifactID]);
@@ -224,7 +224,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactID ON [${flyway:default
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactVersionID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactVersionID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ConversationDetail]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactVersionID ON [${flyway:defaultSchema}].[ConversationDetail] ([ArtifactVersionID]);
@@ -242,7 +242,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetail_ArtifactVersionID ON [${flyway:
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_UserID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_UserID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_UserID ON [${flyway:defaultSchema}].[Conversation] ([UserID]);
@@ -251,7 +251,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_UserID ON [${flyway:defaultSchema}].[
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID ON [${flyway:defaultSchema}].[Conversation] ([LinkedEntityID]);
@@ -260,7 +260,7 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID ON [${flyway:defaultSc
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_DataContextID' 
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_DataContextID'
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_DataContextID ON [${flyway:defaultSchema}].[Conversation] ([DataContextID]);
@@ -307,7 +307,7 @@ LEFT OUTER JOIN
     [c].[ArtifactID] = ConversationArtifact_ArtifactID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwConversationDetails] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for Conversation Details */
 -----------------------------------------------------------------
@@ -397,7 +397,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for Conversation Details */
 
@@ -467,7 +467,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwConversationDetails]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -475,7 +475,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationDetail] TO [cdp_
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the ConversationDetail table
+----- TRIGGER FOR __mj_UpdatedAt field for the ConversationDetail table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateConversationDetail
 GO
@@ -488,7 +488,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[ConversationDetail]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[ConversationDetail] AS _organicTable
     INNER JOIN
@@ -496,7 +496,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for Conversation Details */
 
@@ -536,7 +536,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
-    
+
 
 /* spDelete Permissions for Conversation Details */
 
@@ -586,7 +586,7 @@ LEFT OUTER JOIN
     [c].[DataContextID] = DataContext_DataContextID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwConversations] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
-    
+
 
 /* Base View Permissions SQL for Conversations */
 -----------------------------------------------------------------
@@ -664,7 +664,7 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
-    
+
 
 /* spCreate Permissions for Conversations */
 
@@ -726,7 +726,7 @@ BEGIN
                                         [${flyway:defaultSchema}].[vwConversations]
                                     WHERE
                                         [ID] = @ID
-                                    
+
 END
 GO
 
@@ -734,7 +734,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversation] TO [cdp_Develo
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR ${flyway:defaultSchema}_UpdatedAt field for the Conversation table
+----- TRIGGER FOR __mj_UpdatedAt field for the Conversation table
 ------------------------------------------------------------
 DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateConversation
 GO
@@ -747,7 +747,7 @@ BEGIN
     UPDATE
         [${flyway:defaultSchema}].[Conversation]
     SET
-        ${flyway:defaultSchema}_UpdatedAt = GETUTCDATE()
+        __mj_UpdatedAt = GETUTCDATE()
     FROM
         [${flyway:defaultSchema}].[Conversation] AS _organicTable
     INNER JOIN
@@ -755,7 +755,7 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-        
+
 
 /* spUpdate Permissions for Conversations */
 
