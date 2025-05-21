@@ -45,7 +45,8 @@
       "webRoot": "${workspaceFolder}/packages",
       "sourceMapPathOverrides": {
         "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*",
-        "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*"
+        "../src/*": "${workspaceFolder}/packages/GraphQLDataProvider/src/*",
+        "*/packages/*": "${workspaceFolder}/*"
       }
     },
     {

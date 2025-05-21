@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "tsc -noEmit && pkgroll --sourcemap --minify",
-    "build-debug": "tsc && pkgroll --sourcemap"
+    "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
