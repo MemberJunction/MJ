@@ -9,7 +9,8 @@ BEGIN TRY
     ADD [Type] NVARCHAR(20) NOT NULL CONSTRAINT DF_Dashboard_Type DEFAULT 'Config',
         [Thumbnail] NVARCHAR(MAX) NULL,
         [Scope] NVARCHAR(20) NOT NULL CONSTRAINT DF_Dashboard_Scope DEFAULT 'Global',
-        [ApplicationID] UNIQUEIDENTIFIER NULL;
+        [ApplicationID] UNIQUEIDENTIFIER NULL,
+        [Code] NVARCHAR(255) NULL;
 
     -- Create DashboardUserState table
     CREATE TABLE [${flyway:defaultSchema}].[DashboardUserState](
@@ -95,6 +96,15 @@ BEGIN
             @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
             @level1type = N'TABLE',  @level1name = N'Dashboard',
             @level2type = N'COLUMN', @level2name = N'ApplicationID';
+
+        EXEC sp_addextendedproperty
+            @name = N'MS_Description',
+            @value = N'Key used to identify the runtime class when Dashboard Type is Code',
+            @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+            @level1type = N'TABLE',  @level1name = N'Dashboard',
+            @level2type = N'COLUMN', @level2name = N'Code';        
+
+
 
         -- Add constraints for DashboardUserState
         ALTER TABLE [${flyway:defaultSchema}].[DashboardUserState]
@@ -3350,7 +3360,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateDashboard]
     @Type nvarchar(20),
     @Thumbnail nvarchar(MAX),
     @Scope nvarchar(20),
-    @ApplicationID uniqueidentifier
+    @ApplicationID uniqueidentifier,
+    @Code nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3366,7 +3377,8 @@ BEGIN
             [Type],
             [Thumbnail],
             [Scope],
-            [ApplicationID]
+            [ApplicationID],
+            [Code]
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
@@ -3379,7 +3391,8 @@ BEGIN
             @Type,
             @Thumbnail,
             @Scope,
-            @ApplicationID
+            @ApplicationID,
+            @Code
         )
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [${flyway:defaultSchema}].[vwDashboards] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
@@ -3420,7 +3433,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateDashboard]
     @Type nvarchar(20),
     @Thumbnail nvarchar(MAX),
     @Scope nvarchar(20),
-    @ApplicationID uniqueidentifier
+    @ApplicationID uniqueidentifier,
+    @Code nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3435,7 +3449,8 @@ BEGIN
         [Type] = @Type,
         [Thumbnail] = @Thumbnail,
         [Scope] = @Scope,
-        [ApplicationID] = @ApplicationID
+        [ApplicationID] = @ApplicationID,
+        [Code] = @Code
     WHERE
         [ID] = @ID
 
@@ -3514,11 +3529,6 @@ BEGIN
     SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDashboard] TO [cdp_UI]
-    
-
-/* spDelete Permissions for Dashboards */
-
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDashboard] TO [cdp_UI]
 
 
@@ -5915,3 +5925,81 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
   
             
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/***** ADDITIONAL CODE GEN **********/
+ IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'c730a4d6-7966-4eb8-836f-29eecdeab11b'  OR 
+               (EntityID = '05248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Code')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'c730a4d6-7966-4eb8-836f-29eecdeab11b',
+            '05248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Dashboards
+            13,
+            'Code',
+            'Code',
+            'Key used to identify the runtime class when Dashboard Type is Code',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END

@@ -15029,6 +15029,10 @@ export class Dashboard_ {
     @MaxLength(16)
     ApplicationID?: string;
         
+    @Field({nullable: true, description: `Key used to identify the runtime class when Dashboard Type is Code`}) 
+    @MaxLength(510)
+    Code?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -15080,6 +15084,9 @@ export class CreateDashboardInput {
 
     @Field({ nullable: true })
     ApplicationID: string | null;
+
+    @Field({ nullable: true })
+    Code: string | null;
 }
     
 
@@ -15117,6 +15124,9 @@ export class UpdateDashboardInput {
 
     @Field({ nullable: true })
     ApplicationID?: string | null;
+
+    @Field({ nullable: true })
+    Code?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

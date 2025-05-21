@@ -3567,6 +3567,11 @@ export const DashboardSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     * * Description: Associated Application ID if Scope is App, otherwise NULL`),
+    Code: z.string().nullable().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Key used to identify the runtime class when Dashboard Type is Code`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -20795,30 +20800,18 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
 
     /**
     * Validate() method override for Dashboards entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Scope: This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
-    * * Type: This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.  
+    * * Type: This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.
+    * * Scope: This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateScopeValueIsAppOrGlobal(result);
         this.ValidateTypeAllowedValues(result);
+        this.ValidateScopeValueIsAppOrGlobal(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScopeValueIsAppOrGlobal(result: ValidationResult) {
-    	if (this.Scope !== "App" && this.Scope !== "Global") {
-    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -20830,6 +20823,18 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     public ValidateTypeAllowedValues(result: ValidationResult) {
     	if (this.Type !== "Code" && this.Type !== "Config") {
     		result.Errors.push(new ValidationErrorInfo("Type", "Type must be either \"Code\" or \"Config\".", this.Type, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeValueIsAppOrGlobal(result: ValidationResult) {
+    	if (this.Scope !== "App" && this.Scope !== "Global") {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
     	}
     }
 
@@ -20978,6 +20983,19 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
     set ApplicationID(value: string | null) {
         this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Key used to identify the runtime class when Dashboard Type is Code
+    */
+    get Code(): string | null {
+        return this.Get('Code');
+    }
+    set Code(value: string | null) {
+        this.Set('Code', value);
     }
 
     /**
