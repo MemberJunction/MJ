@@ -30,6 +30,18 @@
             "regexp": "Compiled |Failed to compile."
           }
         }
+      },
+      "dependsOn": ["build-debug-GraphQLDataProvider"]
+    },
+    {
+      "label": "build-debug-GraphQLDataProvider",
+      "type": "npm",
+      "script": "build-debug",
+      "path": "packages/GraphQLDataProvider",
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
       }
     },
     {

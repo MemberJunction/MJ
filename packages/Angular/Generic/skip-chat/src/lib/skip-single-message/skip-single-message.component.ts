@@ -43,6 +43,12 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     @Input() public DefaultUserImage: string | Blob | undefined = undefined;
 
     /**
+     * Optional timestamp when the message was loaded/created
+     * If not provided, it will be set to Date.now() in ngAfterViewInit
+     */
+    @Input() public loadTime: Date | undefined = undefined;
+
+    /**
      * If set to true, user messages will be shown with a button to allow delete/edit
      */
     @Input() public ShowMessageEditPanel: boolean = true;
@@ -189,7 +195,8 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         // since we are dynamically adding stuff
         this.cdRef.detectChanges();  
 
-        this._loadTime = Date.now();
+        // Set _loadTime to the provided loadTime if available, otherwise use current time
+        this._loadTime = this.loadTime !== undefined ? this.loadTime instanceof Date ? this.loadTime.getTime() : this.loadTime : Date.now();
         
         // Load artifact info if available
         if (this.HasArtifact) {
@@ -446,6 +453,42 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
           description: this.ArtifactDescription
         });
       }
+    }
+
+    /**
+     * Returns a formatted string for the completion time if available
+     */
+    public get CompletionTimeFormatted(): string | null {
+      if (this.IsAIMessage && this.ConversationDetailRecord.CompletionTime) {
+        const milliseconds = this.ConversationDetailRecord.CompletionTime;
+        
+        // Format based on duration
+        if (milliseconds < 1000) {
+          return `Generated in less than a second`;
+        } else if (milliseconds < 60000) {
+          const seconds = Math.floor(milliseconds / 1000);
+          return `Generated in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+        } else {
+          const minutes = Math.floor(milliseconds / 60000);
+          const seconds = Math.floor((milliseconds % 60000) / 1000);
+          
+          if (seconds === 0) {
+            return `Generated in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+          } else {
+            return `Generated in ${minutes}m ${seconds}s`;
+          }
+        }
+      }
+      return null;
+    }
+    
+    /**
+     * Returns whether this message should display a completion time
+     */
+    public get ShouldShowCompletionTime(): boolean {
+      return this.IsAIMessage && 
+             !this.IsTemporaryMessage && 
+             !!this.ConversationDetailRecord.CompletionTime;
     }
 
     /**

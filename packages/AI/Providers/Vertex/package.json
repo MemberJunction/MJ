@@ -1,0 +1,26 @@
+{
+  "name": "@memberjunction/ai-vertex",
+  "version": "2.40.0",
+  "description": "MemberJunction Wrapper for Google Vertex AI Models",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.8.1",
+    "@memberjunction/ai": "2.40.0",
+    "@memberjunction/global": "2.40.0"
+  }
+}

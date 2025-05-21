@@ -1,11 +1,11 @@
 {
-    "compilerOptions": {
-      "esModuleInterop": true,
-      "moduleResolution": "node",
-      "sourceMap": true,
-      "declaration": true,
-      "target": "es2020"
-    },
-    "exclude": ["node_modules", "**/*.spec.ts"]
-  }
-  
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "inlineSources": true,
+    "declaration": true,
+    "target": "es2020"
+  },
+  "exclude": ["node_modules", "**/*.spec.ts"]
+}
