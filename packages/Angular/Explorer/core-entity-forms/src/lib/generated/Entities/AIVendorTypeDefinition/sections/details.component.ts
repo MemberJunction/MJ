@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { AIVendorTypeDefinitionEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Applications.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: AI Vendor Type Definitions.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-application-form-details',
+    selector: 'gen-aivendortypedefinition-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -26,20 +26,6 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultForNewUser"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -51,24 +37,17 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="SchemaAutoAddNewEntities"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class ApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ApplicationEntity;
+export class AIVendorTypeDefinitionDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AIVendorTypeDefinitionEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadApplicationDetailsComponent() {
+export function LoadAIVendorTypeDefinitionDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

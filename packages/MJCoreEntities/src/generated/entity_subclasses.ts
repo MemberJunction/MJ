@@ -1023,6 +1023,59 @@ export const AIAgentSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
+    ExposeAsAction: z.boolean().describe(`
+        * * Field Name: ExposeAsAction
+        * * Display Name: Expose As Action
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: When true, this agent can be exposed as an action for use by other agents. Only valid for root agents.`),
+    ExecutionOrder: z.number().describe(`
+        * * Field Name: ExecutionOrder
+        * * Display Name: Execution Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: The order in which this agent should be executed among its siblings under the same parent.`),
+    ExecutionMode: z.string().describe(`
+        * * Field Name: ExecutionMode
+        * * Display Name: Execution Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Sequential
+    * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.`),
+    EnableContextCompression: z.boolean().describe(`
+        * * Field Name: EnableContextCompression
+        * * Display Name: Enable Context Compression
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
+    ContextCompressionMessageThreshold: z.number().nullable().describe(`
+        * * Field Name: ContextCompressionMessageThreshold
+        * * Display Name: Context Compression Message Threshold
+        * * SQL Data Type: int
+    * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
+    ContextCompressionPromptID: z.string().nullable().describe(`
+        * * Field Name: ContextCompressionPromptID
+        * * Display Name: Context Compression Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)`),
+    ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
+        * * Field Name: ContextCompressionMessageRetentionCount
+        * * Display Name: Context Compression Message Retention Count
+        * * SQL Data Type: int
+    * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    ContextCompressionPrompt: z.string().nullable().describe(`
+        * * Field Name: ContextCompressionPrompt
+        * * Display Name: Context Compression Prompt
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentEntityType = z.infer<typeof AIAgentSchema>;
@@ -1121,10 +1174,6 @@ export const AIModelSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    Vendor: z.string().nullable().describe(`
-        * * Field Name: Vendor
-        * * Display Name: Vendor
-        * * SQL Data Type: nvarchar(50)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
         * * Display Name: AI Model Type ID
@@ -1141,19 +1190,6 @@ export const AIModelSchema = z.object({
         * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1`),
-    DriverClass: z.string().nullable().describe(`
-        * * Field Name: DriverClass
-        * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(100)`),
-    DriverImportPath: z.string().nullable().describe(`
-        * * Field Name: DriverImportPath
-        * * Display Name: Driver Import Path
-        * * SQL Data Type: nvarchar(255)`),
-    APIName: z.string().nullable().describe(`
-        * * Field Name: APIName
-        * * Display Name: APIName
-        * * SQL Data Type: nvarchar(100)
-    * * Description: The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -1181,27 +1217,38 @@ export const AIModelSchema = z.object({
         * * Display Name: Model Selection Insights
         * * SQL Data Type: nvarchar(MAX)
     * * Description: This column stores unstructured text notes that provide insights into what the model is particularly good at and areas where it may not perform as well. These notes can be used by a human or an AI to determine if the model is a good fit for various purposes.`),
-    InputTokenLimit: z.number().nullable().describe(`
-        * * Field Name: InputTokenLimit
-        * * Display Name: Input Token Limit
-        * * SQL Data Type: int
-    * * Description: Stores the maximum number of tokens that fit in the context window for the model.`),
-    SupportedResponseFormats: z.string().describe(`
-        * * Field Name: SupportedResponseFormats
-        * * Display Name: Supported Response Formats
-        * * SQL Data Type: nvarchar(100)
-        * * Default Value: Any
-    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
-    SupportsEffortLevel: z.boolean().describe(`
-        * * Field Name: SupportsEffortLevel
-        * * Display Name: Supports Effort Level
-        * * SQL Data Type: bit
-        * * Default Value: 0
-    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
         * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().nullable().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(100)`),
+    DriverImportPath: z.string().nullable().describe(`
+        * * Field Name: DriverImportPath
+        * * Display Name: Driver Import Path
+        * * SQL Data Type: nvarchar(255)`),
+    APIName: z.string().nullable().describe(`
+        * * Field Name: APIName
+        * * Display Name: APIName
+        * * SQL Data Type: nvarchar(100)`),
+    InputTokenLimit: z.number().nullable().describe(`
+        * * Field Name: InputTokenLimit
+        * * Display Name: Input Token Limit
+        * * SQL Data Type: int`),
+    SupportedResponseFormats: z.string().nullable().describe(`
+        * * Field Name: SupportedResponseFormats
+        * * Display Name: Supported Response Formats
+        * * SQL Data Type: nvarchar(100)`),
+    SupportsEffortLevel: z.boolean().nullable().describe(`
+        * * Field Name: SupportsEffortLevel
+        * * Display Name: Supports Effort Level
+        * * SQL Data Type: bit`),
 });
 
 export type AIModelEntityType = z.infer<typeof AIModelSchema>;
@@ -1322,18 +1369,6 @@ export const AIPromptSchema = z.object({
     *   * Pending
     *   * Active
     *   * Disabled`),
-    CacheResults: z.boolean().describe(`
-        * * Field Name: CacheResults
-        * * Display Name: Cache Results
-        * * SQL Data Type: bit
-        * * Default Value: 0
-    * * Description: Indicates whether the results of the prompt should be cached.`),
-    CacheExpiration: z.number().describe(`
-        * * Field Name: CacheExpiration
-        * * Display Name: Cache Expiration
-        * * SQL Data Type: decimal(10, 2)
-        * * Default Value: 0
-    * * Description: Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -1362,6 +1397,145 @@ export const AIPromptSchema = z.object({
         * * Display Name: Model Specific Response Format
         * * SQL Data Type: nvarchar(MAX)
     * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`),
+    AIModelTypeID: z.string().nullable().describe(`
+        * * Field Name: AIModelTypeID
+        * * Display Name: AI Model Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
+    * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).`),
+    MinPowerRank: z.number().nullable().describe(`
+        * * Field Name: MinPowerRank
+        * * Display Name: Min Power Rank
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: The minimum power rank required for models to be considered for this prompt.`),
+    SelectionStrategy: z.string().describe(`
+        * * Field Name: SelectionStrategy
+        * * Display Name: Selection Strategy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Default
+    * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).`),
+    PowerPreference: z.string().describe(`
+        * * Field Name: PowerPreference
+        * * Display Name: Power Preference
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Highest
+    * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.`),
+    ParallelizationMode: z.string().describe(`
+        * * Field Name: ParallelizationMode
+        * * Display Name: Parallelization Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).`),
+    ParallelCount: z.number().nullable().describe(`
+        * * Field Name: ParallelCount
+        * * Display Name: Parallel Count
+        * * SQL Data Type: int
+    * * Description: When ParallelizationMode is StaticCount, specifies the number of parallel executions.`),
+    ParallelConfigParam: z.string().nullable().describe(`
+        * * Field Name: ParallelConfigParam
+        * * Display Name: Parallel Config Param
+        * * SQL Data Type: nvarchar(100)
+    * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.`),
+    OutputType: z.union([z.literal('string'), z.literal('number'), z.literal('boolean'), z.literal('date'), z.literal('object')]).describe(`
+        * * Field Name: OutputType
+        * * Display Name: Output Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: string
+    * * Value List Type: List
+    * * Possible Values 
+    *   * string
+    *   * number
+    *   * boolean
+    *   * date
+    *   * object
+    * * Description: The expected data type of the prompt output: string, number, boolean, date, or object.`),
+    OutputExample: z.string().nullable().describe(`
+        * * Field Name: OutputExample
+        * * Display Name: Output Example
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON example output when OutputType is "object", used for validating structured outputs.`),
+    ValidationBehavior: z.union([z.literal('Strict'), z.literal('Warn'), z.literal('None')]).describe(`
+        * * Field Name: ValidationBehavior
+        * * Display Name: Validation Behavior
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Warn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Strict
+    *   * Warn
+    *   * None
+    * * Description: Determines how validation failures are handled: Strict (fail), Warn (log warning), or None (ignore).`),
+    MaxRetries: z.number().describe(`
+        * * Field Name: MaxRetries
+        * * Display Name: Max Retries
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Maximum number of retry attempts for API failures.`),
+    RetryDelayMS: z.number().describe(`
+        * * Field Name: RetryDelayMS
+        * * Display Name: Retry Delay MS
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Delay between retry attempts in milliseconds.`),
+    RetryStrategy: z.string().describe(`
+        * * Field Name: RetryStrategy
+        * * Display Name: Retry Strategy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Fixed
+    * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).`),
+    ResultSelectorPromptID: z.string().nullable().describe(`
+        * * Field Name: ResultSelectorPromptID
+        * * Display Name: Result Selector Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References another prompt that selects the best result from multiple parallel executions.`),
+    EnableCaching: z.boolean().describe(`
+        * * Field Name: EnableCaching
+        * * Display Name: Enable Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: When true, results from this prompt will be cached for potential reuse.`),
+    CacheTTLSeconds: z.number().nullable().describe(`
+        * * Field Name: CacheTTLSeconds
+        * * Display Name: Cache TTL Seconds
+        * * SQL Data Type: int
+    * * Description: Time-to-live in seconds for cached results. NULL means results never expire.`),
+    CacheMatchType: z.string().describe(`
+        * * Field Name: CacheMatchType
+        * * Display Name: Cache Match Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Exact
+    * * Description: Method for matching cached results: Exact (string matching) or Vector (embedding similarity).`),
+    CacheSimilarityThreshold: z.number().nullable().describe(`
+        * * Field Name: CacheSimilarityThreshold
+        * * Display Name: Cache Similarity Threshold
+        * * SQL Data Type: float(53)
+    * * Description: Threshold (0-1) for vector similarity matching. Higher values require closer matches.`),
+    CacheMustMatchModel: z.boolean().describe(`
+        * * Field Name: CacheMustMatchModel
+        * * Display Name: Cache Must Match Model
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: When true, the AI model must match for a cache hit. When false, results from any model can be used.`),
+    CacheMustMatchVendor: z.boolean().describe(`
+        * * Field Name: CacheMustMatchVendor
+        * * Display Name: Cache Must Match Vendor
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: When true, the vendor must match for a cache hit. When false, results from any vendor can be used.`),
+    CacheMustMatchAgent: z.boolean().describe(`
+        * * Field Name: CacheMustMatchAgent
+        * * Display Name: Cache Must Match Agent
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
+    CacheMustMatchConfig: z.boolean().describe(`
+        * * Field Name: CacheMustMatchConfig
+        * * Display Name: Cache Must Match Config
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -1373,6 +1547,14 @@ export const AIPromptSchema = z.object({
     Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
+        * * SQL Data Type: nvarchar(255)`),
+    AIModelType: z.string().nullable().describe(`
+        * * Field Name: AIModelType
+        * * Display Name: AI Model Type
+        * * SQL Data Type: nvarchar(50)`),
+    ResultSelectorPrompt: z.string().nullable().describe(`
+        * * Field Name: ResultSelectorPrompt
+        * * Display Name: Result Selector Prompt
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -1438,6 +1620,35 @@ export const AIResultCacheSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    VendorID: z.string().nullable().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: The vendor that provided this result.`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: The agent that initiated the request, if any.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: The configuration used for this execution.`),
+    PromptEmbedding: z.number().nullable().describe(`
+        * * Field Name: PromptEmbedding
+        * * Display Name: Prompt Embedding
+        * * SQL Data Type: varbinary
+    * * Description: Vector representation of the prompt for similarity matching.`),
+    PromptRunID: z.string().nullable().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: Reference to the AIPromptRun that created this cache entry.`),
     AIPrompt: z.string().describe(`
         * * Field Name: AIPrompt
         * * Display Name: AIPrompt
@@ -1446,6 +1657,18 @@ export const AIResultCacheSchema = z.object({
         * * Field Name: AIModel
         * * Display Name: AIModel
         * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().nullable().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIResultCacheEntityType = z.infer<typeof AIResultCacheSchema>;
@@ -1592,6 +1815,11 @@ export const ApplicationSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SchemaAutoAddNewEntities: z.string().nullable().describe(`
+        * * Field Name: SchemaAutoAddNewEntities
+        * * Display Name: Schema Auto Add New Entities
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`),
 });
 
 export type ApplicationEntityType = z.infer<typeof ApplicationSchema>;
@@ -6625,6 +6853,666 @@ export const ListSchema = z.object({
 });
 
 export type ListEntityType = z.infer<typeof ListSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Prompts
+ */
+export const AIAgentPromptSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: References the agent this prompt is associated with.`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the prompt to be used by the agent.`),
+    Purpose: z.string().nullable().describe(`
+        * * Field Name: Purpose
+        * * Display Name: Purpose
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The functional purpose of this prompt within the agent, such as "Initialize", "ProcessData", or "Summarize".`),
+    ExecutionOrder: z.number().describe(`
+        * * Field Name: ExecutionOrder
+        * * Display Name: Execution Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: The sequence order in which this prompt should be executed within the agent's workflow.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a specific configuration to use for this prompt. If NULL, uses the default configuration.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Deprecated'), z.literal('Preview')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
+    * * Description: The current status of this agent-prompt mapping. Values include Active, Inactive, Deprecated, and Preview.`),
+    ContextBehavior: z.union([z.literal('Complete'), z.literal('Smart'), z.literal('None'), z.literal('RecentMessages'), z.literal('InitialMessages'), z.literal('Custom')]).describe(`
+        * * Field Name: ContextBehavior
+        * * Display Name: Context Behavior
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Smart
+    *   * None
+    *   * RecentMessages
+    *   * InitialMessages
+    *   * Custom
+    * * Description: Determines how conversation context is filtered for this prompt: Complete, Smart, None, RecentMessages, InitialMessages, or Custom.`),
+    ContextMessageCount: z.number().nullable().describe(`
+        * * Field Name: ContextMessageCount
+        * * Display Name: Context Message Count
+        * * SQL Data Type: int
+    * * Description: The number of messages to include when ContextBehavior is set to RecentMessages or InitialMessages.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentPromptEntityType = z.infer<typeof AIAgentPromptSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Configuration Params
+ */
+export const AIConfigurationParamSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConfigurationID: z.string().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the configuration parameter.`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: string
+    * * Description: The data type of the parameter (string, number, boolean, date, object).`),
+    Value: z.string().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The value of the parameter, stored as a string but interpreted according to the Type.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the parameter and its usage.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Configuration: z.string().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIConfigurationParamEntityType = z.infer<typeof AIConfigurationParamSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Configurations
+ */
+export const AIConfigurationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the configuration.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the configuration.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Indicates whether this is the default configuration to use when none is specified.`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
+    DefaultPromptForContextCompressionID: z.string().nullable().describe(`
+        * * Field Name: DefaultPromptForContextCompressionID
+        * * Display Name: Default Prompt For Context Compression ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt to use for context compression when not specified at the agent level.`),
+    DefaultPromptForContextSummarizationID: z.string().nullable().describe(`
+        * * Field Name: DefaultPromptForContextSummarizationID
+        * * Display Name: Default Prompt For Context Summarization ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt to use for context summarization when not specified at the agent level.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DefaultPromptForContextCompression: z.string().nullable().describe(`
+        * * Field Name: DefaultPromptForContextCompression
+        * * Display Name: Default Prompt For Context Compression
+        * * SQL Data Type: nvarchar(255)`),
+    DefaultPromptForContextSummarization: z.string().nullable().describe(`
+        * * Field Name: DefaultPromptForContextSummarization
+        * * Display Name: Default Prompt For Context Summarization
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIConfigurationEntityType = z.infer<typeof AIConfigurationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Model Vendors
+ */
+export const AIModelVendorSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Determines the priority rank of this vendor for the model. Higher values indicate higher priority.`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the driver class implementing this model-vendor combination.`),
+    DriverImportPath: z.string().nullable().describe(`
+        * * Field Name: DriverImportPath
+        * * Display Name: Driver Import Path
+        * * SQL Data Type: nvarchar(255)
+    * * Description: The import path for the driver class.`),
+    APIName: z.string().nullable().describe(`
+        * * Field Name: APIName
+        * * Display Name: API Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the model to use with API calls, which might differ from the model name. If not provided, the model name will be used.`),
+    MaxInputTokens: z.number().nullable().describe(`
+        * * Field Name: MaxInputTokens
+        * * Display Name: Max Input Tokens
+        * * SQL Data Type: int
+    * * Description: The maximum number of input tokens supported by this model-vendor implementation.`),
+    MaxOutputTokens: z.number().nullable().describe(`
+        * * Field Name: MaxOutputTokens
+        * * Display Name: Max Output Tokens
+        * * SQL Data Type: int
+    * * Description: The maximum number of output tokens supported by this model-vendor implementation.`),
+    SupportedResponseFormats: z.string().describe(`
+        * * Field Name: SupportedResponseFormats
+        * * Display Name: Supported Response Formats
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for this model-vendor implementation. Options include Any, Text, Markdown, JSON, and ModelSpecific.`),
+    SupportsEffortLevel: z.boolean().describe(`
+        * * Field Name: SupportsEffortLevel
+        * * Display Name: Supports Effort Level
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Specifies if this model-vendor implementation supports the concept of an effort level.`),
+    SupportsStreaming: z.boolean().describe(`
+        * * Field Name: SupportsStreaming
+        * * Display Name: Supports Streaming
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Specifies if this model-vendor implementation supports streaming responses.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIModelVendorEntityType = z.infer<typeof AIModelVendorSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Prompt Models
+ */
+export const AIPromptModelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the AI prompt this model association applies to.`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: References the AI model to use for this prompt.`),
+    VendorID: z.string().nullable().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Priority of this model for the prompt. Higher values indicate higher priority.`),
+    ExecutionGroup: z.number().describe(`
+        * * Field Name: ExecutionGroup
+        * * Display Name: Execution Group
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Execution group for parallel processing. Models with the same group are executed in parallel.`),
+    ModelParameters: z.string().nullable().describe(`
+        * * Field Name: ModelParameters
+        * * Display Name: Model Parameters
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-formatted parameters specific to this model (temperature, max tokens, etc.).`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.`),
+    ParallelizationMode: z.string().describe(`
+        * * Field Name: ParallelizationMode
+        * * Display Name: Parallelization Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.`),
+    ParallelCount: z.number().describe(`
+        * * Field Name: ParallelCount
+        * * Display Name: Parallel Count
+        * * SQL Data Type: int
+        * * Default Value: 1
+    * * Description: Number of parallel executions to perform with this model when ParallelizationMode is StaticCount.`),
+    ParallelConfigParam: z.string().nullable().describe(`
+        * * Field Name: ParallelConfigParam
+        * * Display Name: Parallel Config Param
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Name of a configuration parameter that contains the parallel count when ParallelizationMode is ConfigParam.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().nullable().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIPromptModelEntityType = z.infer<typeof AIPromptModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Prompt Runs
+ */
+export const AIPromptRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: The prompt that was executed.`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI model used for execution.`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: The vendor providing the model/inference.`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: If this prompt was run as part of an agent, references the agent.`),
+    ConfigurationID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationID
+        * * Display Name: Configuration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional configuration used for this execution.`),
+    RunAt: z.date().describe(`
+        * * Field Name: RunAt
+        * * Display Name: Run At
+        * * SQL Data Type: datetime2
+        * * Default Value: getutcdate()
+    * * Description: When the prompt execution started.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetime2
+    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.`),
+    ExecutionTimeMS: z.number().nullable().describe(`
+        * * Field Name: ExecutionTimeMS
+        * * Display Name: Execution Time MS
+        * * SQL Data Type: int
+    * * Description: Total execution time in milliseconds.`),
+    Messages: z.string().nullable().describe(`
+        * * Field Name: Messages
+        * * Display Name: Messages
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The input messages sent to the model, typically in JSON format.`),
+    Result: z.string().nullable().describe(`
+        * * Field Name: Result
+        * * Display Name: Result
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: The output result from the model.`),
+    TokensUsed: z.number().nullable().describe(`
+        * * Field Name: TokensUsed
+        * * Display Name: Tokens Used
+        * * SQL Data Type: int
+    * * Description: Total number of tokens used (prompt + completion).`),
+    TokensPrompt: z.number().nullable().describe(`
+        * * Field Name: TokensPrompt
+        * * Display Name: Tokens Prompt
+        * * SQL Data Type: int
+    * * Description: Number of tokens in the prompt.`),
+    TokensCompletion: z.number().nullable().describe(`
+        * * Field Name: TokensCompletion
+        * * Display Name: Tokens Completion
+        * * SQL Data Type: int
+    * * Description: Number of tokens in the completion/result.`),
+    TotalCost: z.number().nullable().describe(`
+        * * Field Name: TotalCost
+        * * Display Name: Total Cost
+        * * SQL Data Type: decimal(18, 6)
+    * * Description: Estimated cost of this execution in USD.`),
+    Success: z.boolean().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+        * * Default Value: 0
+    * * Description: Whether the execution was successful.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the execution failed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Vendor Type Definitions
+ */
+export const AIVendorTypeDefinitionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+    * * Description: The name of the vendor type.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the vendor type.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIVendorTypeDefinitionEntityType = z.infer<typeof AIVendorTypeDefinitionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Vendor Types
+ */
+export const AIVendorTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Determines the priority rank of this type for the vendor. Higher values indicate higher priority.`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type AIVendorTypeEntityType = z.infer<typeof AIVendorTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Vendors
+ */
+export const AIVendorSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+    * * Description: The unique name of the vendor.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the vendor and their AI offerings.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIVendorEntityType = z.infer<typeof AIVendorSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Types
@@ -12798,6 +13686,68 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
+    * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * ExecutionMode: This rule ensures that the ExecutionMode field must be either 'Parallel' or 'Sequential'. No other values are allowed.
+    * * Table-Level: This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
+    * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateExecutionModeAllowedValues(result);
+        this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
+        this.ValidateEnableContextCompressionRequiresContextFields(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the ExecutionMode field must be either 'Parallel' or 'Sequential'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExecutionModeAllowedValues(result: ValidationResult) {
+    	if (this.ExecutionMode !== "Parallel" && this.ExecutionMode !== "Sequential") {
+    		result.Errors.push(new ValidationErrorInfo("ExecutionMode", "ExecutionMode must be either 'Parallel' or 'Sequential'.", this.ExecutionMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentIDMustBeNullIfExposeAsActionTrue(result: ValidationResult) {
+    	if (this.ParentID !== null && this.ExposeAsAction) {
+    		result.Errors.push(new ValidationErrorInfo("ParentID", "ParentID must be empty if this item is exposed as an action.", this.ParentID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEnableContextCompressionRequiresContextFields(result: ValidationResult) {
+    	if (this.EnableContextCompression) {
+    		if (this.ContextCompressionMessageThreshold === null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression is enabled, so the context compression message threshold is required.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionPromptID === null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression is enabled, so the context compression prompt ID is required.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionMessageRetentionCount === null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression is enabled, so the context compression message retention count is required.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -12864,6 +13814,133 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: ExposeAsAction
+    * * Display Name: Expose As Action
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this agent can be exposed as an action for use by other agents. Only valid for root agents.
+    */
+    get ExposeAsAction(): boolean {
+        return this.Get('ExposeAsAction');
+    }
+    set ExposeAsAction(value: boolean) {
+        this.Set('ExposeAsAction', value);
+    }
+
+    /**
+    * * Field Name: ExecutionOrder
+    * * Display Name: Execution Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The order in which this agent should be executed among its siblings under the same parent.
+    */
+    get ExecutionOrder(): number {
+        return this.Get('ExecutionOrder');
+    }
+    set ExecutionOrder(value: number) {
+        this.Set('ExecutionOrder', value);
+    }
+
+    /**
+    * * Field Name: ExecutionMode
+    * * Display Name: Execution Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Sequential
+    * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.
+    */
+    get ExecutionMode(): string {
+        return this.Get('ExecutionMode');
+    }
+    set ExecutionMode(value: string) {
+        this.Set('ExecutionMode', value);
+    }
+
+    /**
+    * * Field Name: EnableContextCompression
+    * * Display Name: Enable Context Compression
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.
+    */
+    get EnableContextCompression(): boolean {
+        return this.Get('EnableContextCompression');
+    }
+    set EnableContextCompression(value: boolean) {
+        this.Set('EnableContextCompression', value);
+    }
+
+    /**
+    * * Field Name: ContextCompressionMessageThreshold
+    * * Display Name: Context Compression Message Threshold
+    * * SQL Data Type: int
+    * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
+    */
+    get ContextCompressionMessageThreshold(): number | null {
+        return this.Get('ContextCompressionMessageThreshold');
+    }
+    set ContextCompressionMessageThreshold(value: number | null) {
+        this.Set('ContextCompressionMessageThreshold', value);
+    }
+
+    /**
+    * * Field Name: ContextCompressionPromptID
+    * * Display Name: Context Compression Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    */
+    get ContextCompressionPromptID(): string | null {
+        return this.Get('ContextCompressionPromptID');
+    }
+    set ContextCompressionPromptID(value: string | null) {
+        this.Set('ContextCompressionPromptID', value);
+    }
+
+    /**
+    * * Field Name: ContextCompressionMessageRetentionCount
+    * * Display Name: Context Compression Message Retention Count
+    * * SQL Data Type: int
+    * * Description: Number of recent messages to keep uncompressed when context compression is applied.
+    */
+    get ContextCompressionMessageRetentionCount(): number | null {
+        return this.Get('ContextCompressionMessageRetentionCount');
+    }
+    set ContextCompressionMessageRetentionCount(value: number | null) {
+        this.Set('ContextCompressionMessageRetentionCount', value);
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: ContextCompressionPrompt
+    * * Display Name: Context Compression Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ContextCompressionPrompt(): string | null {
+        return this.Get('ContextCompressionPrompt');
     }
 }
 
@@ -13192,18 +14269,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * * Field Name: Vendor
-    * * Display Name: Vendor
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Vendor(): string | null {
-        return this.Get('Vendor');
-    }
-    set Vendor(value: string | null) {
-        this.Set('Vendor', value);
-    }
-
-    /**
     * * Field Name: AIModelTypeID
     * * Display Name: AI Model Type ID
     * * SQL Data Type: uniqueidentifier
@@ -13241,43 +14306,6 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
     set IsActive(value: boolean) {
         this.Set('IsActive', value);
-    }
-
-    /**
-    * * Field Name: DriverClass
-    * * Display Name: Driver Class
-    * * SQL Data Type: nvarchar(100)
-    */
-    get DriverClass(): string | null {
-        return this.Get('DriverClass');
-    }
-    set DriverClass(value: string | null) {
-        this.Set('DriverClass', value);
-    }
-
-    /**
-    * * Field Name: DriverImportPath
-    * * Display Name: Driver Import Path
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DriverImportPath(): string | null {
-        return this.Get('DriverImportPath');
-    }
-    set DriverImportPath(value: string | null) {
-        this.Set('DriverImportPath', value);
-    }
-
-    /**
-    * * Field Name: APIName
-    * * Display Name: APIName
-    * * SQL Data Type: nvarchar(100)
-    * * Description: The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls
-    */
-    get APIName(): string | null {
-        return this.Get('APIName');
-    }
-    set APIName(value: string | null) {
-        this.Set('APIName', value);
     }
 
     /**
@@ -13342,53 +14370,75 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * * Field Name: InputTokenLimit
-    * * Display Name: Input Token Limit
-    * * SQL Data Type: int
-    * * Description: Stores the maximum number of tokens that fit in the context window for the model.
-    */
-    get InputTokenLimit(): number | null {
-        return this.Get('InputTokenLimit');
-    }
-    set InputTokenLimit(value: number | null) {
-        this.Set('InputTokenLimit', value);
-    }
-
-    /**
-    * * Field Name: SupportedResponseFormats
-    * * Display Name: Supported Response Formats
-    * * SQL Data Type: nvarchar(100)
-    * * Default Value: Any
-    * * Description: A comma-delimited string indicating the supported response formats for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
-    */
-    get SupportedResponseFormats(): string {
-        return this.Get('SupportedResponseFormats');
-    }
-    set SupportedResponseFormats(value: string) {
-        this.Set('SupportedResponseFormats', value);
-    }
-
-    /**
-    * * Field Name: SupportsEffortLevel
-    * * Display Name: Supports Effort Level
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Specifies if the model supports the concept of an effort level. For example, for a reasoning model, the options often include low, medium, and high.
-    */
-    get SupportsEffortLevel(): boolean {
-        return this.Get('SupportsEffortLevel');
-    }
-    set SupportsEffortLevel(value: boolean) {
-        this.Set('SupportsEffortLevel', value);
-    }
-
-    /**
     * * Field Name: AIModelType
     * * Display Name: AIModel Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
         return this.Get('AIModelType');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string | null {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+
+    /**
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DriverImportPath(): string | null {
+        return this.Get('DriverImportPath');
+    }
+
+    /**
+    * * Field Name: APIName
+    * * Display Name: APIName
+    * * SQL Data Type: nvarchar(100)
+    */
+    get APIName(): string | null {
+        return this.Get('APIName');
+    }
+
+    /**
+    * * Field Name: InputTokenLimit
+    * * Display Name: Input Token Limit
+    * * SQL Data Type: int
+    */
+    get InputTokenLimit(): number | null {
+        return this.Get('InputTokenLimit');
+    }
+
+    /**
+    * * Field Name: SupportedResponseFormats
+    * * Display Name: Supported Response Formats
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SupportedResponseFormats(): string | null {
+        return this.Get('SupportedResponseFormats');
+    }
+
+    /**
+    * * Field Name: SupportsEffortLevel
+    * * Display Name: Supports Effort Level
+    * * SQL Data Type: bit
+    */
+    get SupportsEffortLevel(): boolean | null {
+        return this.Get('SupportsEffortLevel');
     }
 }
 
@@ -13619,6 +14669,195 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
+    * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * CacheMatchType: This rule ensures that the cache match type can only be set to 'Vector' or 'Exact'. No other value is allowed.
+    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
+    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * * SelectionStrategy: This rule ensures that the SelectionStrategy field must be set to either 'ByPower', 'Specific', or 'Default'.
+    * * RetryStrategy: This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
+    * * PowerPreference: This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
+    * * ParallelizationMode: This rule ensures that the ParallelizationMode field can only be set to one of the following values: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCacheMatchTypeIsVectorOrExact(result);
+        this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
+        this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
+        this.ValidateSelectionStrategyAgainstAllowedValues(result);
+        this.ValidateRetryStrategyIsAllowedValue(result);
+        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
+        this.ValidatePowerPreferenceAllowedValues(result);
+        this.ValidateParallelizationModeAllowedValues(result);
+        this.ValidateOutputExampleWhenOutputTypeObject(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
+        this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the cache match type can only be set to 'Vector' or 'Exact'. No other value is allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheMatchTypeIsVectorOrExact(result: ValidationResult) {
+    	if (this.CacheMatchType !== "Vector" && this.CacheMatchType !== "Exact") {
+    		result.Errors.push(new ValidationErrorInfo("CacheMatchType", "Cache match type must be either 'Vector' or 'Exact'.", this.CacheMatchType, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.CacheSimilarityThreshold !== null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "Cache similarity threshold must be between 0 and 1.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountWhenParallelizationModeIsStaticCount(result: ValidationResult) {
+    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount === null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "When ParallelizationMode is 'StaticCount', ParallelCount must be specified.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the SelectionStrategy field must be set to either 'ByPower', 'Specific', or 'Default'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSelectionStrategyAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["ByPower", "Specific", "Default"];
+    	if (!allowedValues.includes(this.SelectionStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo("SelectionStrategy", "SelectionStrategy must be either 'ByPower', 'Specific', or 'Default'.", this.SelectionStrategy, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryStrategyIsAllowedValue(result: ValidationResult) {
+    	const allowed = ["Linear", "Exponential", "Fixed"];
+    	if (this.RetryStrategy && !allowed.includes(this.RetryStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo("RetryStrategy", "RetryStrategy must be one of the following values: 'Linear', 'Exponential', or 'Fixed'.", this.RetryStrategy, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam === null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "Parallel Config Param must be entered when Parallelization Mode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerPreferenceAllowedValues(result: ValidationResult) {
+    	const allowed = ["Balanced", "Lowest", "Highest"];
+    	if (this.PowerPreference && !allowed.includes(this.PowerPreference)) {
+    		result.Errors.push(new ValidationErrorInfo("PowerPreference", "PowerPreference must be 'Balanced', 'Lowest', or 'Highest'.", this.PowerPreference, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ParallelizationMode field can only be set to one of the following values: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["ModelSpecific", "ConfigParam", "StaticCount", "None"];
+    	if (!allowedValues.includes(this.ParallelizationMode)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParallelizationMode",
+    			"ParallelizationMode must be one of: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.",
+    			this.ParallelizationMode,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdRequiredForVectorCache(result: ValidationResult) {
+    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold === null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be specified when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -13712,34 +14951,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * * Field Name: CacheResults
-    * * Display Name: Cache Results
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates whether the results of the prompt should be cached.
-    */
-    get CacheResults(): boolean {
-        return this.Get('CacheResults');
-    }
-    set CacheResults(value: boolean) {
-        this.Set('CacheResults', value);
-    }
-
-    /**
-    * * Field Name: CacheExpiration
-    * * Display Name: Cache Expiration
-    * * SQL Data Type: decimal(10, 2)
-    * * Default Value: 0
-    * * Description: Number of hours the cache is valid for; can be fractional or 0 if the cache never expires.
-    */
-    get CacheExpiration(): number {
-        return this.Get('CacheExpiration');
-    }
-    set CacheExpiration(value: number) {
-        this.Set('CacheExpiration', value);
-    }
-
-    /**
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
@@ -13794,6 +15005,321 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
+    * * Field Name: AIModelTypeID
+    * * Display Name: AI Model Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
+    * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).
+    */
+    get AIModelTypeID(): string | null {
+        return this.Get('AIModelTypeID');
+    }
+    set AIModelTypeID(value: string | null) {
+        this.Set('AIModelTypeID', value);
+    }
+
+    /**
+    * * Field Name: MinPowerRank
+    * * Display Name: Min Power Rank
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The minimum power rank required for models to be considered for this prompt.
+    */
+    get MinPowerRank(): number | null {
+        return this.Get('MinPowerRank');
+    }
+    set MinPowerRank(value: number | null) {
+        this.Set('MinPowerRank', value);
+    }
+
+    /**
+    * * Field Name: SelectionStrategy
+    * * Display Name: Selection Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Default
+    * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).
+    */
+    get SelectionStrategy(): string {
+        return this.Get('SelectionStrategy');
+    }
+    set SelectionStrategy(value: string) {
+        this.Set('SelectionStrategy', value);
+    }
+
+    /**
+    * * Field Name: PowerPreference
+    * * Display Name: Power Preference
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Highest
+    * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.
+    */
+    get PowerPreference(): string {
+        return this.Get('PowerPreference');
+    }
+    set PowerPreference(value: string) {
+        this.Set('PowerPreference', value);
+    }
+
+    /**
+    * * Field Name: ParallelizationMode
+    * * Display Name: Parallelization Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).
+    */
+    get ParallelizationMode(): string {
+        return this.Get('ParallelizationMode');
+    }
+    set ParallelizationMode(value: string) {
+        this.Set('ParallelizationMode', value);
+    }
+
+    /**
+    * * Field Name: ParallelCount
+    * * Display Name: Parallel Count
+    * * SQL Data Type: int
+    * * Description: When ParallelizationMode is StaticCount, specifies the number of parallel executions.
+    */
+    get ParallelCount(): number | null {
+        return this.Get('ParallelCount');
+    }
+    set ParallelCount(value: number | null) {
+        this.Set('ParallelCount', value);
+    }
+
+    /**
+    * * Field Name: ParallelConfigParam
+    * * Display Name: Parallel Config Param
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.
+    */
+    get ParallelConfigParam(): string | null {
+        return this.Get('ParallelConfigParam');
+    }
+    set ParallelConfigParam(value: string | null) {
+        this.Set('ParallelConfigParam', value);
+    }
+
+    /**
+    * * Field Name: OutputType
+    * * Display Name: Output Type
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: string
+    * * Value List Type: List
+    * * Possible Values 
+    *   * string
+    *   * number
+    *   * boolean
+    *   * date
+    *   * object
+    * * Description: The expected data type of the prompt output: string, number, boolean, date, or object.
+    */
+    get OutputType(): 'string' | 'number' | 'boolean' | 'date' | 'object' {
+        return this.Get('OutputType');
+    }
+    set OutputType(value: 'string' | 'number' | 'boolean' | 'date' | 'object') {
+        this.Set('OutputType', value);
+    }
+
+    /**
+    * * Field Name: OutputExample
+    * * Display Name: Output Example
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON example output when OutputType is "object", used for validating structured outputs.
+    */
+    get OutputExample(): string | null {
+        return this.Get('OutputExample');
+    }
+    set OutputExample(value: string | null) {
+        this.Set('OutputExample', value);
+    }
+
+    /**
+    * * Field Name: ValidationBehavior
+    * * Display Name: Validation Behavior
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Warn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Strict
+    *   * Warn
+    *   * None
+    * * Description: Determines how validation failures are handled: Strict (fail), Warn (log warning), or None (ignore).
+    */
+    get ValidationBehavior(): 'Strict' | 'Warn' | 'None' {
+        return this.Get('ValidationBehavior');
+    }
+    set ValidationBehavior(value: 'Strict' | 'Warn' | 'None') {
+        this.Set('ValidationBehavior', value);
+    }
+
+    /**
+    * * Field Name: MaxRetries
+    * * Display Name: Max Retries
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Maximum number of retry attempts for API failures.
+    */
+    get MaxRetries(): number {
+        return this.Get('MaxRetries');
+    }
+    set MaxRetries(value: number) {
+        this.Set('MaxRetries', value);
+    }
+
+    /**
+    * * Field Name: RetryDelayMS
+    * * Display Name: Retry Delay MS
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Delay between retry attempts in milliseconds.
+    */
+    get RetryDelayMS(): number {
+        return this.Get('RetryDelayMS');
+    }
+    set RetryDelayMS(value: number) {
+        this.Set('RetryDelayMS', value);
+    }
+
+    /**
+    * * Field Name: RetryStrategy
+    * * Display Name: Retry Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Fixed
+    * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).
+    */
+    get RetryStrategy(): string {
+        return this.Get('RetryStrategy');
+    }
+    set RetryStrategy(value: string) {
+        this.Set('RetryStrategy', value);
+    }
+
+    /**
+    * * Field Name: ResultSelectorPromptID
+    * * Display Name: Result Selector Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References another prompt that selects the best result from multiple parallel executions.
+    */
+    get ResultSelectorPromptID(): string | null {
+        return this.Get('ResultSelectorPromptID');
+    }
+    set ResultSelectorPromptID(value: string | null) {
+        this.Set('ResultSelectorPromptID', value);
+    }
+
+    /**
+    * * Field Name: EnableCaching
+    * * Display Name: Enable Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, results from this prompt will be cached for potential reuse.
+    */
+    get EnableCaching(): boolean {
+        return this.Get('EnableCaching');
+    }
+    set EnableCaching(value: boolean) {
+        this.Set('EnableCaching', value);
+    }
+
+    /**
+    * * Field Name: CacheTTLSeconds
+    * * Display Name: Cache TTL Seconds
+    * * SQL Data Type: int
+    * * Description: Time-to-live in seconds for cached results. NULL means results never expire.
+    */
+    get CacheTTLSeconds(): number | null {
+        return this.Get('CacheTTLSeconds');
+    }
+    set CacheTTLSeconds(value: number | null) {
+        this.Set('CacheTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: CacheMatchType
+    * * Display Name: Cache Match Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Exact
+    * * Description: Method for matching cached results: Exact (string matching) or Vector (embedding similarity).
+    */
+    get CacheMatchType(): string {
+        return this.Get('CacheMatchType');
+    }
+    set CacheMatchType(value: string) {
+        this.Set('CacheMatchType', value);
+    }
+
+    /**
+    * * Field Name: CacheSimilarityThreshold
+    * * Display Name: Cache Similarity Threshold
+    * * SQL Data Type: float(53)
+    * * Description: Threshold (0-1) for vector similarity matching. Higher values require closer matches.
+    */
+    get CacheSimilarityThreshold(): number | null {
+        return this.Get('CacheSimilarityThreshold');
+    }
+    set CacheSimilarityThreshold(value: number | null) {
+        this.Set('CacheSimilarityThreshold', value);
+    }
+
+    /**
+    * * Field Name: CacheMustMatchModel
+    * * Display Name: Cache Must Match Model
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, the AI model must match for a cache hit. When false, results from any model can be used.
+    */
+    get CacheMustMatchModel(): boolean {
+        return this.Get('CacheMustMatchModel');
+    }
+    set CacheMustMatchModel(value: boolean) {
+        this.Set('CacheMustMatchModel', value);
+    }
+
+    /**
+    * * Field Name: CacheMustMatchVendor
+    * * Display Name: Cache Must Match Vendor
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, the vendor must match for a cache hit. When false, results from any vendor can be used.
+    */
+    get CacheMustMatchVendor(): boolean {
+        return this.Get('CacheMustMatchVendor');
+    }
+    set CacheMustMatchVendor(value: boolean) {
+        this.Set('CacheMustMatchVendor', value);
+    }
+
+    /**
+    * * Field Name: CacheMustMatchAgent
+    * * Display Name: Cache Must Match Agent
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.
+    */
+    get CacheMustMatchAgent(): boolean {
+        return this.Get('CacheMustMatchAgent');
+    }
+    set CacheMustMatchAgent(value: boolean) {
+        this.Set('CacheMustMatchAgent', value);
+    }
+
+    /**
+    * * Field Name: CacheMustMatchConfig
+    * * Display Name: Cache Must Match Config
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
+    */
+    get CacheMustMatchConfig(): boolean {
+        return this.Get('CacheMustMatchConfig');
+    }
+    set CacheMustMatchConfig(value: boolean) {
+        this.Set('CacheMustMatchConfig', value);
+    }
+
+    /**
     * * Field Name: Template
     * * Display Name: Template
     * * SQL Data Type: nvarchar(255)
@@ -13818,6 +15344,24 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     get Type(): string {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: AIModelType
+    * * Display Name: AI Model Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIModelType(): string | null {
+        return this.Get('AIModelType');
+    }
+
+    /**
+    * * Field Name: ResultSelectorPrompt
+    * * Display Name: Result Selector Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResultSelectorPrompt(): string | null {
+        return this.Get('ResultSelectorPrompt');
     }
 }
 
@@ -13980,6 +15524,75 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     }
 
     /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: The vendor that provided this result.
+    */
+    get VendorID(): string | null {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string | null) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: The agent that initiated the request, if any.
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: The configuration used for this execution.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: PromptEmbedding
+    * * Display Name: Prompt Embedding
+    * * SQL Data Type: varbinary
+    * * Description: Vector representation of the prompt for similarity matching.
+    */
+    get PromptEmbedding(): number | null {
+        return this.Get('PromptEmbedding');
+    }
+    set PromptEmbedding(value: number | null) {
+        this.Set('PromptEmbedding', value);
+    }
+
+    /**
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: Reference to the AIPromptRun that created this cache entry.
+    */
+    get PromptRunID(): string | null {
+        return this.Get('PromptRunID');
+    }
+    set PromptRunID(value: string | null) {
+        this.Set('PromptRunID', value);
+    }
+
+    /**
     * * Field Name: AIPrompt
     * * Display Name: AIPrompt
     * * SQL Data Type: nvarchar(255)
@@ -13995,6 +15608,33 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     */
     get AIModel(): string {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string | null {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
     }
 }
 
@@ -14388,6 +16028,19 @@ export class ApplicationEntity extends BaseEntity<ApplicationEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SchemaAutoAddNewEntities
+    * * Display Name: Schema Auto Add New Entities
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas
+    */
+    get SchemaAutoAddNewEntities(): string | null {
+        return this.Get('SchemaAutoAddNewEntities');
+    }
+    set SchemaAutoAddNewEntities(value: string | null) {
+        this.Set('SchemaAutoAddNewEntities', value);
     }
 }
 
@@ -27625,6 +29278,1987 @@ export class ListEntity extends BaseEntity<ListEntityType> {
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Prompts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentPrompt
+ * * Base View: vwAIAgentPrompts
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Prompts')
+export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
+    /**
+    * Loads the MJ: AI Agent Prompts record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Prompts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentPromptEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then the context message count must be provided. For all other context behaviors, the context message count can be left blank.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateContextMessageCountRequiredForCertainBehaviors(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then the context message count must be provided. For all other context behaviors, the context message count can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextMessageCountRequiredForCertainBehaviors(result: ValidationResult) {
+    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount === null) {
+    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "ContextMessageCount must be specified when ContextBehavior is 'InitialMessages' or 'RecentMessages'.", this.ContextMessageCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: References the agent this prompt is associated with.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the prompt to be used by the agent.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: Purpose
+    * * Display Name: Purpose
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The functional purpose of this prompt within the agent, such as "Initialize", "ProcessData", or "Summarize".
+    */
+    get Purpose(): string | null {
+        return this.Get('Purpose');
+    }
+    set Purpose(value: string | null) {
+        this.Set('Purpose', value);
+    }
+
+    /**
+    * * Field Name: ExecutionOrder
+    * * Display Name: Execution Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: The sequence order in which this prompt should be executed within the agent's workflow.
+    */
+    get ExecutionOrder(): number {
+        return this.Get('ExecutionOrder');
+    }
+    set ExecutionOrder(value: number) {
+        this.Set('ExecutionOrder', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a specific configuration to use for this prompt. If NULL, uses the default configuration.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
+    * * Description: The current status of this agent-prompt mapping. Values include Active, Inactive, Deprecated, and Preview.
+    */
+    get Status(): 'Active' | 'Inactive' | 'Deprecated' | 'Preview' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive' | 'Deprecated' | 'Preview') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ContextBehavior
+    * * Display Name: Context Behavior
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Smart
+    *   * None
+    *   * RecentMessages
+    *   * InitialMessages
+    *   * Custom
+    * * Description: Determines how conversation context is filtered for this prompt: Complete, Smart, None, RecentMessages, InitialMessages, or Custom.
+    */
+    get ContextBehavior(): 'Complete' | 'Smart' | 'None' | 'RecentMessages' | 'InitialMessages' | 'Custom' {
+        return this.Get('ContextBehavior');
+    }
+    set ContextBehavior(value: 'Complete' | 'Smart' | 'None' | 'RecentMessages' | 'InitialMessages' | 'Custom') {
+        this.Set('ContextBehavior', value);
+    }
+
+    /**
+    * * Field Name: ContextMessageCount
+    * * Display Name: Context Message Count
+    * * SQL Data Type: int
+    * * Description: The number of messages to include when ContextBehavior is set to RecentMessages or InitialMessages.
+    */
+    get ContextMessageCount(): number | null {
+        return this.Get('ContextMessageCount');
+    }
+    set ContextMessageCount(value: number | null) {
+        this.Set('ContextMessageCount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+}
+
+
+/**
+ * MJ: AI Configuration Params - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIConfigurationParam
+ * * Base View: vwAIConfigurationParams
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Configuration Params')
+export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamEntityType> {
+    /**
+    * Loads the MJ: AI Configuration Params record from the database
+    * @param ID: string - primary key value to load the MJ: AI Configuration Params record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIConfigurationParamEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Configuration Params entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Type: This rule ensures that the Type field must be set to one of the following values: 'object', 'date', 'boolean', 'number', or 'string'. No other values are allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeAgainstAllowedValues(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Type field must be set to one of the following values: 'object', 'date', 'boolean', 'number', or 'string'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeAgainstAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["object", "date", "boolean", "number", "string"];
+    	if (!allowedValues.includes(this.Type)) {
+    		result.Errors.push(new ValidationErrorInfo("Type", "Type must be one of: 'object', 'date', 'boolean', 'number', or 'string'.", this.Type, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    */
+    get ConfigurationID(): string {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the configuration parameter.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: string
+    * * Description: The data type of the parameter (string, number, boolean, date, object).
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+    set Type(value: string) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The value of the parameter, stored as a string but interpreted according to the Type.
+    */
+    get Value(): string {
+        return this.Get('Value');
+    }
+    set Value(value: string) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the parameter and its usage.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string {
+        return this.Get('Configuration');
+    }
+}
+
+
+/**
+ * MJ: AI Configurations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIConfiguration
+ * * Base View: vwAIConfigurations
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Configurations')
+export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType> {
+    /**
+    * Loads the MJ: AI Configurations record from the database
+    * @param ID: string - primary key value to load the MJ: AI Configurations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIConfigurationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Configurations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Status: This rule ensures that the Status field can only have one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. Any other value will not be accepted.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateStatusAllowedValues(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Status field can only have one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. Any other value will not be accepted.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["Preview", "Deprecated", "Inactive", "Active"];
+    	if (!allowedValues.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the configuration.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the configuration.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this is the default configuration to use when none is specified.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DefaultPromptForContextCompressionID
+    * * Display Name: Default Prompt For Context Compression ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt to use for context compression when not specified at the agent level.
+    */
+    get DefaultPromptForContextCompressionID(): string | null {
+        return this.Get('DefaultPromptForContextCompressionID');
+    }
+    set DefaultPromptForContextCompressionID(value: string | null) {
+        this.Set('DefaultPromptForContextCompressionID', value);
+    }
+
+    /**
+    * * Field Name: DefaultPromptForContextSummarizationID
+    * * Display Name: Default Prompt For Context Summarization ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt to use for context summarization when not specified at the agent level.
+    */
+    get DefaultPromptForContextSummarizationID(): string | null {
+        return this.Get('DefaultPromptForContextSummarizationID');
+    }
+    set DefaultPromptForContextSummarizationID(value: string | null) {
+        this.Set('DefaultPromptForContextSummarizationID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DefaultPromptForContextCompression
+    * * Display Name: Default Prompt For Context Compression
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultPromptForContextCompression(): string | null {
+        return this.Get('DefaultPromptForContextCompression');
+    }
+
+    /**
+    * * Field Name: DefaultPromptForContextSummarization
+    * * Display Name: Default Prompt For Context Summarization
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultPromptForContextSummarization(): string | null {
+        return this.Get('DefaultPromptForContextSummarization');
+    }
+}
+
+
+/**
+ * MJ: AI Model Vendors - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelVendor
+ * * Base View: vwAIModelVendors
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Vendors')
+export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
+    /**
+    * Loads the MJ: AI Model Vendors record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Vendors record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIModelVendorEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Priority: This rule ensures that the Priority value cannot be negative. It must be zero or greater.
+    * * MaxOutputTokens: This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
+    * * Status: This rule ensures that the status value must be either "Preview", "Deprecated", "Inactive", or "Active". Other status values are not allowed.
+    * * MaxInputTokens: This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityIsNonNegative(result);
+        this.ValidateMaxOutputTokensNotNegative(result);
+        this.ValidateStatusAllowedValues(result);
+        this.ValidateMaxInputTokensNonNegative(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Priority value cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or greater.", this.Priority, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxOutputTokensNotNegative(result: ValidationResult) {
+    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "Max output tokens must be zero or greater.", this.MaxOutputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the status value must be either "Preview", "Deprecated", "Inactive", or "Active". Other status values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusAllowedValues(result: ValidationResult) {
+    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
+    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxInputTokensNonNegative(result: ValidationResult) {
+    	if (this.MaxInputTokens !== null && this.MaxInputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens must be zero or a positive value if specified.", this.MaxInputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Determines the priority rank of this vendor for the model. Higher values indicate higher priority.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the driver class implementing this model-vendor combination.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The import path for the driver class.
+    */
+    get DriverImportPath(): string | null {
+        return this.Get('DriverImportPath');
+    }
+    set DriverImportPath(value: string | null) {
+        this.Set('DriverImportPath', value);
+    }
+
+    /**
+    * * Field Name: APIName
+    * * Display Name: API Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The name of the model to use with API calls, which might differ from the model name. If not provided, the model name will be used.
+    */
+    get APIName(): string | null {
+        return this.Get('APIName');
+    }
+    set APIName(value: string | null) {
+        this.Set('APIName', value);
+    }
+
+    /**
+    * * Field Name: MaxInputTokens
+    * * Display Name: Max Input Tokens
+    * * SQL Data Type: int
+    * * Description: The maximum number of input tokens supported by this model-vendor implementation.
+    */
+    get MaxInputTokens(): number | null {
+        return this.Get('MaxInputTokens');
+    }
+    set MaxInputTokens(value: number | null) {
+        this.Set('MaxInputTokens', value);
+    }
+
+    /**
+    * * Field Name: MaxOutputTokens
+    * * Display Name: Max Output Tokens
+    * * SQL Data Type: int
+    * * Description: The maximum number of output tokens supported by this model-vendor implementation.
+    */
+    get MaxOutputTokens(): number | null {
+        return this.Get('MaxOutputTokens');
+    }
+    set MaxOutputTokens(value: number | null) {
+        this.Set('MaxOutputTokens', value);
+    }
+
+    /**
+    * * Field Name: SupportedResponseFormats
+    * * Display Name: Supported Response Formats
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Any
+    * * Description: A comma-delimited string indicating the supported response formats for this model-vendor implementation. Options include Any, Text, Markdown, JSON, and ModelSpecific.
+    */
+    get SupportedResponseFormats(): string {
+        return this.Get('SupportedResponseFormats');
+    }
+    set SupportedResponseFormats(value: string) {
+        this.Set('SupportedResponseFormats', value);
+    }
+
+    /**
+    * * Field Name: SupportsEffortLevel
+    * * Display Name: Supports Effort Level
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Specifies if this model-vendor implementation supports the concept of an effort level.
+    */
+    get SupportsEffortLevel(): boolean {
+        return this.Get('SupportsEffortLevel');
+    }
+    set SupportsEffortLevel(value: boolean) {
+        this.Set('SupportsEffortLevel', value);
+    }
+
+    /**
+    * * Field Name: SupportsStreaming
+    * * Display Name: Supports Streaming
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Specifies if this model-vendor implementation supports streaming responses.
+    */
+    get SupportsStreaming(): boolean {
+        return this.Get('SupportsStreaming');
+    }
+    set SupportsStreaming(value: boolean) {
+        this.Set('SupportsStreaming', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+}
+
+
+/**
+ * MJ: AI Prompt Models - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptModel
+ * * Base View: vwAIPromptModels
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Prompt Models')
+export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
+    /**
+    * Loads the MJ: AI Prompt Models record from the database
+    * @param ID: string - primary key value to load the MJ: AI Prompt Models record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptModelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
+    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
+    * * Status: This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
+    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
+    * * ParallelizationMode: This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
+    * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityIsNonNegative(result);
+        this.ValidateExecutionGroupIsNonNegative(result);
+        this.ValidateStatusIsLimitedToAllowedValues(result);
+        this.ValidateParallelCountAtLeastOne(result);
+        this.ValidateParallelizationModeAllowedValues(result);
+        this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be greater than or equal to zero.", this.Priority, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExecutionGroupIsNonNegative(result: ValidationResult) {
+    	if (this.ExecutionGroup < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive number.", this.ExecutionGroup, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusIsLimitedToAllowedValues(result: ValidationResult) {
+    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
+    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo("Status", "The Status field must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
+    	if (this.ParallelCount < 1) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
+    	const validValues = ["ConfigParam", "StaticCount", "None"];
+    	if (this.ParallelizationMode !== null && !validValues.includes(this.ParallelizationMode)) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelizationMode", "ParallelizationMode must be 'ConfigParam', 'StaticCount', or 'None'.", this.ParallelizationMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelConfigParamBasedOnParallelizationMode(result: ValidationResult) {
+    	if (
+    		(this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") &&
+    		this.ParallelConfigParam !== null
+    	) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParallelConfigParam",
+    			"ParallelConfigParam must be empty when ParallelizationMode is 'None' or 'StaticCount'.",
+    			this.ParallelConfigParam,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (
+    		this.ParallelizationMode === "ConfigParam" &&
+    		this.ParallelConfigParam === null
+    	) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParallelConfigParam",
+    			"ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.",
+    			this.ParallelConfigParam,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: References the AI prompt this model association applies to.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: References the AI model to use for this prompt.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: Optional reference to a specific vendor for the model. If NULL, uses the highest priority vendor for the model.
+    */
+    get VendorID(): string | null {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string | null) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional reference to a specific configuration. If NULL, this model is available in all configurations.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Priority of this model for the prompt. Higher values indicate higher priority.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: ExecutionGroup
+    * * Display Name: Execution Group
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution group for parallel processing. Models with the same group are executed in parallel.
+    */
+    get ExecutionGroup(): number {
+        return this.Get('ExecutionGroup');
+    }
+    set ExecutionGroup(value: number) {
+        this.Set('ExecutionGroup', value);
+    }
+
+    /**
+    * * Field Name: ModelParameters
+    * * Display Name: Model Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-formatted parameters specific to this model (temperature, max tokens, etc.).
+    */
+    get ModelParameters(): string | null {
+        return this.Get('ModelParameters');
+    }
+    set ModelParameters(value: string | null) {
+        this.Set('ModelParameters', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ParallelizationMode
+    * * Display Name: Parallelization Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.
+    */
+    get ParallelizationMode(): string {
+        return this.Get('ParallelizationMode');
+    }
+    set ParallelizationMode(value: string) {
+        this.Set('ParallelizationMode', value);
+    }
+
+    /**
+    * * Field Name: ParallelCount
+    * * Display Name: Parallel Count
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Number of parallel executions to perform with this model when ParallelizationMode is StaticCount.
+    */
+    get ParallelCount(): number {
+        return this.Get('ParallelCount');
+    }
+    set ParallelCount(value: number) {
+        this.Set('ParallelCount', value);
+    }
+
+    /**
+    * * Field Name: ParallelConfigParam
+    * * Display Name: Parallel Config Param
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of a configuration parameter that contains the parallel count when ParallelizationMode is ConfigParam.
+    */
+    get ParallelConfigParam(): string | null {
+        return this.Get('ParallelConfigParam');
+    }
+    set ParallelConfigParam(value: string | null) {
+        this.Set('ParallelConfigParam', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string | null {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+}
+
+
+/**
+ * MJ: AI Prompt Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPromptRun
+ * * Base View: vwAIPromptRuns
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
+export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
+    /**
+    * Loads the MJ: AI Prompt Runs record from the database
+    * @param ID: string - primary key value to load the MJ: AI Prompt Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIPromptRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
+        this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTokensUsedSumMatchesPromptAndCompletion(result: ValidationResult) {
+    	if (
+    		!((this.TokensPrompt === null && this.TokensCompletion === null) ||
+    			this.TokensUsed === null ||
+    			(this.TokensPrompt !== null && this.TokensCompletion !== null && this.TokensUsed === (this.TokensPrompt + this.TokensCompletion))
+    		)
+    	) {
+    		result.Errors.push(new ValidationErrorInfo("TokensUsed", "TokensUsed must be equal to the sum of TokensPrompt and TokensCompletion, unless one or more of these values are NULL (except if TokensPrompt and TokensCompletion are both NULL).", this.TokensUsed, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: The prompt that was executed.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: The AI model used for execution.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    * * Description: The vendor providing the model/inference.
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: If this prompt was run as part of an agent, references the agent.
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationID
+    * * Display Name: Configuration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
+    * * Description: Optional configuration used for this execution.
+    */
+    get ConfigurationID(): string | null {
+        return this.Get('ConfigurationID');
+    }
+    set ConfigurationID(value: string | null) {
+        this.Set('ConfigurationID', value);
+    }
+
+    /**
+    * * Field Name: RunAt
+    * * Display Name: Run At
+    * * SQL Data Type: datetime2
+    * * Default Value: getutcdate()
+    * * Description: When the prompt execution started.
+    */
+    get RunAt(): Date {
+        return this.Get('RunAt');
+    }
+    set RunAt(value: Date) {
+        this.Set('RunAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetime2
+    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: ExecutionTimeMS
+    * * Display Name: Execution Time MS
+    * * SQL Data Type: int
+    * * Description: Total execution time in milliseconds.
+    */
+    get ExecutionTimeMS(): number | null {
+        return this.Get('ExecutionTimeMS');
+    }
+    set ExecutionTimeMS(value: number | null) {
+        this.Set('ExecutionTimeMS', value);
+    }
+
+    /**
+    * * Field Name: Messages
+    * * Display Name: Messages
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The input messages sent to the model, typically in JSON format.
+    */
+    get Messages(): string | null {
+        return this.Get('Messages');
+    }
+    set Messages(value: string | null) {
+        this.Set('Messages', value);
+    }
+
+    /**
+    * * Field Name: Result
+    * * Display Name: Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The output result from the model.
+    */
+    get Result(): string | null {
+        return this.Get('Result');
+    }
+    set Result(value: string | null) {
+        this.Set('Result', value);
+    }
+
+    /**
+    * * Field Name: TokensUsed
+    * * Display Name: Tokens Used
+    * * SQL Data Type: int
+    * * Description: Total number of tokens used (prompt + completion).
+    */
+    get TokensUsed(): number | null {
+        return this.Get('TokensUsed');
+    }
+    set TokensUsed(value: number | null) {
+        this.Set('TokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TokensPrompt
+    * * Display Name: Tokens Prompt
+    * * SQL Data Type: int
+    * * Description: Number of tokens in the prompt.
+    */
+    get TokensPrompt(): number | null {
+        return this.Get('TokensPrompt');
+    }
+    set TokensPrompt(value: number | null) {
+        this.Set('TokensPrompt', value);
+    }
+
+    /**
+    * * Field Name: TokensCompletion
+    * * Display Name: Tokens Completion
+    * * SQL Data Type: int
+    * * Description: Number of tokens in the completion/result.
+    */
+    get TokensCompletion(): number | null {
+        return this.Get('TokensCompletion');
+    }
+    set TokensCompletion(value: number | null) {
+        this.Set('TokensCompletion', value);
+    }
+
+    /**
+    * * Field Name: TotalCost
+    * * Display Name: Total Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Estimated cost of this execution in USD.
+    */
+    get TotalCost(): number | null {
+        return this.Get('TotalCost');
+    }
+    set TotalCost(value: number | null) {
+        this.Set('TotalCost', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the execution was successful.
+    */
+    get Success(): boolean {
+        return this.Get('Success');
+    }
+    set Success(value: boolean) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the execution failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+}
+
+
+/**
+ * MJ: AI Vendor Type Definitions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIVendorTypeDefinition
+ * * Base View: vwAIVendorTypeDefinitions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Vendor Type Definitions')
+export class AIVendorTypeDefinitionEntity extends BaseEntity<AIVendorTypeDefinitionEntityType> {
+    /**
+    * Loads the MJ: AI Vendor Type Definitions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Vendor Type Definitions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIVendorTypeDefinitionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The name of the vendor type.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the vendor type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Vendor Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIVendorType
+ * * Base View: vwAIVendorTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Vendor Types')
+export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
+    /**
+    * Loads the MJ: AI Vendor Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Vendor Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIVendorTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Rank: This rule ensures that the Rank value cannot be negative; it must be zero or higher.
+    * * Status: This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankNonNegative(result);
+        this.ValidateStatusInAllowedList(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Rank value cannot be negative; it must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankNonNegative(result: ValidationResult) {
+    	if (this.Rank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank cannot be negative. It must be zero or higher.", this.Rank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusInAllowedList(result: ValidationResult) {
+    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
+    	if (!allowedStatuses.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Status",
+    			"Status must be one of the following: 'Preview', 'Deprecated', 'Inactive', or 'Active'.",
+    			this.Status,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Determines the priority rank of this type for the vendor. Higher values indicate higher priority.
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+}
+
+
+/**
+ * MJ: AI Vendors - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIVendor
+ * * Base View: vwAIVendors
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Vendors')
+export class AIVendorEntity extends BaseEntity<AIVendorEntityType> {
+    /**
+    * Loads the MJ: AI Vendors record from the database
+    * @param ID: string - primary key value to load the MJ: AI Vendors record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIVendorEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The unique name of the vendor.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the vendor and their AI offerings.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

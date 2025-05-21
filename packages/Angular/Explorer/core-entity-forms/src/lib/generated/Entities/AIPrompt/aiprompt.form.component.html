@@ -28,6 +28,97 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Configurations" [Visible]="record.IsSaved"> 
+                        MJ: AI Configurations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextCompressionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Configurations')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Configurations" [Visible]="record.IsSaved"> 
+                        MJ: AI Configurations
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Configurations','DefaultPromptForContextSummarizationID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Configurations')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Configurations')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
+                        AI Prompts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','ResultSelectorPromptID')"  
+                            [NewRecordValues]="NewRecordValues('AI Prompts')"
+                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Prompt Models" [Visible]="record.IsSaved"> 
+                        MJ: AI Prompt Models
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Models','PromptID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Models')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Models')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Agent Prompts" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Prompts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Prompts','PromptID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Prompts')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Prompts')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Prompt Runs" [Visible]="record.IsSaved"> 
+                        MJ: AI Prompt Runs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','PromptID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Prompt Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Agents" [Visible]="record.IsSaved"> 
+                        AI Agents
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','ContextCompressionPromptID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agents')"
+                            [AllowLoad]="IsCurrentTab('AI Agents')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

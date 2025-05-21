@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { AIConfigurationEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Applications.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: AI Configurations.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-application-form-details',
+    selector: 'gen-aiconfiguration-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -26,16 +26,34 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textarea"
+            FieldName="IsDefault"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="DefaultForNewUser"
-            Type="checkbox"
+            FieldName="Status"
+            Type="textbox"
             [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultPromptForContextCompressionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultPromptForContextSummarizationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -54,8 +72,15 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SchemaAutoAddNewEntities"
-            Type="textarea"
+            FieldName="DefaultPromptForContextCompression"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultPromptForContextSummarization"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -63,12 +88,12 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ApplicationEntity;
+export class AIConfigurationDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AIConfigurationEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadApplicationDetailsComponent() {
+export function LoadAIConfigurationDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

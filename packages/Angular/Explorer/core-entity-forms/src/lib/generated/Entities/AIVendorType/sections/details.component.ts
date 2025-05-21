@@ -1,40 +1,44 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { AIVendorTypeEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Applications.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: AI Vendor Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-application-form-details',
+    selector: 'gen-aivendortype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="VendorID"
             Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="TypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Rank"
+            Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Icon"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="DefaultForNewUser"
-            Type="checkbox"
+            FieldName="Status"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -54,8 +58,15 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="SchemaAutoAddNewEntities"
-            Type="textarea"
+            FieldName="Vendor"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -63,12 +74,12 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ApplicationEntity;
+export class AIVendorTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AIVendorTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadApplicationDetailsComponent() {
+export function LoadAIVendorTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
