@@ -25,6 +25,10 @@
                     </div>
                 }
                 
+                @if(ShouldShowCompletionTime) {
+                    <div class="completion-time">{{CompletionTimeFormatted}}</div>
+                }
+                
                 @if(HasArtifact) {
                     <!-- Artifact indicator for messages with associated artifacts -->
                     <div class="artifact-indicator" (click)="onArtifactIndicatorClick()">
