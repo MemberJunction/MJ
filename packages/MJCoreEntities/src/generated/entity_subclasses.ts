@@ -3544,6 +3544,29 @@ export const DashboardSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Config
+    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`),
+    Thumbnail: z.string().nullable().describe(`
+        * * Field Name: Thumbnail
+        * * Display Name: Thumbnail
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64 encoded image or URL to an image thumbnail for the dashboard`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Global
+    * * Description: Scope of the dashboard: Global or App-specific`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
+    * * Description: Associated Application ID if Scope is App, otherwise NULL`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -3551,6 +3574,10 @@ export const DashboardSchema = z.object({
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7715,6 +7742,117 @@ export const ConversationArtifactSchema = z.object({
 });
 
 export type ConversationArtifactEntityType = z.infer<typeof ConversationArtifactSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard User Preferences
+ */
+export const DashboardUserPreferenceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User that these preferences belong to, NULL for system defaults`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    * * Description: Dashboard that this preference refers to`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+    * * Description: Scope of the preference (Global or App)`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
+    * * Description: Application that this preference applies to (only for App scope)`),
+    DisplayOrder: z.number().describe(`
+        * * Field Name: DisplayOrder
+        * * Display Name: Display Order
+        * * SQL Data Type: int
+    * * Description: Order in which to display the dashboard`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard
+        * * SQL Data Type: nvarchar(255)`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardUserPreferenceEntityType = z.infer<typeof DashboardUserPreferenceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dashboard User States
+ */
+export const DashboardUserStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DashboardID: z.string().describe(`
+        * * Field Name: DashboardID
+        * * Display Name: Dashboard ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    * * Description: Dashboard that this state applies to`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User that this state belongs to`),
+    UserState: z.string().nullable().describe(`
+        * * Field Name: UserState
+        * * Display Name: User State
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing user-specific dashboard state`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Dashboard: z.string().describe(`
+        * * Field Name: Dashboard
+        * * Display Name: Dashboard
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type DashboardUserStateEntityType = z.infer<typeof DashboardUserStateSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report User States
@@ -14671,17 +14809,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     /**
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheMatchType: This rule ensures that the cache match type can only be set to 'Vector' or 'Exact'. No other value is allowed.
-    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
-    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * * SelectionStrategy: This rule ensures that the SelectionStrategy field must be set to either 'ByPower', 'Specific', or 'Default'.
-    * * RetryStrategy: This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
-    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
     * * PowerPreference: This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
+    * * RetryStrategy: This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
     * * ParallelizationMode: This rule ensures that the ParallelizationMode field can only be set to one of the following values: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
     * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.  
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
+    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
     * @public
     * @method
     * @override
@@ -14689,17 +14827,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCacheMatchTypeIsVectorOrExact(result);
-        this.ValidateCacheTTLSecondsGreaterThanZero(result);
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
-        this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
+        this.ValidateCacheTTLSecondsGreaterThanZero(result);
         this.ValidateSelectionStrategyAgainstAllowedValues(result);
-        this.ValidateRetryStrategyIsAllowedValue(result);
-        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidatePowerPreferenceAllowedValues(result);
+        this.ValidateRetryStrategyIsAllowedValue(result);
         this.ValidateParallelizationModeAllowedValues(result);
-        this.ValidateOutputExampleWhenOutputTypeObject(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
+        this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
+        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
+        this.ValidateOutputExampleWhenOutputTypeObject(result);
 
         return result;
     }
@@ -14717,18 +14855,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
-    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -14741,14 +14867,14 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateParallelCountWhenParallelizationModeIsStaticCount(result: ValidationResult) {
-    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount === null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "When ParallelizationMode is 'StaticCount', ParallelCount must be specified.", this.ParallelCount, ValidationErrorType.Failure));
+    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
     	}
     }
 
@@ -14766,31 +14892,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRetryStrategyIsAllowedValue(result: ValidationResult) {
-    	const allowed = ["Linear", "Exponential", "Fixed"];
-    	if (this.RetryStrategy && !allowed.includes(this.RetryStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo("RetryStrategy", "RetryStrategy must be one of the following values: 'Linear', 'Exponential', or 'Fixed'.", this.RetryStrategy, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
-    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam === null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "Parallel Config Param must be entered when Parallelization Mode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -14800,6 +14901,19 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     	const allowed = ["Balanced", "Lowest", "Highest"];
     	if (this.PowerPreference && !allowed.includes(this.PowerPreference)) {
     		result.Errors.push(new ValidationErrorInfo("PowerPreference", "PowerPreference must be 'Balanced', 'Lowest', or 'Highest'.", this.PowerPreference, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryStrategyIsAllowedValue(result: ValidationResult) {
+    	const allowed = ["Linear", "Exponential", "Fixed"];
+    	if (this.RetryStrategy && !allowed.includes(this.RetryStrategy)) {
+    		result.Errors.push(new ValidationErrorInfo("RetryStrategy", "RetryStrategy must be one of the following values: 'Linear', 'Exponential', or 'Fixed'.", this.RetryStrategy, ValidationErrorType.Failure));
     	}
     }
 
@@ -14818,18 +14932,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     			this.ParallelizationMode,
     			ValidationErrorType.Failure
     		));
-    	}
-    }
-
-    /**
-    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
-    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
-    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
     	}
     }
 
@@ -14854,6 +14956,42 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheSimilarityThresholdRequiredForVectorCache(result: ValidationResult) {
     	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold === null) {
     		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be specified when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountWhenParallelizationModeIsStaticCount(result: ValidationResult) {
+    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount === null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "When ParallelizationMode is 'StaticCount', ParallelCount must be specified.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam === null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "Parallel Config Param must be entered when Parallelization Mode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
     	}
     }
 
@@ -20656,6 +20794,46 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
+    * Validate() method override for Dashboards entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Scope: This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
+    * * Type: This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeValueIsAppOrGlobal(result);
+        this.ValidateTypeAllowedValues(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeValueIsAppOrGlobal(result: ValidationResult) {
+    	if (this.Scope !== "App" && this.Scope !== "Global") {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeAllowedValues(result: ValidationResult) {
+    	if (this.Type !== "Code" && this.Type !== "Config") {
+    		result.Errors.push(new ValidationErrorInfo("Type", "Type must be either \"Code\" or \"Config\".", this.Type, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -20748,6 +20926,61 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Config
+    * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+    set Type(value: string) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Thumbnail
+    * * Display Name: Thumbnail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Base64 encoded image or URL to an image thumbnail for the dashboard
+    */
+    get Thumbnail(): string | null {
+        return this.Get('Thumbnail');
+    }
+    set Thumbnail(value: string | null) {
+        this.Set('Thumbnail', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Description: Scope of the dashboard: Global or App-specific
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+    set Scope(value: string) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Applications (vwApplications.ID)
+    * * Description: Associated Application ID if Scope is App, otherwise NULL
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -20763,6 +20996,15 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     */
     get Category(): string | null {
         return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
     }
 }
 
@@ -29902,46 +30144,22 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Priority: This rule ensures that the Priority value cannot be negative. It must be zero or greater.
-    * * MaxOutputTokens: This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
     * * Status: This rule ensures that the status value must be either "Preview", "Deprecated", "Inactive", or "Active". Other status values are not allowed.
-    * * MaxInputTokens: This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.  
+    * * Priority: This rule ensures that the Priority value cannot be negative. It must be zero or greater.
+    * * MaxInputTokens: This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
+    * * MaxOutputTokens: This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidatePriorityIsNonNegative(result);
-        this.ValidateMaxOutputTokensNotNegative(result);
         this.ValidateStatusAllowedValues(result);
+        this.ValidatePriorityIsNonNegative(result);
         this.ValidateMaxInputTokensNonNegative(result);
+        this.ValidateMaxOutputTokensNotNegative(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the Priority value cannot be negative. It must be zero or greater.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePriorityIsNonNegative(result: ValidationResult) {
-    	if (this.Priority < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or greater.", this.Priority, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMaxOutputTokensNotNegative(result: ValidationResult) {
-    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "Max output tokens must be zero or greater.", this.MaxOutputTokens, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -29958,6 +30176,18 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     }
 
     /**
+    * This rule ensures that the Priority value cannot be negative. It must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or greater.", this.Priority, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -29966,6 +30196,18 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     public ValidateMaxInputTokensNonNegative(result: ValidationResult) {
     	if (this.MaxInputTokens !== null && this.MaxInputTokens < 0) {
     		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens must be zero or a positive value if specified.", this.MaxInputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxOutputTokensNotNegative(result: ValidationResult) {
+    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "Max output tokens must be zero or greater.", this.MaxOutputTokens, ValidationErrorType.Failure));
     	}
     }
 
@@ -30211,11 +30453,11 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Status: This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
     * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
-    * * Status: This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
-    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * ParallelizationMode: This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
+    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
     * @public
     * @method
@@ -30223,14 +30465,27 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateStatusIsLimitedToAllowedValues(result);
         this.ValidatePriorityIsNonNegative(result);
         this.ValidateExecutionGroupIsNonNegative(result);
-        this.ValidateStatusIsLimitedToAllowedValues(result);
-        this.ValidateParallelCountAtLeastOne(result);
         this.ValidateParallelizationModeAllowedValues(result);
+        this.ValidateParallelCountAtLeastOne(result);
         this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusIsLimitedToAllowedValues(result: ValidationResult) {
+    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
+    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo("Status", "The Status field must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -30258,15 +30513,15 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     }
 
     /**
-    * This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
+    * This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateStatusIsLimitedToAllowedValues(result: ValidationResult) {
-    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
-    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo("Status", "The Status field must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
+    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
+    	const validValues = ["ConfigParam", "StaticCount", "None"];
+    	if (this.ParallelizationMode !== null && !validValues.includes(this.ParallelizationMode)) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelizationMode", "ParallelizationMode must be 'ConfigParam', 'StaticCount', or 'None'.", this.ParallelizationMode, ValidationErrorType.Failure));
     	}
     }
 
@@ -30279,19 +30534,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     public ValidateParallelCountAtLeastOne(result: ValidationResult) {
     	if (this.ParallelCount < 1) {
     		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
-    	const validValues = ["ConfigParam", "StaticCount", "None"];
-    	if (this.ParallelizationMode !== null && !validValues.includes(this.ParallelizationMode)) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelizationMode", "ParallelizationMode must be 'ConfigParam', 'StaticCount', or 'None'.", this.ParallelizationMode, ValidationErrorType.Failure));
     	}
     }
 
@@ -31028,30 +31270,18 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
 
     /**
     * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Rank: This rule ensures that the Rank value cannot be negative; it must be zero or higher.
-    * * Status: This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.  
+    * * Status: This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.
+    * * Rank: This rule ensures that the Rank value cannot be negative; it must be zero or higher.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRankNonNegative(result);
         this.ValidateStatusInAllowedList(result);
+        this.ValidateRankNonNegative(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the Rank value cannot be negative; it must be zero or higher.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRankNonNegative(result: ValidationResult) {
-    	if (this.Rank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank cannot be negative. It must be zero or higher.", this.Rank, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -31069,6 +31299,18 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     			this.Status,
     			ValidationErrorType.Failure
     		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the Rank value cannot be negative; it must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankNonNegative(result: ValidationResult) {
+    	if (this.Rank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank cannot be negative. It must be zero or higher.", this.Rank, ValidationErrorType.Failure));
     	}
     }
 
@@ -31855,6 +32097,325 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     */
     get ArtifactType(): string {
         return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: Dashboard User Preferences - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardUserPreference
+ * * Base View: vwDashboardUserPreferences
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard User Preferences')
+export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPreferenceEntityType> {
+    /**
+    * Loads the MJ: Dashboard User Preferences record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard User Preferences record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardUserPreferenceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Scope: This rule ensures that the value of Scope must be either 'App' or 'Global'. No other values are allowed for the Scope field.
+    * * Table-Level: This rule ensures that when the scope is set to 'Global', the ApplicationID must be blank, and when the scope is set to 'App', an ApplicationID must be provided.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeMustBeAppOrGlobal(result);
+        this.ValidateApplicationIDCorrectForScope(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the value of Scope must be either 'App' or 'Global'. No other values are allowed for the Scope field.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeMustBeAppOrGlobal(result: ValidationResult) {
+    	if (this.Scope !== "App" && this.Scope !== "Global") {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that when the scope is set to 'Global', the ApplicationID must be blank, and when the scope is set to 'App', an ApplicationID must be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApplicationIDCorrectForScope(result: ValidationResult) {
+    	if (this.Scope === "Global" && this.ApplicationID !== null) {
+    		result.Errors.push(new ValidationErrorInfo("ApplicationID", "When scope is 'Global', ApplicationID must be blank.", this.ApplicationID, ValidationErrorType.Failure));
+    	}
+    	else if (this.Scope === "App" && this.ApplicationID === null) {
+    		result.Errors.push(new ValidationErrorInfo("ApplicationID", "When scope is 'App', ApplicationID must be provided.", this.ApplicationID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User that these preferences belong to, NULL for system defaults
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    * * Description: Dashboard that this preference refers to
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Scope of the preference (Global or App)
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+    set Scope(value: string) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Applications (vwApplications.ID)
+    * * Description: Application that this preference applies to (only for App scope)
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DisplayOrder
+    * * Display Name: Display Order
+    * * SQL Data Type: int
+    * * Description: Order in which to display the dashboard
+    */
+    get DisplayOrder(): number {
+        return this.Get('DisplayOrder');
+    }
+    set DisplayOrder(value: number) {
+        this.Set('DisplayOrder', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+}
+
+
+/**
+ * MJ: Dashboard User States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DashboardUserState
+ * * Base View: vwDashboardUserStates
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dashboard User States')
+export class DashboardUserStateEntity extends BaseEntity<DashboardUserStateEntityType> {
+    /**
+    * Loads the MJ: Dashboard User States record from the database
+    * @param ID: string - primary key value to load the MJ: Dashboard User States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof DashboardUserStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: DashboardID
+    * * Display Name: Dashboard ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
+    * * Description: Dashboard that this state applies to
+    */
+    get DashboardID(): string {
+        return this.Get('DashboardID');
+    }
+    set DashboardID(value: string) {
+        this.Set('DashboardID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User that this state belongs to
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: UserState
+    * * Display Name: User State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing user-specific dashboard state
+    */
+    get UserState(): string | null {
+        return this.Get('UserState');
+    }
+    set UserState(value: string | null) {
+        this.Set('UserState', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Dashboard
+    * * Display Name: Dashboard
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Dashboard(): string {
+        return this.Get('Dashboard');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 

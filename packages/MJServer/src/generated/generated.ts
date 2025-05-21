@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIPromptModelEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, ConversationArtifactPermissionEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, AIAgentNoteTypeEntity, AIVendorEntity, AIConfigurationEntity, AIAgentEntity, AIPromptModelEntity, AIAgentNoteEntity, AIAgentActionEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ArtifactTypeEntity, AIVendorTypeEntity, ConversationArtifactEntity, AIAgentPromptEntity, DashboardUserPreferenceEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, ConversationArtifactPermissionEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -7453,11 +7453,17 @@ export class User_ {
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
+    @Field(() => [DashboardUserPreference_])
+    MJ_DashboardUserPreferences_UserIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
     @Field(() => [ReportUserState_])
     MJ_ReportUserStates_UserIDArray: ReportUserState_[]; // Link to MJ_ReportUserStates
     
     @Field(() => [AIAgentNote_])
     AIAgentNotes_UserIDArray: AIAgentNote_[]; // Link to AIAgentNotes
+    
+    @Field(() => [DashboardUserState_])
+    MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
     
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
@@ -7926,6 +7932,15 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [DashboardUserPreference_])
+    async MJ_DashboardUserPreferences_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ReportUserState_])
     async MJ_ReportUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Report User States', userPayload);
@@ -7941,6 +7956,15 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentNotes] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('AI Agent Notes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Notes', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserState_])
+    async MJ_DashboardUserStates_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', await dataSource.query(sSQL));
         return result;
     }
         
@@ -9556,6 +9580,12 @@ export class Application_ {
     @Field(() => [ApplicationEntity_])
     ApplicationEntities_ApplicationIDArray: ApplicationEntity_[]; // Link to ApplicationEntities
     
+    @Field(() => [Dashboard_])
+    Dashboards_ApplicationIDArray: Dashboard_[]; // Link to Dashboards
+    
+    @Field(() => [DashboardUserPreference_])
+    MJ_DashboardUserPreferences_ApplicationIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
 }
 
 //****************************************************************************
@@ -9696,6 +9726,24 @@ export class ApplicationResolver extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationEntities] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [Dashboard_])
+    async Dashboards_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboards', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserPreference_])
+    async MJ_DashboardUserPreferences_ApplicationIDArray(@Root() application_: Application_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [ApplicationID]='${application_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', await dataSource.query(sSQL));
         return result;
     }
         
@@ -14966,6 +15014,21 @@ export class Dashboard_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`}) 
+    @MaxLength(40)
+    Type: string;
+        
+    @Field({nullable: true, description: `Base64 encoded image or URL to an image thumbnail for the dashboard`}) 
+    Thumbnail?: string;
+        
+    @Field({description: `Scope of the dashboard: Global or App-specific`}) 
+    @MaxLength(40)
+    Scope: string;
+        
+    @Field({nullable: true, description: `Associated Application ID if Scope is App, otherwise NULL`}) 
+    @MaxLength(16)
+    ApplicationID?: string;
+        
     @Field() 
     @MaxLength(200)
     User: string;
@@ -14974,6 +15037,16 @@ export class Dashboard_ {
     @MaxLength(200)
     Category?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Application?: string;
+        
+    @Field(() => [DashboardUserState_])
+    MJ_DashboardUserStates_DashboardIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
+    
+    @Field(() => [DashboardUserPreference_])
+    MJ_DashboardUserPreferences_DashboardIDArray: DashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
 }
 
 //****************************************************************************
@@ -14995,6 +15068,18 @@ export class CreateDashboardInput {
 
     @Field({ nullable: true })
     UIConfigDetails?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    Thumbnail: string | null;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
 }
     
 
@@ -15020,6 +15105,18 @@ export class UpdateDashboardInput {
 
     @Field({ nullable: true })
     UIConfigDetails?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    Thumbnail?: string | null;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15081,6 +15178,24 @@ export class DashboardResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [DashboardUserState_])
+    async MJ_DashboardUserStates_DashboardIDArray(@Root() dashboard_: Dashboard_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [DashboardID]='${dashboard_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @FieldResolver(() => [DashboardUserPreference_])
+    async MJ_DashboardUserPreferences_DashboardIDArray(@Root() dashboard_: Dashboard_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [DashboardID]='${dashboard_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => Dashboard_)
     async CreateDashboard(
         @Arg('input', () => CreateDashboardInput) input: CreateDashboardInput,
@@ -31709,6 +31824,166 @@ export class QueryEntityResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Dashboard User States
+//****************************************************************************
+@ObjectType()
+export class DashboardUserState_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Dashboard that this state applies to`}) 
+    @MaxLength(16)
+    DashboardID: string;
+        
+    @Field({description: `User that this state belongs to`}) 
+    @MaxLength(16)
+    UserID: string;
+        
+    @Field({nullable: true, description: `JSON object containing user-specific dashboard state`}) 
+    UserState?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Dashboard: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dashboard User States
+//****************************************************************************
+@InputType()
+export class CreateDashboardUserStateInput {
+    @Field({ nullable: true })
+    DashboardID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    UserState: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dashboard User States
+//****************************************************************************
+@InputType()
+export class UpdateDashboardUserStateInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    DashboardID?: string;
+
+    @Field({ nullable: true })
+    UserID?: string;
+
+    @Field({ nullable: true })
+    UserState?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Dashboard User States
+//****************************************************************************
+@ObjectType()
+export class RunDashboardUserStateViewResult {
+    @Field(() => [DashboardUserState_])
+    Results: DashboardUserState_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DashboardUserState_)
+export class DashboardUserStateResolver extends ResolverBase {
+    @Query(() => RunDashboardUserStateViewResult)
+    async RunDashboardUserStateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardUserStateViewResult)
+    async RunDashboardUserStateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardUserStateViewResult)
+    async RunDashboardUserStateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Dashboard User States';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DashboardUserState_, { nullable: true })
+    async DashboardUserState(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardUserState_ | null> {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Dashboard User States', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => DashboardUserState_)
+    async CreateDashboardUserState(
+        @Arg('input', () => CreateDashboardUserStateInput) input: CreateDashboardUserStateInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Dashboard User States', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => DashboardUserState_)
+    async UpdateDashboardUserState(
+        @Arg('input', () => UpdateDashboardUserStateInput) input: UpdateDashboardUserStateInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Dashboard User States', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => DashboardUserState_)
+    async DeleteDashboardUserState(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Dashboard User States', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Artifact Types
 //****************************************************************************
 @ObjectType()
@@ -32484,6 +32759,190 @@ export class AIAgentPromptResolver extends ResolverBase {
         const dataSource = GetReadWriteDataSource(dataSources);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Agent Prompts', key, options, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Dashboard User Preferences
+//****************************************************************************
+@ObjectType()
+export class DashboardUserPreference_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({nullable: true, description: `User that these preferences belong to, NULL for system defaults`}) 
+    @MaxLength(16)
+    UserID?: string;
+        
+    @Field({description: `Dashboard that this preference refers to`}) 
+    @MaxLength(16)
+    DashboardID: string;
+        
+    @Field({description: `Scope of the preference (Global or App)`}) 
+    @MaxLength(40)
+    Scope: string;
+        
+    @Field({nullable: true, description: `Application that this preference applies to (only for App scope)`}) 
+    @MaxLength(16)
+    ApplicationID?: string;
+        
+    @Field(() => Int, {description: `Order in which to display the dashboard`}) 
+    DisplayOrder: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Dashboard: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Application?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dashboard User Preferences
+//****************************************************************************
+@InputType()
+export class CreateDashboardUserPreferenceInput {
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    DashboardID?: string;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dashboard User Preferences
+//****************************************************************************
+@InputType()
+export class UpdateDashboardUserPreferenceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    DashboardID?: string;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    DisplayOrder?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Dashboard User Preferences
+//****************************************************************************
+@ObjectType()
+export class RunDashboardUserPreferenceViewResult {
+    @Field(() => [DashboardUserPreference_])
+    Results: DashboardUserPreference_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DashboardUserPreference_)
+export class DashboardUserPreferenceResolver extends ResolverBase {
+    @Query(() => RunDashboardUserPreferenceViewResult)
+    async RunDashboardUserPreferenceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardUserPreferenceViewResult)
+    async RunDashboardUserPreferenceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardUserPreferenceViewResult)
+    async RunDashboardUserPreferenceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Dashboard User Preferences';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DashboardUserPreference_, { nullable: true })
+    async DashboardUserPreference(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardUserPreference_ | null> {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause('MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('MJ: Dashboard User Preferences', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => DashboardUserPreference_)
+    async CreateDashboardUserPreference(
+        @Arg('input', () => CreateDashboardUserPreferenceInput) input: CreateDashboardUserPreferenceInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.CreateRecord('MJ: Dashboard User Preferences', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => DashboardUserPreference_)
+    async UpdateDashboardUserPreference(
+        @Arg('input', () => UpdateDashboardUserPreferenceInput) input: UpdateDashboardUserPreferenceInput,
+        @Ctx() { dataSources, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        return this.UpdateRecord('MJ: Dashboard User Preferences', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => DashboardUserPreference_)
+    async DeleteDashboardUserPreference(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const dataSource = GetReadWriteDataSource(dataSources);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Dashboard User Preferences', key, options, dataSource, userPayload, pubSub);
     }
     
 }
