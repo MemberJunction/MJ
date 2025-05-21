@@ -54,6 +54,7 @@ export class ApplicationInfo extends BaseInfo {
     Description: string = null
     Icon: string = null
     DefaultForNewUser: boolean = null
+    SchemaAutoAddNewEntities: string = null
 
     private _ApplicationEntities: ApplicationEntityInfo[] = []
     public get ApplicationEntities(): ApplicationEntityInfo[] {
