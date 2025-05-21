@@ -13,7 +13,7 @@
 -- 2. AIVendorTypeDefinition - Defines vendor types (Model Developer, Inference Provider)
 -- 3. AIVendorType - Links vendors to their types with priority rankings
 -- 4. AIModelVendor - Links models to vendors with implementation details
--- 5. vwAIModels_Custom - View for backward compatibility
+-- 5. vwAIModels - View for backward compatibility
 -- ---------------------------------------------------------------------------
 -- ---------------------------------------------------------------------------
  
@@ -355,9 +355,9 @@ END CATCH
 -- ---------------------------------------------------------------------------
 -- Create view for backward compatibility bringing in top priotiy for AIModelVendor - now using TOP 1 to handle ties
 -- ---------------------------------------------------------------------------
-DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwAIModels_Custom;
+DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwAIModels;
 GO
-CREATE VIEW [${flyway:defaultSchema}].[vwAIModels_Custom]
+CREATE VIEW [${flyway:defaultSchema}].[vwAIModels]
 AS
 SELECT 
 	m.*,
@@ -1694,7 +1694,7 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description',
   DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN ('F773433E-F36B-1410-883E-00D02208DC50','F673433E-F36B-1410-883E-00D02208DC50') -- Name IN ('CacheResults','CacheExpiration'), AIPrompt table
 
 -- 3) Update Entity Metadata for AI Models entity to reflect we have a CUSTOM base view
-  UPDATE ${flyway:defaultSchema}.Entity SET BaseViewGenerated=0, BaseView='vwAIModels_Custom' WHERE ID='FD238F34-2837-EF11-86D4-6045BDEE16E6' -- Name='AI Models'
+  UPDATE ${flyway:defaultSchema}.Entity SET BaseViewGenerated=0 WHERE ID='FD238F34-2837-EF11-86D4-6045BDEE16E6' -- Name='AI Models'
 
 /************************************************************************************************
  ************************************************************************************************ 
