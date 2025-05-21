@@ -677,6 +677,7 @@ export class EntityInfo extends BaseInfo {
      * Unique name of the entity
      */
     public Name: string = null
+    public NameSuffix: string = null
     public Description: string  = null
     public BaseTable: string = null
     public BaseView: string = null
