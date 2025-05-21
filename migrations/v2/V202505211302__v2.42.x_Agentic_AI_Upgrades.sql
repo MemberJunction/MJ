@@ -13,7 +13,7 @@
 -- 2. AIVendorTypeDefinition - Defines vendor types (Model Developer, Inference Provider)
 -- 3. AIVendorType - Links vendors to their types with priority rankings
 -- 4. AIModelVendor - Links models to vendors with implementation details
--- 5. vwAIModels - View for backward compatibility
+-- 5. vwAIModels_Custom - View for backward compatibility
 -- ---------------------------------------------------------------------------
 -- ---------------------------------------------------------------------------
  
@@ -355,9 +355,9 @@ END CATCH
 -- ---------------------------------------------------------------------------
 -- Create view for backward compatibility bringing in top priotiy for AIModelVendor - now using TOP 1 to handle ties
 -- ---------------------------------------------------------------------------
-DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwAIModels;
+DROP VIEW IF EXISTS ${flyway:defaultSchema}.vwAIModels_Custom;
 GO
-CREATE VIEW [${flyway:defaultSchema}].[vwAIModels]
+CREATE VIEW [${flyway:defaultSchema}].[vwAIModels_Custom]
 AS
 SELECT 
 	m.*,
@@ -1671,9 +1671,33 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description',
     @level2type=N'COLUMN',@level2name=N'PromptRunID';
 
 
+/************************************************************************************************
+ ************************************************************************************************ 
+        PART 6 - Custom Metadata Tweaks
+ ************************************************************************************************ 
+ ***********************************************************************************************/
+
+-- 1) Add schema to Application table
+-- Add the SchemaAutoAddNewEntities column to the ${flyway:defaultSchema}.Application table
+  ALTER TABLE [${flyway:defaultSchema}].[Application]
+  ADD [SchemaAutoAddNewEntities] NVARCHAR(MAX) NULL;
+
+  -- Add documentation for the SchemaAutoAddNewEntities column
+  EXEC sp_addextendedproperty
+      @name = N'MS_Description',
+      @value = N'Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas',
+      @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+      @level1type = N'TABLE',  @level1name = N'Application',
+      @level2type = N'COLUMN', @level2name = N'SchemaAutoAddNewEntities';
+
+-- 2) Remove fields from AIPrompt that we removed for Cache... replaced by new fields
+  DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN ('F773433E-F36B-1410-883E-00D02208DC50','F673433E-F36B-1410-883E-00D02208DC50') -- Name IN ('CacheResults','CacheExpiration'), AIPrompt table
+
+-- 3) Update Entity Metadata for AI Models entity to reflect we have a CUSTOM base view
+  UPDATE ${flyway:defaultSchema}.Entity SET BaseViewGenerated=0, BaseView='vwAIModels_Custom' WHERE ID='FD238F34-2837-EF11-86D4-6045BDEE16E6' -- Name='AI Models'
 
 /************************************************************************************************
  ************************************************************************************************ 
-        PART 6 - CodeGen OUTPUT
+        PART 7 - CodeGen OUTPUT
  ************************************************************************************************ 
  ***********************************************************************************************/
