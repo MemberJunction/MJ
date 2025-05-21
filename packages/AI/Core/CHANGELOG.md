@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai
 
+## 2.41.0
+
+### Patch Changes
+
+- 9d3b577: - Clarify that @memberjunction/ai can be used completely independently without database or environment setup
+- 276371d: Added Google Vertex and Amazon Bedrock AI providers!
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes

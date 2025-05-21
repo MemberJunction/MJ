@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/storage
 
+## 2.41.0
+
+### Patch Changes
+
+- c20558b: Enhance Box.com FileStorage Provider with improved file handling and path resolution
+- c20558b: Updates to Box.com FileStorage Provider
+- Updated dependencies [3be3f71]
+- Updated dependencies [7e0523d]
+  - @memberjunction/core@2.41.0
+  - @memberjunction/core-entities@2.41.0
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes

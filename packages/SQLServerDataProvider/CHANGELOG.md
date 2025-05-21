@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.41.0
+
+### Patch Changes
+
+- 3be3f71: Patched sql stored procedure name for tables with name colisions.
+- Updated dependencies [3be3f71]
+- Updated dependencies [9d3b577]
+- Updated dependencies [276371d]
+- Updated dependencies [7e0523d]
+  - @memberjunction/core@2.41.0
+  - @memberjunction/ai@2.41.0
+  - @memberjunction/core-entities@2.41.0
+  - @memberjunction/aiengine@2.41.0
+  - @memberjunction/ai-vector-dupe@2.41.0
+  - @memberjunction/actions@2.41.0
+  - @memberjunction/queue@2.41.0
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes

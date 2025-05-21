@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/server
 
+## 2.41.0
+
+### Minor Changes
+
+- 7e0523d: Persist Skip conversation status and add completion time display
+
+  - Added 'Status' column to Conversation table with 'Processing' and 'Available' states
+  - Added 'CompletionTime' column to ConversationDetail table to track processing duration
+  - Updated AskSkipResolver to manage conversation status and track processing time
+  - Enabled GraphQLDataProvider to cache and retrieve session IDs from IndexedDB
+  - Enhanced skip-chat component to poll for 'Processing' conversations after page refresh
+  - Added CompletionTime display in the UI for completed AI messages
+  - Fixed session persistence for conversation status across page reloads
+
+### Patch Changes
+
+- Updated dependencies [3be3f71]
+- Updated dependencies [c20558b]
+- Updated dependencies [c20558b]
+- Updated dependencies [9d3b577]
+- Updated dependencies [276371d]
+- Updated dependencies [7e0523d]
+  - @memberjunction/core@2.41.0
+  - @memberjunction/sqlserver-dataprovider@2.41.0
+  - @memberjunction/storage@2.41.0
+  - @memberjunction/ai@2.41.0
+  - @memberjunction/graphql-dataprovider@2.41.0
+  - @memberjunction/core-entities@2.41.0
+  - @memberjunction/aiengine@2.41.0
+  - @memberjunction/ai-vectors-pinecone@2.41.0
+  - @memberjunction/core-actions@2.41.0
+  - @memberjunction/actions@2.41.0
+  - @memberjunction/entity-communications-server@2.41.0
+  - @memberjunction/doc-utils@2.41.0
+  - @memberjunction/external-change-detection@2.41.0
+  - @memberjunction/data-context@2.41.0
+  - @memberjunction/queue@2.41.0
+  - @memberjunction/templates@2.41.0
+  - @memberjunction/ai-mistral@2.41.0
+  - @memberjunction/ai-openai@2.41.0
+  - @memberjunction/skip-types@2.41.0
+  - @memberjunction/data-context-server@2.41.0
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes
