@@ -456,6 +456,42 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     }
 
     /**
+     * Returns a formatted string for the completion time if available
+     */
+    public get CompletionTimeFormatted(): string | null {
+      if (this.IsAIMessage && this.ConversationDetailRecord.CompletionTime) {
+        const milliseconds = this.ConversationDetailRecord.CompletionTime;
+        
+        // Format based on duration
+        if (milliseconds < 1000) {
+          return `Generated in less than a second`;
+        } else if (milliseconds < 60000) {
+          const seconds = Math.floor(milliseconds / 1000);
+          return `Generated in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
+        } else {
+          const minutes = Math.floor(milliseconds / 60000);
+          const seconds = Math.floor((milliseconds % 60000) / 1000);
+          
+          if (seconds === 0) {
+            return `Generated in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+          } else {
+            return `Generated in ${minutes}m ${seconds}s`;
+          }
+        }
+      }
+      return null;
+    }
+    
+    /**
+     * Returns whether this message should display a completion time
+     */
+    public get ShouldShowCompletionTime(): boolean {
+      return this.IsAIMessage && 
+             !this.IsTemporaryMessage && 
+             !!this.ConversationDetailRecord.CompletionTime;
+    }
+
+    /**
      * Loads the artifact information if available
      */
     private async loadArtifactInfo(): Promise<void> {
