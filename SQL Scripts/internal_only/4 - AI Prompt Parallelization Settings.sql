@@ -16,7 +16,8 @@ BEGIN TRY
     ALTER TABLE [__mj].[AIPrompt] ADD
         [MaxRetries] [int] NOT NULL DEFAULT(0),                   -- Maximum number of retry attempts
         [RetryDelayMS] [int] NOT NULL DEFAULT(0),                 -- Delay between retries in milliseconds
-        [RetryStrategy] [nvarchar](20) NOT NULL DEFAULT('Fixed'); -- Fixed, Exponential, Linear
+        [RetryStrategy] [nvarchar](20) NOT NULL DEFAULT('Fixed'), -- Fixed, Exponential, Linear
+        [ResultSelectorPromptID] [uniqueidentifier] NULL;         -- Reference to a prompt that selects the best result
 
     -- Then add model-specific parallelization to AIPromptModel
     ALTER TABLE [__mj].[AIPromptModel] ADD
@@ -24,16 +25,22 @@ BEGIN TRY
         [ParallelCount] [int] NOT NULL DEFAULT(1),                     -- Number of parallel executions for this model
         [ParallelConfigParam] [nvarchar](100) NULL;                    -- Config parameter containing parallel count
 
-    -- ---------------------------------------------------------------------------
-    -- 3. Add Best Result Selector Prompt reference
-    -- ---------------------------------------------------------------------------
-    ALTER TABLE [__mj].[AIPrompt] ADD
-        [ResultSelectorPromptID] [uniqueidentifier] NULL;         -- Reference to a prompt that selects the best result
-
-
     COMMIT TRANSACTION;
 
+    PRINT 'Table enhancements committed successfully.';
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+    PRINT 'Error in AIPrompt enhancements: ' + ERROR_MESSAGE();
+    THROW;
+END CATCH;
 
+GO
+
+
+
+BEGIN TRY
     BEGIN TRANSACTION;
 
     -- Add check constraint on RetryStrategy
@@ -79,7 +86,8 @@ BEGIN TRY
         CHECK ([ResultSelectorPromptID] <> [ID]);
         
     COMMIT TRANSACTION;
-    PRINT 'AIPrompt enhancements committed successfully.';
+
+    PRINT 'Constraints committed successfully.';
 END TRY
 BEGIN CATCH
     IF @@TRANCOUNT > 0
@@ -89,6 +97,7 @@ BEGIN CATCH
 END CATCH;
 
 GO
+
 
 -- ---------------------------------------------------------------------------
 -- Extended properties for documentation

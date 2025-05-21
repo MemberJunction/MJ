@@ -261,11 +261,6 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description',
     @level2type=N'COLUMN',@level2name=N'ExecutionOrder'
 
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', 
-    @value=N'If true, this prompt is required for the agent to function. If false, the agent can continue if this prompt fails.' , 
-    @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIAgentPrompt', 
-    @level2type=N'COLUMN',@level2name=N'IsRequired'
-
-EXEC sys.sp_addextendedproperty @name=N'MS_Description', 
     @value=N'Optional reference to a specific configuration to use for this prompt. If NULL, uses the default configuration.' , 
     @level0type=N'SCHEMA',@level0name=N'__mj', @level1type=N'TABLE',@level1name=N'AIAgentPrompt', 
     @level2type=N'COLUMN',@level2name=N'ConfigurationID'

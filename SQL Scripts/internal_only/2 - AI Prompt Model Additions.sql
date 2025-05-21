@@ -1,6 +1,6 @@
 -- ---------------------------------------------------------------------------
 -- MemberJunction AI Prompt Enhancement Schema
--- 
+--  
 -- This script creates new tables and enhances existing ones to support:
 -- 1. Advanced model selection for prompts
 -- 2. Configuration-based prompt execution
