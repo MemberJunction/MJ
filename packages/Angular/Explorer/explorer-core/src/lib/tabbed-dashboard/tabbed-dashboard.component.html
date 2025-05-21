@@ -1,0 +1,53 @@
+<div class="tabbed-dashboard-container">
+  <div *ngIf="loading" class="loading-indicator">
+    Loading dashboards...
+  </div>
+  
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+  </div>
+  
+  <div *ngIf="!loading && !error">
+    <!-- Show default component if no dashboards are available -->
+    <ng-container *ngIf="dashboards.length === 0 && defaultComponent">
+      <ng-container *ngComponentOutlet="defaultComponent"></ng-container>
+    </ng-container>
+    
+    <!-- Show tabbed dashboards if available -->
+    <mj-tabstrip #tabstrip *ngIf="dashboards.length > 0" (TabSelected)="onTabSelect($event.index)">
+      <ng-container *ngFor="let dashboard of dashboards; let i = index">
+        <mj-tab [Name]="dashboard.Name">
+          <span class="fa-solid fa-grip tab-icon"></span>
+          {{ dashboard.Name }}
+        </mj-tab>
+      </ng-container>
+      
+      <ng-container *ngFor="let dashboard of dashboards; let i = index">
+        <mj-tab-body>
+          <div class="dashboard-container">
+            <!-- Lazy load dashboard component when tab is selected -->
+            <ng-container *ngIf="tabstrip.SelectedTabIndex === i">
+              <ng-container *ngTemplateOutlet="dashboardTemplate; context: { $implicit: dashboard }"></ng-container>
+            </ng-container>
+          </div>
+        </mj-tab-body>
+      </ng-container>
+    </mj-tabstrip>
+  </div>
+</div>
+
+<!-- Template for dashboard instantiation -->
+<ng-template #dashboardTemplate let-dashboard>
+  <!-- Use the dashboard instance based on the dashboard ID -->
+  <ng-container *ngIf="getDashboardInstance(dashboard.ID) as dashboardInstance">
+    <!-- Render the dashboard instance -->
+    <!-- You'll need to implement the actual rendering based on the dashboard type -->
+    <div class="dashboard-instance-container">
+      <!-- This is where the dashboard would be rendered -->
+      <!-- For now, showing dashboard info as placeholder -->
+      <div *ngIf="!dashboardInstance" class="dashboard-placeholder">
+        Dashboard "{{ dashboard.Name }}" would be rendered here
+      </div>
+    </div>
+  </ng-container>
+</ng-template>

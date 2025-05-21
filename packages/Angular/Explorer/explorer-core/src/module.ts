@@ -51,6 +51,7 @@ import { ResourceContainerComponent } from './lib/generic/resource-container-com
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
+import { TabbedDashboardComponent } from './lib/tabbed-dashboard/tabbed-dashboard.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
@@ -122,7 +123,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ListViewComponent,
     ResourceBrowserComponent,
     SingleListDetailComponent,
-    ListDetailResource
+    ListDetailResource,
+    TabbedDashboardComponent
   ],
   imports: [
     AppRoutingModule,
@@ -207,7 +209,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ApplicationViewComponent,
     ListViewComponent,
     ResourceBrowserComponent,
-    ListDetailResource
+    ListDetailResource,
+    TabbedDashboardComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

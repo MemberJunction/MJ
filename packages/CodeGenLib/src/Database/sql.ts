@@ -141,7 +141,13 @@ public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], app
       for (const entity of l) {
         // if an excludeEntities variable was provided, skip this entity if it's in the list
         if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
-          sqlCommand += `EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';\n`;
+          sqlCommand += ` BEGIN TRY
+                              EXEC sp_refreshview '${entity.SchemaName}.${entity.BaseView}';
+                          END TRY
+                          BEGIN CATCH
+                              PRINT 'Error refreshing view: ${entity.SchemaName}.${entity.BaseView}. Error: ' + ERROR_MESSAGE();
+                          END CATCH
+                        ` // done this way to make each line more resilient so whole batch doesn't fail if one fails
         }
       }
 

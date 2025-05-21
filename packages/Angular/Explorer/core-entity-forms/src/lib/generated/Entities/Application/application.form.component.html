@@ -54,6 +54,32 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="Dashboards" [Visible]="record.IsSaved"> 
+                        <span class="fa-solid fa-table-columns tab-header-icon"></span>Dashboards
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboards','ApplicationID')"  
+                            [NewRecordValues]="NewRecordValues('Dashboards')"
+                            [AllowLoad]="IsCurrentTab('Dashboards')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Dashboard User Preferences" [Visible]="record.IsSaved"> 
+                        MJ: Dashboard User Preferences
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','ApplicationID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
+                            [AllowLoad]="IsCurrentTab('MJ: Dashboard User Preferences')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
