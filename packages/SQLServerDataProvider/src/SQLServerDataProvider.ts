@@ -1536,10 +1536,10 @@ export class SQLServerDataProvider
     const spName = bNewRecord
     ? entity.EntityInfo.spCreate?.length > 0
       ? entity.EntityInfo.spCreate
-      : 'spCreate' + entity.EntityInfo.BaseTable
+      : 'spCreate' + entity.EntityInfo.ClassName
     : entity.EntityInfo.spUpdate?.length > 0
       ? entity.EntityInfo.spUpdate
-      : 'spUpdate' + entity.EntityInfo.BaseTable;
+      : 'spUpdate' + entity.EntityInfo.ClassName;
     return spName;
   } 
 
