@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/doc-utils
 
+## 2.41.0
+
+### Patch Changes
+
+- Updated dependencies [3be3f71]
+- Updated dependencies [7e0523d]
+  - @memberjunction/core@2.41.0
+  - @memberjunction/core-entities@2.41.0
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes

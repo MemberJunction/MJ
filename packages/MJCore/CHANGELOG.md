@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.41.0
+
+### Patch Changes
+
+- 3be3f71: Patched sql stored procedure name for tables with name colisions.
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes

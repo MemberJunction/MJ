@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.41.0
+
+### Minor Changes
+
+- 7e0523d: Persist Skip conversation status and add completion time display
+
+  - Added 'Status' column to Conversation table with 'Processing' and 'Available' states
+  - Added 'CompletionTime' column to ConversationDetail table to track processing duration
+  - Updated AskSkipResolver to manage conversation status and track processing time
+  - Enabled GraphQLDataProvider to cache and retrieve session IDs from IndexedDB
+  - Enhanced skip-chat component to poll for 'Processing' conversations after page refresh
+  - Added CompletionTime display in the UI for completed AI messages
+  - Fixed session persistence for conversation status across page reloads
+
+### Patch Changes
+
+- Updated dependencies [3be3f71]
+  - @memberjunction/core@2.41.0
+  - @memberjunction/global@2.41.0
+
 ## 2.40.0
 
 ### Patch Changes
