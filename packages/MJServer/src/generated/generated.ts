@@ -6405,6 +6405,20 @@ export class Entity_ {
     @Field({nullable: true, description: `An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`}) 
     RowsToPackSampleOrder?: string;
         
+    @Field(() => Int, {nullable: true, description: `Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.`}) 
+    AutoRowCountFrequency?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.`}) 
+    RowCount?: number;
+        
+    @Field({nullable: true, description: `Timestamp indicating when the last automatic row count was performed for this entity.`}) 
+    @MaxLength(10)
+    RowCountRunAt?: Date;
+        
+    @Field({description: `Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`}) 
+    @MaxLength(50)
+    Status: string;
+        
     @Field({nullable: true}) 
     CodeName?: string;
         
@@ -6684,6 +6698,18 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     RowsToPackSampleOrder: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AutoRowCountFrequency: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RowCount: number | null;
+
+    @Field({ nullable: true })
+    RowCountRunAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -6835,6 +6861,18 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     RowsToPackSampleOrder?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    AutoRowCountFrequency?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    RowCount?: number | null;
+
+    @Field({ nullable: true })
+    RowCountRunAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -8617,6 +8655,9 @@ export class UserView_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`}) 
+    Thumbnail?: string;
+        
     @Field() 
     @MaxLength(200)
     UserName: string;
@@ -8707,6 +8748,9 @@ export class CreateUserViewInput {
 
     @Field({ nullable: true })
     SortState: string | null;
+
+    @Field({ nullable: true })
+    Thumbnail: string | null;
 }
     
 
@@ -8768,6 +8812,9 @@ export class UpdateUserViewInput {
 
     @Field({ nullable: true })
     SortState?: string | null;
+
+    @Field({ nullable: true })
+    Thumbnail?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15029,9 +15076,13 @@ export class Dashboard_ {
     @MaxLength(16)
     ApplicationID?: string;
         
-    @Field({nullable: true, description: `Key used to identify the runtime class when Dashboard Type is Code`}) 
+    @Field({nullable: true, description: `Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`}) 
     @MaxLength(510)
     Code?: string;
+        
+    @Field({nullable: true, description: `Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
         
     @Field() 
     @MaxLength(200)
@@ -15087,6 +15138,9 @@ export class CreateDashboardInput {
 
     @Field({ nullable: true })
     Code: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -15127,6 +15181,9 @@ export class UpdateDashboardInput {
 
     @Field({ nullable: true })
     Code?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15598,6 +15655,9 @@ export class Report_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`}) 
+    Thumbnail?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
@@ -15690,6 +15750,9 @@ export class CreateReportInput {
 
     @Field({ nullable: true })
     OutputWorkflowID: string | null;
+
+    @Field({ nullable: true })
+    Thumbnail: string | null;
 }
     
 
@@ -15745,6 +15808,9 @@ export class UpdateReportInput {
 
     @Field({ nullable: true })
     OutputWorkflowID?: string | null;
+
+    @Field({ nullable: true })
+    Thumbnail?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -3571,7 +3571,12 @@ export const DashboardSchema = z.object({
         * * Field Name: Code
         * * Display Name: Code
         * * SQL Data Type: nvarchar(255)
-    * * Description: Key used to identify the runtime class when Dashboard Type is Code`),
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -4556,6 +4561,27 @@ export const EntitySchema = z.object({
         * * Display Name: Rows To Pack Sample Order
         * * SQL Data Type: nvarchar(MAX)
     * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
+    AutoRowCountFrequency: z.number().nullable().describe(`
+        * * Field Name: AutoRowCountFrequency
+        * * Display Name: Auto Row Count Frequency
+        * * SQL Data Type: int
+    * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.`),
+    RowCount: z.number().nullable().describe(`
+        * * Field Name: RowCount
+        * * Display Name: Row Count
+        * * SQL Data Type: bigint
+    * * Description: Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.`),
+    RowCountRunAt: z.date().nullable().describe(`
+        * * Field Name: RowCountRunAt
+        * * Display Name: Row Count Run At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp indicating when the last automatic row count was performed for this entity.`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -9251,6 +9277,11 @@ export const ReportSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Thumbnail: z.string().nullable().describe(`
+        * * Field Name: Thumbnail
+        * * Display Name: Thumbnail
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -10781,6 +10812,11 @@ export const UserViewSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Thumbnail: z.string().nullable().describe(`
+        * * Field Name: Thumbnail
+        * * Display Name: Thumbnail
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
     UserName: z.string().describe(`
         * * Field Name: UserName
         * * Display Name: User Name
@@ -20989,13 +21025,26 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Field Name: Code
     * * Display Name: Code
     * * SQL Data Type: nvarchar(255)
-    * * Description: Key used to identify the runtime class when Dashboard Type is Code
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.
     */
     get Code(): string | null {
         return this.Get('Code');
     }
     set Code(value: string | null) {
         this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**
@@ -22868,7 +22917,8 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
 
     /**
     * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
+    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
+    * * Status: This rule ensures that the status of the record can only be 'Disabled', 'Deprecated', or 'Active'. No other values are allowed.  
     * @public
     * @method
     * @override
@@ -22876,6 +22926,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateAllowRecordMergeConstraints(result);
+        this.ValidateStatusAllowedValues(result);
 
         return result;
     }
@@ -22889,6 +22940,19 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
     	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
     		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the status of the record can only be 'Disabled', 'Deprecated', or 'Active'. No other values are allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusAllowedValues(result: ValidationResult) {
+    	const allowedValues = ["Disabled", "Deprecated", "Active"];
+    	if (this.Status !== undefined && this.Status !== null && !allowedValues.includes(this.Status)) {
+    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be either 'Disabled', 'Deprecated', or 'Active'.", this.Status, ValidationErrorType.Failure));
     	}
     }
 
@@ -23572,6 +23636,59 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
     set RowsToPackSampleOrder(value: string | null) {
         this.Set('RowsToPackSampleOrder', value);
+    }
+
+    /**
+    * * Field Name: AutoRowCountFrequency
+    * * Display Name: Auto Row Count Frequency
+    * * SQL Data Type: int
+    * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.
+    */
+    get AutoRowCountFrequency(): number | null {
+        return this.Get('AutoRowCountFrequency');
+    }
+    set AutoRowCountFrequency(value: number | null) {
+        this.Set('AutoRowCountFrequency', value);
+    }
+
+    /**
+    * * Field Name: RowCount
+    * * Display Name: Row Count
+    * * SQL Data Type: bigint
+    * * Description: Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.
+    */
+    get RowCount(): number | null {
+        return this.Get('RowCount');
+    }
+    set RowCount(value: number | null) {
+        this.Set('RowCount', value);
+    }
+
+    /**
+    * * Field Name: RowCountRunAt
+    * * Display Name: Row Count Run At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp indicating when the last automatic row count was performed for this entity.
+    */
+    get RowCountRunAt(): Date | null {
+        return this.Get('RowCountRunAt');
+    }
+    set RowCountRunAt(value: Date | null) {
+        this.Set('RowCountRunAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
     }
 
     /**
@@ -36311,6 +36428,19 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     }
 
     /**
+    * * Field Name: Thumbnail
+    * * Display Name: Thumbnail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.
+    */
+    get Thumbnail(): string | null {
+        return this.Get('Thumbnail');
+    }
+    set Thumbnail(value: string | null) {
+        this.Set('Thumbnail', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(100)
@@ -40450,6 +40580,19 @@ export class UserViewEntity extends BaseEntity<UserViewEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Thumbnail
+    * * Display Name: Thumbnail
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Thumbnail image for the user view that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.
+    */
+    get Thumbnail(): string | null {
+        return this.Get('Thumbnail');
+    }
+    set Thumbnail(value: string | null) {
+        this.Set('Thumbnail', value);
     }
 
     /**

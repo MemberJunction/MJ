@@ -10,6 +10,7 @@ BEGIN TRY
         [Thumbnail] NVARCHAR(MAX) NULL,
         [Scope] NVARCHAR(20) NOT NULL CONSTRAINT DF_Dashboard_Scope DEFAULT 'Global',
         [ApplicationID] UNIQUEIDENTIFIER NULL,
+        [DriverClass] NVARCHAR(255) NULL,
         [Code] NVARCHAR(255) NULL;
 
     -- Create DashboardUserState table
@@ -99,12 +100,18 @@ BEGIN
 
         EXEC sp_addextendedproperty
             @name = N'MS_Description',
-            @value = N'Key used to identify the runtime class when Dashboard Type is Code',
+            @value = N'Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.',
             @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
             @level1type = N'TABLE',  @level1name = N'Dashboard',
             @level2type = N'COLUMN', @level2name = N'Code';        
 
-
+        -- Add documentation for the new DriverClass column
+        EXEC sp_addextendedproperty
+            @name = N'MS_Description',
+            @value = N'Specifies the runtime class that will be used for the Dashboard when Type is set to ''Code''. This class contains the custom logic and implementation for code-based dashboards.',
+            @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+            @level1type = N'TABLE',  @level1name = N'Dashboard',
+            @level2type = N'COLUMN', @level2name = N'DriverClass';
 
         -- Add constraints for DashboardUserState
         ALTER TABLE [${flyway:defaultSchema}].[DashboardUserState]
