@@ -190,27 +190,48 @@ BEGIN TRY
     VALUES 
     (@SystemUserID, @MigrationLogTypeID, 'Success', 'MJ Upgrade: ' + @MJ_VERSION + ' | Vendor type definitions created');
 
-    -- Extract unique vendors from AIModel and use the oldest row's ID for each vendor
-    WITH VendorIDs AS (
-        SELECT 
-            [Vendor] AS VendorName,
-            (SELECT TOP 1 [ID] FROM [${flyway:defaultSchema}].[AIModel] m2 
-             WHERE m2.[Vendor] = m1.[Vendor] 
-             ORDER BY m2.[__mj_CreatedAt]) AS OldestID
-        FROM 
-            [${flyway:defaultSchema}].[AIModel] m1
-        WHERE 
-            [Vendor] IS NOT NULL
-        GROUP BY 
-            [Vendor]
-    )
-    INSERT INTO [${flyway:defaultSchema}].[AIVendor] ([ID], [Name], [Description])
-    SELECT 
-        v.OldestID,
-        v.VendorName,
-        'AI Vendor'
-    FROM 
-        VendorIDs v;
+
+   -- Insert static AIVendor records first
+   INSERT INTO [${flyway:defaultSchema}].[AIVendor] ([ID], [Name], [Description])
+   VALUES 
+      ('DAB9433E-F36B-1410-8DA0-00021F8B792E', 'Eleven Labs', 'AI Vendor'),
+      ('E1B9433E-F36B-1410-8DA0-00021F8B792E', 'HeyGen', 'AI Vendor'),
+      ('D8A5CCEC-6A37-EF11-86D4-000D3A4E707E', 'OpenAI', 'AI Vendor'),
+      ('DAA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'Anthropic', 'AI Vendor'),
+      ('DBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'Mistral AI', 'AI Vendor'),
+      ('E3A5CCEC-6A37-EF11-86D4-000D3A4E707E', 'Groq', 'AI Vendor'),
+      ('E4A5CCEC-6A37-EF11-86D4-000D3A4E707E', 'Google', 'AI Vendor'),
+      ('27C0423E-F36B-1410-8876-005D02743E8C', 'Tasio Labs', 'AI Vendor');
+
+   -- Extract unique vendors from AIModel and use the oldest row's ID for each vendor
+   -- Exclude vendors that were statically inserted above
+   WITH VendorIDs AS (
+      SELECT 
+         [Vendor] AS VendorName,
+         (SELECT TOP 1 [ID] FROM [${flyway:defaultSchema}].[AIModel] m2 
+            WHERE m2.[Vendor] = m1.[Vendor] 
+            ORDER BY m2.[__mj_CreatedAt]) AS OldestID
+      FROM 
+         [${flyway:defaultSchema}].[AIModel] m1
+      WHERE 
+         [Vendor] IS NOT NULL
+         AND [Vendor] NOT IN ('Eleven Labs', 'HeyGen', 'OpenAI', 'Anthropic', 'Mistral AI', 'Groq', 'Google', 'Tasio Labs')
+      GROUP BY 
+         [Vendor]
+   )
+   INSERT INTO [${flyway:defaultSchema}].[AIVendor] ([ID], [Name], [Description])
+   SELECT 
+      v.OldestID,
+      v.VendorName,
+      'AI Vendor'
+   FROM 
+      VendorIDs v
+   WHERE 
+      NOT EXISTS (
+         SELECT 1 
+         FROM [${flyway:defaultSchema}].[AIVendor] av 
+         WHERE av.[Name] = v.VendorName
+      );
 
     -- Log vendors migrated
     DECLARE @VendorCount int;
