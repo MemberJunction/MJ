@@ -1,15 +1,13 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { LogError, Metadata, RunQuery } from '@memberjunction/core';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 @Component({
-  selector: 'app-home',
+  selector: 'mj-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css', '../../shared/first-tab-styles.css']
 })
-@RegisterClass(BaseNavigationComponent, 'Home')
 export class HomeComponent extends BaseNavigationComponent {
 
   public versionString: string;

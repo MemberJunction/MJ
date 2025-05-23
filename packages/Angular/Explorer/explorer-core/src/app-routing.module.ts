@@ -1,10 +1,10 @@
 import { ComponentRef, Injectable, NgModule } from '@angular/core';
-import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router, NavigationEnd, NavigationError, NavigationCancel } from '@angular/router';
+import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot, Router } from '@angular/router';
 import {
   SingleApplicationComponent,
   SingleEntityComponent,
   SingleRecordComponent,
-  HomeComponent,
+  HomeWrapperComponent,
   UserNotificationsComponent,
   DataBrowserComponent,
   ReportBrowserComponent,
@@ -13,16 +13,13 @@ import {
   FilesComponent,
   QueryBrowserComponent,
   ListViewComponent,
-  SingleListDetailComponent
 } from './public-api';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { SkipChatComponent } from '@memberjunction/ng-skip-chat';
 import { EventCodes, SharedService, BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
-import { ExplorerNavigationItemEntity } from '@memberjunction/core-entities';
 import { SkipChatWrapperComponent } from '@memberjunction/ng-ask-skip';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
@@ -230,8 +227,8 @@ export class ResourceResolver implements Resolve<void> {
 }
 
 const routes: Routes = [
-  { path: '', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
+  { path: '', component: HomeWrapperComponent, canActivate: [AuthGuard] },
+  { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
   { path: 'askskip', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'askskip/:conversationId', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },

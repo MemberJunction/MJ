@@ -1,11 +1,13 @@
 import { Component } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
+import { RegisterClass } from '@memberjunction/global';
 
 @Component({
   selector: 'mj-hello-dashboard',
   templateUrl: './hello-dashboard.component.html',
   styleUrls: ['./hello-dashboard.component.scss']
 })
+@RegisterClass(BaseDashboard, 'HelloDemo')
 export class HelloDashboardComponent extends BaseDashboard {
   // Current text color
   textColor: string = '#FF5733';
@@ -57,4 +59,8 @@ export class HelloDashboardComponent extends BaseDashboard {
     
     this.textColor = newColor;
   }
+}
+
+export function LoadHelloDashboard() {
+  // does nothing, point is to prevent tree-shaking
 }
