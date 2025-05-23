@@ -4,7 +4,7 @@ import { DashboardEntityExtended } from '@memberjunction/core-entities';
 
 export interface DashboardConfig {
   dashboard: DashboardEntityExtended;
-  userState?: Record<string, any>;
+  userState?: any;
 }
 
 /**
@@ -36,7 +36,7 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
   /**
    * Subclasses should emit this event anytime their internal state changes in a way that they'd like to persist.
    */
-  @Output() UserStateChanged = new EventEmitter<Record<string, any>>();
+  @Output() UserStateChanged = new EventEmitter<any>();
 
   /**
    * Subclasses can emit this event anytime they want to communicate with the container to let it know that something has happened of significance.
