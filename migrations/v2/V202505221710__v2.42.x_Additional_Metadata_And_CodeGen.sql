@@ -2052,3 +2052,420 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
   
             
 
+
+/***** CAUGHT MISSING EntityFieldValues and EntityField.ValueListType missing because of N' prefix on their literals in check
+       constraint. This was fixed in the codegen and the migration was generated again. *****/
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('B007D2D5-549E-4688-B48D-8EDD2C5075D4', 1, 'Exact', 'Exact')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('B007D2D5-549E-4688-B48D-8EDD2C5075D4', 2, 'Vector', 'Vector')
+
+/* SQL text to update ValueListType for entity field ID B007D2D5-549E-4688-B48D-8EDD2C5075D4 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='B007D2D5-549E-4688-B48D-8EDD2C5075D4'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F928E66C-7FA4-46B7-A08C-DB1784B52F58', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F928E66C-7FA4-46B7-A08C-DB1784B52F58', 2, 'Inactive', 'Inactive')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F928E66C-7FA4-46B7-A08C-DB1784B52F58', 3, 'Deprecated', 'Deprecated')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F928E66C-7FA4-46B7-A08C-DB1784B52F58', 4, 'Preview', 'Preview')
+
+/* SQL text to update ValueListType for entity field ID F928E66C-7FA4-46B7-A08C-DB1784B52F58 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='F928E66C-7FA4-46B7-A08C-DB1784B52F58'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429', 2, 'Inactive', 'Inactive')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429', 3, 'Deprecated', 'Deprecated')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429', 4, 'Preview', 'Preview')
+
+/* SQL text to update ValueListType for entity field ID 1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0E223DFA-F70D-4185-ADF4-196AAEB2B9CA', 1, 'None', 'None')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0E223DFA-F70D-4185-ADF4-196AAEB2B9CA', 2, 'SpecificUsers', 'SpecificUsers')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0E223DFA-F70D-4185-ADF4-196AAEB2B9CA', 3, 'Everyone', 'Everyone')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0E223DFA-F70D-4185-ADF4-196AAEB2B9CA', 4, 'Public', 'Public')
+
+/* SQL text to update ValueListType for entity field ID 0E223DFA-F70D-4185-ADF4-196AAEB2B9CA */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='0E223DFA-F70D-4185-ADF4-196AAEB2B9CA'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8548F57A-0342-42BF-9FD0-D3BA3EFACDD4', 1, 'Config', 'Config')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8548F57A-0342-42BF-9FD0-D3BA3EFACDD4', 2, 'Code', 'Code')
+
+/* SQL text to update ValueListType for entity field ID 8548F57A-0342-42BF-9FD0-D3BA3EFACDD4 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='8548F57A-0342-42BF-9FD0-D3BA3EFACDD4'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('47BB4821-6981-41B4-9ED0-9E007934DF5D', 1, 'Global', 'Global')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('47BB4821-6981-41B4-9ED0-9E007934DF5D', 2, 'App', 'App')
+
+/* SQL text to update ValueListType for entity field ID 47BB4821-6981-41B4-9ED0-9E007934DF5D */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='47BB4821-6981-41B4-9ED0-9E007934DF5D'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('5F8B5527-C9C9-4B72-8B5B-CF07EABFF61D', 1, 'Read', 'Read')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('5F8B5527-C9C9-4B72-8B5B-CF07EABFF61D', 2, 'Edit', 'Edit')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('5F8B5527-C9C9-4B72-8B5B-CF07EABFF61D', 3, 'Owner', 'Owner')
+
+/* SQL text to update ValueListType for entity field ID 5F8B5527-C9C9-4B72-8B5B-CF07EABFF61D */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='5F8B5527-C9C9-4B72-8B5B-CF07EABFF61D'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('C58AAAC7-5375-41CD-867A-0FE967C3A791', 1, 'Global', 'Global')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('C58AAAC7-5375-41CD-867A-0FE967C3A791', 2, 'App', 'App')
+
+/* SQL text to update ValueListType for entity field ID C58AAAC7-5375-41CD-867A-0FE967C3A791 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='C58AAAC7-5375-41CD-867A-0FE967C3A791'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F885F179-DFA5-4B9A-BDB6-6BFB0DC90601', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F885F179-DFA5-4B9A-BDB6-6BFB0DC90601', 2, 'Inactive', 'Inactive')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F885F179-DFA5-4B9A-BDB6-6BFB0DC90601', 3, 'Deprecated', 'Deprecated')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('F885F179-DFA5-4B9A-BDB6-6BFB0DC90601', 4, 'Preview', 'Preview')
+
+/* SQL text to update ValueListType for entity field ID F885F179-DFA5-4B9A-BDB6-6BFB0DC90601 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='F885F179-DFA5-4B9A-BDB6-6BFB0DC90601'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A68F157F-802A-433B-81A3-0B01ECC39C25', 1, 'string', 'string')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A68F157F-802A-433B-81A3-0B01ECC39C25', 2, 'number', 'number')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A68F157F-802A-433B-81A3-0B01ECC39C25', 3, 'boolean', 'boolean')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A68F157F-802A-433B-81A3-0B01ECC39C25', 4, 'date', 'date')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A68F157F-802A-433B-81A3-0B01ECC39C25', 5, 'object', 'object')
+
+/* SQL text to update ValueListType for entity field ID A68F157F-802A-433B-81A3-0B01ECC39C25 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='A68F157F-802A-433B-81A3-0B01ECC39C25'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A014DE78-5FB6-4114-AC50-40739A24E122', 1, 'Default', 'Default')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A014DE78-5FB6-4114-AC50-40739A24E122', 2, 'Specific', 'Specific')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A014DE78-5FB6-4114-AC50-40739A24E122', 3, 'ByPower', 'ByPower')
+
+/* SQL text to update ValueListType for entity field ID A014DE78-5FB6-4114-AC50-40739A24E122 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='A014DE78-5FB6-4114-AC50-40739A24E122'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A', 1, 'Highest', 'Highest')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A', 2, 'Lowest', 'Lowest')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A', 3, 'Balanced', 'Balanced')
+
+/* SQL text to update ValueListType for entity field ID 3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A'
+
+/* SQL text to delete entity field value ID 8852302D-7236-EF11-86D4-6045BDEE16E6 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='8852302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FC5817F0-6F36-EF11-86D4-6045BDEE16E6', 6, 'JSO', 'JSO')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('70E7FF76-A99F-4886-AE7C-3DE0C620B4A5', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('70E7FF76-A99F-4886-AE7C-3DE0C620B4A5', 2, 'Inactive', 'Inactive')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('70E7FF76-A99F-4886-AE7C-3DE0C620B4A5', 3, 'Deprecated', 'Deprecated')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('70E7FF76-A99F-4886-AE7C-3DE0C620B4A5', 4, 'Preview', 'Preview')
+
+/* SQL text to update ValueListType for entity field ID 70E7FF76-A99F-4886-AE7C-3DE0C620B4A5 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='70E7FF76-A99F-4886-AE7C-3DE0C620B4A5'
+
+/* SQL text to delete entity field value ID F1BB433E-F36B-1410-8DAB-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='F1BB433E-F36B-1410-8DAB-00021F8B792E'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('4EBEB02B-AC46-4440-948F-0FCD6C6C26DE', 4, 'JSO', 'JSO')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8261D630-2560-4C03-BE14-C8A9682ABBB4', 1, 'Sequential', 'Sequential')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('8261D630-2560-4C03-BE14-C8A9682ABBB4', 2, 'Parallel', 'Parallel')
+
+/* SQL text to update ValueListType for entity field ID 8261D630-2560-4C03-BE14-C8A9682ABBB4 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='8261D630-2560-4C03-BE14-C8A9682ABBB4'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('B9992893-7BD7-42EA-A2A8-48928D7A5CCE', 1, 'Active', 'Active')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('B9992893-7BD7-42EA-A2A8-48928D7A5CCE', 2, 'Deprecated', 'Deprecated')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('B9992893-7BD7-42EA-A2A8-48928D7A5CCE', 3, 'Disabled', 'Disabled')
+
+/* SQL text to update ValueListType for entity field ID B9992893-7BD7-42EA-A2A8-48928D7A5CCE */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='B9992893-7BD7-42EA-A2A8-48928D7A5CCE'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0049EE44-5535-4D29-9CE2-2522E5BCD811', 1, 'Fixed', 'Fixed')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0049EE44-5535-4D29-9CE2-2522E5BCD811', 2, 'Exponential', 'Exponential')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0049EE44-5535-4D29-9CE2-2522E5BCD811', 3, 'Linear', 'Linear')
+
+/* SQL text to update ValueListType for entity field ID 0049EE44-5535-4D29-9CE2-2522E5BCD811 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='0049EE44-5535-4D29-9CE2-2522E5BCD811'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A93C0CBB-A329-4E92-90D8-471FF627D055', 1, 'None', 'None')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A93C0CBB-A329-4E92-90D8-471FF627D055', 2, 'StaticCount', 'StaticCount')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A93C0CBB-A329-4E92-90D8-471FF627D055', 3, 'ConfigParam', 'ConfigParam')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('A93C0CBB-A329-4E92-90D8-471FF627D055', 4, 'ModelSpecific', 'ModelSpecific')
+
+/* SQL text to update ValueListType for entity field ID A93C0CBB-A329-4E92-90D8-471FF627D055 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='A93C0CBB-A329-4E92-90D8-471FF627D055'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FEC78D56-641A-4866-9049-2F3684DF4592', 1, 'None', 'None')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FEC78D56-641A-4866-9049-2F3684DF4592', 2, 'StaticCount', 'StaticCount')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FEC78D56-641A-4866-9049-2F3684DF4592', 3, 'ConfigParam', 'ConfigParam')
+
+/* SQL text to update ValueListType for entity field ID FEC78D56-641A-4866-9049-2F3684DF4592 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='FEC78D56-641A-4866-9049-2F3684DF4592'
+

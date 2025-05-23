@@ -1487,8 +1487,9 @@ export class ManageMetadataBase {
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
+      const processedConstraint = constraintDefinition.replace(/N'([^']*)'/g, "'$1'");
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
-      if (!structureRegex.test(constraintDefinition)) {
+      if (!structureRegex.test(processedConstraint)) {
          // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
          // check constraints that are not simple OR conditions
          //logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
@@ -1501,7 +1502,7 @@ export class ManageMetadataBase {
          const possibleValues: string[] = [];
 
          // Use regex to find matches and extract the values
-         while ((match = valueRegex.exec(constraintDefinition)) !== null) {
+         while ((match = valueRegex.exec(processedConstraint)) !== null) {
             // This is necessary to avoid infinite loops with zero-width matches
             if (match.index === valueRegex.lastIndex) {
                valueRegex.lastIndex++;

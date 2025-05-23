@@ -31,7 +31,7 @@ import { DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Scope"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

@@ -1041,11 +1041,15 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: The order in which this agent should be executed among its siblings under the same parent.`),
-    ExecutionMode: z.string().describe(`
+    ExecutionMode: z.union([z.literal('Sequential'), z.literal('Parallel')]).describe(`
         * * Field Name: ExecutionMode
         * * Display Name: Execution Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Sequential
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sequential
+    *   * Parallel
     * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.`),
     EnableContextCompression: z.boolean().describe(`
         * * Field Name: EnableContextCompression
@@ -1379,7 +1383,7 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific')]).describe(`
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSO')]).describe(`
         * * Field Name: ResponseFormat
         * * Display Name: Response Format
         * * SQL Data Type: nvarchar(20)
@@ -1389,8 +1393,8 @@ export const AIPromptSchema = z.object({
     *   * Any
     *   * Text
     *   * Markdown
-    *   * JSON
     *   * ModelSpecific
+    *   * JSO
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
     ModelSpecificResponseFormat: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseFormat
@@ -1409,23 +1413,39 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: The minimum power rank required for models to be considered for this prompt.`),
-    SelectionStrategy: z.string().describe(`
+    SelectionStrategy: z.union([z.literal('Default'), z.literal('Specific'), z.literal('ByPower')]).describe(`
         * * Field Name: SelectionStrategy
         * * Display Name: Selection Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
     * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).`),
-    PowerPreference: z.string().describe(`
+    PowerPreference: z.union([z.literal('Highest'), z.literal('Lowest'), z.literal('Balanced')]).describe(`
         * * Field Name: PowerPreference
         * * Display Name: Power Preference
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Highest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Highest
+    *   * Lowest
+    *   * Balanced
     * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.`),
-    ParallelizationMode: z.string().describe(`
+    ParallelizationMode: z.union([z.literal('None'), z.literal('StaticCount'), z.literal('ConfigParam'), z.literal('ModelSpecific')]).describe(`
         * * Field Name: ParallelizationMode
         * * Display Name: Parallelization Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * StaticCount
+    *   * ConfigParam
+    *   * ModelSpecific
     * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).`),
     ParallelCount: z.number().nullable().describe(`
         * * Field Name: ParallelCount
@@ -1478,11 +1498,16 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Delay between retry attempts in milliseconds.`),
-    RetryStrategy: z.string().describe(`
+    RetryStrategy: z.union([z.literal('Fixed'), z.literal('Exponential'), z.literal('Linear')]).describe(`
         * * Field Name: RetryStrategy
         * * Display Name: Retry Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Fixed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Fixed
+    *   * Exponential
+    *   * Linear
     * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).`),
     ResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPromptID
@@ -1501,11 +1526,15 @@ export const AIPromptSchema = z.object({
         * * Display Name: Cache TTL Seconds
         * * SQL Data Type: int
     * * Description: Time-to-live in seconds for cached results. NULL means results never expire.`),
-    CacheMatchType: z.string().describe(`
+    CacheMatchType: z.union([z.literal('Exact'), z.literal('Vector')]).describe(`
         * * Field Name: CacheMatchType
         * * Display Name: Cache Match Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Exact
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exact
+    *   * Vector
     * * Description: Method for matching cached results: Exact (string matching) or Vector (embedding similarity).`),
     CacheSimilarityThreshold: z.number().nullable().describe(`
         * * Field Name: CacheSimilarityThreshold
@@ -3544,22 +3573,30 @@ export const DashboardSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Type: z.string().describe(`
+    Type: z.union([z.literal('Config'), z.literal('Code')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Config
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Code
     * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)`),
     Thumbnail: z.string().nullable().describe(`
         * * Field Name: Thumbnail
         * * Display Name: Thumbnail
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Base64 encoded image or URL to an image thumbnail for the dashboard`),
-    Scope: z.string().describe(`
+    Scope: z.union([z.literal('Global'), z.literal('App')]).describe(`
         * * Field Name: Scope
         * * Display Name: Scope
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * App
     * * Description: Scope of the dashboard: Global or App-specific`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
@@ -4576,11 +4613,16 @@ export const EntitySchema = z.object({
         * * Display Name: Row Count Run At
         * * SQL Data Type: datetimeoffset
     * * Description: Timestamp indicating when the last automatic row count was performed for this entity.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
     * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
@@ -7026,11 +7068,18 @@ export const AIConfigurationParamSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)
     * * Description: The name of the configuration parameter.`),
-    Type: z.string().describe(`
+    Type: z.union([z.literal('string'), z.literal('number'), z.literal('boolean'), z.literal('date'), z.literal('object')]).describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: string
+    * * Value List Type: List
+    * * Possible Values 
+    *   * string
+    *   * number
+    *   * boolean
+    *   * date
+    *   * object
     * * Description: The data type of the parameter (string, number, boolean, date, object).`),
     Value: z.string().describe(`
         * * Field Name: Value
@@ -7085,11 +7134,17 @@ export const AIConfigurationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: Indicates whether this is the default configuration to use when none is specified.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Deprecated'), z.literal('Preview')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     DefaultPromptForContextCompressionID: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompressionID
@@ -7150,11 +7205,17 @@ export const AIModelVendorSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Determines the priority rank of this vendor for the model. Higher values indicate higher priority.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Deprecated'), z.literal('Preview')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
@@ -7271,17 +7332,28 @@ export const AIPromptModelSchema = z.object({
         * * Display Name: Model Parameters
         * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-formatted parameters specific to this model (temperature, max tokens, etc.).`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Deprecated'), z.literal('Preview')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.`),
-    ParallelizationMode: z.string().describe(`
+    ParallelizationMode: z.union([z.literal('None'), z.literal('StaticCount'), z.literal('ConfigParam')]).describe(`
         * * Field Name: ParallelizationMode
         * * Display Name: Parallelization Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * StaticCount
+    *   * ConfigParam
     * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.`),
     ParallelCount: z.number().describe(`
         * * Field Name: ParallelCount
@@ -7511,11 +7583,17 @@ export const AIVendorTypeSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
     * * Description: Determines the priority rank of this type for the vendor. Higher values indicate higher priority.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Deprecated'), z.literal('Preview')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -7635,10 +7713,15 @@ export const ConversationArtifactPermissionSchema = z.object({
         * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
     * * Description: User this permission applies to`),
-    AccessLevel: z.string().describe(`
+    AccessLevel: z.union([z.literal('Read'), z.literal('Edit'), z.literal('Owner')]).describe(`
         * * Field Name: AccessLevel
         * * Display Name: Access Level
         * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Read
+    *   * Edit
+    *   * Owner
     * * Description: Level of access granted (Read, Edit, Owner)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -7742,10 +7825,16 @@ export const ConversationArtifactSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
     * * Description: Reference to the type of artifact`),
-    SharingScope: z.string().describe(`
+    SharingScope: z.union([z.literal('None'), z.literal('SpecificUsers'), z.literal('Everyone'), z.literal('Public')]).describe(`
         * * Field Name: SharingScope
         * * Display Name: Sharing Scope
         * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * SpecificUsers
+    *   * Everyone
+    *   * Public
     * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
@@ -7795,10 +7884,14 @@ export const DashboardUserPreferenceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Dashboards (vwDashboards.ID)
     * * Description: Dashboard that this preference refers to`),
-    Scope: z.string().describe(`
+    Scope: z.union([z.literal('Global'), z.literal('App')]).describe(`
         * * Field Name: Scope
         * * Display Name: Scope
         * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * App
     * * Description: Scope of the preference (Global or App)`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
@@ -9996,19 +10089,19 @@ export const TemplateContentTypeSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template content type`),
-    CodeType: z.union([z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('JSON'), z.literal('Other')]).describe(`
+    CodeType: z.union([z.literal('JSO'), z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * JSO
     *   * TypeScript
     *   * SQL
     *   * HTML
     *   * CSS
     *   * JavaScript
-    *   * JSON
     *   * Other
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc`),
     __mj_CreatedAt: z.date().describe(`
@@ -13866,7 +13959,6 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
 
     /**
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * ExecutionMode: This rule ensures that the ExecutionMode field must be either 'Parallel' or 'Sequential'. No other values are allowed.
     * * Table-Level: This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
     * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.  
     * @public
@@ -13875,23 +13967,10 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateExecutionModeAllowedValues(result);
         this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
         this.ValidateEnableContextCompressionRequiresContextFields(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the ExecutionMode field must be either 'Parallel' or 'Sequential'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateExecutionModeAllowedValues(result: ValidationResult) {
-    	if (this.ExecutionMode !== "Parallel" && this.ExecutionMode !== "Sequential") {
-    		result.Errors.push(new ValidationErrorInfo("ExecutionMode", "ExecutionMode must be either 'Parallel' or 'Sequential'.", this.ExecutionMode, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -14042,12 +14121,16 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Display Name: Execution Mode
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Sequential
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sequential
+    *   * Parallel
     * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.
     */
-    get ExecutionMode(): string {
+    get ExecutionMode(): 'Sequential' | 'Parallel' {
         return this.Get('ExecutionMode');
     }
-    set ExecutionMode(value: string) {
+    set ExecutionMode(value: 'Sequential' | 'Parallel') {
         this.Set('ExecutionMode', value);
     }
 
@@ -14849,13 +14932,8 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
 
     /**
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CacheMatchType: This rule ensures that the cache match type can only be set to 'Vector' or 'Exact'. No other value is allowed.
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * * SelectionStrategy: This rule ensures that the SelectionStrategy field must be set to either 'ByPower', 'Specific', or 'Default'.
-    * * PowerPreference: This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
-    * * RetryStrategy: This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
-    * * ParallelizationMode: This rule ensures that the ParallelizationMode field can only be set to one of the following values: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.
     * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
@@ -14867,13 +14945,8 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCacheMatchTypeIsVectorOrExact(result);
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
-        this.ValidateSelectionStrategyAgainstAllowedValues(result);
-        this.ValidatePowerPreferenceAllowedValues(result);
-        this.ValidateRetryStrategyIsAllowedValue(result);
-        this.ValidateParallelizationModeAllowedValues(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
@@ -14881,18 +14954,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateOutputExampleWhenOutputTypeObject(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the cache match type can only be set to 'Vector' or 'Exact'. No other value is allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCacheMatchTypeIsVectorOrExact(result: ValidationResult) {
-    	if (this.CacheMatchType !== "Vector" && this.CacheMatchType !== "Exact") {
-    		result.Errors.push(new ValidationErrorInfo("CacheMatchType", "Cache match type must be either 'Vector' or 'Exact'.", this.CacheMatchType, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -14916,63 +14977,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the SelectionStrategy field must be set to either 'ByPower', 'Specific', or 'Default'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSelectionStrategyAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["ByPower", "Specific", "Default"];
-    	if (!allowedValues.includes(this.SelectionStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo("SelectionStrategy", "SelectionStrategy must be either 'ByPower', 'Specific', or 'Default'.", this.SelectionStrategy, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the PowerPreference field can only be set to 'Balanced', 'Lowest', or 'Highest'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePowerPreferenceAllowedValues(result: ValidationResult) {
-    	const allowed = ["Balanced", "Lowest", "Highest"];
-    	if (this.PowerPreference && !allowed.includes(this.PowerPreference)) {
-    		result.Errors.push(new ValidationErrorInfo("PowerPreference", "PowerPreference must be 'Balanced', 'Lowest', or 'Highest'.", this.PowerPreference, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the RetryStrategy field can only be set to one of the following values: 'Linear', 'Exponential', or 'Fixed'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRetryStrategyIsAllowedValue(result: ValidationResult) {
-    	const allowed = ["Linear", "Exponential", "Fixed"];
-    	if (this.RetryStrategy && !allowed.includes(this.RetryStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo("RetryStrategy", "RetryStrategy must be one of the following values: 'Linear', 'Exponential', or 'Fixed'.", this.RetryStrategy, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ParallelizationMode field can only be set to one of the following values: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["ModelSpecific", "ConfigParam", "StaticCount", "None"];
-    	if (!allowedValues.includes(this.ParallelizationMode)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ParallelizationMode",
-    			"ParallelizationMode must be one of: 'ModelSpecific', 'ConfigParam', 'StaticCount', or 'None'.",
-    			this.ParallelizationMode,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -15159,14 +15163,14 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Any
     *   * Text
     *   * Markdown
-    *   * JSON
     *   * ModelSpecific
+    *   * JSO
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
-    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' {
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSO' {
         return this.Get('ResponseFormat');
     }
-    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific') {
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSO') {
         this.Set('ResponseFormat', value);
     }
 
@@ -15216,12 +15220,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Selection Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Default
+    *   * Specific
+    *   * ByPower
     * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).
     */
-    get SelectionStrategy(): string {
+    get SelectionStrategy(): 'Default' | 'Specific' | 'ByPower' {
         return this.Get('SelectionStrategy');
     }
-    set SelectionStrategy(value: string) {
+    set SelectionStrategy(value: 'Default' | 'Specific' | 'ByPower') {
         this.Set('SelectionStrategy', value);
     }
 
@@ -15230,12 +15239,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Power Preference
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Highest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Highest
+    *   * Lowest
+    *   * Balanced
     * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.
     */
-    get PowerPreference(): string {
+    get PowerPreference(): 'Highest' | 'Lowest' | 'Balanced' {
         return this.Get('PowerPreference');
     }
-    set PowerPreference(value: string) {
+    set PowerPreference(value: 'Highest' | 'Lowest' | 'Balanced') {
         this.Set('PowerPreference', value);
     }
 
@@ -15244,12 +15258,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Parallelization Mode
     * * SQL Data Type: nvarchar(20)
     * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * StaticCount
+    *   * ConfigParam
+    *   * ModelSpecific
     * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).
     */
-    get ParallelizationMode(): string {
+    get ParallelizationMode(): 'None' | 'StaticCount' | 'ConfigParam' | 'ModelSpecific' {
         return this.Get('ParallelizationMode');
     }
-    set ParallelizationMode(value: string) {
+    set ParallelizationMode(value: 'None' | 'StaticCount' | 'ConfigParam' | 'ModelSpecific') {
         this.Set('ParallelizationMode', value);
     }
 
@@ -15365,12 +15385,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Retry Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Fixed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Fixed
+    *   * Exponential
+    *   * Linear
     * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).
     */
-    get RetryStrategy(): string {
+    get RetryStrategy(): 'Fixed' | 'Exponential' | 'Linear' {
         return this.Get('RetryStrategy');
     }
-    set RetryStrategy(value: string) {
+    set RetryStrategy(value: 'Fixed' | 'Exponential' | 'Linear') {
         this.Set('RetryStrategy', value);
     }
 
@@ -15420,12 +15445,16 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Cache Match Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Exact
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exact
+    *   * Vector
     * * Description: Method for matching cached results: Exact (string matching) or Vector (embedding similarity).
     */
-    get CacheMatchType(): string {
+    get CacheMatchType(): 'Exact' | 'Vector' {
         return this.Get('CacheMatchType');
     }
-    set CacheMatchType(value: string) {
+    set CacheMatchType(value: 'Exact' | 'Vector') {
         this.Set('CacheMatchType', value);
     }
 
@@ -20835,46 +20864,6 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
-    * Validate() method override for Dashboards entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Type: This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.
-    * * Scope: This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.  
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTypeAllowedValues(result);
-        this.ValidateScopeValueIsAppOrGlobal(result);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the value for the Type field must be either 'Code' or 'Config', and nothing else is allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTypeAllowedValues(result: ValidationResult) {
-    	if (this.Type !== "Code" && this.Type !== "Config") {
-    		result.Errors.push(new ValidationErrorInfo("Type", "Type must be either \"Code\" or \"Config\".", this.Type, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the value of the Scope field must be either 'App' or 'Global'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScopeValueIsAppOrGlobal(result: ValidationResult) {
-    	if (this.Scope !== "App" && this.Scope !== "Global") {
-    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -20971,12 +20960,16 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Config
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Config
+    *   * Code
     * * Description: Specifies if the dashboard is metadata-driven (Config) or code-based (Code)
     */
-    get Type(): string {
+    get Type(): 'Config' | 'Code' {
         return this.Get('Type');
     }
-    set Type(value: string) {
+    set Type(value: 'Config' | 'Code') {
         this.Set('Type', value);
     }
 
@@ -20998,12 +20991,16 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Display Name: Scope
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * App
     * * Description: Scope of the dashboard: Global or App-specific
     */
-    get Scope(): string {
+    get Scope(): 'Global' | 'App' {
         return this.Get('Scope');
     }
-    set Scope(value: string) {
+    set Scope(value: 'Global' | 'App') {
         this.Set('Scope', value);
     }
 
@@ -22917,8 +22914,7 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
 
     /**
     * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
-    * * Status: This rule ensures that the status of the record can only be 'Disabled', 'Deprecated', or 'Active'. No other values are allowed.  
+    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
     * @public
     * @method
     * @override
@@ -22926,7 +22922,6 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateAllowRecordMergeConstraints(result);
-        this.ValidateStatusAllowedValues(result);
 
         return result;
     }
@@ -22940,19 +22935,6 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
     	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
     		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the status of the record can only be 'Disabled', 'Deprecated', or 'Active'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStatusAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["Disabled", "Deprecated", "Active"];
-    	if (this.Status !== undefined && this.Status !== null && !allowedValues.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be either 'Disabled', 'Deprecated', or 'Active'.", this.Status, ValidationErrorType.Failure));
     	}
     }
 
@@ -23682,12 +23664,17 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Display Name: Status
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
     * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
         this.Set('Status', value);
     }
 
@@ -29927,33 +29914,6 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
     }
 
     /**
-    * Validate() method override for MJ: AI Configuration Params entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Type: This rule ensures that the Type field must be set to one of the following values: 'object', 'date', 'boolean', 'number', or 'string'. No other values are allowed.  
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateTypeAgainstAllowedValues(result);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Type field must be set to one of the following values: 'object', 'date', 'boolean', 'number', or 'string'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateTypeAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["object", "date", "boolean", "number", "string"];
-    	if (!allowedValues.includes(this.Type)) {
-    		result.Errors.push(new ValidationErrorInfo("Type", "Type must be one of: 'object', 'date', 'boolean', 'number', or 'string'.", this.Type, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -29994,12 +29954,19 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
     * * Display Name: Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: string
+    * * Value List Type: List
+    * * Possible Values 
+    *   * string
+    *   * number
+    *   * boolean
+    *   * date
+    *   * object
     * * Description: The data type of the parameter (string, number, boolean, date, object).
     */
-    get Type(): string {
+    get Type(): 'string' | 'number' | 'boolean' | 'date' | 'object' {
         return this.Get('Type');
     }
-    set Type(value: string) {
+    set Type(value: 'string' | 'number' | 'boolean' | 'date' | 'object') {
         this.Set('Type', value);
     }
 
@@ -30090,33 +30057,6 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     }
 
     /**
-    * Validate() method override for MJ: AI Configurations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Status: This rule ensures that the Status field can only have one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. Any other value will not be accepted.  
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateStatusAllowedValues(result);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Status field can only have one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. Any other value will not be accepted.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStatusAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["Preview", "Deprecated", "Inactive", "Active"];
-    	if (!allowedValues.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -30171,12 +30111,18 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Inactive' | 'Deprecated' | 'Preview' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Inactive' | 'Deprecated' | 'Preview') {
         this.Set('Status', value);
     }
 
@@ -30279,7 +30225,6 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
 
     /**
     * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Status: This rule ensures that the status value must be either "Preview", "Deprecated", "Inactive", or "Active". Other status values are not allowed.
     * * Priority: This rule ensures that the Priority value cannot be negative. It must be zero or greater.
     * * MaxInputTokens: This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
     * * MaxOutputTokens: This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.  
@@ -30289,25 +30234,11 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateStatusAllowedValues(result);
         this.ValidatePriorityIsNonNegative(result);
         this.ValidateMaxInputTokensNonNegative(result);
         this.ValidateMaxOutputTokensNotNegative(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the status value must be either "Preview", "Deprecated", "Inactive", or "Active". Other status values are not allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStatusAllowedValues(result: ValidationResult) {
-    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
-    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo("Status", "Status must be 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -30401,12 +30332,18 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Inactive' | 'Deprecated' | 'Preview' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Inactive' | 'Deprecated' | 'Preview') {
         this.Set('Status', value);
     }
 
@@ -30588,10 +30525,8 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Status: This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
     * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
     * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
-    * * ParallelizationMode: This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
     * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
     * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
     * @public
@@ -30600,27 +30535,12 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateStatusIsLimitedToAllowedValues(result);
         this.ValidatePriorityIsNonNegative(result);
         this.ValidateExecutionGroupIsNonNegative(result);
-        this.ValidateParallelizationModeAllowedValues(result);
         this.ValidateParallelCountAtLeastOne(result);
         this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the status can only be set to one of these values: 'Preview', 'Deprecated', 'Inactive', or 'Active'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStatusIsLimitedToAllowedValues(result: ValidationResult) {
-    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
-    	if (this.Status !== null && !allowedStatuses.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo("Status", "The Status field must be one of: 'Preview', 'Deprecated', 'Inactive', or 'Active'.", this.Status, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -30644,19 +30564,6 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     public ValidateExecutionGroupIsNonNegative(result: ValidationResult) {
     	if (this.ExecutionGroup < 0) {
     		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive number.", this.ExecutionGroup, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule makes sure that the ParallelizationMode field can only be set to one of three valid values: 'ConfigParam', 'StaticCount', or 'None'. No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateParallelizationModeAllowedValues(result: ValidationResult) {
-    	const validValues = ["ConfigParam", "StaticCount", "None"];
-    	if (this.ParallelizationMode !== null && !validValues.includes(this.ParallelizationMode)) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelizationMode", "ParallelizationMode must be 'ConfigParam', 'StaticCount', or 'None'.", this.ParallelizationMode, ValidationErrorType.Failure));
     	}
     }
 
@@ -30814,12 +30721,18 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Inactive' | 'Deprecated' | 'Preview' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Inactive' | 'Deprecated' | 'Preview') {
         this.Set('Status', value);
     }
 
@@ -30828,12 +30741,17 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     * * Display Name: Parallelization Mode
     * * SQL Data Type: nvarchar(20)
     * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * StaticCount
+    *   * ConfigParam
     * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.
     */
-    get ParallelizationMode(): string {
+    get ParallelizationMode(): 'None' | 'StaticCount' | 'ConfigParam' {
         return this.Get('ParallelizationMode');
     }
-    set ParallelizationMode(value: string) {
+    set ParallelizationMode(value: 'None' | 'StaticCount' | 'ConfigParam') {
         this.Set('ParallelizationMode', value);
     }
 
@@ -31405,7 +31323,6 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
 
     /**
     * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Status: This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.
     * * Rank: This rule ensures that the Rank value cannot be negative; it must be zero or higher.  
     * @public
     * @method
@@ -31413,28 +31330,9 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateStatusInAllowedList(result);
         this.ValidateRankNonNegative(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the status of the record can only be set to one of the following values: 'Preview', 'Deprecated', 'Inactive', or 'Active'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateStatusInAllowedList(result: ValidationResult) {
-    	const allowedStatuses = ["Preview", "Deprecated", "Inactive", "Active"];
-    	if (!allowedStatuses.includes(this.Status)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Status",
-    			"Status must be one of the following: 'Preview', 'Deprecated', 'Inactive', or 'Active'.",
-    			this.Status,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -31504,12 +31402,18 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Deprecated
+    *   * Preview
     * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.
     */
-    get Status(): string {
+    get Status(): 'Active' | 'Inactive' | 'Deprecated' | 'Preview' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Active' | 'Inactive' | 'Deprecated' | 'Preview') {
         this.Set('Status', value);
     }
 
@@ -31783,32 +31687,6 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
     }
 
     /**
-    * Validate() method override for MJ: Conversation Artifact Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * AccessLevel: This rule ensures that the access level of a user can only be one of three specific values: 'Owner', 'Edit', or 'Read'.  
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateAccessLevelMustBeValid(result);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the access level of a user can only be one of three specific values: 'Owner', 'Edit', or 'Read'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateAccessLevelMustBeValid(result: ValidationResult) {
-    	if (this.AccessLevel !== 'Owner' && this.AccessLevel !== 'Edit' && this.AccessLevel !== 'Read') {
-    		result.Errors.push(new ValidationErrorInfo('AccessLevel', 'Access level must be either Owner, Edit, or Read.', this.AccessLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -31849,12 +31727,17 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
     * * Field Name: AccessLevel
     * * Display Name: Access Level
     * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Read
+    *   * Edit
+    *   * Owner
     * * Description: Level of access granted (Read, Edit, Owner)
     */
-    get AccessLevel(): string {
+    get AccessLevel(): 'Read' | 'Edit' | 'Owner' {
         return this.Get('AccessLevel');
     }
-    set AccessLevel(value: string) {
+    set AccessLevel(value: 'Read' | 'Edit' | 'Owner') {
         this.Set('AccessLevel', value);
     }
 
@@ -32081,32 +31964,6 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     }
 
     /**
-    * Validate() method override for MJ: Conversation Artifacts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * SharingScope: This rule ensures that the sharing scope of an entity can only be one of the predefined options: 'Public', 'Everyone', 'SpecificUsers', or 'None'.  
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateSharingScopeAgainstPredefinedOptions(result);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the sharing scope of an entity can only be one of the predefined options: 'Public', 'Everyone', 'SpecificUsers', or 'None'.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSharingScopeAgainstPredefinedOptions(result: ValidationResult) {
-    	if (this.SharingScope !== 'Public' && this.SharingScope !== 'Everyone' && this.SharingScope !== 'SpecificUsers' && this.SharingScope !== 'None') {
-    		result.Errors.push(new ValidationErrorInfo("SharingScope", "The SharingScope must be one of the following: 'Public', 'Everyone', 'SpecificUsers', or 'None'.", this.SharingScope, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -32174,12 +32031,18 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     * * Field Name: SharingScope
     * * Display Name: Sharing Scope
     * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * None
+    *   * SpecificUsers
+    *   * Everyone
+    *   * Public
     * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)
     */
-    get SharingScope(): string {
+    get SharingScope(): 'None' | 'SpecificUsers' | 'Everyone' | 'Public' {
         return this.Get('SharingScope');
     }
-    set SharingScope(value: string) {
+    set SharingScope(value: 'None' | 'SpecificUsers' | 'Everyone' | 'Public') {
         this.Set('SharingScope', value);
     }
 
@@ -32267,7 +32130,6 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
 
     /**
     * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Scope: This rule ensures that the value of Scope must be either 'App' or 'Global'. No other values are allowed for the Scope field.
     * * Table-Level: This rule ensures that when the scope is set to 'Global', the ApplicationID must be blank, and when the scope is set to 'App', an ApplicationID must be provided.  
     * @public
     * @method
@@ -32275,22 +32137,9 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateScopeMustBeAppOrGlobal(result);
         this.ValidateApplicationIDCorrectForScope(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that the value of Scope must be either 'App' or 'Global'. No other values are allowed for the Scope field.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScopeMustBeAppOrGlobal(result: ValidationResult) {
-    	if (this.Scope !== "App" && this.Scope !== "Global") {
-    		result.Errors.push(new ValidationErrorInfo("Scope", "Scope must be either 'App' or 'Global'.", this.Scope, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -32350,12 +32199,16 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
     * * Field Name: Scope
     * * Display Name: Scope
     * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * App
     * * Description: Scope of the preference (Global or App)
     */
-    get Scope(): string {
+    get Scope(): 'Global' | 'App' {
         return this.Get('Scope');
     }
-    set Scope(value: string) {
+    set Scope(value: 'Global' | 'App') {
         this.Set('Scope', value);
     }
 
@@ -38439,19 +38292,19 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
+    *   * JSO
     *   * TypeScript
     *   * SQL
     *   * HTML
     *   * CSS
     *   * JavaScript
-    *   * JSON
     *   * Other
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other' {
+    get CodeType(): 'JSO' | 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
         return this.Get('CodeType');
     }
-    set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'JSON' | 'Other') {
+    set CodeType(value: 'JSO' | 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
         this.Set('CodeType', value);
     }
 
