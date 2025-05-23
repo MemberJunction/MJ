@@ -316,6 +316,7 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0; // Important for flex scrolling
+    max-height: 500px; // Limit max height for scrolling
     
     &:last-child {
       border-bottom: none;
@@ -857,9 +858,27 @@
       background-color: #cce5ff;
       border-color: #99d6ff;
       cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
       
       &:hover {
         text-decoration: underline;
+        background-color: #b3d9ff;
+        border-color: #66c2ff;
+        transform: translateX(2px);
+      }
+      
+      .fa-external-link-alt {
+        font-size: 8px;
+        opacity: 0.7;
+        transition: opacity 0.2s ease;
+      }
+      
+      &:hover .fa-external-link-alt {
+        opacity: 1;
       }
     }
     

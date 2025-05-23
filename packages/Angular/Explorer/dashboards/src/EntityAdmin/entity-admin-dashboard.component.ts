@@ -378,6 +378,19 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     });
   }
 
+  public getRelatedEntityObject(field: EntityFieldInfo): EntityInfo | null {
+    if (!field.RelatedEntityID) return null;
+    return this.entities.find((entity: EntityInfo) => entity.ID === field.RelatedEntityID) || null;
+  }
+
+  public onRelatedEntityClick(event: Event, field: EntityFieldInfo): void {
+    event.stopPropagation(); // Prevent bubbling to field click handler
+    const relatedEntity = this.getRelatedEntityObject(field);
+    if (relatedEntity) {
+      this.selectEntity(relatedEntity, true); // Auto-zoom to the related entity
+    }
+  }
+
   public get isShowingLoading(): boolean {
     return this.isLoading || this.isFiltering || this.isRefreshingERD;
   }
@@ -621,11 +634,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       .attr('text-anchor', 'middle')
       .text((d: any) => d.sourceField.Name || '');
 
-    // Add click handlers for link highlighting
-    link.style('cursor', 'pointer').on('click', (event: any, d: any) => {
-      this.highlightRelationship(d);
-      event.stopPropagation(); // Prevent diagram deselection
-    });
+    // Remove click handlers from links - not needed
 
     // Create entity rectangle nodes
     const node = chartArea
@@ -766,7 +775,12 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     // Add click handler for entity selection and tooltip
     node
       .on('click', (_: any, d: EntityNode) => {
-        this.selectEntity(d.entity, false);
+        // Check if entity is too small and needs auto-zoom
+        const currentTransform = d3.zoomTransform(this.svg.node()!);
+        const currentRenderedWidth = d.width * currentTransform.k;
+        const shouldAutoZoom = currentRenderedWidth < 20;
+        
+        this.selectEntity(d.entity, shouldAutoZoom);
       })
       .append('title')
       .text((d: EntityNode) => `${d.name}\nPrimary Keys: ${d.primaryKeys.length}\nForeign Keys: ${d.foreignKeys.length}`);

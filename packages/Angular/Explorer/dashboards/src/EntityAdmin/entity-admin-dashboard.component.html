@@ -159,7 +159,7 @@
         }
         
         <!-- ERD Section (Center) -->
-        <div class="erd-section">
+        <div class="erd-section" mjFillContainer>
           <div class="section-header">
             <h3>Entity Relationship Diagram</h3>
             <div class="erd-controls">
@@ -177,7 +177,7 @@
               </button>
             </div>
           </div>
-          <div class="erd-container" #erdContainer></div>
+          <div class="erd-container" #erdContainer mjFillContainer></div>
         </div>
         
         <!-- Entity Details Panel (Right) -->
@@ -412,7 +412,12 @@
                             @if (field.RelatedEntityID) {
                               <div class="detail-row">
                                 <span class="detail-label">Related Entity:</span>
-                                <span class="detail-value related-entity">{{ field.RelatedEntity }}</span>
+                                <span class="detail-value related-entity" 
+                                      (click)="onRelatedEntityClick($event, field)"
+                                      title="Click to navigate to {{ field.RelatedEntity }}">
+                                  {{ field.RelatedEntity }}
+                                  <span class="fa-solid fa-external-link-alt"></span>
+                                </span>
                               </div>
                             }
                             @if (field.AutoIncrement) {
