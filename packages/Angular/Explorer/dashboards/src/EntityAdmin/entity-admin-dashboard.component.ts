@@ -14,7 +14,6 @@ interface EntityNode {
   y?: number;
   fx?: number | null;
   fy?: number | null;
-  connectionCount: number;
   width: number;
   height: number;
   primaryKeys: EntityFieldInfo[];
@@ -33,8 +32,6 @@ interface EntityLink {
 interface EntityFilter {
   schemaName: string | null;
   entityName: string;
-  connectionCountMin: number;
-  connectionCountMax: number;
   entityStatus: string | null;
   baseTable: string;
 }
@@ -69,7 +66,6 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   // Filtering properties
   public filteredEntities: EntityInfo[] = [];
   public distinctSchemas: Array<{ text: string; value: string }> = [];
-  public connectionCountRange = { min: 0, max: 100 };
   public filterPanelVisible = true;
   public detailsPanelVisible = true;
   public fieldsSectionExpanded = true;
@@ -82,8 +78,6 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public filters: EntityFilter = {
     schemaName: null,
     entityName: '',
-    connectionCountMin: 0,
-    connectionCountMax: 100,
     entityStatus: null,
     baseTable: '',
   };
@@ -164,42 +158,6 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     const uniqueSchemas = [...new Set(this.entities.map((e) => e.SchemaName).filter((s) => s))].sort();
     this.distinctSchemas = uniqueSchemas.map((schema) => ({ text: schema, value: schema }));
 
-    // Calculate connection count range
-    const connectionCounts = this.entities.map((entity) => {
-      return this.entityFields.filter((field) => field.EntityID === entity.ID || field.RelatedEntityID === entity.ID).length;
-    });
-
-    this.connectionCountRange.min = Math.min(...connectionCounts, 0);
-    this.connectionCountRange.max = Math.max(...connectionCounts, 1);
-
-    // Initialize filter ranges
-    this.filters.connectionCountMin = this.connectionCountRange.min;
-    this.filters.connectionCountMax = this.connectionCountRange.max;
-  }
-
-  private updateConnectionCountRange(): void {
-    if (this.filteredEntities.length === 0) {
-      // If no entities after filtering, keep current range
-      return;
-    }
-
-    // Calculate connection counts for filtered entities only
-    const connectionCounts = this.filteredEntities.map((entity) => {
-      return this.entityFields.filter((field) => field.EntityID === entity.ID || field.RelatedEntityID === entity.ID).length;
-    });
-
-    const newMin = Math.min(...connectionCounts, 0);
-    const newMax = Math.max(...connectionCounts, 1);
-
-    // Update the range
-    this.connectionCountRange.min = newMin;
-    this.connectionCountRange.max = newMax;
-
-    // Ensure current filter values are within the new range
-    this.filters.connectionCountMin = Math.max(this.filters.connectionCountMin, newMin);
-    this.filters.connectionCountMax = Math.min(this.filters.connectionCountMax, newMax);
-
-    console.log('Updated connection count range:', this.connectionCountRange);
   }
 
   private applyFilters(): void {
@@ -238,13 +196,6 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         return false;
       }
 
-      // Connection count filter
-      const connectionCount = this.entityFields.filter((field) => field.EntityID === entity.ID || field.RelatedEntityID === entity.ID).length;
-
-      if (connectionCount < this.filters.connectionCountMin || connectionCount > this.filters.connectionCountMax) {
-        return false;
-      }
-
       return true;
     });
 
@@ -261,24 +212,9 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.applyFilters();
     console.log('After filtering, entities count:', this.filteredEntities.length);
     
-    // Recalculate connection count range based on filtered entities
-    this.updateConnectionCountRange();
-    
     this.setupERD();
     this.autoFitDiagram();
     this.emitStateChange();
-  }
-
-  public onConnectionRangeChange(event: any): void {
-    if (event && Array.isArray(event) && event.length === 2) {
-      this.filters.connectionCountMin = event[0];
-      this.filters.connectionCountMax = event[1];
-      this.onFilterChange();
-    } else if (event && event.target && event.target.value && Array.isArray(event.target.value)) {
-      this.filters.connectionCountMin = event.target.value[0];
-      this.filters.connectionCountMax = event.target.value[1];
-      this.onFilterChange();
-    }
   }
 
   public toggleFilterPanel(): void {
@@ -458,12 +394,14 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.filters = {
       schemaName: null,
       entityName: '',
-      connectionCountMin: this.connectionCountRange.min,
-      connectionCountMax: this.connectionCountRange.max,
       entityStatus: null,
       baseTable: ''
     };
     this.onFilterChange();
+  }
+
+  public resetAllFilters(): void {
+    this.clearAllFilters();
   }
 
   private emitStateChange(): void {
@@ -512,7 +450,6 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         id: entity.ID,
         name: entity.Name || entity.SchemaName || '',
         entity,
-        connectionCount: foreignKeys.length,
         width,
         height,
         primaryKeys,

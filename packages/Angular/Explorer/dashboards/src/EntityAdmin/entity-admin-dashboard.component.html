@@ -1,7 +1,8 @@
 <div class="entity-admin-dashboard-container" mjFillContainer>
   <div class="dashboard-header">
-    <h1>Entity Administration</h1>
-    <p>Visualize and manage your entity relationships</p>
+    <div class="header-info">
+      <span class="visible-entities-count">{{ filteredEntities.length }} visible entities</span>
+    </div>
     <div class="header-controls">
       <button 
         class="control-btn" 
@@ -110,33 +111,6 @@
                   placeholder="Search tables...">
               </div>
               
-              <!-- Connection Count Range -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-link"></span>
-                  Connections ({{ filters.connectionCountMin }} - {{ filters.connectionCountMax }})
-                </label>
-                <div class="range-container">
-                  <input 
-                    type="range"
-                    class="range-input range-min"
-                    [min]="connectionCountRange.min"
-                    [max]="connectionCountRange.max"
-                    [(ngModel)]="filters.connectionCountMin"
-                    (ngModelChange)="onFilterChange()">
-                  <input 
-                    type="range"
-                    class="range-input range-max"
-                    [min]="connectionCountRange.min"
-                    [max]="connectionCountRange.max"
-                    [(ngModel)]="filters.connectionCountMax"
-                    (ngModelChange)="onFilterChange()">
-                  <div class="range-values">
-                    <span class="range-min-value">Min: {{ filters.connectionCountMin }}</span>
-                    <span class="range-max-value">Max: {{ filters.connectionCountMax }}</span>
-                  </div>
-                </div>
-              </div>
               
               <!-- Entity Status Filter -->
               <div class="filter-group">
@@ -153,6 +127,14 @@
                   <option value="Deprecated">Deprecated</option>
                   <option value="Disabled">Disabled</option>
                 </select>
+              </div>
+              
+              <!-- Reset Button -->
+              <div class="filter-actions">
+                <button class="reset-btn" (click)="resetAllFilters()" title="Reset all filters">
+                  <span class="fa-solid fa-undo"></span>
+                  Reset Filters
+                </button>
               </div>
             </div>
           </div>
@@ -461,26 +443,6 @@
             </div>
           </div>
         }
-      </div>
-      
-      <!-- Statistics Section -->
-      <div class="stats-section">
-        <div class="stat-card">
-          <div class="stat-value">{{ filteredEntities.length }}</div>
-          <div class="stat-label">Filtered Entities</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ entities.length }}</div>
-          <div class="stat-label">Total Entities</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ entityFields.length }}</div>
-          <div class="stat-label">Relationships</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ getActiveEntitiesCount() }}</div>
-          <div class="stat-label">Active Entities</div>
-        </div>
       </div>
     </div>
   }
