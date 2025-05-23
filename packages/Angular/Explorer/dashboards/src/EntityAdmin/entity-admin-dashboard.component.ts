@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, EntityFieldInfo, EntityInfo, KeyValuePair, Metadata } from '@memberjunction/core';
+import { CompositeKey, EntityFieldInfo, EntityFieldValueInfo, EntityInfo, KeyValuePair, Metadata } from '@memberjunction/core';
 import * as d3 from 'd3';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -258,34 +258,15 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   private applyFiltersDebounced(): void {
     console.log('applyFiltersDebounced called with filters:', this.filters);
+    this.applyFilters();
+    console.log('After filtering, entities count:', this.filteredEntities.length);
     
-    // Start filtering loading state
-    this.isFiltering = true;
-    this.loadingMessage = 'Filtering entities...';
+    // Recalculate connection count range based on filtered entities
+    this.updateConnectionCountRange();
     
-    // Add small delay to show loading state
-    setTimeout(() => {
-      this.applyFilters();
-      console.log('After filtering, entities count:', this.filteredEntities.length);
-      
-      // Recalculate connection count range based on filtered entities
-      this.updateConnectionCountRange();
-      
-      // Start ERD refresh
-      this.isRefreshingERD = true;
-      this.loadingMessage = 'Building diagram...';
-      this.isFiltering = false;
-      
-      // Build ERD off-screen then show
-      setTimeout(() => {
-        this.setupERD();
-        this.autoFitDiagram();
-        this.emitStateChange();
-        
-        // Complete loading
-        this.isRefreshingERD = false;
-      }, 50);
-    }, 100);
+    this.setupERD();
+    this.autoFitDiagram();
+    this.emitStateChange();
   }
 
   public onConnectionRangeChange(event: any): void {
@@ -384,6 +365,19 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     return this.getFieldPossibleValues(field).length > 0;
   }
 
+  public getSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
+    if (!field.EntityFieldValues || field.EntityFieldValues.length === 0) {
+      return [];
+    }
+    // Sort by Sequence, then by Value if Sequence is the same
+    return field.EntityFieldValues.sort((a, b) => {
+      if (a.Sequence !== b.Sequence) {
+        return a.Sequence - b.Sequence;
+      }
+      return a.Value.localeCompare(b.Value);
+    });
+  }
+
   public get isShowingLoading(): boolean {
     return this.isLoading || this.isFiltering || this.isRefreshingERD;
   }
@@ -415,6 +409,22 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   }
 
   public selectEntity(entity: EntityInfo, zoomTo: boolean = false): void {
+    // Check if entity is visible in current filtered entities
+    const isEntityVisible = this.filteredEntities.some(e => e.ID === entity.ID);
+    
+    // If entity is not visible due to filters, clear filters first
+    if (!isEntityVisible) {
+      this.clearAllFilters();
+      // Wait for filters to be applied before proceeding
+      setTimeout(() => {
+        this.proceedWithEntitySelection(entity, zoomTo);
+      }, 150);
+    } else {
+      this.proceedWithEntitySelection(entity, zoomTo);
+    }
+  }
+
+  private proceedWithEntitySelection(entity: EntityInfo, zoomTo: boolean): void {
     this.selectedEntity = entity;
     this.detailsPanelVisible = true; // Auto-show details when entity is selected
     this.Interaction.emit({ type: 'entitySelected', entity });
@@ -429,6 +439,18 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     if (zoomTo && this.svg && this.nodes) {
       this.zoomToEntity(entity.ID);
     }
+  }
+
+  private clearAllFilters(): void {
+    this.filters = {
+      schemaName: null,
+      entityName: '',
+      connectionCountMin: this.connectionCountRange.min,
+      connectionCountMax: this.connectionCountRange.max,
+      entityStatus: null,
+      baseTable: ''
+    };
+    this.onFilterChange();
   }
 
   private emitStateChange(): void {

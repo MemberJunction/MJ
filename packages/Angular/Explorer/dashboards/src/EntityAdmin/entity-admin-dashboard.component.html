@@ -163,34 +163,21 @@
           <div class="section-header">
             <h3>Entity Relationship Diagram</h3>
             <div class="erd-controls">
-              <button class="control-btn" (click)="zoomIn()" title="Zoom In" [disabled]="isShowingLoading">
+              <button class="control-btn" (click)="zoomIn()" title="Zoom In">
                 <span class="fa-solid fa-search-plus"></span>
               </button>
-              <button class="control-btn" (click)="zoomOut()" title="Zoom Out" [disabled]="isShowingLoading">
+              <button class="control-btn" (click)="zoomOut()" title="Zoom Out">
                 <span class="fa-solid fa-search-minus"></span>
               </button>
-              <button class="control-btn" (click)="resetZoom()" title="Reset Zoom" [disabled]="isShowingLoading">
+              <button class="control-btn" (click)="resetZoom()" title="Reset Zoom">
                 <span class="fa-solid fa-expand"></span>
               </button>
-              <button class="control-btn" (click)="setupERD()" title="Refresh Diagram" [disabled]="isShowingLoading">
+              <button class="control-btn" (click)="setupERD()" title="Refresh Diagram">
                 <span class="fa-solid fa-refresh"></span>
               </button>
             </div>
           </div>
-          <div class="erd-container" #erdContainer>
-            @if (isShowingLoading) {
-              <div class="loading-overlay">
-                <div class="loading-content">
-                  <div class="loading-spinner">
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                    <div class="spinner-ring"></div>
-                  </div>
-                  <div class="loading-text">{{ loadingMessage }}</div>
-                </div>
-              </div>
-            }
-          </div>
+          <div class="erd-container" #erdContainer></div>
         </div>
         
         <!-- Entity Details Panel (Right) -->
@@ -231,10 +218,9 @@
             
             <div class="fields-section">
               <div class="section-header">
-                <div class="section-title-group">
+                <div class="section-title-group" (click)="toggleFieldsSection()">
                   <button 
                     class="expand-btn" 
-                    (click)="toggleFieldsSection()"
                     [class.expanded]="fieldsSectionExpanded"
                     title="Toggle fields section">
                     <span class="fa-solid fa-chevron-right"></span>
@@ -359,6 +345,29 @@
                               <div class="description-content">{{ field.Description }}</div>
                             </div>
                           }
+                          @if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+                            <div class="field-values-comprehensive">
+                              <div class="values-header">
+                                <span class="fa-solid fa-list"></span>
+                                Possible Values ({{ field.EntityFieldValues.length }})
+                              </div>
+                              <div class="values-grid">
+                                @for (fieldValue of getSortedEntityFieldValues(field); track fieldValue.ID) {
+                                  <div class="value-item">
+                                    <div class="value-main">
+                                      <span class="value-text">{{ fieldValue.Value }}</span>
+                                      @if (fieldValue.Code && fieldValue.Code !== fieldValue.Value) {
+                                        <span class="value-code">[{{ fieldValue.Code }}]</span>
+                                      }
+                                    </div>
+                                    @if (fieldValue.Description && fieldValue.Description !== fieldValue.Value) {
+                                      <div class="value-description">{{ fieldValue.Description }}</div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            </div>
+                          }
                           <div class="details-grid">
                             <div class="detail-row">
                               <span class="detail-label">Data Type:</span>
@@ -423,10 +432,9 @@
             
             <div class="relationships-section">
               <div class="section-header">
-                <div class="section-title-group">
+                <div class="section-title-group" (click)="toggleRelationshipsSection()">
                   <button 
                     class="expand-btn" 
-                    (click)="toggleRelationshipsSection()"
                     [class.expanded]="relationshipsSectionExpanded"
                     title="Toggle relationships section">
                     <span class="fa-solid fa-chevron-right"></span>
