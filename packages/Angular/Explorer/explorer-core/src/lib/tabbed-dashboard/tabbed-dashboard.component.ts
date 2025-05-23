@@ -1,9 +1,10 @@
 import { Component, Input, OnInit, ViewChild, ElementRef, AfterViewInit, ViewContainerRef, ComponentRef, OnDestroy } from '@angular/core';
-import { LogError, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { DashboardEntity, DashboardUserPreferenceEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-dashboards';
 import { InvokeManualResize, MJGlobal } from '@memberjunction/global';
 import { MJTabComponent, MJTabStripComponent } from '@memberjunction/ng-tabstrip';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'mj-tabbed-dashboard',
@@ -39,7 +40,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
   private dashboardInstances: Map<string, BaseDashboard> = new Map();
   private dashboardComponentRefs: Map<string, ComponentRef<BaseDashboard>> = new Map();
   
-  constructor() {}
+  constructor(private router: Router) {}
 
   async ngOnInit(): Promise<void> {
   }
@@ -166,6 +167,16 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                 const targetElement = document.getElementById(`dashboard-${dashboardId}`);
                 if (targetElement && componentRef.location.nativeElement) {
                   targetElement.appendChild(componentRef.location.nativeElement);
+
+                  // handle open entity record events in MJ Explorer with routing
+                  instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
+                    // check to see if the data has entityname/pkey
+                    if (data && data.EntityName && data.RecordPKey) {
+                      // open the record in the explorer
+                      this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
+                                           { queryParams: { Entity: data.EntityName } })                      
+                    }
+                  });
                   instance.Refresh();
                 }
               }, 0);

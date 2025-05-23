@@ -1,4 +1,5 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { CompositeKey } from '@memberjunction/core';
 import { DashboardEntityExtended } from '@memberjunction/core-entities';
 
 export interface DashboardConfig {
@@ -41,6 +42,11 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
    * Subclasses can emit this event anytime they want to communicate with the container to let it know that something has happened of significance.
    */
   @Output() Interaction = new EventEmitter<any>();
+
+  /**
+   * Subclasses can emit this event anytime they want to open a record within a particular entity. The container should handle this event and open the record.
+   */
+  @Output() OpenEntityRecord = new EventEmitter<{EntityName: string, RecordPKey: CompositeKey}>();
 
   protected _config: DashboardConfig | null = null;
 

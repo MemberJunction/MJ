@@ -6,9 +6,15 @@
 ## Build Commands
 - Build all packages: `npm run build`
 - Build specific packages: `turbo build --filter="@memberjunction/package-name"`
+- **IMPORTANT**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
 - Watch mode: `npm run watch`
 - Start API server: `npm run start:api`
 - Start Explorer UI: `npm run start:explorer`
+
+## Development Workflow
+- **CRITICAL**: After making code changes, always compile the affected package by running `npm run build` in that package's directory to check for TypeScript errors
+- Fix all compilation errors before proceeding with additional changes
+- This ensures code quality and prevents runtime issues
 
 ## Lint & Format
 - Check with ESLint: `npx eslint packages/path/to/file.ts`

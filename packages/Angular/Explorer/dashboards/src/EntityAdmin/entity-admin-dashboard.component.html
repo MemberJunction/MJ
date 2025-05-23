@@ -1,0 +1,474 @@
+<div class="entity-admin-dashboard-container" mjFillContainer>
+  <div class="dashboard-header">
+    <h1>Entity Administration</h1>
+    <p>Visualize and manage your entity relationships</p>
+    <div class="header-controls">
+      <button 
+        class="control-btn" 
+        (click)="toggleFilterPanel()" 
+        [class.active]="filterPanelVisible"
+        title="Toggle Filters">
+        <span class="fa-solid fa-filter"></span>
+        Filters
+      </button>
+      @if (selectedEntity) {
+        <button 
+          class="control-btn" 
+          (click)="toggleDetailsPanel()" 
+          [class.active]="detailsPanelVisible"
+          title="Toggle Details">
+          <span class="fa-solid fa-info-circle"></span>
+          Details
+        </button>
+      }
+    </div>
+  </div>
+  
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">{{ loadingMessage }}</div>
+      </div>
+    </div>
+  }
+  
+  @if (error) {
+    <div class="error-container">
+      <p class="error-message">{{ error }}</p>
+    </div>
+  }
+  
+  @if (!isLoading && !error) {
+    <div class="dashboard-content" mjFillContainer>
+      <!-- Main Layout with Flexbox -->
+      <div class="main-layout">
+        
+        <!-- Filter Panel (Left) -->
+        @if (filterPanelVisible) {
+          <div class="filter-panel">
+            <div class="filter-panel-header">
+              <h3>Entity Filters</h3>
+              <div class="filter-summary-inline">
+                <span class="summary-value">{{ filteredEntities.length }}</span>
+                <span class="summary-label">of {{ entities.length }}</span>
+              </div>
+              <button class="close-btn" (click)="toggleFilterPanel()">
+                <span class="fa-solid fa-times"></span>
+              </button>
+            </div>
+            
+            <div class="filter-content">
+              <!-- Schema Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-database"></span>
+                  Schema
+                </label>
+                <select 
+                  class="filter-select"
+                  [(ngModel)]="filters.schemaName"
+                  (ngModelChange)="onFilterChange()">
+                  <option [ngValue]="null">All Schemas</option>
+                  <option *ngFor="let schema of distinctSchemas" [ngValue]="schema.value">
+                    {{ schema.text }}
+                  </option>
+                </select>
+              </div>
+              
+              <!-- Entity Name Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-search"></span>
+                  Entity Name
+                </label>
+                <input 
+                  type="text"
+                  class="filter-input"
+                  [(ngModel)]="filters.entityName"
+                  (ngModelChange)="onFilterChange()"
+                  (input)="onFilterChange()"
+                  placeholder="Search entities...">
+              </div>
+              
+              <!-- Base Table Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-table"></span>
+                  Base Table
+                </label>
+                <input 
+                  type="text"
+                  class="filter-input"
+                  [(ngModel)]="filters.baseTable"
+                  (ngModelChange)="onFilterChange()"
+                  (input)="onFilterChange()"
+                  placeholder="Search tables...">
+              </div>
+              
+              <!-- Connection Count Range -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-link"></span>
+                  Connections ({{ filters.connectionCountMin }} - {{ filters.connectionCountMax }})
+                </label>
+                <div class="range-container">
+                  <input 
+                    type="range"
+                    class="range-input range-min"
+                    [min]="connectionCountRange.min"
+                    [max]="connectionCountRange.max"
+                    [(ngModel)]="filters.connectionCountMin"
+                    (ngModelChange)="onFilterChange()">
+                  <input 
+                    type="range"
+                    class="range-input range-max"
+                    [min]="connectionCountRange.min"
+                    [max]="connectionCountRange.max"
+                    [(ngModel)]="filters.connectionCountMax"
+                    (ngModelChange)="onFilterChange()">
+                  <div class="range-values">
+                    <span class="range-min-value">Min: {{ filters.connectionCountMin }}</span>
+                    <span class="range-max-value">Max: {{ filters.connectionCountMax }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Entity Status Filter -->
+              <div class="filter-group">
+                <label class="filter-label">
+                  <span class="fa-solid fa-check-circle"></span>
+                  Status
+                </label>
+                <select 
+                  class="filter-select"
+                  [(ngModel)]="filters.entityStatus"
+                  (ngModelChange)="onFilterChange()">
+                  <option [ngValue]="null">All Statuses</option>
+                  <option value="Active">Active</option>
+                  <option value="Deprecated">Deprecated</option>
+                  <option value="Disabled">Disabled</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        }
+        
+        <!-- ERD Section (Center) -->
+        <div class="erd-section">
+          <div class="section-header">
+            <h3>Entity Relationship Diagram</h3>
+            <div class="erd-controls">
+              <button class="control-btn" (click)="zoomIn()" title="Zoom In" [disabled]="isShowingLoading">
+                <span class="fa-solid fa-search-plus"></span>
+              </button>
+              <button class="control-btn" (click)="zoomOut()" title="Zoom Out" [disabled]="isShowingLoading">
+                <span class="fa-solid fa-search-minus"></span>
+              </button>
+              <button class="control-btn" (click)="resetZoom()" title="Reset Zoom" [disabled]="isShowingLoading">
+                <span class="fa-solid fa-expand"></span>
+              </button>
+              <button class="control-btn" (click)="setupERD()" title="Refresh Diagram" [disabled]="isShowingLoading">
+                <span class="fa-solid fa-refresh"></span>
+              </button>
+            </div>
+          </div>
+          <div class="erd-container" #erdContainer>
+            @if (isShowingLoading) {
+              <div class="loading-overlay">
+                <div class="loading-content">
+                  <div class="loading-spinner">
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                    <div class="spinner-ring"></div>
+                  </div>
+                  <div class="loading-text">{{ loadingMessage }}</div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+        
+        <!-- Entity Details Panel (Right) -->
+        @if (selectedEntity && detailsPanelVisible) {
+          <div class="resize-handle" (mousedown)="startResize($event)">
+            <div class="resize-line"></div>
+          </div>
+          <div class="details-panel" [style.width.px]="detailsPanelWidth" mjFillContainer>
+            <div class="panel-header">
+              <h3>{{ selectedEntity.Name || selectedEntity.SchemaName }}</h3>
+              <div class="panel-actions">
+                <button class="open-btn" (click)="openEntity(selectedEntity)" title="Open Entity Record">
+                  <span class="fa-solid fa-external-link-alt"></span>
+                  Open
+                </button>
+                <button class="close-btn" (click)="toggleDetailsPanel()">
+                  <span class="fa-solid fa-times"></span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="entity-info">
+              <div class="info-row">
+                <label>Schema:</label>
+                <span>{{ selectedEntity.SchemaName }}</span>
+              </div>
+              <div class="info-row">
+                <label>Table:</label>
+                <span>{{ selectedEntity.BaseTable }}</span>
+              </div>
+              @if (selectedEntity.Description) {
+                <div class="info-row">
+                  <label>Description:</label>
+                  <span>{{ selectedEntity.Description }}</span>
+                </div>
+              }
+            </div>
+            
+            <div class="fields-section">
+              <div class="section-header">
+                <div class="section-title-group">
+                  <button 
+                    class="expand-btn" 
+                    (click)="toggleFieldsSection()"
+                    [class.expanded]="fieldsSectionExpanded"
+                    title="Toggle fields section">
+                    <span class="fa-solid fa-chevron-right"></span>
+                  </button>
+                  <h4>Fields ({{ getEntityFields(selectedEntity.ID).length }})</h4>
+                </div>
+                @if (fieldsSectionExpanded) {
+                  <div class="field-filters">
+                    <button 
+                      class="filter-btn" 
+                      [class.active]="fieldFilter === 'all'"
+                      (click)="setFieldFilter('all')"
+                      title="Show all fields">
+                      All
+                    </button>
+                    <button 
+                      class="filter-btn" 
+                      [class.active]="fieldFilter === 'keys'"
+                      (click)="setFieldFilter('keys')"
+                      title="Show primary keys and ID fields">
+                      Keys
+                    </button>
+                    <button 
+                      class="filter-btn" 
+                      [class.active]="fieldFilter === 'foreign_keys'"
+                      (click)="setFieldFilter('foreign_keys')"
+                      title="Show foreign key fields only">
+                      FKs
+                    </button>
+                    <button 
+                      class="filter-btn" 
+                      [class.active]="fieldFilter === 'regular'"
+                      (click)="setFieldFilter('regular')"
+                      title="Show regular data fields">
+                      Regular
+                    </button>
+                  </div>
+                }
+              </div>
+              @if (fieldsSectionExpanded) {
+                <div class="fields-list">
+                  @for (field of getEntityFields(selectedEntity.ID); track field.ID) {
+                    <div class="field-item" 
+                         [class]="{ 
+                           'primary-key-field': field.IsPrimaryKey,
+                           'foreign-key-field': field.RelatedEntityID && !field.IsPrimaryKey,
+                           'regular-field': !field.IsPrimaryKey && !field.RelatedEntityID,
+                           'field-expanded': isFieldDetailsExpanded(field.ID)
+                         }"
+                         (click)="onFieldClick(field)"
+                         [title]="'Click to see more details about ' + field.Name">
+                      <div class="field-header">
+                        <div class="field-name">
+                          @if (field.IsPrimaryKey) {
+                            <span class="field-icon fa-solid fa-key" title="Primary Key"></span>
+                          } @else if (field.RelatedEntityID) {
+                            <span class="field-icon fa-solid fa-link" title="Foreign Key"></span>
+                          }
+                          {{ field.Name }}
+                        </div>
+                        <div class="field-actions">
+                          @if (hasFieldPossibleValues(field)) {
+                            <button 
+                              class="field-values-btn"
+                              (click)="toggleFieldValues(field.ID)"
+                              [class.expanded]="isFieldValuesExpanded(field.ID)"
+                              title="Toggle possible values">
+                              <span class="fa-solid fa-list"></span>
+                            </button>
+                          }
+                          @if (field.Description) {
+                            <button 
+                              class="field-info-btn"
+                              (click)="toggleFieldDescription(field.ID)"
+                              [class.expanded]="isFieldDescriptionExpanded(field.ID)"
+                              title="Toggle field description">
+                              <span class="fa-solid fa-info-circle"></span>
+                            </button>
+                          }
+                          <div class="field-badges">
+                            @if (field.IsPrimaryKey) {
+                              <span class="field-badge primary-key">PK</span>
+                            }
+                            @if (field.RelatedEntityID && !field.IsPrimaryKey) {
+                              <span class="field-badge foreign-key">FK</span>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      <div class="field-details">
+                        <div class="field-type">{{ field.Type }}</div>
+                        @if (field.RelatedEntityID) {
+                          <div class="field-relation">
+                            <span class="fa-solid fa-arrow-right"></span>
+                            Related Entity
+                          </div>
+                        }
+                      </div>
+                      @if (field.Description && isFieldDescriptionExpanded(field.ID)) {
+                        <div class="field-description">
+                          <div class="description-text">{{ field.Description }}</div>
+                        </div>
+                      }
+                      @if (hasFieldPossibleValues(field) && isFieldValuesExpanded(field.ID)) {
+                        <div class="field-values">
+                          <div class="values-header">Possible Values:</div>
+                          <div class="values-list">
+                            @for (value of getFieldPossibleValues(field); track value; let i = $index) {
+                              <span class="value-tag">{{ value }}</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                      @if (isFieldDetailsExpanded(field.ID)) {
+                        <div class="field-comprehensive-details">
+                          <div class="details-header">
+                            <span class="fa-solid fa-info-circle"></span>
+                            Comprehensive Field Information
+                          </div>
+                          @if (field.Description) {
+                            <div class="comprehensive-description-top">
+                              <div class="description-content">{{ field.Description }}</div>
+                            </div>
+                          }
+                          <div class="details-grid">
+                            <div class="detail-row">
+                              <span class="detail-label">Data Type:</span>
+                              <span class="detail-value">{{ field.Type }}</span>
+                            </div>
+                            <div class="detail-row">
+                              <span class="detail-label">Nullable:</span>
+                              <span class="detail-value" [class]="field.AllowsNull ? 'nullable-yes' : 'nullable-no'">
+                                {{ field.AllowsNull ? 'Yes' : 'No' }}
+                              </span>
+                            </div>
+                            @if (field.Length && field.Length > 0) {
+                              <div class="detail-row">
+                                <span class="detail-label">Max Length:</span>
+                                <span class="detail-value">{{ field.Length }}</span>
+                              </div>
+                            }
+                            @if (field.Precision && field.Precision > 0) {
+                              <div class="detail-row">
+                                <span class="detail-label">Precision:</span>
+                                <span class="detail-value">{{ field.Precision }}</span>
+                              </div>
+                            }
+                            @if (field.Scale && field.Scale > 0) {
+                              <div class="detail-row">
+                                <span class="detail-label">Scale:</span>
+                                <span class="detail-value">{{ field.Scale }}</span>
+                              </div>
+                            }
+                            <div class="detail-row">
+                              <span class="detail-label">Virtual Field:</span>
+                              <span class="detail-value" [class]="field.IsVirtual ? 'virtual-yes' : 'virtual-no'">
+                                {{ field.IsVirtual ? 'Yes' : 'No' }}
+                              </span>
+                            </div>
+                            @if (field.DefaultValue) {
+                              <div class="detail-row">
+                                <span class="detail-label">Default Value:</span>
+                                <span class="detail-value default-value">{{ field.DefaultValue }}</span>
+                              </div>
+                            }
+                            @if (field.RelatedEntityID) {
+                              <div class="detail-row">
+                                <span class="detail-label">Related Entity:</span>
+                                <span class="detail-value related-entity">{{ field.RelatedEntity }}</span>
+                              </div>
+                            }
+                            @if (field.AutoIncrement) {
+                              <div class="detail-row">
+                                <span class="detail-label">Auto Increment:</span>
+                                <span class="detail-value auto-increment">Yes</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+            
+            <div class="relationships-section">
+              <div class="section-header">
+                <div class="section-title-group">
+                  <button 
+                    class="expand-btn" 
+                    (click)="toggleRelationshipsSection()"
+                    [class.expanded]="relationshipsSectionExpanded"
+                    title="Toggle relationships section">
+                    <span class="fa-solid fa-chevron-right"></span>
+                  </button>
+                  <h4>Related Entities ({{ getRelatedEntities(selectedEntity.ID).length }})</h4>
+                </div>
+              </div>
+              @if (relationshipsSectionExpanded) {
+                <div class="related-entities-list">
+                  @for (relatedEntity of getRelatedEntities(selectedEntity.ID); track relatedEntity.ID) {
+                    <div class="related-entity-item" (click)="selectEntity(relatedEntity, true)">
+                      <span class="fa-solid fa-database"></span>
+                      {{ relatedEntity.Name || relatedEntity.SchemaName }}
+                      <span class="zoom-indicator fa-solid fa-search-plus" title="Click to zoom to entity"></span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+      
+      <!-- Statistics Section -->
+      <div class="stats-section">
+        <div class="stat-card">
+          <div class="stat-value">{{ filteredEntities.length }}</div>
+          <div class="stat-label">Filtered Entities</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ entities.length }}</div>
+          <div class="stat-label">Total Entities</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ entityFields.length }}</div>
+          <div class="stat-label">Relationships</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ getActiveEntitiesCount() }}</div>
+          <div class="stat-label">Active Entities</div>
+        </div>
+      </div>
+    </div>
+  }
+</div>
