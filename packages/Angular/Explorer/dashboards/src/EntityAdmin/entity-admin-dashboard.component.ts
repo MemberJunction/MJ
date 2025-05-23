@@ -41,6 +41,13 @@ interface DashboardState {
   filterPanelWidth: number;
   mainSplitterPosition: number;
   filters: EntityFilter;
+  detailsPanelVisible: boolean;
+  detailsPanelWidth: number;
+  selectedEntityId: string | null;
+  zoomLevel: number;
+  panPosition: { x: number; y: number };
+  fieldsSectionExpanded: boolean;
+  relationshipsSectionExpanded: boolean;
 }
 
 @Component({
@@ -75,6 +82,12 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public expandedFieldDetails = new Set<string>();
   public detailsPanelWidth = 400; // Default width in pixels
   private isResizing = false;
+
+  // Pending state for deferred loading
+  private pendingSelectedEntityId: string | null = null;
+  private pendingZoomLevel: number | null = null;
+  private pendingPanPosition: { x: number; y: number } | null = null;
+  private zoomStateTimeout: any;
   public filters: EntityFilter = {
     schemaName: null,
     entityName: '',
@@ -84,6 +97,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   // State management
   private stateChangeSubject = new Subject<DashboardState>();
+  private userStateChangeSubject = new Subject<DashboardState>();
   private filterChangeSubject = new Subject<void>();
 
   private svg: any;
@@ -93,18 +107,28 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   private zoom: any;
 
   protected override initDashboard(): void {
-    // Setup debounced state change emission
+    // Setup debounced state change emission (short for internal state changes)
     this.stateChangeSubject.pipe(debounceTime(300)).subscribe((state) => {
+      // Internal state changes (not persisted)
+      console.log('Internal state changed:', state);
+    });
+
+    // Setup debounced user state change emission (longer for persistence)
+    this.userStateChangeSubject.pipe(debounceTime(1000)).subscribe((state) => {
       this.UserStateChanged.emit({
-        type: 'stateChange',
+        type: 'userStateChange',
         data: state,
       });
+      console.log('User state persisted:', state);
     });
 
     // Setup debounced filter changes
     this.filterChangeSubject.pipe(debounceTime(300)).subscribe(() => {
       this.applyFiltersDebounced();
     });
+
+    // Load initial user state from configuration
+    this.loadUserState();
   }
 
   protected override loadData(): void {
@@ -215,24 +239,29 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.setupERD();
     this.autoFitDiagram();
     this.emitStateChange();
+    this.emitUserStateChange(); // Persist filter changes
   }
 
   public toggleFilterPanel(): void {
     this.filterPanelVisible = !this.filterPanelVisible;
     this.emitStateChange();
+    this.emitUserStateChange();
   }
 
   public toggleDetailsPanel(): void {
     this.detailsPanelVisible = !this.detailsPanelVisible;
     this.emitStateChange();
+    this.emitUserStateChange();
   }
 
   public toggleFieldsSection(): void {
     this.fieldsSectionExpanded = !this.fieldsSectionExpanded;
+    this.emitUserStateChange();
   }
 
   public toggleRelationshipsSection(): void {
     this.relationshipsSectionExpanded = !this.relationshipsSectionExpanded;
+    this.emitUserStateChange();
   }
 
   public toggleFieldDescription(fieldId: string): void {
@@ -349,6 +378,9 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       document.removeEventListener('mouseup', mouseUpHandler);
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
+      
+      // Persist panel width change
+      this.emitUserStateChange();
     };
 
     document.addEventListener('mousemove', mouseMoveHandler);
@@ -388,6 +420,9 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     if (zoomTo && this.svg && this.nodes) {
       this.zoomToEntity(entity.ID);
     }
+
+    // Persist entity selection state
+    this.emitUserStateChange();
   }
 
   private clearAllFilters(): void {
@@ -402,17 +437,116 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   public resetAllFilters(): void {
     this.clearAllFilters();
+    this.emitUserStateChange(); // Persist filter reset
+  }
+
+  private loadUserState(): void {
+    if (!this.Config?.userState) {
+      console.log('No user state found in config, using defaults');
+      return;
+    }
+
+    const userState = this.Config.userState as DashboardState;
+    console.log('Loading user state:', userState);
+
+    try {
+      // Load panel visibility and dimensions
+      if (userState.filterPanelVisible !== undefined) {
+        this.filterPanelVisible = userState.filterPanelVisible;
+      }
+      if (userState.detailsPanelVisible !== undefined) {
+        this.detailsPanelVisible = userState.detailsPanelVisible;
+      }
+      if (userState.detailsPanelWidth !== undefined) {
+        this.detailsPanelWidth = userState.detailsPanelWidth;
+      }
+
+      // Load section expansion states
+      if (userState.fieldsSectionExpanded !== undefined) {
+        this.fieldsSectionExpanded = userState.fieldsSectionExpanded;
+      }
+      if (userState.relationshipsSectionExpanded !== undefined) {
+        this.relationshipsSectionExpanded = userState.relationshipsSectionExpanded;
+      }
+
+      // Load filters
+      if (userState.filters) {
+        this.filters = { ...this.filters, ...userState.filters };
+      }
+
+      // Selected entity will be loaded after entities are available
+      if (userState.selectedEntityId) {
+        this.pendingSelectedEntityId = userState.selectedEntityId;
+      }
+
+      // Zoom and pan will be applied after ERD is created
+      if (userState.zoomLevel !== undefined) {
+        this.pendingZoomLevel = userState.zoomLevel;
+      }
+      if (userState.panPosition) {
+        this.pendingPanPosition = userState.panPosition;
+      }
+
+      console.log('User state loaded successfully');
+    } catch (error) {
+      console.error('Error loading user state:', error);
+    }
   }
 
   private emitStateChange(): void {
     const state: DashboardState = {
       filterPanelVisible: this.filterPanelVisible,
-      filterPanelWidth: 320, // Updated width
-      mainSplitterPosition: 70, // Default position
+      filterPanelWidth: 320,
+      mainSplitterPosition: 70,
       filters: { ...this.filters },
+      detailsPanelVisible: this.detailsPanelVisible,
+      detailsPanelWidth: this.detailsPanelWidth,
+      selectedEntityId: this.selectedEntity?.ID || null,
+      zoomLevel: this.getCurrentZoomLevel(),
+      panPosition: this.getCurrentPanPosition(),
+      fieldsSectionExpanded: this.fieldsSectionExpanded,
+      relationshipsSectionExpanded: this.relationshipsSectionExpanded,
     };
 
     this.stateChangeSubject.next(state);
+  }
+
+  private emitUserStateChange(): void {
+    const state: DashboardState = {
+      filterPanelVisible: this.filterPanelVisible,
+      filterPanelWidth: 320,
+      mainSplitterPosition: 70,
+      filters: { ...this.filters },
+      detailsPanelVisible: this.detailsPanelVisible,
+      detailsPanelWidth: this.detailsPanelWidth,
+      selectedEntityId: this.selectedEntity?.ID || null,
+      zoomLevel: this.getCurrentZoomLevel(),
+      panPosition: this.getCurrentPanPosition(),
+      fieldsSectionExpanded: this.fieldsSectionExpanded,
+      relationshipsSectionExpanded: this.relationshipsSectionExpanded,
+    };
+
+    this.userStateChangeSubject.next(state);
+  }
+
+  private getCurrentZoomLevel(): number {
+    if (!this.svg) return 1;
+    try {
+      const transform = d3.zoomTransform(this.svg.node());
+      return transform.k;
+    } catch {
+      return 1;
+    }
+  }
+
+  private getCurrentPanPosition(): { x: number; y: number } {
+    if (!this.svg) return { x: 0, y: 0 };
+    try {
+      const transform = d3.zoomTransform(this.svg.node());
+      return { x: transform.x, y: transform.y };
+    } catch {
+      return { x: 0, y: 0 };
+    }
   }
 
   public setupERD(): void {
@@ -424,7 +558,39 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     // Auto-fit after a short delay to let the simulation settle
     setTimeout(() => {
       this.autoFitDiagram();
+      // Apply pending state after ERD is fully loaded
+      this.applyPendingState();
     }, 1000);
+  }
+
+  private applyPendingState(): void {
+    // Apply pending selected entity
+    if (this.pendingSelectedEntityId) {
+      const entity = this.entities.find(e => e.ID === this.pendingSelectedEntityId);
+      if (entity) {
+        console.log('Restoring selected entity:', entity.Name);
+        this.selectEntity(entity, false); // Don't auto-zoom yet
+      }
+      this.pendingSelectedEntityId = null;
+    }
+
+    // Apply pending zoom and pan state
+    if (this.pendingZoomLevel !== null || this.pendingPanPosition !== null) {
+      setTimeout(() => {
+        if (this.svg && this.zoom) {
+          const zoomLevel = this.pendingZoomLevel || 1;
+          const panPos = this.pendingPanPosition || { x: 0, y: 0 };
+          
+          console.log('Restoring zoom/pan state:', { zoomLevel, panPos });
+          this.svg.transition().duration(750).call(
+            this.zoom.transform, 
+            d3.zoomIdentity.translate(panPos.x, panPos.y).scale(zoomLevel)
+          );
+        }
+        this.pendingZoomLevel = null;
+        this.pendingPanPosition = null;
+      }, 100);
+    }
   }
 
   private prepareData(): void {
@@ -484,9 +650,15 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     // Clear any existing visualization
     d3.select(container).selectAll('*').remove();
 
-    // Create zoom behavior
+    // Create zoom behavior with debounced state persistence
     this.zoom = d3.zoom<SVGSVGElement, unknown>().on('zoom', (event: any) => {
       this.svg.select('.chart-area').attr('transform', event.transform);
+      
+      // Debounce user state changes during manual zoom/pan
+      clearTimeout(this.zoomStateTimeout);
+      this.zoomStateTimeout = setTimeout(() => {
+        this.emitUserStateChange();
+      }, 500);
     });
 
     // Create SVG
@@ -1047,6 +1219,8 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public zoomIn(): void {
     if (!this.svg || !this.zoom) return;
     this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.5);
+    // Persist zoom change with a slight delay to capture final state
+    setTimeout(() => this.emitUserStateChange(), 350);
   }
 
   public zoomOut(): void {
@@ -1055,11 +1229,15 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       .transition()
       .duration(300)
       .call(this.zoom.scaleBy, 1 / 1.5);
+    // Persist zoom change with a slight delay to capture final state
+    setTimeout(() => this.emitUserStateChange(), 350);
   }
 
   public resetZoom(): void {
     if (!this.svg || !this.zoom) return;
     this.svg.transition().duration(500).call(this.zoom.transform, d3.zoomIdentity.translate(0, 0).scale(1));
+    // Persist zoom reset with a slight delay to capture final state
+    setTimeout(() => this.emitUserStateChange(), 550);
   }
 
   public getEntityFields(entityId: string): EntityFieldInfo[] {

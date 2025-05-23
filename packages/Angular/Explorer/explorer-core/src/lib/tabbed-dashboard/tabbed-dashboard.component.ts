@@ -1,8 +1,8 @@
 import { Component, Input, OnInit, ViewChild, ElementRef, AfterViewInit, ViewContainerRef, ComponentRef, OnDestroy } from '@angular/core';
 import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@memberjunction/core';
-import { DashboardEntity, DashboardUserPreferenceEntity, ResourceData } from '@memberjunction/core-entities';
-import { BaseDashboard } from '@memberjunction/ng-dashboards';
-import { InvokeManualResize, MJGlobal } from '@memberjunction/global';
+import { DashboardEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, ResourceData } from '@memberjunction/core-entities';
+import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
+import { InvokeManualResize, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { MJTabComponent, MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 import { Router } from '@angular/router';
 
@@ -163,12 +163,18 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
               this.dashboardComponentRefs.set(dashboardId, componentRef);
               
               // Find the target container element and append the component
-              setTimeout(() => {
+              setTimeout(async () => {
                 const targetElement = document.getElementById(`dashboard-${dashboardId}`);
                 if (targetElement && componentRef.location.nativeElement) {
                   targetElement.appendChild(componentRef.location.nativeElement);
 
-                  // handle open entity record events in MJ Explorer with routing
+                  const userState = await this.loadDashboardUserState(dashboardId);
+                  const config: DashboardConfig = {
+                    dashboard: dashboardEntity,
+                    userState: userState.UserState ? SafeJSONParse(userState.UserState) : {}
+                  };
+
+                  // handle open entity record events in MJ Explorer with routing                  
                   instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
                     // check to see if the data has entityname/pkey
                     if (data && data.EntityName && data.RecordPKey) {
@@ -177,6 +183,21 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                                            { queryParams: { Entity: data.EntityName } })                      
                     }
                   });
+
+                  instance.UserStateChanged.subscribe(async (userState: any) => {
+                    if (!userState) {
+                      // if the user state is null, we need to remove it from the user state
+                      userState = {};
+                    }
+                    // save the user state to the dashboard user state entity
+                    userState.UserState = JSON.stringify(userState);
+                    if (!await userState.Save()) {
+                      LogError('Error saving user state', null, userState.Error);
+                    }
+                  });
+
+                  // now that we have state loaded and our events are wired up, we can set the config
+                  instance.Config = config;
                   instance.Refresh();
                 }
               }, 0);
@@ -191,6 +212,28 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
     }
     
     return this.dashboardInstances.get(dashboardId);
+  }
+
+  protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
+    // handle user state changes for the dashboard
+    const rv = new RunView();
+    const md = new Metadata();
+    const stateResult = await rv.RunView({
+      EntityName: 'MJ: Dashboard User States',
+      ExtraFilter: `DashboardID='${dashboardId}' AND UserID='${md.CurrentUser.ID}'`,
+      ResultType: 'entity_object',
+    });
+    let stateObject: DashboardUserStateEntity;
+    if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
+      stateObject = stateResult.Results[0];
+    }
+    else {
+      stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
+      stateObject.DashboardID = dashboardId;
+      stateObject.UserID = md.CurrentUser.ID;
+      // don't save becuase we don't care about the state until something changes
+    }
+    return stateObject;
   }
 
   public onTabSelect(tabIndex: number): void {
