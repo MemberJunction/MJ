@@ -93,7 +93,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
       const md = new Metadata();
       const rv = new RunView();
       const appFilter = this.ApplicationID ? ` AND ApplicationID='${this.ApplicationID}'` : '';
-      const scope = this.ApplicationID ? 'Application' : 'Global'
+      const scope = this.ApplicationID ? 'App' : 'Global'
       const filter: string = `(UserID='${md.CurrentUser.ID}' AND Scope='${scope}'${appFilter}) OR (Scope='${scope}' AND UserID IS NULL)`;
       const params: RunViewParams = {
         EntityName: 'MJ: Dashboard User Preferences',
