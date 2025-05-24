@@ -93,15 +93,23 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
       const md = new Metadata();
       const rv = new RunView();
       const appFilter = this.ApplicationID ? ` AND ApplicationID='${this.ApplicationID}'` : '';
-      const scope = this.ApplicationID ? 'App' : 'Global'
-      const filter: string = `(UserID='${md.CurrentUser.ID}' AND Scope='${scope}'${appFilter}) OR (Scope='${scope}' AND UserID IS NULL)`;
+      const scope = this.ApplicationID ? 'App' : 'Global';
+      const baseCondition = `Scope='${scope}'${appFilter}`;
+      const userFilter = `UserID='${md.CurrentUser.ID}' AND ${baseCondition}`;
+      const upEntity = md.EntityByName('MJ: Dashboard User Preferences');
+
+      const filter: string = `(${userFilter})
+                              OR 
+                              (UserID IS NULL AND ${baseCondition} AND
+                              NOT EXISTS (SELECT 1 FROM [${upEntity.SchemaName}].[${upEntity.BaseView}] 
+                                        WHERE ${userFilter}))`;
+
       const params: RunViewParams = {
         EntityName: 'MJ: Dashboard User Preferences',
         ExtraFilter: filter,
         ResultType: 'entity_object',
         OrderBy: 'DisplayOrder',
-      };
-      
+      };      
       const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>(params);
       if (prefsResult && prefsResult.Success) {
         if (prefsResult.Results.length > 0) {

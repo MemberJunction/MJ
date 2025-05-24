@@ -56,3 +56,50 @@ VALUES
     ('DBCB423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Relationship Display Components'), 0, 26 ), --Entity Relationship Display Components
     ('DBCB423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity AI Actions'), 0, 27 ), --Entity AI Actions
     ('DBCB423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'File Entity Record Links'), 0, 28 ) --File Entity Record Links
+
+
+
+-------- AI App + Dashboard Creation
+INSERT INTO __mj.Application 
+	(ID, Name, Description, DefaultForNewUser, Icon )
+VALUES
+	('7ACD423E-F36B-1410-8DAC-00021F8B792E', 'AI', 'AI Administration', 1, 'fa-solid fa-robot')
+
+INSERT INTO __mj.Dashboard 
+	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass) 
+VALUES 
+	('7DCD423E-F36B-1410-8DAC-00021F8B792E', 'AI Admin', 'AI Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'AIDashboard')
+
+INSERT INTO __mj.DashboardUserPreference 
+	(DashboardID, ApplicationID, Scope, DisplayOrder)
+VALUES 
+	('7DCD423E-F36B-1410-8DAC-00021F8B792E','7ACD423E-F36B-1410-8DAC-00021F8B792E','App',0)
+   
+
+-- Create the ApplicationEntity records to link AI entities to the AI application
+-- HIGH PRIORITY - DefaultForNewUser = 1 (shown by default to new users)
+INSERT INTO __mj.ApplicationEntity 
+    (ApplicationID, EntityID, DefaultForNewUser, Sequence)
+VALUES
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Models'), 1, 1 ), --AI Models
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Model Types'), 1, 2 ), --AI Model Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agents'), 1, 3 ), --AI Agents
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompts'), 1, 4 ), --AI Prompts
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Conversations'), 1, 5 ), --Conversations
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Conversation Details'), 1, 6 ), --Conversation Details
+
+-- MEDIUM PRIORITY - DefaultForNewUser = 0 (available but not shown by default)
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Models'), 0, 11 ), --AI Agent Models
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Actions'), 0, 12 ), --AI Agent Actions
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompt Categories'), 0, 13 ), --AI Prompt Categories
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompt Types'), 0, 14 ), --AI Prompt Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Model Actions'), 0, 15 ), --AI Model Actions
+
+-- LOW PRIORITY - DefaultForNewUser = 0 (advanced features and logging)
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Requests'), 0, 21 ), --AI Agent Requests
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Learning Cycles'), 0, 22 ), --AI Agent Learning Cycles
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Notes'), 0, 23 ), --AI Agent Notes
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Note Types'), 0, 24 ), --AI Agent Note Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Result Cache'), 0, 25 ) --AI Result Cache
+
+
