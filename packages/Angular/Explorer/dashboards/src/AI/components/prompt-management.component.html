@@ -1,0 +1,294 @@
+<div class="prompt-management mjFillContainer">
+  <!-- Header matching Entity Admin pattern -->
+  <div class="header">
+    <h1>Prompt Management</h1>
+    <div class="header-controls">
+      <button class="control-btn" [class.active]="activeView === 'prompts'" (click)="setActiveView('prompts')">
+        Prompts
+      </button>
+      <button class="control-btn" [class.active]="activeView === 'models'" (click)="setActiveView('models')">
+        Prompt Models
+      </button>
+      <button class="control-btn" (click)="toggleFiltersVisible()">
+        @if (filtersVisible) {
+          Hide Filters
+        } @else {
+          Show Filters
+        }
+      </button>
+    </div>
+  </div>
+
+  <!-- Splitter Layout -->
+  <kendo-splitter orientation="horizontal" class="splitter-container">
+    <!-- Filter Panel -->
+    @if (filtersVisible) {
+      <kendo-splitter-pane size="300px" [resizable]="true" [collapsible]="true">
+        <div class="filter-panel">
+          <h3>Filter & Search</h3>
+          
+          <div class="filter-group">
+            <label>Search</label>
+            <input 
+              type="text" 
+              class="filter-input" 
+              placeholder="Search prompts..." 
+              [value]="filters.searchTerm"
+              (input)="onSearchInput($event)"
+            />
+          </div>
+
+          <div class="filter-group">
+            <label>Category</label>
+            <select 
+              class="filter-select" 
+              [value]="filters.categoryId || ''"
+              (change)="onCategoryChange($event)"
+            >
+              <option value="">All Categories</option>
+              @for (category of categories; track category.ID) {
+                <option [value]="category.ID">{{ category.Name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Type</label>
+            <select 
+              class="filter-select" 
+              [value]="filters.typeId || ''"
+              (change)="onTypeChange($event)"
+            >
+              <option value="">All Types</option>
+              @for (type of types; track type.ID) {
+                <option [value]="type.ID">{{ type.Name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Status</label>
+            <select 
+              class="filter-select" 
+              [value]="filters.status || ''"
+              (change)="onStatusChange($event)"
+            >
+              <option value="">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Draft">Draft</option>
+            </select>
+          </div>
+
+          @if (activeView === 'prompts') {
+            <div class="filter-group">
+              <label>Response Format</label>
+              <select 
+                class="filter-select" 
+                [value]="filters.responseFormat || ''"
+                (change)="onResponseFormatChange($event)"
+              >
+                <option value="">All Formats</option>
+                <option value="text">Text</option>
+                <option value="json">JSON</option>
+                <option value="markdown">Markdown</option>
+                <option value="code">Code</option>
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <label>Selection Strategy</label>
+              <select 
+                class="filter-select" 
+                [value]="filters.selectionStrategy || ''"
+                (change)="onSelectionStrategyChange($event)"
+              >
+                <option value="">All Strategies</option>
+                <option value="first">First</option>
+                <option value="random">Random</option>
+                <option value="weighted">Weighted</option>
+                <option value="best_performance">Best Performance</option>
+              </select>
+            </div>
+          }
+
+          <div class="filter-actions">
+            <button class="filter-clear-btn" (click)="clearFilters()">Clear All</button>
+          </div>
+        </div>
+      </kendo-splitter-pane>
+    }
+
+    <!-- Main Content -->
+    <kendo-splitter-pane>
+      <div class="main-content">
+        <!-- Prompts View -->
+        @if (activeView === 'prompts') {
+          <div class="content-header">
+            <h2>AI Prompts ({{ filteredPrompts.length }})</h2>
+            <button class="create-btn" (click)="createNewPrompt()">
+              <i class="fa-solid fa-plus"></i>
+              Create Prompt
+            </button>
+          </div>
+
+          @if (isLoading) {
+            <div class="loading-state">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Loading prompts...
+            </div>
+          } @else if (filteredPrompts.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-comments"></i>
+              <h3>No prompts found</h3>
+              <p>Create your first prompt or adjust your filters</p>
+              <button class="create-btn" (click)="createNewPrompt()">
+                <i class="fa-solid fa-plus"></i>
+                Create Prompt
+              </button>
+            </div>
+          } @else {
+            <div class="prompts-grid">
+              @for (promptData of filteredPrompts; track promptData.prompt.ID) {
+                <div class="prompt-card" (click)="editPrompt(promptData.prompt)">
+                  <div class="prompt-header">
+                    <h4>{{ promptData.prompt.Name }}</h4>
+                    <div class="prompt-status" [class]="'status-' + (promptData.statusDisplay | lowercase)">
+                      {{ promptData.statusDisplay }}
+                    </div>
+                  </div>
+                  
+                  <div class="prompt-meta">
+                    @if (promptData.category) {
+                      <span class="meta-item">
+                        <i class="fa-solid fa-folder"></i>
+                        {{ promptData.category.Name }}
+                      </span>
+                    }
+                    @if (promptData.type) {
+                      <span class="meta-item">
+                        <i class="fa-solid fa-tag"></i>
+                        {{ promptData.type.Name }}
+                      </span>
+                    }
+                    @if (promptData.modelCount > 0) {
+                      <span class="meta-item">
+                        <i class="fa-solid fa-robot"></i>
+                        {{ promptData.modelCount }} models
+                      </span>
+                    }
+                  </div>
+
+                  @if (promptData.prompt.Description) {
+                    <p class="prompt-description">{{ promptData.prompt.Description }}</p>
+                  }
+
+                  <div class="prompt-details">
+                    @if (promptData.responseFormatDisplay) {
+                      <span class="detail-tag">{{ promptData.responseFormatDisplay }}</span>
+                    }
+                    @if (promptData.prompt.SelectionStrategy) {
+                      <span class="detail-tag">{{ promptData.prompt.SelectionStrategy }}</span>
+                    }
+                  </div>
+
+                  <div class="prompt-actions">
+                    <button class="action-btn-small" (click)="testPrompt(promptData.prompt, $event)">
+                      <i class="fa-solid fa-play"></i>
+                      Test
+                    </button>
+                    <button class="action-btn-small" (click)="togglePromptStatus(promptData.prompt, $event)">
+                      <i class="fa-solid fa-power-off"></i>
+                      {{ promptData.prompt.Status === 'Active' ? 'Disable' : 'Enable' }}
+                    </button>
+                    <button class="action-btn-small" (click)="duplicatePrompt(promptData.prompt, $event)">
+                      <i class="fa-solid fa-copy"></i>
+                      Duplicate
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+
+        <!-- Prompt Models View -->
+        @if (activeView === 'models') {
+          <div class="content-header">
+            <h2>Prompt Models ({{ filteredPromptModels.length }})</h2>
+            <button class="create-btn" (click)="createNewPromptModel()">
+              <i class="fa-solid fa-plus"></i>
+              Create Prompt Model
+            </button>
+          </div>
+
+          @if (isLoading) {
+            <div class="loading-state">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              Loading prompt models...
+            </div>
+          } @else if (filteredPromptModels.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-robot"></i>
+              <h3>No prompt models found</h3>
+              <p>Create your first prompt model or adjust your filters</p>
+              <button class="create-btn" (click)="createNewPromptModel()">
+                <i class="fa-solid fa-plus"></i>
+                Create Prompt Model
+              </button>
+            </div>
+          } @else {
+            <div class="models-list">
+              @for (modelData of filteredPromptModels; track modelData.promptModel.ID) {
+                <div class="model-row" (click)="editPromptModel(modelData.promptModel)">
+                  <div class="model-main">
+                    <div class="model-header">
+                      <h4>{{ modelData.prompt?.Name || 'Unknown Prompt' }}</h4>
+                      <span class="model-name">{{ modelData.aiModel?.Name || 'Unknown Model' }}</span>
+                    </div>
+                    
+                    <div class="model-details">
+                      @if (modelData.aiModel && modelData.aiModel.Vendor) {
+                        <span class="detail-item">
+                          <i class="fa-solid fa-building"></i>
+                          {{ modelData.aiModel.Vendor }}
+                        </span>
+                      }
+                      @if (modelData.aiModel && modelData.aiModel.AIModelType) {
+                        <span class="detail-item">
+                          <i class="fa-solid fa-microchip"></i>
+                          {{ modelData.aiModel.AIModelType }}
+                        </span>
+                      }
+                      @if (modelData.promptModel.Priority) {
+                        <span class="detail-item">
+                          <i class="fa-solid fa-star"></i>
+                          Priority {{ modelData.promptModel.Priority }}
+                        </span>
+                      }
+                    </div>
+
+                    @if (modelData.promptModel.Status) {
+                      <p class="model-system-prompt">Status: {{ modelData.promptModel.Status }}</p>
+                    }
+                  </div>
+
+                  <div class="model-actions">
+                    <button class="action-btn-small" (click)="testPromptModel(modelData.promptModel, $event)">
+                      <i class="fa-solid fa-play"></i>
+                      Test
+                    </button>
+                    <button class="action-btn-small" (click)="editPromptModel(modelData.promptModel, $event)">
+                      <i class="fa-solid fa-edit"></i>
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+    </kendo-splitter-pane>
+  </kendo-splitter>
+</div>

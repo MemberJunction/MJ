@@ -33,6 +33,12 @@
 - Document public APIs with TSDoc comments
 - Follow single responsibility principle
 
+## Icon Libraries
+- **Primary**: Font Awesome (already included) - Use for all icons throughout the application
+- Font Awesome classes: `fa-solid`, `fa-regular`, `fa-light`, `fa-brands` etc.
+- Use semantic icon names that clearly represent their function
+- For model types in AI dashboard: use appropriate technology icons (fa-microchip, fa-robot, fa-brain, etc.)
+
 ## Monorepo Structure
 - Packages organized under /packages directory by function
 - Each package has its own tsconfig.json and package.json

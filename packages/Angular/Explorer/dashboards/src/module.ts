@@ -11,7 +11,17 @@ import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.co
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
+import { AIDashboardComponent } from './AI/ai-dashboard.component';
+import { ModelManagementComponent } from './AI/components/model-management.component';
+import { PromptManagementComponent } from './AI/components/prompt-management.component';
+import { AgentConfigurationComponent } from './AI/components/agent-configuration.component';
+import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
+import { SystemConfigurationComponent } from './AI/components/system-configuration.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { NavigationModule } from '@progress/kendo-angular-navigation';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { ButtonsModule } from '@progress/kendo-angular-buttons';
 @NgModule({
   declarations: [
     HelloDashboardComponent,
@@ -19,7 +29,13 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     ERDCompositeComponent,
     EntityFilterPanelComponent,
     EntityDetailsComponent,
-    ERDDiagramComponent
+    ERDDiagramComponent,
+    AIDashboardComponent,
+    ModelManagementComponent,
+    PromptManagementComponent,
+    AgentConfigurationComponent,
+    ExecutionMonitoringComponent,
+    SystemConfigurationComponent
   ],
   imports: [
     CommonModule,
@@ -28,11 +44,16 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     DropDownsModule,
     InputsModule,
     LayoutModule,
-    ContainerDirectivesModule
+    ContainerDirectivesModule,
+    NavigationModule,
+    CodeEditorModule,
+    TreeViewModule,
+    ButtonsModule
   ],
   exports: [
     HelloDashboardComponent,
-    EntityAdminDashboardComponent
+    EntityAdminDashboardComponent,
+    AIDashboardComponent
   ]
 })
 export class DashboardsModule { }
