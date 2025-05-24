@@ -29,8 +29,8 @@
     }
   </div>
   
-  <div class="fields-section">
-    <div class="section-header">
+  <div class="fields-section" [class.section-expanded]="fieldsSectionExpanded" [class.section-collapsed]="!fieldsSectionExpanded">
+    <div class="section-header extra-padding">
       <div class="section-title-group" (click)="toggleFieldsSection()">
         <button 
           class="expand-btn" 
@@ -74,7 +74,7 @@
       }
     </div>
     @if (fieldsSectionExpanded) {
-      <div class="fields-list">
+      <div class="fields-list" #fieldsListContainer>
         @for (field of getEntityFields(selectedEntity?.ID || ''); track field.ID) {
           <div class="field-item" 
                [class]="{ 
@@ -149,10 +149,6 @@
             }
             @if (isFieldDetailsExpanded(field.ID)) {
               <div class="field-comprehensive-details">
-                <div class="details-header">
-                  <span class="fa-solid fa-info-circle"></span>
-                  Comprehensive Field Information
-                </div>
                 @if (field.Description) {
                   <div class="comprehensive-description-top">
                     <div class="description-content">{{ field.Description }}</div>
@@ -227,9 +223,9 @@
                       <span class="detail-label">Related Entity:</span>
                       <span class="detail-value related-entity" 
                             (click)="onRelatedEntityClick($event, field)"
-                            title="Click to navigate to {{ field.RelatedEntity }}">
+                            title="Click to select {{ field.RelatedEntity }} in ERD">
                         {{ field.RelatedEntity }}
-                        <span class="fa-solid fa-external-link-alt"></span>
+                        <span class="fa-solid fa-arrow-right"></span>
                       </span>
                     </div>
                   }
@@ -248,8 +244,8 @@
     }
   </div>
     
-  <div class="relationships-section">
-    <div class="section-header">
+  <div class="relationships-section" [class.section-expanded]="relationshipsSectionExpanded" [class.section-collapsed]="!relationshipsSectionExpanded">
+    <div class="section-header extra-padding">
       <div class="section-title-group" (click)="toggleRelationshipsSection()">
         <button 
           class="expand-btn" 
@@ -261,11 +257,11 @@
       </div>
     </div>
     @if (relationshipsSectionExpanded) {
-      <div class="related-entities-list">
+      <div class="related-entities-list" #relationshipsListContainer>
         @for (relatedEntity of getRelatedEntities(selectedEntity?.ID || ''); track relatedEntity.ID) {
           <div class="related-entity-item" (click)="selectEntity(relatedEntity, true)">
             <span class="fa-solid fa-database"></span>
-            {{ relatedEntity.Name || relatedEntity.SchemaName }}
+            <span class="entity-name">{{ relatedEntity.Name || relatedEntity.SchemaName }}</span>
             <span class="zoom-indicator fa-solid fa-search-plus" title="Click to zoom to entity"></span>
           </div>
         }

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
 
@@ -7,7 +7,10 @@ import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@me
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.scss']
 })
-export class EntityDetailsComponent implements OnInit {
+export class EntityDetailsComponent implements OnInit, OnChanges {
+  @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
+  @ViewChild('relationshipsListContainer', { static: false }) relationshipsListContainer!: ElementRef;
+
   @Input() selectedEntity: EntityInfo | null = null;
   @Input() allEntityFields: EntityFieldInfo[] = [];
   @Input() fieldsSectionExpanded = true;
@@ -24,14 +27,44 @@ export class EntityDetailsComponent implements OnInit {
   public expandedFieldDescriptions = new Set<string>();
   public expandedFieldValues = new Set<string>();
   public expandedFieldDetails = new Set<string>();
+  private previousSelectedEntityId: string | null = null;
 
   ngOnInit(): void {
     // Component initialization
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['selectedEntity'] && !changes['selectedEntity'].firstChange) {
+      const currentEntityId = this.selectedEntity?.ID || null;
+      
+      // Check if entity actually changed
+      if (currentEntityId !== this.previousSelectedEntityId) {
+        // Reset scroll positions when entity changes
+        this.resetScrollPositions();
+        
+        this.previousSelectedEntityId = currentEntityId;
+      }
+    }
+  }
+
+  private resetScrollPositions(): void {
+    // Use setTimeout to ensure the DOM is updated
+    setTimeout(() => {
+      if (this.fieldsListContainer?.nativeElement) {
+        this.fieldsListContainer.nativeElement.scrollTop = 0;
+      }
+      if (this.relationshipsListContainer?.nativeElement) {
+        this.relationshipsListContainer.nativeElement.scrollTop = 0;
+      }
+    }, 0);
+  }
+
   public onOpenEntity(): void {
     if (this.selectedEntity) {
-      this.openEntity.emit(this.selectedEntity);
+      this.openRecord.emit({
+        EntityName: this.selectedEntity.Name || this.selectedEntity.SchemaName || '',
+        RecordID: this.selectedEntity.ID
+      });
     }
   }
 
@@ -161,15 +194,17 @@ export class EntityDetailsComponent implements OnInit {
 
   public onRelatedEntityClick(event: Event, field: EntityFieldInfo): void {
     event.stopPropagation();
-    if (field.RelatedEntity) {
-      this.openRecord.emit({
-        EntityName: field.RelatedEntity,
-        RecordID: field.RelatedEntityID || ''
-      });
+    if (field.RelatedEntityID) {
+      // Find the related entity and select it in the ERD
+      const md = new Metadata();
+      const relatedEntity = md.Entities.find(e => e.ID === field.RelatedEntityID);
+      if (relatedEntity) {
+        this.entitySelected.emit(relatedEntity);
+      }
     }
   }
 
-  public selectEntity(entity: EntityInfo, zoomTo: boolean = false): void {
+  public selectEntity(entity: EntityInfo, _zoomTo: boolean = false): void {
     this.entitySelected.emit(entity);
   }
 }
