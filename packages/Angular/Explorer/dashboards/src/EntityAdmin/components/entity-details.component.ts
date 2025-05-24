@@ -62,7 +62,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   public onOpenEntity(): void {
     if (this.selectedEntity) {
       this.openRecord.emit({
-        EntityName: this.selectedEntity.Name || this.selectedEntity.SchemaName || '',
+        EntityName: 'Entities',
         RecordID: this.selectedEntity.ID
       });
     }
