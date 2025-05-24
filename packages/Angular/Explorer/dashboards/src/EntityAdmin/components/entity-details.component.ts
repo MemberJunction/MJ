@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-entity-details',
@@ -71,21 +71,33 @@ export class EntityDetailsComponent implements OnInit {
   public getRelatedEntities(entityId: string): EntityInfo[] {
     if (!entityId) return [];
     
-    const relatedEntityIds = new Set<string>();
+    const relatedEntityIds = new Array<string>();
     
     // Get entities that this entity references (foreign keys)
     this.allEntityFields
       .filter(f => f.EntityID === entityId && f.RelatedEntityID)
-      .forEach(f => relatedEntityIds.add(f.RelatedEntityID!));
+      .forEach(f => relatedEntityIds.push(f.RelatedEntityID!));
     
     // Get entities that reference this entity
     this.allEntityFields
       .filter(f => f.RelatedEntityID === entityId)
-      .forEach(f => relatedEntityIds.add(f.EntityID));
+      .forEach(f => relatedEntityIds.push(f.EntityID));
     
     // Convert to actual EntityInfo objects (would need entities list passed in)
     // For now, returning empty array as we'd need the full entities list
-    return [];
+    const md = new Metadata();
+    const allEntities = md.Entities;
+    const retVals: EntityInfo[] = [];
+    relatedEntityIds.forEach(id => {
+      if (id !== entityId) {
+        // don't return the current entity itself
+        const entity = allEntities.find(e => e.ID === id);
+        if (entity) {
+          retVals.push(entity);
+        }
+      }
+    });
+    return retVals;
   }
 
   public onFieldClick(field: EntityFieldInfo): void {
