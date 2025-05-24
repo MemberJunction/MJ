@@ -630,7 +630,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     this.svg.selectAll('.entity-rect')
       .classed('highlighted', false)
       .classed('relationship-highlighted', false)
-      .classed('connection-highlighted', false);
+      .classed('connection-highlighted', false)
+      .style('stroke', '#333')
+      .style('stroke-width', '2px')
+      .style('filter', null);
       
     this.svg.selectAll('.link-group')
       .classed('highlighted', false);
@@ -652,7 +655,11 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     if (this.selectedEntityId) {
       this.svg.selectAll('.node')
         .filter((d: any) => d.id === this.selectedEntityId)
-        .classed('selected', true);
+        .classed('selected', true)
+        .select('.entity-rect')
+        .style('stroke', '#4CAF50')
+        .style('stroke-width', '4px')
+        .style('filter', 'drop-shadow(0 0 8px rgba(76, 175, 80, 0.6))');
     }
   }
 
