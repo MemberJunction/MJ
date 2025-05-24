@@ -160,66 +160,99 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         if (dashboardEntity && this.tabstripContainer) {
           // Use the type of the dashboard to determine which class to instantiate
           const classInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboardEntity.DriverClass!);
-          if (classInfo && classInfo.SubClass) {
-            // Create the component dynamically
-            const componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
-            const instance = componentRef.instance as BaseDashboard;
-            
-            if (instance) {
-              // Store both the instance and component reference
-              this.dashboardInstances.set(dashboardId, instance);
-              this.dashboardComponentRefs.set(dashboardId, componentRef);
-              
-              // Find the target container element and append the component
-              setTimeout(async () => {
-                const targetElement = document.getElementById(`dashboard-${dashboardId}`);
-                if (targetElement && componentRef.location.nativeElement) {
-                  targetElement.appendChild(componentRef.location.nativeElement);
-
-                  const userStateEntity = await this.loadDashboardUserState(dashboardId);
-                  const config: DashboardConfig = {
-                    dashboard: dashboardEntity,
-                    userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
-                  };
-
-                  // handle open entity record events in MJ Explorer with routing                  
-                  instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
-                    // check to see if the data has entityname/pkey
-                    if (data && data.EntityName && data.RecordPKey) {
-                      // open the record in the explorer
-                      this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
-                                           { queryParams: { Entity: data.EntityName } })                      
-                    }
-                  });
-
-                  instance.UserStateChanged.subscribe(async (userState: any) => {
-                    if (!userState) {
-                      // if the user state is null, we need to remove it from the user state
-                      userState = {};
-                    }
-                    // save the user state to the dashboard user state entity
-                    userStateEntity.UserState = JSON.stringify(userState);
-                    if (!await userStateEntity.Save()) {
-                      LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
-                    }
-                  });
-
-                  // now that we have state loaded and our events are wired up, we can set the config
-                  instance.Config = config;
-                  instance.Refresh();
-                }
-              }, 0);
-              
-              return instance;
-            }
+          if (!classInfo || !classInfo.SubClass) {
+            // Class not found error
+            const errorMsg = `Dashboard class '${dashboardEntity.DriverClass}' not found`;
+            console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
+            this.displayDashboardError(dashboardId, `Dashboard component not available: ${dashboardEntity.DriverClass}`, 'The dashboard class is not registered. Please contact your system administrator.');
+            return undefined;
           }
+
+          // Create the component dynamically
+          const componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
+          const instance = componentRef.instance as BaseDashboard;
+          
+          if (!instance) {
+            // Instance creation failed error
+            const errorMsg = `Failed to create instance of dashboard class '${dashboardEntity.DriverClass}'`;
+            console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
+            this.displayDashboardError(dashboardId, 'Dashboard failed to initialize', 'The dashboard could not be created. Please contact your system administrator.');
+            return undefined;
+          }
+
+          // Store both the instance and component reference
+          this.dashboardInstances.set(dashboardId, instance);
+          this.dashboardComponentRefs.set(dashboardId, componentRef);
+          
+          // Find the target container element and append the component
+          setTimeout(async () => {
+            const targetElement = document.getElementById(`dashboard-${dashboardId}`);
+            if (targetElement && componentRef.location.nativeElement) {
+              targetElement.appendChild(componentRef.location.nativeElement);
+
+              const userStateEntity = await this.loadDashboardUserState(dashboardId);
+              const config: DashboardConfig = {
+                dashboard: dashboardEntity,
+                userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
+              };
+
+              // handle open entity record events in MJ Explorer with routing                  
+              instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
+                // check to see if the data has entityname/pkey
+                if (data && data.EntityName && data.RecordPKey) {
+                  // open the record in the explorer
+                  this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
+                                       { queryParams: { Entity: data.EntityName } })                      
+                }
+              });
+
+              instance.UserStateChanged.subscribe(async (userState: any) => {
+                if (!userState) {
+                  // if the user state is null, we need to remove it from the user state
+                  userState = {};
+                }
+                // save the user state to the dashboard user state entity
+                userStateEntity.UserState = JSON.stringify(userState);
+                if (!await userStateEntity.Save()) {
+                  LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
+                }
+              });
+
+              // now that we have state loaded and our events are wired up, we can set the config
+              instance.Config = config;
+              instance.Refresh();
+            }
+          }, 0);
+          
+          return instance;
         }
       } catch (error) {
-        LogError(`Error creating dashboard instance for ID ${dashboardId}`, null, error);
+        const dashboardEntity = this.dashboards.find(d => d.ID === dashboardId);
+        const errorMsg = `Error creating dashboard instance for '${dashboardEntity?.Name || dashboardId}'`;
+        console.error(errorMsg, error);
+        LogError(errorMsg, null, error);
+        this.displayDashboardError(dashboardId, 'Dashboard loading error', 'An unexpected error occurred while loading the dashboard. Please contact your system administrator.');
       }
     }
     
     return this.dashboardInstances.get(dashboardId);
+  }
+
+  private displayDashboardError(dashboardId: string, title: string, message: string): void {
+    // Display error message in the dashboard container
+    setTimeout(() => {
+      const targetElement = document.getElementById(`dashboard-${dashboardId}`);
+      if (targetElement) {
+        targetElement.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; text-align: center; padding: 20px; color: #666;">
+            <div style="font-size: 48px; color: #dc3545; margin-bottom: 20px;">⚠️</div>
+            <h3 style="color: #dc3545; margin: 0 0 10px 0;">${title}</h3>
+            <p style="margin: 0 0 20px 0; max-width: 400px; line-height: 1.5;">${message}</p>
+            <small style="color: #999;">Dashboard ID: ${dashboardId}</small>
+          </div>
+        `;
+      }
+    }, 0);
   }
 
   protected async loadDashboardUserState(dashboardId: string): Promise<DashboardUserStateEntity> {
