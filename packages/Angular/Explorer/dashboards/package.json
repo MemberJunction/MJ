@@ -27,6 +27,7 @@
   "dependencies": {
     "@memberjunction/core": "2.41.0",
     "@memberjunction/core-entities": "2.41.0",
+    "@memberjunction/ng-container-directives": "2.41.0",
     "@progress/kendo-angular-dropdowns": "^16.0.0",
     "@progress/kendo-angular-inputs": "^16.0.0",
     "@progress/kendo-angular-layout": "^16.0.0",

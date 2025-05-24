@@ -1,0 +1,61 @@
+.erd-composite {
+  overflow: hidden;
+}
+
+// Kendo Splitter Styles - let mjFillContainer handle sizing
+.main-splitter {
+  .k-pane {
+    overflow: hidden;
+  }
+}
+
+// ERD Pane Container for floating panel
+.erd-pane-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+// Floating Details Panel
+.floating-details-panel {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  width: 380px;
+  max-height: calc(100% - 40px);
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  overflow: hidden;
+  transform: translateY(-50%);
+  animation: slideInFromRight 0.3s ease-out;
+  
+  // Prevent panel from going off-screen on smaller displays
+  @media (max-width: 768px) {
+    right: 10px;
+    left: 10px;
+    width: auto;
+    max-width: none;
+  }
+  
+  // Ensure panel doesn't extend beyond viewport
+  @media (max-height: 600px) {
+    top: 20px;
+    transform: none;
+    max-height: calc(100vh - 40px);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateY(-50%) translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(-50%) translateX(0);
+    opacity: 1;
+  }
+}

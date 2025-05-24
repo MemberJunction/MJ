@@ -7,11 +7,19 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { HelloDashboardComponent } from './demo/hello-dashboard.component';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
-
+import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
+import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
+import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
+import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
+import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 @NgModule({
   declarations: [
     HelloDashboardComponent,
-    EntityAdminDashboardComponent
+    EntityAdminDashboardComponent,
+    ERDCompositeComponent,
+    EntityFilterPanelComponent,
+    EntityDetailsComponent,
+    ERDDiagramComponent
   ],
   imports: [
     CommonModule,
@@ -19,7 +27,8 @@ import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashbo
     IndicatorsModule,
     DropDownsModule,
     InputsModule,
-    LayoutModule
+    LayoutModule,
+    ContainerDirectivesModule
   ],
   exports: [
     HelloDashboardComponent,

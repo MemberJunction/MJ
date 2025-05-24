@@ -1,0 +1,20 @@
+<div class="erd-section">
+  <div class="section-header">
+    <h3>Entity Relationship Diagram</h3>
+    <div class="erd-controls">
+      <button class="control-btn" (click)="zoomIn()" title="Zoom In">
+        <span class="fa-solid fa-search-plus"></span>
+      </button>
+      <button class="control-btn" (click)="zoomOut()" title="Zoom Out">
+        <span class="fa-solid fa-search-minus"></span>
+      </button>
+      <button class="control-btn" (click)="resetZoom()" title="Reset Zoom">
+        <span class="fa-solid fa-expand"></span>
+      </button>
+      <button class="control-btn" (click)="setupERD()" title="Refresh Diagram">
+        <span class="fa-solid fa-refresh"></span>
+      </button>
+    </div>
+  </div>
+  <div class="erd-container" #erdContainer></div>
+</div>

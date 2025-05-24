@@ -1,4 +1,4 @@
-<div class="tabbed-dashboard-container" mjFillContainer>
+<div class="tabbed-dashboard-container" mjFillContainer [rightMargin]="10" [bottomMargin]="10">
   @if (loading) {
     <div class="loading-indicator">
       Loading dashboards...
@@ -52,7 +52,7 @@
           @if (DefaultDashboardPosition === 'first') {
             <mj-tab-body>
               <div class="dashboard-container" mjFillContainer>
-                <div #tabContainer></div>
+                <div #tabContainer mjFillContainer></div>
               </div>
             </mj-tab-body>
           }
@@ -61,7 +61,7 @@
           @for (dashboard of dashboards; track dashboard.ID; let i = $index) {
             <mj-tab-body>
               <div class="dashboard-container" mjFillContainer>
-                <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance">
+                <div id="dashboard-{{ dashboard.ID }}" class="dashboard-instance" mjFillContainer>
                 </div>
               </div>
             </mj-tab-body>
@@ -71,7 +71,7 @@
           @if (DefaultDashboardPosition === 'last') {
             <mj-tab-body>
               <div class="dashboard-container" mjFillContainer>
-                <div #tabContainer></div>
+                <div #tabContainer mjFillContainer></div>
               </div>
             </mj-tab-body>
           }

@@ -1,0 +1,275 @@
+<div class="details-panel">
+  <div class="panel-header">
+    <h3>{{ selectedEntity?.Name || selectedEntity?.SchemaName }}</h3>
+    <div class="panel-actions">
+      <button class="open-btn" (click)="onOpenEntity()" title="Open Entity Record">
+        <span class="fa-solid fa-external-link-alt"></span>
+        Open
+      </button>
+      <button class="close-btn" (click)="onClosePanel()">
+        <span class="fa-solid fa-times"></span>
+      </button>
+    </div>
+  </div>
+  
+  <div class="entity-info">
+    <div class="info-row">
+      <label>Schema:</label>
+      <span>{{ selectedEntity?.SchemaName }}</span>
+    </div>
+    <div class="info-row">
+      <label>Table:</label>
+      <span>{{ selectedEntity?.BaseTable }}</span>
+    </div>
+    @if (selectedEntity?.Description) {
+      <div class="info-row">
+        <label>Description:</label>
+        <span>{{ selectedEntity?.Description }}</span>
+      </div>
+    }
+  </div>
+  
+  <div class="fields-section">
+    <div class="section-header">
+      <div class="section-title-group" (click)="toggleFieldsSection()">
+        <button 
+          class="expand-btn" 
+          [class.expanded]="fieldsSectionExpanded"
+          title="Toggle fields section">
+          <span class="fa-solid fa-chevron-right"></span>
+        </button>
+        <h4>Fields ({{ selectedEntity ? getEntityFields(selectedEntity.ID).length : 0 }})</h4>
+      </div>
+      @if (fieldsSectionExpanded) {
+        <div class="field-filters">
+          <button 
+            class="filter-btn" 
+            [class.active]="fieldFilter === 'all'"
+            (click)="setFieldFilter('all')"
+            title="Show all fields">
+            All
+          </button>
+          <button 
+            class="filter-btn" 
+            [class.active]="fieldFilter === 'keys'"
+            (click)="setFieldFilter('keys')"
+            title="Show primary keys and ID fields">
+            Keys
+          </button>
+          <button 
+            class="filter-btn" 
+            [class.active]="fieldFilter === 'foreign_keys'"
+            (click)="setFieldFilter('foreign_keys')"
+            title="Show foreign key fields only">
+            FKs
+          </button>
+          <button 
+            class="filter-btn" 
+            [class.active]="fieldFilter === 'regular'"
+            (click)="setFieldFilter('regular')"
+            title="Show regular data fields">
+            Regular
+          </button>
+        </div>
+      }
+    </div>
+    @if (fieldsSectionExpanded) {
+      <div class="fields-list">
+        @for (field of getEntityFields(selectedEntity?.ID || ''); track field.ID) {
+          <div class="field-item" 
+               [class]="{ 
+                 'primary-key-field': field.IsPrimaryKey,
+                 'foreign-key-field': field.RelatedEntityID && !field.IsPrimaryKey,
+                 'regular-field': !field.IsPrimaryKey && !field.RelatedEntityID,
+                 'field-expanded': isFieldDetailsExpanded(field.ID)
+               }"
+               (click)="onFieldClick(field)"
+               [title]="'Click to see more details about ' + field.Name">
+            <div class="field-header">
+              <div class="field-name">
+                @if (field.IsPrimaryKey) {
+                  <span class="field-icon fa-solid fa-key" title="Primary Key"></span>
+                } @else if (field.RelatedEntityID) {
+                  <span class="field-icon fa-solid fa-link" title="Foreign Key"></span>
+                }
+                {{ field.Name }}
+              </div>
+              <div class="field-actions">
+                @if (hasFieldPossibleValues(field)) {
+                  <button 
+                    class="field-values-btn"
+                    (click)="toggleFieldValues(field.ID)"
+                    [class.expanded]="isFieldValuesExpanded(field.ID)"
+                    title="Toggle possible values">
+                    <span class="fa-solid fa-list"></span>
+                  </button>
+                }
+                @if (field.Description) {
+                  <button 
+                    class="field-info-btn"
+                    (click)="toggleFieldDescription(field.ID)"
+                    [class.expanded]="isFieldDescriptionExpanded(field.ID)"
+                    title="Toggle field description">
+                    <span class="fa-solid fa-info-circle"></span>
+                  </button>
+                }
+                <div class="field-badges">
+                  @if (field.IsPrimaryKey) {
+                    <span class="field-badge primary-key">PK</span>
+                  }
+                  @if (field.RelatedEntityID && !field.IsPrimaryKey) {
+                    <span class="field-badge foreign-key">FK</span>
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="field-details">
+              <div class="field-type">{{ field.Type }}</div>
+              @if (field.RelatedEntityID) {
+                <div class="field-relation">
+                  <span class="fa-solid fa-arrow-right"></span>
+                  Related Entity
+                </div>
+              }
+            </div>
+            @if (field.Description && isFieldDescriptionExpanded(field.ID)) {
+              <div class="field-description">
+                <div class="description-text">{{ field.Description }}</div>
+              </div>
+            }
+            @if (hasFieldPossibleValues(field) && isFieldValuesExpanded(field.ID)) {
+              <div class="field-values">
+                <div class="values-header">Possible Values:</div>
+                <div class="values-list">
+                  @for (value of getFieldPossibleValues(field); track value; let i = $index) {
+                    <span class="value-tag">{{ value }}</span>
+                  }
+                </div>
+              </div>
+            }
+            @if (isFieldDetailsExpanded(field.ID)) {
+              <div class="field-comprehensive-details">
+                <div class="details-header">
+                  <span class="fa-solid fa-info-circle"></span>
+                  Comprehensive Field Information
+                </div>
+                @if (field.Description) {
+                  <div class="comprehensive-description-top">
+                    <div class="description-content">{{ field.Description }}</div>
+                  </div>
+                }
+                @if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+                  <div class="field-values-comprehensive">
+                    <div class="values-header">
+                      <span class="fa-solid fa-list"></span>
+                      Possible Values ({{ field.EntityFieldValues.length }})
+                    </div>
+                    <div class="values-grid">
+                      @for (fieldValue of getSortedEntityFieldValues(field); track fieldValue.ID) {
+                        <div class="value-item">
+                          <div class="value-main">
+                            <span class="value-text">{{ fieldValue.Value }}</span>
+                            @if (fieldValue.Code && fieldValue.Code !== fieldValue.Value) {
+                              <span class="value-code">[{{ fieldValue.Code }}]</span>
+                            }
+                          </div>
+                          @if (fieldValue.Description && fieldValue.Description !== fieldValue.Value) {
+                            <div class="value-description">{{ fieldValue.Description }}</div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+                <div class="details-grid">
+                  <div class="detail-row">
+                    <span class="detail-label">Data Type:</span>
+                    <span class="detail-value">{{ field.Type }}</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Nullable:</span>
+                    <span class="detail-value" [class]="field.AllowsNull ? 'nullable-yes' : 'nullable-no'">
+                      {{ field.AllowsNull ? 'Yes' : 'No' }}
+                    </span>
+                  </div>
+                  @if (field.Length && field.Length > 0) {
+                    <div class="detail-row">
+                      <span class="detail-label">Max Length:</span>
+                      <span class="detail-value">{{ field.Length }}</span>
+                    </div>
+                  }
+                  @if (field.Precision && field.Precision > 0) {
+                    <div class="detail-row">
+                      <span class="detail-label">Precision:</span>
+                      <span class="detail-value">{{ field.Precision }}</span>
+                    </div>
+                  }
+                  @if (field.Scale && field.Scale > 0) {
+                    <div class="detail-row">
+                      <span class="detail-label">Scale:</span>
+                      <span class="detail-value">{{ field.Scale }}</span>
+                    </div>
+                  }
+                  <div class="detail-row">
+                    <span class="detail-label">Virtual Field:</span>
+                    <span class="detail-value" [class]="field.IsVirtual ? 'virtual-yes' : 'virtual-no'">
+                      {{ field.IsVirtual ? 'Yes' : 'No' }}
+                    </span>
+                  </div>
+                  @if (field.DefaultValue) {
+                    <div class="detail-row">
+                      <span class="detail-label">Default Value:</span>
+                      <span class="detail-value default-value">{{ field.DefaultValue }}</span>
+                    </div>
+                  }
+                  @if (field.RelatedEntityID) {
+                    <div class="detail-row">
+                      <span class="detail-label">Related Entity:</span>
+                      <span class="detail-value related-entity" 
+                            (click)="onRelatedEntityClick($event, field)"
+                            title="Click to navigate to {{ field.RelatedEntity }}">
+                        {{ field.RelatedEntity }}
+                        <span class="fa-solid fa-external-link-alt"></span>
+                      </span>
+                    </div>
+                  }
+                  @if (field.AutoIncrement) {
+                    <div class="detail-row">
+                      <span class="detail-label">Auto Increment:</span>
+                      <span class="detail-value auto-increment">Yes</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+  
+  <div class="relationships-section">
+    <div class="section-header">
+      <div class="section-title-group" (click)="toggleRelationshipsSection()">
+        <button 
+          class="expand-btn" 
+          [class.expanded]="relationshipsSectionExpanded"
+          title="Toggle relationships section">
+          <span class="fa-solid fa-chevron-right"></span>
+        </button>
+        <h4>Related Entities ({{ selectedEntity ? getRelatedEntities(selectedEntity.ID).length : 0 }})</h4>
+      </div>
+    </div>
+    @if (relationshipsSectionExpanded) {
+      <div class="related-entities-list">
+        @for (relatedEntity of getRelatedEntities(selectedEntity?.ID || ''); track relatedEntity.ID) {
+          <div class="related-entity-item" (click)="selectEntity(relatedEntity, true)">
+            <span class="fa-solid fa-database"></span>
+            {{ relatedEntity.Name || relatedEntity.SchemaName }}
+            <span class="zoom-indicator fa-solid fa-search-plus" title="Click to zoom to entity"></span>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

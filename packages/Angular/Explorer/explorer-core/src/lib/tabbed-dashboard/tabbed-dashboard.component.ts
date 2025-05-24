@@ -168,10 +168,10 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                 if (targetElement && componentRef.location.nativeElement) {
                   targetElement.appendChild(componentRef.location.nativeElement);
 
-                  const userState = await this.loadDashboardUserState(dashboardId);
+                  const userStateEntity = await this.loadDashboardUserState(dashboardId);
                   const config: DashboardConfig = {
                     dashboard: dashboardEntity,
-                    userState: userState.UserState ? SafeJSONParse(userState.UserState) : {}
+                    userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
                   };
 
                   // handle open entity record events in MJ Explorer with routing                  
@@ -190,9 +190,9 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                       userState = {};
                     }
                     // save the user state to the dashboard user state entity
-                    userState.UserState = JSON.stringify(userState);
-                    if (!await userState.Save()) {
-                      LogError('Error saving user state', null, userState.Error);
+                    userStateEntity.UserState = JSON.stringify(userState);
+                    if (!await userStateEntity.Save()) {
+                      LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
                     }
                   });
 
