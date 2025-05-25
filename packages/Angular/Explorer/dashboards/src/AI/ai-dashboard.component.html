@@ -51,11 +51,17 @@
         }
       </div>
       
-      <kendo-bottomnavigation 
-        [items]="navigationConfig"
-        (itemClick)="onNavigationChange($event)"
-        class="ai-dashboard-nav">
-      </kendo-bottomnavigation>
+      <div class="ai-dashboard-nav">
+        @for (navItem of navigationConfig; track $index) {
+          <div 
+            class="nav-item"
+            [class.active]="navItem.selected"
+            (click)="onTabChange(navigationItems[$index])">
+            <i [class]="navItem.icon"></i>
+            <span>{{ navItem.text }}</span>
+          </div>
+        }
+      </div>
     </div>
   }
 </div>

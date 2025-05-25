@@ -178,7 +178,7 @@ export class ModelManagementComponent implements OnInit, OnDestroy {
     try {
       const rv = new RunView();
       const result = await rv.RunView({
-        EntityName: 'AI Vendors',
+        EntityName: 'MJ: AI Vendors',
         ExtraFilter: '',
         OrderBy: 'Name',
         UserSearchString: '',

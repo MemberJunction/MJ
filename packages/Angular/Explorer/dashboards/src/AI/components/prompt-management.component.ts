@@ -1,35 +1,18 @@
 import { Component, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptEntity, AIPromptCategoryEntity, AIPromptTypeEntity, AIPromptModelEntity, AIModelEntity, TemplateEntity } from '@memberjunction/core-entities';
-import { Subject, combineLatest, BehaviorSubject } from 'rxjs';
+import { AIPromptEntity, AIPromptCategoryEntity, AIPromptTypeEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { LanguageDescription } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
-export interface PromptFilter {
-  searchTerm: string;
-  categoryId: string | null;
-  typeId: string | null;
-  status: string | null;
-  responseFormat: string | null;
-  selectionStrategy: string | null;
-}
-
-export interface PromptDisplayData {
+interface PromptWithTemplate {
   prompt: AIPromptEntity;
+  template: TemplateEntity | null;
+  templateContent: TemplateContentEntity | null;
   category: AIPromptCategoryEntity | null;
   type: AIPromptTypeEntity | null;
-  template: TemplateEntity | null;
-  modelCount: number;
-  statusDisplay: string;
-  responseFormatDisplay: string;
-}
-
-export interface PromptModelDisplayData {
-  promptModel: AIPromptModelEntity;
-  prompt: AIPromptEntity | null;
-  aiModel: AIModelEntity | null;
-  statusDisplay: string;
-  priorityDisplay: string;
-  executionGroupDisplay: string;
 }
 
 @Component({
@@ -45,39 +28,51 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   public categories: AIPromptCategoryEntity[] = [];
   public types: AIPromptTypeEntity[] = [];
   public templates: TemplateEntity[] = [];
-  public models: AIModelEntity[] = [];
-  public promptModels: AIPromptModelEntity[] = [];
-  public filteredPrompts: PromptDisplayData[] = [];
-  public selectedPromptModels: PromptModelDisplayData[] = [];
-  
+  public templateContents: TemplateContentEntity[] = [];
+  public promptsWithTemplates: PromptWithTemplate[] = [];
+  public filteredPrompts: PromptWithTemplate[] = [];
+
   // UI state
   public isLoading = false;
-  public loadingMessage = 'Loading AI prompts...';
+  public loadingMessage = 'Loading prompts...';
   public error: string | null = null;
-  public filtersVisible = false;
-  public selectedPrompt: AIPromptEntity | null = null;
-  public activeView: 'prompts' | 'models' = 'prompts';
+  public currentView: 'list' | 'editor' = 'list';
+  public selectedPrompt: PromptWithTemplate | null = null;
+  public isEditing = false;
+  public isDirty = false;
+
+  // Editor state
+  public editorContent = '';
+  public editorMode = 'nunjucks';
+  public showPreview = false;
+  public supportedLanguages: LanguageDescription[] = languages;
+  public editorLanguage = 'twig';
   
+  // Category creation
+  public newCategoryName = '';
+  public showNewCategoryInput = false;
+
   // Filter state
-  public filters: PromptFilter = {
-    searchTerm: '',
-    categoryId: null,
-    typeId: null,
-    status: null,
-    responseFormat: null,
-    selectionStrategy: null
-  };
-  
-  // Additional UI state
-  public filteredPromptModels: PromptModelDisplayData[] = [];
-  
-  // Search and filter subjects
-  private searchSubject = new BehaviorSubject<string>('');
-  private filterSubject = new BehaviorSubject<PromptFilter>(this.filters);
+  public searchTerm$ = new BehaviorSubject<string>('');
+  public selectedCategory$ = new BehaviorSubject<string>('all');
+  public selectedType$ = new BehaviorSubject<string>('all');
+  public selectedStatus$ = new BehaviorSubject<string>('all');
+
+  public categoryOptions: Array<{text: string; value: string}> = [];
+  public typeOptions: Array<{text: string; value: string}> = [];
+  public statusOptions = [
+    { text: 'All Statuses', value: 'all' },
+    { text: 'Active', value: 'Active' },
+    { text: 'Pending', value: 'Pending' },
+    { text: 'Disabled', value: 'Disabled' }
+  ];
+
   private destroy$ = new Subject<void>();
 
+  constructor(private mjNotificationsService: MJNotificationService) {}
+
   ngOnInit(): void {
-    this.setupFilterSubscriptions();
+    this.setupFilters();
     this.loadData();
   }
 
@@ -86,21 +81,12 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  private setupFilterSubscriptions(): void {
-    // Debounced search
-    this.searchSubject.pipe(
-      debounceTime(300),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$)
-    ).subscribe(searchTerm => {
-      this.filters.searchTerm = searchTerm;
-      this.applyFilters();
-    });
-
-    // Combined filter changes
+  private setupFilters(): void {
     combineLatest([
-      this.filterSubject.pipe(debounceTime(100)),
-      this.searchSubject.pipe(debounceTime(300))
+      this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
+      this.selectedCategory$.pipe(distinctUntilChanged()),
+      this.selectedType$.pipe(distinctUntilChanged()),
+      this.selectedStatus$.pipe(distinctUntilChanged())
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
@@ -108,477 +94,500 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  public async loadData(): Promise<void> {
+  private async loadData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
-      this.loadingMessage = 'Loading AI prompts...';
+      this.loadingMessage = 'Loading prompts and templates...';
 
-      // Load all required data in parallel
-      const [promptsResult, categoriesResult, typesResult, templatesResult, modelsResult, promptModelsResult] = await Promise.all([
+      const [prompts, categories, types, templates, templateContents] = await Promise.all([
         this.loadPrompts(),
         this.loadCategories(),
         this.loadTypes(),
         this.loadTemplates(),
-        this.loadModels(),
-        this.loadPromptModels()
+        this.loadTemplateContents()
       ]);
 
-      if (promptsResult && categoriesResult && typesResult && templatesResult && modelsResult && promptModelsResult) {
-        this.applyFilters();
-        LogStatus('Prompt management data loaded successfully');
-      }
+      this.prompts = prompts;
+      this.categories = categories;
+      this.types = types;
+      this.templates = templates;
+      this.templateContents = templateContents;
+
+      this.buildPromptTemplateRelationships();
+      this.buildFilterOptions();
+      this.applyFilters();
+
+      LogStatus('Prompt management data loaded successfully');
     } catch (error) {
       this.error = 'Failed to load prompt data. Please try again.';
-      LogError('Error loading prompt management data: ' + String(error));
+      LogError('Error loading prompt management data', undefined, error);
     } finally {
       this.isLoading = false;
     }
   }
 
-  private async loadPrompts(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'AI Prompts',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private async loadPrompts(): Promise<AIPromptEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'AI Prompts',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      UserSearchString: '',
+      IgnoreMaxRows: false,
+      MaxRows: 1000
+    });
 
-      if (result && result.Success && result.Results) {
-        this.prompts = result.Results as AIPromptEntity[];
-        return true;
-      } else {
-        throw new Error('Failed to load AI prompts');
-      }
-    } catch (error) {
-      LogError('Error loading AI prompts: ' + String(error));
-      return false;
+    if (result && result.Success && result.Results) {
+      return result.Results as AIPromptEntity[];
+    } else {
+      throw new Error('Failed to load AI prompts');
     }
   }
 
-  private async loadCategories(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'AI Prompt Categories',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private async loadCategories(): Promise<AIPromptCategoryEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'AI Prompt Categories',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      UserSearchString: '',
+      IgnoreMaxRows: false,
+      MaxRows: 1000
+    });
 
-      if (result && result.Success && result.Results) {
-        this.categories = result.Results as AIPromptCategoryEntity[];
-        return true;
-      } else {
-        throw new Error('Failed to load AI prompt categories');
-      }
-    } catch (error) {
-      LogError('Error loading AI prompt categories: ' + String(error));
-      return false;
+    if (result && result.Success && result.Results) {
+      return result.Results as AIPromptCategoryEntity[];
+    } else {
+      throw new Error('Failed to load AI prompt categories');
     }
   }
 
-  private async loadTypes(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'AI Prompt Types',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private async loadTypes(): Promise<AIPromptTypeEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'AI Prompt Types',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      UserSearchString: '',
+      IgnoreMaxRows: false,
+      MaxRows: 1000
+    });
 
-      if (result && result.Success && result.Results) {
-        this.types = result.Results as AIPromptTypeEntity[];
-        return true;
-      } else {
-        throw new Error('Failed to load AI prompt types');
-      }
-    } catch (error) {
-      LogError('Error loading AI prompt types: ' + String(error));
-      return false;
+    if (result && result.Success && result.Results) {
+      return result.Results as AIPromptTypeEntity[];
+    } else {
+      throw new Error('Failed to load AI prompt types');
     }
   }
 
-  private async loadTemplates(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'Templates',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private async loadTemplates(): Promise<TemplateEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'Templates',
+      ExtraFilter: '',
+      OrderBy: 'Name',
+      UserSearchString: '',
+      IgnoreMaxRows: false,
+      MaxRows: 1000
+    });
 
-      if (result && result.Success && result.Results) {
-        this.templates = result.Results as TemplateEntity[];
-        return true;
-      } else {
-        throw new Error('Failed to load templates');
-      }
-    } catch (error) {
-      LogError('Error loading templates: ' + String(error));
-      return false;
+    if (result && result.Success && result.Results) {
+      return result.Results as TemplateEntity[];
+    } else {
+      throw new Error('Failed to load templates');
     }
   }
 
-  private async loadModels(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'AI Models',
-        ExtraFilter: '',
-        OrderBy: 'Name',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private async loadTemplateContents(): Promise<TemplateContentEntity[]> {
+    const rv = new RunView();
+    const result = await rv.RunView({
+      EntityName: 'Template Contents',
+      ExtraFilter: '',
+      OrderBy: 'TemplateID',
+      UserSearchString: '',
+      IgnoreMaxRows: false,
+      MaxRows: 1000
+    });
 
-      if (result && result.Success && result.Results) {
-        this.models = result.Results as AIModelEntity[];
-        return true;
-      } else {
-        throw new Error('Failed to load AI models');
-      }
-    } catch (error) {
-      LogError('Error loading AI models: ' + String(error));
-      return false;
+    if (result && result.Success && result.Results) {
+      return result.Results as TemplateContentEntity[];
+    } else {
+      throw new Error('Failed to load template contents');
     }
   }
 
-  private async loadPromptModels(): Promise<boolean> {
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'AI Prompt Models',
-        ExtraFilter: '',
-        OrderBy: 'Priority DESC, ExecutionGroup',
-        UserSearchString: '',
-        OverrideExcludeFilter: '',
-        SaveViewResults: false
-      });
+  private buildPromptTemplateRelationships(): void {
+    this.promptsWithTemplates = this.prompts.map(prompt => {
+      const template = this.templates.find(t => t.ID === prompt.TemplateID) || null;
+      const templateContent = template ? 
+        this.templateContents.find(tc => tc.TemplateID === template.ID) || null : null;
+      const category = this.categories.find(c => c.ID === prompt.CategoryID) || null;
+      const type = this.types.find(t => t.ID === prompt.TypeID) || null;
 
-      if (result && result.Success && result.Results) {
-        this.promptModels = result.Results as AIPromptModelEntity[];
-        this.filteredPromptModels = this.promptModels.map(pm => this.transformPromptModelToDisplayData(pm));
-        return true;
-      } else {
-        throw new Error('Failed to load AI prompt models');
-      }
-    } catch (error) {
-      LogError('Error loading AI prompt models: ' + String(error));
-      return false;
-    }
+      return {
+        prompt,
+        template,
+        templateContent,
+        category,
+        type
+      };
+    });
   }
 
-  public onSearchChange(searchTerm: string): void {
-    this.searchSubject.next(searchTerm);
-  }
+  private buildFilterOptions(): void {
+    this.categoryOptions = [
+      { text: 'All Categories', value: 'all' },
+      ...this.categories.map(cat => ({ text: cat.Name, value: cat.ID }))
+    ];
 
-  public onFilterChange(): void {
-    this.filterSubject.next({ ...this.filters });
-  }
-
-  public toggleFiltersVisible(): void {
-    this.filtersVisible = !this.filtersVisible;
-  }
-
-  public clearFilters(): void {
-    this.filters = {
-      searchTerm: '',
-      categoryId: null,
-      typeId: null,
-      status: null,
-      responseFormat: null,
-      selectionStrategy: null
-    };
-    this.searchSubject.next('');
-    this.filterSubject.next(this.filters);
-  }
-
-  public switchView(view: 'prompts' | 'models'): void {
-    this.activeView = view;
-    if (view === 'models' && this.selectedPrompt) {
-      this.loadPromptModels();
-    }
+    this.typeOptions = [
+      { text: 'All Types', value: 'all' },
+      ...this.types.map(type => ({ text: type.Name, value: type.ID }))
+    ];
   }
 
   private applyFilters(): void {
-    let filtered = [...this.prompts];
+    let filtered = [...this.promptsWithTemplates];
 
     // Apply search filter
-    if (this.filters.searchTerm) {
-      const searchLower = this.filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(prompt => 
-        prompt.Name?.toLowerCase().includes(searchLower) ||
-        prompt.Description?.toLowerCase().includes(searchLower) ||
-        this.getCategoryName(prompt)?.toLowerCase().includes(searchLower) ||
-        this.getTypeName(prompt)?.toLowerCase().includes(searchLower)
+    const searchTerm = this.searchTerm$.value.toLowerCase();
+    if (searchTerm) {
+      filtered = filtered.filter(item => 
+        item.prompt.Name.toLowerCase().includes(searchTerm) ||
+        (item.prompt.Description || '').toLowerCase().includes(searchTerm) ||
+        (item.category?.Name || '').toLowerCase().includes(searchTerm) ||
+        (item.template?.Name || '').toLowerCase().includes(searchTerm)
       );
     }
 
     // Apply category filter
-    if (this.filters.categoryId) {
-      filtered = filtered.filter(prompt => prompt.CategoryID === this.filters.categoryId);
+    const categoryId = this.selectedCategory$.value;
+    if (categoryId !== 'all') {
+      filtered = filtered.filter(item => item.prompt.CategoryID === categoryId);
     }
 
     // Apply type filter
-    if (this.filters.typeId) {
-      filtered = filtered.filter(prompt => prompt.TypeID === this.filters.typeId);
+    const typeId = this.selectedType$.value;
+    if (typeId !== 'all') {
+      filtered = filtered.filter(item => item.prompt.TypeID === typeId);
     }
 
     // Apply status filter
-    if (this.filters.status) {
-      filtered = filtered.filter(prompt => prompt.Status === this.filters.status);
+    const status = this.selectedStatus$.value;
+    if (status !== 'all') {
+      filtered = filtered.filter(item => item.prompt.Status === status);
     }
 
-    // Apply response format filter
-    if (this.filters.responseFormat) {
-      filtered = filtered.filter(prompt => prompt.ResponseFormat === this.filters.responseFormat);
-    }
-
-    // Apply selection strategy filter
-    if (this.filters.selectionStrategy) {
-      filtered = filtered.filter(prompt => prompt.SelectionStrategy === this.filters.selectionStrategy);
-    }
-
-    // Transform to display data
-    this.filteredPrompts = filtered.map(prompt => this.transformToDisplayData(prompt));
+    this.filteredPrompts = filtered;
   }
 
-  private transformToDisplayData(prompt: AIPromptEntity): PromptDisplayData {
-    const modelCount = this.promptModels.filter(pm => pm.PromptID === prompt.ID).length;
+  // Event handlers
+  public onSearchChange(searchTerm: string): void {
+    this.searchTerm$.next(searchTerm);
+  }
+
+  public onCategoryFilterChange(categoryId: string): void {
+    this.selectedCategory$.next(categoryId);
+  }
+
+  public onTypeFilterChange(typeId: string): void {
+    this.selectedType$.next(typeId);
+  }
+
+  public onStatusFilterChange(status: string): void {
+    this.selectedStatus$.next(status);
+  }
+
+  // Navigation methods
+  public viewPrompt(promptWithTemplate: PromptWithTemplate): void {
+    this.selectedPrompt = promptWithTemplate;
+    this.currentView = 'editor';
+    this.isEditing = false;
+    this.isDirty = false;
+    this.editorContent = promptWithTemplate.templateContent?.TemplateText || '';
+  }
+
+  public editPrompt(promptWithTemplate: PromptWithTemplate): void {
+    this.selectedPrompt = promptWithTemplate;
+    this.currentView = 'editor';
+    this.isEditing = true;
+    this.isDirty = false;
+    this.editorContent = promptWithTemplate.templateContent?.TemplateText || '';
+  }
+
+  public async createNewCategory(): Promise<string | null> {
+    if (!this.newCategoryName.trim()) return null;
     
-    return {
-      prompt,
-      category: this.getCategory(prompt),
-      type: this.getType(prompt),
-      template: this.getTemplate(prompt),
-      modelCount,
-      statusDisplay: prompt.Status || 'Unknown',
-      responseFormatDisplay: prompt.ResponseFormat || 'Any'
-    };
+    try {
+      const md = new Metadata();
+      if (!md) throw new Error('Metadata provider not available');
+      
+      const category = await md.GetEntityObject<AIPromptCategoryEntity>('AI Prompt Categories', md.CurrentUser);
+      category.Name = this.newCategoryName.trim();
+      category.Description = 'Category created during prompt editing';
+      
+      const result = await category.Save();
+      if (result) {
+        LogStatus('Category created successfully');
+        await this.loadCategories();
+        this.buildFilterOptions();
+        this.newCategoryName = '';
+        this.showNewCategoryInput = false;
+        return category.ID;
+      } else {
+        // Handle save failure
+        const errorMessage = category.LatestResult?.Message || 'Unknown error occurred while saving category';
+        console.error('Category save failed:', category.LatestResult);
+        LogError('Category save failed', undefined, category.LatestResult);
+        this.error = `Failed to create category: ${errorMessage}`;
+        return null;
+      }
+    } catch (error) {
+      LogError('Error creating category', undefined, error);
+      this.error = 'Failed to create category. Please try again.';
+      return null;
+    }
   }
-
-  private getCategory(prompt: AIPromptEntity): AIPromptCategoryEntity | null {
-    return this.categories.find(c => c.ID === prompt.CategoryID) || null;
+  
+  public onCategoryChange(categoryId: string): void {
+    if (categoryId === 'new') {
+      this.showNewCategoryInput = true;
+      this.selectedPrompt!.prompt.CategoryID = '';
+    } else {
+      this.showNewCategoryInput = false;
+      this.selectedPrompt!.prompt.CategoryID = categoryId;
+      this.isDirty = true;
+    }
   }
-
-  private getCategoryName(prompt: AIPromptEntity): string | null {
-    const category = this.getCategory(prompt);
-    return category?.Name || null;
+  
+  public async onCreateNewCategoryKeyup(event: KeyboardEvent): Promise<void> {
+    if (event.key === 'Enter') {
+      const newCategoryId = await this.createNewCategory();
+      if (newCategoryId) {
+        this.selectedPrompt!.prompt.CategoryID = newCategoryId;
+        this.isDirty = true;
+      }
+    } else if (event.key === 'Escape') {
+      this.newCategoryName = '';
+      this.showNewCategoryInput = false;
+    }
   }
-
-  private getType(prompt: AIPromptEntity): AIPromptTypeEntity | null {
-    return this.types.find(t => t.ID === prompt.TypeID) || null;
+  
+  public cancelNewCategory(): void {
+    this.newCategoryName = '';
+    this.showNewCategoryInput = false;
   }
-
-  private getTypeName(prompt: AIPromptEntity): string | null {
-    const type = this.getType(prompt);
-    return type?.Name || null;
-  }
-
-  private getTemplate(prompt: AIPromptEntity): TemplateEntity | null {
-    return this.templates.find(t => t.ID === prompt.TemplateID) || null;
-  }
-
-  public onOpenPrompt(prompt: AIPromptEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'AI Prompts',
-      recordId: prompt.ID!
-    });
-  }
-
-  public onOpenPromptModel(promptModel: AIPromptModelEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'AI Prompt Models',
-      recordId: promptModel.ID!
-    });
-  }
-
-  public onSelectPrompt(prompt: AIPromptEntity): void {
-    this.selectedPrompt = prompt;
-    this.selectedPromptModels = this.promptModels
-      .filter(pm => pm.PromptID === prompt.ID)
-      .map(pm => this.transformPromptModelToDisplayData(pm));
-  }
-
-  private transformPromptModelToDisplayData(promptModel: AIPromptModelEntity): PromptModelDisplayData {
-    return {
-      promptModel,
-      prompt: this.prompts.find(p => p.ID === promptModel.PromptID) || null,
-      aiModel: this.models.find(m => m.ID === promptModel.ModelID) || null,
-      statusDisplay: promptModel.Status || 'Unknown',
-      priorityDisplay: `Priority: ${promptModel.Priority || 0}`,
-      executionGroupDisplay: `Group: ${promptModel.ExecutionGroup || 0}`
-    };
+  
+  public async createAndSelectNewCategory(): Promise<void> {
+    const newCategoryId = await this.createNewCategory();
+    if (newCategoryId && this.selectedPrompt) {
+      this.selectedPrompt.prompt.CategoryID = newCategoryId;
+      this.isDirty = true;
+    }
   }
 
   public async createNewPrompt(): Promise<void> {
+    // Create a new prompt structure
+    const md = new Metadata();
+    if (!md) return;
+    
+    const promptEntity = await md.GetEntityObject<AIPromptEntity>('AI Prompts', md.CurrentUser);
+    promptEntity.Name = 'New Prompt';
+    promptEntity.Description = '';
+    promptEntity.CategoryID = '';
+    promptEntity.TypeID = '';
+    promptEntity.Status = 'Pending';
+    promptEntity.TemplateID = '';
+    
+    const newPrompt: PromptWithTemplate = {
+      prompt: promptEntity,
+      template: null,
+      templateContent: null,
+      category: null,
+      type: null
+    };
+
+    this.selectedPrompt = newPrompt;
+    this.currentView = 'editor';
+    this.isEditing = true;
+    this.isDirty = false;
+    this.editorContent = '';
+  }
+
+  public backToList(): void {
+    if (this.isDirty) {
+      const confirm = window.confirm('You have unsaved changes. Are you sure you want to go back?');
+      if (!confirm) return;
+    }
+    
+    this.currentView = 'list';
+    this.selectedPrompt = null;
+    this.isEditing = false;
+    this.isDirty = false;
+    this.showNewCategoryInput = false;
+    this.newCategoryName = '';
+  }
+
+  public toggleEdit(): void {
+    this.isEditing = !this.isEditing;
+    if (!this.isEditing) {
+      this.showNewCategoryInput = false;
+      this.newCategoryName = '';
+    }
+  }
+  
+  public onEditorContentChange(content: string): void {
+    this.editorContent = content;
+    this.isDirty = true;
+  }
+
+  public async savePrompt(): Promise<void> {
+    if (!this.selectedPrompt || !this.isEditing) return;
+
     try {
-      const md = Metadata.Provider;
-      if (!md) {
+      this.isLoading = true;
+      const md = new Metadata();
+      if (!md) 
         throw new Error('Metadata provider not available');
-      }
 
-      this.openEntityRecord.emit({
-        entityName: 'AI Prompts',
-        recordId: 'new'
-      });
-    } catch (error) {
-      LogError('Error creating new AI prompt: ' + String(error));
-    }
-  }
-
-  public async createNewPromptModel(): Promise<void> {
-    try {
-      const md = Metadata.Provider;
-      if (!md) {
-        throw new Error('Metadata provider not available');
-      }
-
-      this.openEntityRecord.emit({
-        entityName: 'AI Prompt Models',
-        recordId: 'new'
-      });
-    } catch (error) {
-      LogError('Error creating new AI prompt model: ' + String(error));
-    }
-  }
-
-  public setActiveView(view: 'prompts' | 'models'): void {
-    this.activeView = view;
-    if (view === 'models') {
-      this.filteredPromptModels = this.promptModels.map(pm => this.transformPromptModelToDisplayData(pm));
-    }
-  }
-
-  public updateFilter(key: keyof PromptFilter, value: string | null): void {
-    (this.filters as any)[key] = value;
-    this.filterSubject.next({ ...this.filters });
-  }
-
-  public onSearchInput(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter('searchTerm', value);
-  }
-
-  public onCategoryChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter('categoryId', value || null);
-  }
-
-  public onTypeChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter('typeId', value || null);
-  }
-
-  public onStatusChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter('status', value || null);
-  }
-
-  public onResponseFormatChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter('responseFormat', value || null);
-  }
-
-  public onSelectionStrategyChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.updateFilter('selectionStrategy', value || null);
-  }
-
-  public editPrompt(prompt: AIPromptEntity): void {
-    this.openEntityRecord.emit({
-      entityName: 'AI Prompts',
-      recordId: prompt.ID!
-    });
-  }
-
-  public editPromptModel(promptModel: AIPromptModelEntity, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    this.openEntityRecord.emit({
-      entityName: 'AI Prompt Models', 
-      recordId: promptModel.ID!
-    });
-  }
-
-  public testPrompt(prompt: AIPromptEntity, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    // TODO: Implement prompt testing functionality
-    console.log('Testing prompt:', prompt.Name);
-  }
-
-  public testPromptModel(promptModel: AIPromptModelEntity, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    // TODO: Implement prompt model testing functionality
-    console.log('Testing prompt model:', promptModel.ID);
-  }
-
-  public duplicatePrompt(prompt: AIPromptEntity, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    // TODO: Implement prompt duplication functionality
-    console.log('Duplicating prompt:', prompt.Name);
-  }
-
-  public async togglePromptStatus(prompt: AIPromptEntity, event?: Event): Promise<void> {
-    if (event) {
-      event.stopPropagation();
-    }
-    try {
-      const md = Metadata.Provider;
-      if (!md) {
-        throw new Error('Metadata provider not available');
-      }
-
-      const promptToUpdate = await md.GetEntityObject<AIPromptEntity>('AI Prompts', md.CurrentUser);
-      await promptToUpdate.Load(prompt.ID!);
+      // Save or create template content first
+      let templateContentId = this.selectedPrompt.templateContent?.ID;
       
-      // Cycle through statuses: Active -> Disabled -> Pending -> Active
-      switch (promptToUpdate.Status) {
-        case 'Active':
-          promptToUpdate.Status = 'Disabled';
-          break;
-        case 'Disabled':
-          promptToUpdate.Status = 'Pending';
-          break;
-        case 'Pending':
-        default:
-          promptToUpdate.Status = 'Active';
-          break;
-      }
-      
-      const result = await promptToUpdate.Save();
-      
-      if (result) {
-        // Update local data
-        const index = this.prompts.findIndex(p => p.ID === prompt.ID);
-        if (index >= 0) {
-          this.prompts[index] = Object.assign({}, this.prompts[index], { Status: promptToUpdate.Status });
-          this.applyFilters();
+      if (!templateContentId) {
+        // Create new template content
+        const templateContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents', md.CurrentUser);
+        templateContent.TemplateText = this.editorContent;
+        // Note: TypeCodeGenerated property may not exist, setting basic properties
+        
+        // We need to link to a template, create one if needed
+        if (!this.selectedPrompt.template) {
+          const template = await md.GetEntityObject<TemplateEntity>('Templates', md.CurrentUser);
+          template.Name = this.selectedPrompt.prompt.Name + ' Template';
+          template.Description = 'Template for ' + this.selectedPrompt.prompt.Name;
+          
+          if (await template.Save()) {
+            templateContent.TemplateID = template.ID;
+            this.selectedPrompt.template = template;
+          }
+        } else {
+          templateContent.TemplateID = this.selectedPrompt.template.ID;
         }
-        LogStatus(`Prompt ${promptToUpdate.Name} status changed to ${promptToUpdate.Status}`);
+        
+        if (await templateContent.Save()) {
+          templateContentId = templateContent.ID;
+          this.selectedPrompt.templateContent = templateContent;
+        }
+      } else {
+        // Update existing template content
+        const templateContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
+        await templateContent.Load(templateContentId);
+        templateContent.TemplateText = this.editorContent;
+        await templateContent.Save();
       }
+
+      // Save the prompt
+      let prompt: AIPromptEntity;
+      if (this.selectedPrompt.prompt.ID) {
+        // Update existing prompt
+        prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', md.CurrentUser);
+        await prompt.Load(this.selectedPrompt.prompt.ID);
+      } else {
+        // Create new prompt
+        prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', md.CurrentUser);
+      }
+
+      // Update prompt properties
+      prompt.Name = this.selectedPrompt.prompt.Name;
+      prompt.Description = this.selectedPrompt.prompt.Description;
+      prompt.CategoryID = this.selectedPrompt.prompt.CategoryID;
+      prompt.TypeID = this.selectedPrompt.prompt.TypeID;
+      prompt.Status = this.selectedPrompt.prompt.Status;
+      prompt.TemplateID = this.selectedPrompt.template?.ID || '';
+
+      const promptResult = await prompt.Save();
+      
+      if (promptResult) {
+        this.isDirty = false;
+        this.isEditing = false;
+        LogStatus('Prompt saved successfully');
+        
+        // Reload data to get the updated state
+        await this.loadData();
+        
+        // Find and select the updated prompt
+        this.selectedPrompt = this.promptsWithTemplates.find(p => p.prompt.ID === prompt.ID) || null;
+      } else {
+        // Handle save failure
+        const errorMessage = prompt.LatestResult?.Message || 'Unknown error occurred while saving prompt';
+        console.error('Prompt save failed:', errorMessage);
+        LogError('Prompt save failed', undefined, errorMessage);
+        this.mjNotificationsService.CreateSimpleNotification(errorMessage,'error',3500);
+        this.error = `Failed to save prompt: ${errorMessage}`;
+      }
+
     } catch (error) {
-      LogError('Error updating prompt status: ' + String(error));
+      LogError('Error saving prompt', undefined, error);
+      this.error = 'Failed to save prompt. Please try again.';
+    } finally {
+      this.isLoading = false;
     }
+  }
+
+  public async deletePrompt(promptWithTemplate: PromptWithTemplate): Promise<void> {
+    if (!promptWithTemplate.prompt.ID) return;
+    
+    const confirm = window.confirm(`Are you sure you want to delete "${promptWithTemplate.prompt.Name}"?`);
+    if (!confirm) return;
+
+    try {
+      this.isLoading = true;
+      const md = Metadata.Provider;
+      if (!md) throw new Error('Metadata provider not available');
+
+      const prompt = await md.GetEntityObject<AIPromptEntity>('AI Prompts', md.CurrentUser);
+      await prompt.Load(promptWithTemplate.prompt.ID);
+      const result = await prompt.Delete();
+
+      if (result) {
+        LogStatus('Prompt deleted successfully');
+        await this.loadData();
+        
+        if (this.selectedPrompt?.prompt.ID === promptWithTemplate.prompt.ID) {
+          this.backToList();
+        }
+      }
+
+    } catch (error) {
+      LogError('Error deleting prompt', undefined, error);
+      this.error = 'Failed to delete prompt. Please try again.';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+
+  // Utility methods
+  public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
+    switch (status) {
+      case 'Active': return 'success';
+      case 'Pending': return 'warning';
+      case 'Disabled': return 'error';
+      default: return 'info';
+    }
+  }
+
+  public getPromptIcon(): string {
+    return 'fa-solid fa-comment-dots';
+  }
+
+  public getCategoryName(categoryId: string | null): string {
+    if (!categoryId || categoryId === '') return 'No Category';
+    return this.categories.find(c => c.ID === categoryId)?.Name || 'Unknown Category';
+  }
+
+  public getTypeName(typeId: string | null): string {
+    if (!typeId || typeId === '') return 'No Type';
+    return this.types.find(t => t.ID === typeId)?.Name || 'Unknown Type';
   }
 }

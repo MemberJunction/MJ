@@ -24,17 +24,30 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   
   public isLoading = false;
   public activeTab = 'models'; // Default tab
+  public selectedIndex = 0; // Track selected navigation index
   
   // Navigation items for bottom navigation
   public navigationItems: string[] = ['models', 'prompts', 'agents', 'monitoring', 'config'];
   
-  public navigationConfig = [
-    { text: 'Models', icon: 'k-icon k-i-gear' },
-    { text: 'Prompts', icon: 'k-icon k-i-comment' },
-    { text: 'Agents', icon: 'k-icon k-i-user' },
-    { text: 'Monitor', icon: 'k-icon k-i-chart-line' },
-    { text: 'Config', icon: 'k-icon k-i-cog' }
-  ];
+  public get navigationConfig() {
+    return [
+      { text: 'Models', icon: 'fa-solid fa-microchip', selected: this.activeTab === 'models' },
+      { text: 'Prompts', icon: 'fa-solid fa-comment-dots', selected: this.activeTab === 'prompts' },
+      { text: 'Agents', icon: 'fa-solid fa-robot', selected: this.activeTab === 'agents' },
+      { text: 'Monitor', icon: 'fa-solid fa-chart-line', selected: this.activeTab === 'monitoring' },
+      { text: 'Config', icon: 'fa-solid fa-cogs', selected: this.activeTab === 'config' }
+    ];
+  }
+
+  public get navigationConfigForKendo() {
+    return [
+      { text: 'Models', icon: 'gear', selected: this.activeTab === 'models' },
+      { text: 'Prompts', icon: 'comment', selected: this.activeTab === 'prompts' },
+      { text: 'Agents', icon: 'user', selected: this.activeTab === 'agents' },
+      { text: 'Monitor', icon: 'chart-line', selected: this.activeTab === 'monitoring' },
+      { text: 'Config', icon: 'cog', selected: this.activeTab === 'config' }
+    ];
+  }
 
   private stateChangeSubject = new Subject<AIDashboardState>();
 
@@ -53,16 +66,20 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   }
 
   public onTabChange(tabId: string): void {
+    console.log('AI Dashboard: Tab changed to:', tabId);
     this.activeTab = tabId;
+    this.selectedIndex = this.navigationItems.indexOf(tabId);
     this.emitStateChange();
   }
 
-  public onNavigationChange(event: Event): void {
-    const target = event.target as HTMLElement;
-    const index = Array.from(target.parentElement?.children || []).indexOf(target);
+  public onNavigationChange(event: any): void {
+    // Legacy method for Kendo navigation - kept for compatibility
+    const index = event.index;
     if (index >= 0 && index < this.navigationItems.length) {
+      this.selectedIndex = index;
       this.activeTab = this.navigationItems[index];
       this.emitStateChange();
+      console.log('AI Dashboard: Switched to tab:', this.activeTab, 'index:', index);
     }
   }
 
@@ -91,6 +108,7 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public loadUserState(state: Partial<AIDashboardState>): void {
     if (state.activeTab) {
       this.activeTab = state.activeTab;
+      this.selectedIndex = this.navigationItems.indexOf(state.activeTab);
     }
     // Load sub-component states as they're implemented
   }

@@ -1,294 +1,480 @@
-<div class="prompt-management mjFillContainer">
-  <!-- Header matching Entity Admin pattern -->
-  <div class="header">
-    <h1>Prompt Management</h1>
-    <div class="header-controls">
-      <button class="control-btn" [class.active]="activeView === 'prompts'" (click)="setActiveView('prompts')">
-        Prompts
-      </button>
-      <button class="control-btn" [class.active]="activeView === 'models'" (click)="setActiveView('models')">
-        Prompt Models
-      </button>
-      <button class="control-btn" (click)="toggleFiltersVisible()">
-        @if (filtersVisible) {
-          Hide Filters
-        } @else {
-          Show Filters
-        }
-      </button>
-    </div>
-  </div>
+<div class="prompt-management-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  <!-- List View -->
+  @if (currentView === 'list') {
+    <div class="list-view">
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-info">
+          <span class="prompt-count">{{ filteredPrompts.length }} prompts</span>
+        </div>
+        
+        <div class="header-controls">
+          <button 
+            type="button" 
+            class="control-btn"
+            (click)="createNewPrompt()">
+            <i class="fa-solid fa-plus"></i>
+            New Prompt
+          </button>
+        </div>
+      </div>
 
-  <!-- Splitter Layout -->
-  <kendo-splitter orientation="horizontal" class="splitter-container">
-    <!-- Filter Panel -->
-    @if (filtersVisible) {
-      <kendo-splitter-pane size="300px" [resizable]="true" [collapsible]="true">
-        <div class="filter-panel">
-          <h3>Filter & Search</h3>
-          
+      <!-- Filters -->
+      <div class="filters-section">
+        <div class="filters-grid">
+          <!-- Search -->
           <div class="filter-group">
-            <label>Search</label>
+            <label class="filter-label">Search</label>
             <input 
               type="text" 
-              class="filter-input" 
-              placeholder="Search prompts..." 
-              [value]="filters.searchTerm"
-              (input)="onSearchInput($event)"
-            />
+              class="filter-input"
+              placeholder="Search prompts..."
+              [value]="searchTerm$.value"
+              (input)="onSearchChange($any($event.target).value)">
           </div>
-
+          
+          <!-- Category Filter -->
           <div class="filter-group">
-            <label>Category</label>
+            <label class="filter-label">Category</label>
             <select 
-              class="filter-select" 
-              [value]="filters.categoryId || ''"
-              (change)="onCategoryChange($event)"
-            >
-              <option value="">All Categories</option>
-              @for (category of categories; track category.ID) {
-                <option [value]="category.ID">{{ category.Name }}</option>
+              class="filter-select"
+              [value]="selectedCategory$.value"
+              (change)="onCategoryFilterChange($any($event.target).value)">
+              @for (option of categoryOptions; track option.value) {
+                <option [value]="option.value">{{ option.text }}</option>
               }
             </select>
           </div>
-
+          
+          <!-- Type Filter -->
           <div class="filter-group">
-            <label>Type</label>
+            <label class="filter-label">Type</label>
             <select 
-              class="filter-select" 
-              [value]="filters.typeId || ''"
-              (change)="onTypeChange($event)"
-            >
-              <option value="">All Types</option>
-              @for (type of types; track type.ID) {
-                <option [value]="type.ID">{{ type.Name }}</option>
+              class="filter-select"
+              [value]="selectedType$.value"
+              (change)="onTypeFilterChange($any($event.target).value)">
+              @for (option of typeOptions; track option.value) {
+                <option [value]="option.value">{{ option.text }}</option>
               }
             </select>
           </div>
-
+          
+          <!-- Status Filter -->
           <div class="filter-group">
-            <label>Status</label>
+            <label class="filter-label">Status</label>
             <select 
-              class="filter-select" 
-              [value]="filters.status || ''"
-              (change)="onStatusChange($event)"
-            >
-              <option value="">All Statuses</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Draft">Draft</option>
+              class="filter-select"
+              [value]="selectedStatus$.value"
+              (change)="onStatusFilterChange($any($event.target).value)">
+              @for (option of statusOptions; track option.value) {
+                <option [value]="option.value">{{ option.text }}</option>
+              }
             </select>
-          </div>
-
-          @if (activeView === 'prompts') {
-            <div class="filter-group">
-              <label>Response Format</label>
-              <select 
-                class="filter-select" 
-                [value]="filters.responseFormat || ''"
-                (change)="onResponseFormatChange($event)"
-              >
-                <option value="">All Formats</option>
-                <option value="text">Text</option>
-                <option value="json">JSON</option>
-                <option value="markdown">Markdown</option>
-                <option value="code">Code</option>
-              </select>
-            </div>
-
-            <div class="filter-group">
-              <label>Selection Strategy</label>
-              <select 
-                class="filter-select" 
-                [value]="filters.selectionStrategy || ''"
-                (change)="onSelectionStrategyChange($event)"
-              >
-                <option value="">All Strategies</option>
-                <option value="first">First</option>
-                <option value="random">Random</option>
-                <option value="weighted">Weighted</option>
-                <option value="best_performance">Best Performance</option>
-              </select>
-            </div>
-          }
-
-          <div class="filter-actions">
-            <button class="filter-clear-btn" (click)="clearFilters()">Clear All</button>
           </div>
         </div>
-      </kendo-splitter-pane>
-    }
+      </div>
 
-    <!-- Main Content -->
-    <kendo-splitter-pane>
-      <div class="main-content">
-        <!-- Prompts View -->
-        @if (activeView === 'prompts') {
-          <div class="content-header">
-            <h2>AI Prompts ({{ filteredPrompts.length }})</h2>
-            <button class="create-btn" (click)="createNewPrompt()">
-              <i class="fa-solid fa-plus"></i>
-              Create Prompt
-            </button>
-          </div>
-
-          @if (isLoading) {
-            <div class="loading-state">
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              Loading prompts...
+      <!-- Loading State -->
+      @if (isLoading) {
+        <div class="loading-container">
+          <div class="loading-content">
+            <div class="loading-spinner">
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
             </div>
-          } @else if (filteredPrompts.length === 0) {
+            <div class="loading-text">{{ loadingMessage }}</div>
+          </div>
+        </div>
+      }
+
+      <!-- Error State -->
+      @if (error) {
+        <div class="error-container">
+          <p class="error-message">
+            <i class="fa-solid fa-exclamation-triangle"></i>
+            {{ error }}
+          </p>
+        </div>
+      }
+
+      <!-- Prompts List -->
+      @if (!isLoading && !error) {
+        <div class="prompts-list">
+          @if (filteredPrompts.length === 0) {
             <div class="empty-state">
-              <i class="fa-solid fa-comments"></i>
+              <i class="fa-solid fa-comment-dots"></i>
               <h3>No prompts found</h3>
-              <p>Create your first prompt or adjust your filters</p>
-              <button class="create-btn" (click)="createNewPrompt()">
-                <i class="fa-solid fa-plus"></i>
-                Create Prompt
-              </button>
+              <p>No prompts match your current filters. Try adjusting your search criteria or create a new prompt.</p>
             </div>
           } @else {
             <div class="prompts-grid">
-              @for (promptData of filteredPrompts; track promptData.prompt.ID) {
-                <div class="prompt-card" (click)="editPrompt(promptData.prompt)">
-                  <div class="prompt-header">
-                    <h4>{{ promptData.prompt.Name }}</h4>
-                    <div class="prompt-status" [class]="'status-' + (promptData.statusDisplay | lowercase)">
-                      {{ promptData.statusDisplay }}
-                    </div>
-                  </div>
-                  
-                  <div class="prompt-meta">
-                    @if (promptData.category) {
-                      <span class="meta-item">
-                        <i class="fa-solid fa-folder"></i>
-                        {{ promptData.category.Name }}
-                      </span>
-                    }
-                    @if (promptData.type) {
-                      <span class="meta-item">
-                        <i class="fa-solid fa-tag"></i>
-                        {{ promptData.type.Name }}
-                      </span>
-                    }
-                    @if (promptData.modelCount > 0) {
-                      <span class="meta-item">
-                        <i class="fa-solid fa-robot"></i>
-                        {{ promptData.modelCount }} models
-                      </span>
-                    }
-                  </div>
-
-                  @if (promptData.prompt.Description) {
-                    <p class="prompt-description">{{ promptData.prompt.Description }}</p>
-                  }
-
-                  <div class="prompt-details">
-                    @if (promptData.responseFormatDisplay) {
-                      <span class="detail-tag">{{ promptData.responseFormatDisplay }}</span>
-                    }
-                    @if (promptData.prompt.SelectionStrategy) {
-                      <span class="detail-tag">{{ promptData.prompt.SelectionStrategy }}</span>
-                    }
-                  </div>
-
-                  <div class="prompt-actions">
-                    <button class="action-btn-small" (click)="testPrompt(promptData.prompt, $event)">
-                      <i class="fa-solid fa-play"></i>
-                      Test
-                    </button>
-                    <button class="action-btn-small" (click)="togglePromptStatus(promptData.prompt, $event)">
-                      <i class="fa-solid fa-power-off"></i>
-                      {{ promptData.prompt.Status === 'Active' ? 'Disable' : 'Enable' }}
-                    </button>
-                    <button class="action-btn-small" (click)="duplicatePrompt(promptData.prompt, $event)">
-                      <i class="fa-solid fa-copy"></i>
-                      Duplicate
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        }
-
-        <!-- Prompt Models View -->
-        @if (activeView === 'models') {
-          <div class="content-header">
-            <h2>Prompt Models ({{ filteredPromptModels.length }})</h2>
-            <button class="create-btn" (click)="createNewPromptModel()">
-              <i class="fa-solid fa-plus"></i>
-              Create Prompt Model
-            </button>
-          </div>
-
-          @if (isLoading) {
-            <div class="loading-state">
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              Loading prompt models...
-            </div>
-          } @else if (filteredPromptModels.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-robot"></i>
-              <h3>No prompt models found</h3>
-              <p>Create your first prompt model or adjust your filters</p>
-              <button class="create-btn" (click)="createNewPromptModel()">
-                <i class="fa-solid fa-plus"></i>
-                Create Prompt Model
-              </button>
-            </div>
-          } @else {
-            <div class="models-list">
-              @for (modelData of filteredPromptModels; track modelData.promptModel.ID) {
-                <div class="model-row" (click)="editPromptModel(modelData.promptModel)">
-                  <div class="model-main">
-                    <div class="model-header">
-                      <h4>{{ modelData.prompt?.Name || 'Unknown Prompt' }}</h4>
-                      <span class="model-name">{{ modelData.aiModel?.Name || 'Unknown Model' }}</span>
+              @for (promptWithTemplate of filteredPrompts; track promptWithTemplate.prompt.ID || $index) {
+                <div class="prompt-card">
+                  <!-- Card Header -->
+                  <div class="card-header">
+                    <div class="prompt-info">
+                      <div class="prompt-icon">
+                        <i [class]="getPromptIcon()"></i>
+                      </div>
+                      <div class="prompt-details">
+                        <h4 class="prompt-name">{{ promptWithTemplate.prompt.Name }}</h4>
+                        <div class="prompt-meta">
+                          <span class="prompt-category">{{ getCategoryName(promptWithTemplate.prompt.CategoryID) }}</span>
+                          @if (promptWithTemplate.type) {
+                            <span class="prompt-type">• {{ promptWithTemplate.type.Name }}</span>
+                          }
+                        </div>
+                      </div>
                     </div>
                     
-                    <div class="model-details">
-                      @if (modelData.aiModel && modelData.aiModel.Vendor) {
-                        <span class="detail-item">
-                          <i class="fa-solid fa-building"></i>
-                          {{ modelData.aiModel.Vendor }}
-                        </span>
-                      }
-                      @if (modelData.aiModel && modelData.aiModel.AIModelType) {
-                        <span class="detail-item">
-                          <i class="fa-solid fa-microchip"></i>
-                          {{ modelData.aiModel.AIModelType }}
-                        </span>
-                      }
-                      @if (modelData.promptModel.Priority) {
-                        <span class="detail-item">
-                          <i class="fa-solid fa-star"></i>
-                          Priority {{ modelData.promptModel.Priority }}
-                        </span>
-                      }
+                    <div class="status-badge status-{{ promptWithTemplate.prompt.Status.toLowerCase() }}">
+                      {{ promptWithTemplate.prompt.Status }}
                     </div>
-
-                    @if (modelData.promptModel.Status) {
-                      <p class="model-system-prompt">Status: {{ modelData.promptModel.Status }}</p>
-                    }
                   </div>
 
-                  <div class="model-actions">
-                    <button class="action-btn-small" (click)="testPromptModel(modelData.promptModel, $event)">
-                      <i class="fa-solid fa-play"></i>
-                      Test
+                  <!-- Card Body -->
+                  <div class="card-body">
+                    @if (promptWithTemplate.prompt.Description) {
+                      <p class="prompt-description">{{ promptWithTemplate.prompt.Description }}</p>
+                    } @else {
+                      <p class="prompt-description text-muted">No description provided</p>
+                    }
+                    
+                    <!-- Template Info -->
+                    <div class="template-info">
+                      @if (promptWithTemplate.template) {
+                        <div class="template-item">
+                          <i class="fa-solid fa-file-code"></i>
+                          <span>{{ promptWithTemplate.template.Name }}</span>
+                        </div>
+                        @if (promptWithTemplate.templateContent) {
+                          <div class="template-content-info">
+                            <small>
+                              Template content: {{ (promptWithTemplate.templateContent.TemplateText || '').length }} characters
+                            </small>
+                          </div>
+                        }
+                      } @else {
+                        <div class="template-item text-muted">
+                          <i class="fa-solid fa-file-code"></i>
+                          <span>No template assigned</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Card Actions -->
+                  <div class="card-actions">
+                    <button 
+                      type="button" 
+                      class="action-btn"
+                      (click)="viewPrompt(promptWithTemplate)">
+                      <i class="fa-solid fa-eye"></i>
+                      View
                     </button>
-                    <button class="action-btn-small" (click)="editPromptModel(modelData.promptModel, $event)">
+                    
+                    <button 
+                      type="button" 
+                      class="action-btn action-btn-primary"
+                      (click)="editPrompt(promptWithTemplate)">
                       <i class="fa-solid fa-edit"></i>
                       Edit
                     </button>
+                    
+                    <button 
+                      type="button" 
+                      class="action-btn action-btn-danger"
+                      (click)="deletePrompt(promptWithTemplate)">
+                      <i class="fa-solid fa-trash"></i>
+                      Delete
+                    </button>
                   </div>
                 </div>
               }
             </div>
           }
-        }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Editor View -->
+  @if (currentView === 'editor' && selectedPrompt) {
+    <div class="editor-view">
+      <!-- Editor Header -->
+      <div class="editor-header">
+        <div class="breadcrumb-section">
+          <button 
+            type="button" 
+            class="back-btn"
+            (click)="backToList()">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Prompts
+          </button>
+        </div>
+        
+        <div class="editor-title">
+          <h2>
+            @if (isEditing && !selectedPrompt.prompt.ID) {
+              <i class="fa-solid fa-plus"></i>
+              Create New Prompt
+            } @else if (isEditing) {
+              <i class="fa-solid fa-edit"></i>
+              Edit Prompt
+            } @else {
+              <i class="fa-solid fa-eye"></i>
+              View Prompt
+            }
+          </h2>
+          
+          @if (selectedPrompt.prompt.ID) {
+            <div class="status-badge status-{{ selectedPrompt.prompt.Status.toLowerCase() }}">
+              {{ selectedPrompt.prompt.Status }}
+            </div>
+          }
+        </div>
+        
+        <div class="editor-actions">
+          @if (!isEditing) {
+            <button 
+              type="button" 
+              class="control-btn"
+              (click)="toggleEdit()">
+              <i class="fa-solid fa-edit"></i>
+              Edit
+            </button>
+          } @else {
+            <button 
+              type="button" 
+              class="control-btn"
+              (click)="toggleEdit()">
+              <i class="fa-solid fa-times"></i>
+              Cancel
+            </button>
+            
+            <button 
+              type="button" 
+              class="control-btn control-btn-primary"
+              (click)="savePrompt()"
+              [disabled]="isLoading">
+              @if (isLoading) {
+                <span class="loading-spinner-sm"></span>
+              } @else {
+                <i class="fa-solid fa-save"></i>
+              }
+              Save
+            </button>
+          }
+        </div>
       </div>
-    </kendo-splitter-pane>
-  </kendo-splitter>
+
+      <!-- Editor Content -->
+      <div class="editor-content">
+        <div class="editor-layout">
+          <!-- Prompt Details Panel -->
+          <div class="editor-sidebar">
+            <div class="prompt-details-panel">
+              <h3>Prompt Details</h3>
+              
+              <!-- Name -->
+              <div class="form-field">
+                <label class="field-label">Name *</label>
+                @if (isEditing) {
+                  <input 
+                    type="text" 
+                    class="field-input"
+                    [(ngModel)]="selectedPrompt.prompt.Name"
+                    placeholder="Enter prompt name"
+                    (input)="isDirty = true">
+                } @else {
+                  <div class="field-value">{{ selectedPrompt.prompt.Name }}</div>
+                }
+              </div>
+              
+              <!-- Description -->
+              <div class="form-field">
+                <label class="field-label">Description</label>
+                @if (isEditing) {
+                  <textarea 
+                    class="field-textarea"
+                    [(ngModel)]="selectedPrompt.prompt.Description"
+                    placeholder="Enter prompt description"
+                    (input)="isDirty = true"></textarea>
+                } @else {
+                  <div class="field-value">
+                    {{ selectedPrompt.prompt.Description || 'No description provided' }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Category -->
+              <div class="form-field">
+                <label class="field-label">Category</label>
+                @if (isEditing) {
+                  @if (!showNewCategoryInput) {
+                    <select 
+                      class="field-select"
+                      [value]="selectedPrompt.prompt.CategoryID"
+                      (change)="onCategoryChange($any($event.target).value)">
+                      <option value="">Select category...</option>
+                      @for (category of categories; track category.ID) {
+                        <option [value]="category.ID">{{ category.Name }}</option>
+                      }
+                      <option value="new" class="new-category-option">+ Create New Category</option>
+                    </select>
+                  } @else {
+                    <div class="new-category-container">
+                      <input 
+                        type="text" 
+                        class="field-input"
+                        [(ngModel)]="newCategoryName"
+                        placeholder="Enter new category name"
+                        (keyup)="onCreateNewCategoryKeyup($event)"
+                        #newCategoryInput>
+                      <div class="new-category-actions">
+                        <button 
+                          type="button" 
+                          class="action-btn action-btn-primary"
+                          (click)="createAndSelectNewCategory()">
+                          <i class="fa-solid fa-check"></i>
+                        </button>
+                        <button 
+                          type="button" 
+                          class="action-btn"
+                          (click)="cancelNewCategory()">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                } @else {
+                  <div class="field-value">
+                    {{ getCategoryName(selectedPrompt.prompt.CategoryID) }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Type -->
+              <div class="form-field">
+                <label class="field-label">Type</label>
+                @if (isEditing) {
+                  <select 
+                    class="field-select"
+                    [(ngModel)]="selectedPrompt.prompt.TypeID"
+                    (change)="isDirty = true">
+                    <option value="">Select type...</option>
+                    @for (type of types; track type.ID) {
+                      <option [value]="type.ID">{{ type.Name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <div class="field-value">
+                    {{ getTypeName(selectedPrompt.prompt.TypeID) }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Status -->
+              <div class="form-field">
+                <label class="field-label">Status</label>
+                @if (isEditing) {
+                  <select 
+                    class="field-select"
+                    [(ngModel)]="selectedPrompt.prompt.Status"
+                    (change)="isDirty = true">
+                    <option value="Active">Active</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Disabled">Disabled</option>
+                  </select>
+                } @else {
+                  <div class="field-value">
+                    <span class="status-badge status-{{ selectedPrompt.prompt.Status.toLowerCase() }}">
+                      {{ selectedPrompt.prompt.Status }}
+                    </span>
+                  </div>
+                }
+              </div>
+              
+              <!-- Template Info -->
+              @if (selectedPrompt.template) {
+                <div class="template-info-section">
+                  <h4>Template Information</h4>
+                  <div class="template-details">
+                    <div><strong>Template:</strong> {{ selectedPrompt.template.Name }}</div>
+                    @if (selectedPrompt.template.Description) {
+                      <div><strong>Description:</strong> {{ selectedPrompt.template.Description }}</div>
+                    }
+                    @if (selectedPrompt.templateContent) {
+                      <div><strong>Content Length:</strong> {{ (selectedPrompt.templateContent.TemplateText || '').length }} characters</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          
+          <!-- Template Editor Panel -->
+          <div class="editor-main">
+            <div class="template-editor-panel">
+              <div class="editor-header">
+                <h3>Template Content</h3>
+                <div class="editor-info">
+                  @if (isEditing) {
+                    <span class="editor-badge editor-badge-info">Nunjucks Template</span>
+                    @if (isDirty) {
+                      <span class="editor-badge editor-badge-warning">Unsaved Changes</span>
+                    }
+                  } @else {
+                    <span class="editor-badge editor-badge-secondary">Read Only</span>
+                  }
+                </div>
+              </div>
+              
+              <div class="editor-container">
+                @if (isEditing) {
+                  <mj-code-editor
+                    [value]="editorContent"
+                    [languages]="supportedLanguages"
+                    [language]="editorLanguage"
+                    [placeholder]="'Enter your Nunjucks template here...'"
+                    [lineWrapping]="true"
+                    [highlightWhitespace]="false"
+                    [indentWithTab]="true"
+                    [indentUnit]="'  '"
+                    [readonly]="false"
+                    (change)="onEditorContentChange($event)">
+                  </mj-code-editor>
+                } @else {
+                  <div class="code-display">
+                    <pre><code>{{ editorContent || 'No template content' }}</code></pre>
+                  </div>
+                }
+              </div>
+              
+              <!-- Editor Help -->
+              @if (isEditing) {
+                <div class="editor-help">
+                  <div class="help-section">
+                    <h5>Nunjucks Template Syntax</h5>
+                    <div class="syntax-examples">
+                      <div class="syntax-item">
+                        <code>{{ "{{ variable }}" }}</code> - Variable output
+                      </div>
+                      <div class="syntax-item">
+                        <code>{{ "{% if condition %} ... {% endif %}" }}</code> - Conditionals
+                      </div>
+                      <div class="syntax-item">
+                        <code>{{ "{% for item in items %} ... {% endfor %}" }}</code> - Loops
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 </div>
