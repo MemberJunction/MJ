@@ -4,7 +4,6 @@ import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { BottomNavigationItem } from '@progress/kendo-angular-navigation';
 
 interface AIDashboardState {
   activeTab: string;
@@ -27,37 +26,14 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public activeTab = 'models'; // Default tab
   
   // Navigation items for bottom navigation
-  public navigationItems: BottomNavigationItem[] = [
-    { 
-      id: 'models', 
-      text: 'Models', 
-      icon: 'k-icon k-i-gear',
-      selected: this.activeTab === 'models'
-    },
-    { 
-      id: 'prompts', 
-      text: 'Prompts', 
-      icon: 'k-icon k-i-comment',
-      selected: this.activeTab === 'prompts'
-    },
-    { 
-      id: 'agents', 
-      text: 'Agents', 
-      icon: 'k-icon k-i-user',
-      selected: this.activeTab === 'agents'
-    },
-    { 
-      id: 'monitoring', 
-      text: 'Monitor', 
-      icon: 'k-icon k-i-chart-line',
-      selected: this.activeTab === 'monitoring'
-    },
-    { 
-      id: 'config', 
-      text: 'Config', 
-      icon: 'k-icon k-i-cog',
-      selected: this.activeTab === 'config'
-    }
+  public navigationItems: string[] = ['models', 'prompts', 'agents', 'monitoring', 'config'];
+  
+  public navigationConfig = [
+    { text: 'Models', icon: 'k-icon k-i-gear' },
+    { text: 'Prompts', icon: 'k-icon k-i-comment' },
+    { text: 'Agents', icon: 'k-icon k-i-user' },
+    { text: 'Monitor', icon: 'k-icon k-i-chart-line' },
+    { text: 'Config', icon: 'k-icon k-i-cog' }
   ];
 
   private stateChangeSubject = new Subject<AIDashboardState>();
@@ -78,21 +54,16 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
 
   public onTabChange(tabId: string): void {
     this.activeTab = tabId;
-    this.updateNavigationSelection();
     this.emitStateChange();
   }
 
-  public onNavigationChange(item: BottomNavigationItem): void {
-    this.activeTab = item.id!;
-    this.updateNavigationSelection();
-    this.emitStateChange();
-  }
-
-  private updateNavigationSelection(): void {
-    this.navigationItems = this.navigationItems.map(item => ({
-      ...item,
-      selected: item.id === this.activeTab
-    }));
+  public onNavigationChange(event: Event): void {
+    const target = event.target as HTMLElement;
+    const index = Array.from(target.parentElement?.children || []).indexOf(target);
+    if (index >= 0 && index < this.navigationItems.length) {
+      this.activeTab = this.navigationItems[index];
+      this.emitStateChange();
+    }
   }
 
   private setupStateManagement(): void {
@@ -156,8 +127,9 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   }
 
   public getCurrentTabLabel(): string {
-    const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
-    return currentTab ? currentTab.label : 'AI Administration';
+    const tabIndex = this.navigationItems.indexOf(this.activeTab);
+    const labels = ['Models', 'Prompts', 'Agents', 'Monitor', 'Config'];
+    return tabIndex >= 0 ? labels[tabIndex] : 'AI Administration';
   }
 }
 

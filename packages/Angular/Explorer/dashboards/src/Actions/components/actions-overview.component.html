@@ -1,0 +1,220 @@
+<div class="actions-overview" mjFillContainer>
+  <!-- Header with search and filters -->
+  <div class="overview-header">
+    <div class="filters-row">
+      <div class="search-container">
+        <kendo-textbox 
+          placeholder="Search actions..." 
+          [value]="searchTerm$.value"
+          (valueChange)="onSearchChange($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+      
+      <div class="filter-container">
+        <kendo-dropdownlist 
+          [data]="[
+            { text: 'All Statuses', value: 'all' },
+            { text: 'Active', value: 'Active' },
+            { text: 'Pending', value: 'Pending' },
+            { text: 'Disabled', value: 'Disabled' }
+          ]"
+          textField="text"
+          valueField="value"
+          [value]="selectedStatus$.value"
+          (valueChange)="onStatusFilterChange($event)">
+        </kendo-dropdownlist>
+      </div>
+      
+      <div class="filter-container">
+        <kendo-dropdownlist 
+          [data]="[
+            { text: 'All Types', value: 'all' },
+            { text: 'AI Generated', value: 'Generated' },
+            { text: 'Custom', value: 'Custom' }
+          ]"
+          textField="text"
+          valueField="value"
+          [value]="selectedType$.value"
+          (valueChange)="onTypeFilterChange($event)">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metrics Cards -->
+  <div class="metrics-grid">
+    <div class="metric-card primary clickable" (click)="onTotalActionsClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-cogs"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalActions }}</div>
+        <div class="metric-label">Total Actions</div>
+        <div class="metric-breakdown">
+          <span class="active">{{ metrics.activeActions }} Active</span>
+          <span class="pending">{{ metrics.pendingActions }} Pending</span>
+          <span class="disabled">{{ metrics.disabledActions }} Disabled</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card success clickable" (click)="onExecutionsClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-play-circle"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalExecutions }}</div>
+        <div class="metric-label">Total Executions</div>
+        <div class="metric-breakdown">
+          <span class="recent">{{ metrics.recentExecutions }} in last 24h</span>
+          <span class="success-rate">{{ metrics.successRate }}% success rate</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card info clickable" (click)="onCategoriesClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-sitemap"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalCategories }}</div>
+        <div class="metric-label">Categories</div>
+        <div class="metric-breakdown">
+          <span>Organized structure</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card warning clickable" (click)="onAIGeneratedClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-robot"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.aiGeneratedActions }}</div>
+        <div class="metric-label">AI Generated</div>
+        <div class="metric-breakdown">
+          <span class="custom">{{ metrics.customActions }} Custom</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Grid -->
+  <div class="content-grid">
+    <!-- Category Statistics -->
+    <div class="panel category-stats">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-chart-bar"></i> Category Performance</h3>
+      </div>
+      <div class="panel-content">
+        @if (categoryStats.length > 0) {
+          <div class="category-list">
+            @for (category of categoryStats; track category.categoryId) {
+              <div class="category-item" (click)="openCategory(category.categoryId)">
+                <div class="category-info">
+                  <div class="category-name">{{ category.categoryName }}</div>
+                  <div class="category-metrics">
+                    <span class="metric">{{ category.actionCount }} actions</span>
+                    <span class="metric">{{ category.executionCount }} executions</span>
+                    <span class="metric success-rate">{{ category.successRate }}% success</span>
+                  </div>
+                </div>
+                <div class="category-chart">
+                  <div class="progress-bar">
+                    <div class="progress-fill" [style.width.%]="category.successRate"></div>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-chart-bar"></i>
+            <p>No category statistics available</p>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Recent Actions -->
+    <div class="panel recent-actions">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-clock"></i> Recent Actions</h3>
+      </div>
+      <div class="panel-content">
+        @if (recentActions.length > 0) {
+          <div class="actions-list">
+            @for (action of recentActions; track action.ID) {
+              <div class="action-item" (click)="openAction(action)">
+                <div class="action-icon">
+                  <i [class]="getTypeIcon(action.Type)"></i>
+                </div>
+                <div class="action-info">
+                  <div class="action-name">{{ action.Name }}</div>
+                  <div class="action-description">{{ action.Description || 'No description' }}</div>
+                </div>
+                <div class="action-status">
+                  <kendo-chip 
+                    [themeColor]="getStatusColor(action.Status)"
+                    [size]="'small'">
+                    {{ action.Status }}
+                  </kendo-chip>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-cogs"></i>
+            <p>No recent actions found</p>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Recent Executions -->
+    <div class="panel recent-executions">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-history"></i> Recent Executions</h3>
+      </div>
+      <div class="panel-content">
+        @if (recentExecutions.length > 0) {
+          <div class="executions-list">
+            @for (execution of recentExecutions; track execution.ID) {
+              <div class="execution-item" (click)="openExecution(execution)">
+                <div class="execution-time">
+                  {{ execution.StartedAt | date:'MMM d, HH:mm' }}
+                </div>
+                <div class="execution-info">
+                  <div class="execution-action">Action ID: {{ execution.ActionID }}</div>
+                  <div class="execution-user">User: {{ execution.UserID }}</div>
+                </div>
+                <div class="execution-result">
+                  <kendo-chip 
+                    [themeColor]="execution.ResultCode === 'Success' ? 'success' : 'error'"
+                    [size]="'small'">
+                    {{ execution.ResultCode || 'Unknown' }}
+                  </kendo-chip>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-history"></i>
+            <p>No recent executions found</p>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+    </div>
+  }
+</div>

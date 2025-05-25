@@ -17,6 +17,16 @@ import { PromptManagementComponent } from './AI/components/prompt-management.com
 import { AgentConfigurationComponent } from './AI/components/agent-configuration.component';
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system-configuration.component';
+import { ActionsManagementDashboardComponent } from './Actions/actions-management-dashboard.component';
+import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
+import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
+import { CodeManagementComponent } from './Actions/components/code-management.component';
+import { EntityIntegrationComponent } from './Actions/components/entity-integration.component';
+import { SecurityPermissionsComponent } from './Actions/components/security-permissions.component';
+import { ActionsListViewComponent } from './Actions/components/actions-list-view.component';
+import { ExecutionsListViewComponent } from './Actions/components/executions-list-view.component';
+import { CategoriesListViewComponent } from './Actions/components/categories-list-view.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -35,7 +45,17 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
     PromptManagementComponent,
     AgentConfigurationComponent,
     ExecutionMonitoringComponent,
-    SystemConfigurationComponent
+    SystemConfigurationComponent,
+    ActionsManagementDashboardComponent,
+    ActionsOverviewComponent,
+    ActionsExecutionMonitoringComponent,
+    ScheduledActionsComponent,
+    CodeManagementComponent,
+    EntityIntegrationComponent,
+    SecurityPermissionsComponent,
+    ActionsListViewComponent,
+    ExecutionsListViewComponent,
+    CategoriesListViewComponent
   ],
   imports: [
     CommonModule,
@@ -53,7 +73,8 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
   exports: [
     HelloDashboardComponent,
     EntityAdminDashboardComponent,
-    AIDashboardComponent
+    AIDashboardComponent,
+    ActionsManagementDashboardComponent
   ]
 })
 export class DashboardsModule { }

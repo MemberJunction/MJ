@@ -1,0 +1,103 @@
+<div class="actions-management-dashboard" mjFillContainer>
+  <div class="dashboard-header">
+    <h2 class="dashboard-title">
+      <i class="fa-solid fa-cogs"></i>
+      Actions Management
+    </h2>
+    <div class="dashboard-subtitle">
+      Manage actions, execution monitoring, and integrations
+    </div>
+  </div>
+
+  <div class="dashboard-content">
+    <!-- Bottom Navigation -->
+    <kendo-bottomnavigation
+      [items]="navigationConfig"
+      (itemClick)="onNavigationChange($event)"
+      class="actions-navigation">
+    </kendo-bottomnavigation>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      @if (subView === null) {
+        <!-- Main tab content when no sub-view is active -->
+        @if (activeTab === 'overview') {
+          <mj-actions-overview
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (showActionsListView)="onShowActionsListView()"
+            (showExecutionsListView)="onShowExecutionsListView()"
+            (showCategoriesListView)="onShowCategoriesListView()">
+          </mj-actions-overview>
+        }
+        
+        @if (activeTab === 'execution') {
+          <mj-execution-monitoring
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (showExecutionsListView)="onShowExecutionsListView()">
+          </mj-execution-monitoring>
+        }
+        
+        @if (activeTab === 'scheduled') {
+          <mj-scheduled-actions
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-scheduled-actions>
+        }
+        
+        @if (activeTab === 'code') {
+          <mj-code-management
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-code-management>
+        }
+        
+        @if (activeTab === 'entities') {
+          <mj-entity-integration
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-entity-integration>
+        }
+        
+        @if (activeTab === 'security') {
+          <mj-security-permissions
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-security-permissions>
+        }
+      } @else {
+        <!-- Sub-view content -->
+        <div class="sub-view-container">
+          <div class="sub-view-header">
+            <button kendoButton 
+              [icon]="'chevron-left'" 
+              [fillMode]="'flat'"
+              (click)="onBackToOverview()"
+              class="back-button">
+              Back to {{ getCurrentTabLabel() }}
+            </button>
+          </div>
+          
+          @if (subView === 'actions-list') {
+            <mj-actions-list-view
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-actions-list-view>
+          }
+          
+          @if (subView === 'executions-list') {
+            <mj-executions-list-view
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-executions-list-view>
+          }
+          
+          @if (subView === 'categories-list') {
+            <mj-categories-list-view
+              (openEntityRecord)="onOpenEntityRecord($event)">
+            </mj-categories-list-view>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+    </div>
+  }
+</div>

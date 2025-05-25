@@ -52,9 +52,8 @@
       </div>
       
       <kendo-bottomnavigation 
-        [items]="navigationItems"
-        [selected]="activeTab"
-        (selectedChange)="onNavigationChange($event)"
+        [items]="navigationConfig"
+        (itemClick)="onNavigationChange($event)"
         class="ai-dashboard-nav">
       </kendo-bottomnavigation>
     </div>
