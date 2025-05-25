@@ -103,3 +103,53 @@ VALUES
     ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Result Cache'), 0, 25 ) --AI Result Cache
 
 
+
+
+/****************************************************/
+/********* Actions App + Dashboard Creation *********/
+/****************************************************/
+INSERT INTO __mj.Application 
+	(ID, Name, Description, DefaultForNewUser, Icon )
+VALUES
+	('02D5423E-F36B-1410-8DAC-00021F8B792E', 'Actions', 'Actions Framework', 1, 'fa-solid fa-hat-wizard')
+
+INSERT INTO __mj.Dashboard 
+	(ID, Name, Description, UserID, 
+     UIConfigDetails, Type, DriverClass) 
+VALUES 
+	('0BD5423E-F36B-1410-8DAC-00021F8B792E', 'Actions', 'Actions Framework Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', 
+     '', 'Code', 'ActionsManagement')
+
+INSERT INTO __mj.DashboardUserPreference 
+	(ID, DashboardID, ApplicationID, Scope, DisplayOrder)
+VALUES 
+	('12D5423E-F36B-1410-8DAC-00021F8B792E', '0BD5423E-F36B-1410-8DAC-00021F8B792E','02D5423E-F36B-1410-8DAC-00021F8B792E','App',0)
+
+-- Create the ApplicationEntity records to link Actions entities to the Actions application
+-- HIGH PRIORITY - DefaultForNewUser = 1 (shown by default to new users)
+INSERT INTO __mj.ApplicationEntity 
+    (ApplicationID, EntityID, DefaultForNewUser, Sequence)
+VALUES
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Actions'), 1, 1 ), --Actions
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Categories'), 1, 2 ), --Action Categories
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Execution Logs'), 1, 3 ), --Action Execution Logs
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Actions'), 1, 4 ), --Entity Actions
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Params'), 1, 5 ), --Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Scheduled Actions'), 1, 6 ), --Scheduled Actions
+
+-- MEDIUM PRIORITY - DefaultForNewUser = 0 (available but not shown by default)
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Libraries'), 0, 11 ), --Action Libraries
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Result Codes'), 0, 12 ), --Action Result Codes
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Filters'), 0, 13 ), --Action Filters
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Authorizations'), 0, 14 ), --Action Authorizations
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Scheduled Action Params'), 0, 15 ), --Scheduled Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Context Types'), 0, 16 ), --Action Context Types
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Contexts'), 0, 17 ), --Action Contexts
+
+-- LOW PRIORITY - DefaultForNewUser = 0 (AI and advanced features)
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Params'), 0, 23 ), --Entity Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Invocation Types'), 0, 24 ), --Entity Action Invocation Types
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Invocations'), 0, 25 ), --Entity Action Invocations
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Filters'), 0, 26 ) --Entity Action Filters
+
+
