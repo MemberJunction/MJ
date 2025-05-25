@@ -60,17 +60,17 @@ VALUES
 
 
 -------- AI App + Dashboard Creation
-INSERT INTO __mj.Application 
+INSERT INTO ${flyway:defaultSchema}.Application 
 	(ID, Name, Description, DefaultForNewUser, Icon )
 VALUES
 	('7ACD423E-F36B-1410-8DAC-00021F8B792E', 'AI', 'AI Administration', 1, 'fa-solid fa-robot')
 
-INSERT INTO __mj.Dashboard 
+INSERT INTO ${flyway:defaultSchema}.Dashboard 
 	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass) 
 VALUES 
 	('7DCD423E-F36B-1410-8DAC-00021F8B792E', 'AI Admin', 'AI Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'AIDashboard')
 
-INSERT INTO __mj.DashboardUserPreference 
+INSERT INTO ${flyway:defaultSchema}.DashboardUserPreference 
 	(DashboardID, ApplicationID, Scope, DisplayOrder)
 VALUES 
 	('7DCD423E-F36B-1410-8DAC-00021F8B792E','7ACD423E-F36B-1410-8DAC-00021F8B792E','App',0)
@@ -78,29 +78,29 @@ VALUES
 
 -- Create the ApplicationEntity records to link AI entities to the AI application
 -- HIGH PRIORITY - DefaultForNewUser = 1 (shown by default to new users)
-INSERT INTO __mj.ApplicationEntity 
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity 
     (ApplicationID, EntityID, DefaultForNewUser, Sequence)
 VALUES
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Models'), 1, 1 ), --AI Models
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Model Types'), 1, 2 ), --AI Model Types
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agents'), 1, 3 ), --AI Agents
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompts'), 1, 4 ), --AI Prompts
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Conversations'), 1, 5 ), --Conversations
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Conversation Details'), 1, 6 ), --Conversation Details
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Models'), 1, 1 ), --AI Models
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Model Types'), 1, 2 ), --AI Model Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agents'), 1, 3 ), --AI Agents
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Prompts'), 1, 4 ), --AI Prompts
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Conversations'), 1, 5 ), --Conversations
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Conversation Details'), 1, 6 ), --Conversation Details
 
 -- MEDIUM PRIORITY - DefaultForNewUser = 0 (available but not shown by default)
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Models'), 0, 11 ), --AI Agent Models
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Actions'), 0, 12 ), --AI Agent Actions
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompt Categories'), 0, 13 ), --AI Prompt Categories
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Prompt Types'), 0, 14 ), --AI Prompt Types
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Model Actions'), 0, 15 ), --AI Model Actions
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Models'), 0, 11 ), --AI Agent Models
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Actions'), 0, 12 ), --AI Agent Actions
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Prompt Categories'), 0, 13 ), --AI Prompt Categories
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Prompt Types'), 0, 14 ), --AI Prompt Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Model Actions'), 0, 15 ), --AI Model Actions
 
 -- LOW PRIORITY - DefaultForNewUser = 0 (advanced features and logging)
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Requests'), 0, 21 ), --AI Agent Requests
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Learning Cycles'), 0, 22 ), --AI Agent Learning Cycles
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Notes'), 0, 23 ), --AI Agent Notes
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Agent Note Types'), 0, 24 ), --AI Agent Note Types
-    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'AI Result Cache'), 0, 25 ) --AI Result Cache
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Requests'), 0, 21 ), --AI Agent Requests
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Learning Cycles'), 0, 22 ), --AI Agent Learning Cycles
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Notes'), 0, 23 ), --AI Agent Notes
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Agent Note Types'), 0, 24 ), --AI Agent Note Types
+    ('7ACD423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'AI Result Cache'), 0, 25 ) --AI Result Cache
 
 
 
@@ -108,48 +108,72 @@ VALUES
 /****************************************************/
 /********* Actions App + Dashboard Creation *********/
 /****************************************************/
-INSERT INTO __mj.Application 
+INSERT INTO ${flyway:defaultSchema}.Application 
 	(ID, Name, Description, DefaultForNewUser, Icon )
 VALUES
 	('02D5423E-F36B-1410-8DAC-00021F8B792E', 'Actions', 'Actions Framework', 1, 'fa-solid fa-hat-wizard')
 
-INSERT INTO __mj.Dashboard 
+INSERT INTO ${flyway:defaultSchema}.Dashboard 
 	(ID, Name, Description, UserID, 
      UIConfigDetails, Type, DriverClass) 
 VALUES 
 	('0BD5423E-F36B-1410-8DAC-00021F8B792E', 'Actions', 'Actions Framework Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', 
      '', 'Code', 'ActionsManagement')
 
-INSERT INTO __mj.DashboardUserPreference 
+INSERT INTO ${flyway:defaultSchema}.DashboardUserPreference 
 	(ID, DashboardID, ApplicationID, Scope, DisplayOrder)
 VALUES 
 	('12D5423E-F36B-1410-8DAC-00021F8B792E', '0BD5423E-F36B-1410-8DAC-00021F8B792E','02D5423E-F36B-1410-8DAC-00021F8B792E','App',0)
 
 -- Create the ApplicationEntity records to link Actions entities to the Actions application
 -- HIGH PRIORITY - DefaultForNewUser = 1 (shown by default to new users)
-INSERT INTO __mj.ApplicationEntity 
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity 
     (ApplicationID, EntityID, DefaultForNewUser, Sequence)
 VALUES
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Actions'), 1, 1 ), --Actions
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Categories'), 1, 2 ), --Action Categories
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Execution Logs'), 1, 3 ), --Action Execution Logs
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Actions'), 1, 4 ), --Entity Actions
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Params'), 1, 5 ), --Action Params
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Scheduled Actions'), 1, 6 ), --Scheduled Actions
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Actions'), 1, 1 ), --Actions
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Categories'), 1, 2 ), --Action Categories
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Execution Logs'), 1, 3 ), --Action Execution Logs
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Actions'), 1, 4 ), --Entity Actions
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Params'), 1, 5 ), --Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Scheduled Actions'), 1, 6 ), --Scheduled Actions
 
 -- MEDIUM PRIORITY - DefaultForNewUser = 0 (available but not shown by default)
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Libraries'), 0, 11 ), --Action Libraries
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Result Codes'), 0, 12 ), --Action Result Codes
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Filters'), 0, 13 ), --Action Filters
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Authorizations'), 0, 14 ), --Action Authorizations
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Scheduled Action Params'), 0, 15 ), --Scheduled Action Params
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Context Types'), 0, 16 ), --Action Context Types
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Action Contexts'), 0, 17 ), --Action Contexts
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Libraries'), 0, 11 ), --Action Libraries
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Result Codes'), 0, 12 ), --Action Result Codes
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Filters'), 0, 13 ), --Action Filters
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Authorizations'), 0, 14 ), --Action Authorizations
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Scheduled Action Params'), 0, 15 ), --Scheduled Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Context Types'), 0, 16 ), --Action Context Types
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Action Contexts'), 0, 17 ), --Action Contexts
 
 -- LOW PRIORITY - DefaultForNewUser = 0 (AI and advanced features)
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Params'), 0, 23 ), --Entity Action Params
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Invocation Types'), 0, 24 ), --Entity Action Invocation Types
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Invocations'), 0, 25 ), --Entity Action Invocations
-    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM __mj.Entity WHERE Name = 'Entity Action Filters'), 0, 26 ) --Entity Action Filters
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Action Params'), 0, 23 ), --Entity Action Params
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Action Invocation Types'), 0, 24 ), --Entity Action Invocation Types
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Action Invocations'), 0, 25 ), --Entity Action Invocations
+    ('02D5423E-F36B-1410-8DAC-00021F8B792E', (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'Entity Action Filters'), 0, 26 ) --Entity Action Filters
 
 
+-- Allow Developer Role to have edit on *AI Prompt* entities
+UPDATE ${flyway:defaultSchema}.EntityPermission SET CanCreate=1,CanUpdate=1,CanDelete=1 WHERE ID IN (
+      SELECT ID FROM ${flyway:defaultSchema}.vwEntityPermissions WHERE RoleName='Developer' AND 
+	                       Entity LIKE '%AI Prompt%'
+);
+
+-- CREATE AI Prompt Types
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('A6DA423E-F36B-1410-8DAC-00021F8B792E', 'Chat','LLM Chat');
+
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('ABDA423E-F36B-1410-8DAC-00021F8B792E', 'Text To Video (TTV)','Uses a generative video model to convert text to video');
+
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('B0DA423E-F36B-1410-8DAC-00021F8B792E', 'Text To Speech','Uses a generative audio model to convert text to speech');
+
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('B5DA423E-F36B-1410-8DAC-00021F8B792E', 'Audio to Text','Uses an audio model to convert speech to text (transcript)');
+
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('BADA423E-F36B-1410-8DAC-00021F8B792E', 'Video to Text','Uses a video model to convert the audio portion of a video to text (transcript)');
+
+INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
+VALUES ('BFDA423E-F36B-1410-8DAC-00021F8B792E', 'Generate Image','Uses a generative image model to convert text to an image');
