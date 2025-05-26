@@ -432,24 +432,18 @@
               </div>
               
               <div class="editor-container">
-                @if (isEditing) {
-                  <mj-code-editor
-                    [value]="editorContent"
-                    [languages]="supportedLanguages"
-                    [language]="editorLanguage"
-                    [placeholder]="'Enter your Nunjucks template here...'"
-                    [lineWrapping]="true"
-                    [highlightWhitespace]="false"
-                    [indentWithTab]="true"
-                    [indentUnit]="'  '"
-                    [readonly]="false"
-                    (change)="onEditorContentChange($event)">
-                  </mj-code-editor>
-                } @else {
-                  <div class="code-display">
-                    <pre><code>{{ editorContent || 'No template content' }}</code></pre>
-                  </div>
-                }
+                <mj-code-editor
+                  [value]="editorContent"
+                  [languages]="supportedLanguages"
+                  [language]="editorLanguage"
+                  [placeholder]="'Enter your Nunjucks template here...'"
+                  [lineWrapping]="true"
+                  [highlightWhitespace]="false"
+                  [indentWithTab]="true"
+                  [indentUnit]="'  '"
+                  [readonly]="!isEditing"
+                  (change)="onEditorContentChange($event)">
+                </mj-code-editor>
               </div>
               
               <!-- Editor Help -->

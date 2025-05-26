@@ -6,6 +6,7 @@ import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 
 interface PromptWithTemplate {
   prompt: AIPromptEntity;
@@ -438,7 +439,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   }
   
   public onEditorContentChange(content: string): void {
-    this.editorContent = content;
+    // don't modify our modle, it is directly bound to the editor
     this.isDirty = true;
   }
 
@@ -458,17 +459,35 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
         // Create new template content
         const templateContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents', md.CurrentUser);
         templateContent.TemplateText = this.editorContent;
-        // Note: TypeCodeGenerated property may not exist, setting basic properties
-        
+
+        // make sure the template engine metadata is set correctly
+        await TemplateEngineBase.Instance.Config(false);
+        const tcType = TemplateEngineBase.Instance.TemplateContentTypes.find(tct => tct.Name.trim().toLowerCase() === 'text');
+        if (!tcType) {
+          throw new Error('Template content type "text" not found');
+        }
+        templateContent.TypeID = tcType.ID;
+        templateContent.Priority = 0; // Default priority
+
         // We need to link to a template, create one if needed
         if (!this.selectedPrompt.template) {
           const template = await md.GetEntityObject<TemplateEntity>('Templates', md.CurrentUser);
           template.Name = this.selectedPrompt.prompt.Name + ' Template';
           template.Description = 'Template for ' + this.selectedPrompt.prompt.Name;
+          template.UserID = md.CurrentUser.ID;
           
           if (await template.Save()) {
             templateContent.TemplateID = template.ID;
             this.selectedPrompt.template = template;
+          }
+          else {
+            // we have an error saving the template
+            const errorMessage = template.LatestResult?.Message || 'Unknown error occurred while saving template';
+            console.error('Template save failed:', errorMessage);
+            LogError('Template save failed', undefined, errorMessage);
+            this.mjNotificationsService.CreateSimpleNotification(errorMessage, 'error', 3500);
+            this.error = `Failed to save template: ${errorMessage}`;
+            return;
           }
         } else {
           templateContent.TemplateID = this.selectedPrompt.template.ID;
@@ -478,12 +497,29 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
           templateContentId = templateContent.ID;
           this.selectedPrompt.templateContent = templateContent;
         }
+        else {
+          // Handle save failure
+          const errorMessage = templateContent.LatestResult?.Message || 'Unknown error occurred while saving template content';
+          console.error('Template content save failed:', errorMessage);
+          LogError('Template content save failed', undefined, errorMessage);
+          this.mjNotificationsService.CreateSimpleNotification(errorMessage, 'error', 3500);
+          this.error = `Failed to save template content: ${errorMessage}`;
+          return;
+        }
       } else {
         // Update existing template content
         const templateContent = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
         await templateContent.Load(templateContentId);
         templateContent.TemplateText = this.editorContent;
-        await templateContent.Save();
+        if (!await templateContent.Save()) {
+          // Handle save failure
+          const errorMessage = templateContent.LatestResult?.Message || 'Unknown error occurred while saving template content';
+          console.error('Template content update failed:', errorMessage);
+          LogError('Template content update failed', undefined, errorMessage);
+          this.mjNotificationsService.CreateSimpleNotification(errorMessage, 'error', 3500);
+          this.error = `Failed to update template content: ${errorMessage}`;
+          return;
+        }
       }
 
       // Save the prompt
