@@ -5,7 +5,6 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { HelloDashboardComponent } from './demo/hello-dashboard.component';
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { ERDCompositeComponent } from './EntityAdmin/components/erd-composite.component';
 import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filter-panel.component';
@@ -38,7 +37,6 @@ import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 @NgModule({
   declarations: [
-    HelloDashboardComponent,
     EntityAdminDashboardComponent,
     ERDCompositeComponent,
     EntityFilterPanelComponent,
@@ -79,7 +77,6 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
     ButtonsModule
   ],
   exports: [
-    HelloDashboardComponent,
     EntityAdminDashboardComponent,
     AIDashboardComponent,
     ActionsManagementDashboardComponent
