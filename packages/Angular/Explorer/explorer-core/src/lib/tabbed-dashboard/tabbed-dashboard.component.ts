@@ -93,6 +93,21 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
       const md = new Metadata();
       const rv = new RunView();
       const appFilter = this.ApplicationID ? ` AND ApplicationID='${this.ApplicationID}'` : '';
+
+      const ds = await md.GetAndCacheDatasetByName("MJ_Metadata"); // get the main MJ_Metadata dataset which is usually already cached
+      if (!ds || !ds.Success) {
+        this.error = ds.Status || 'Failed to load metadata dataset';
+        this.dashboards = [];
+        return;
+      }
+      const dashList = ds.Results.find(r => r.Code === 'Dashboards');
+      if (!dashList) {
+        this.error = 'Dashboards dataset not found';
+        this.dashboards = [];
+        return;
+      }
+
+      // now get the data from the dataset which is usually cached
       const scope = this.ApplicationID ? 'App' : 'Global';
       const baseCondition = `Scope='${scope}'${appFilter}`;
       const userFilter = `UserID='${md.CurrentUser.ID}' AND ${baseCondition}`;
@@ -110,39 +125,31 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         ResultType: 'entity_object',
         OrderBy: 'DisplayOrder',
       };      
-      const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>(params);
-      if (prefsResult && prefsResult.Success) {
-        if (prefsResult.Results.length > 0) {
-          // User has dashboard preferences, load the dashboards
-          const dashResults = await rv.RunView<DashboardEntity>({
-            EntityName: 'Dashboards',
-            ExtraFilter: `ID IN (${prefsResult.Results.map(p => `'${p.DashboardID}'`).join(',')})`,
-            ResultType: 'entity_object',
-          })
-          if (dashResults && dashResults.Success) {
-            // now sort the dashboards based on the user preferences
-            this.dashboards = dashResults.Results.sort((a, b) => {
-              const prefA = prefsResult.Results.find(p => p.DashboardID === a.ID);
-              const prefB = prefsResult.Results.find(p => p.DashboardID === b.ID);
-              if (prefA && prefB) {
-                // we want to sort by DisplayOrder where lower numbers come first
-                return (prefA.DisplayOrder || 0) - (prefB.DisplayOrder || 0);
-              }
-              return 0;
-            });
-          } 
-          else {
-            this.error = dashResults?.ErrorMessage || 'Failed to load dashboards';
-            this.dashboards = [];
-          }
-        } else {
-          // No dashboard preferences found - this is normal, show default content
+
+      const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>(params); // Use RunView for user preferences because we don't want to cache this data as it would cause cache being refreshed all the time since
+                                                                                   // user preferences can change frequently and we want to ensure we always have the latest preferences for the current user    
+      if (prefsResult && prefsResult.Success && prefsResult.Results.length > 0) {
+        const dashResults = dashList.Results.filter((d: DashboardEntity) => {
+          return prefsResult.Results.some((p: DashboardUserPreferenceEntity) => p.DashboardID === d.ID);
+        });
+        if (dashResults.length > 0) {
+          // now sort the dashboards based on the user preferences
+          this.dashboards = dashResults.sort((a, b) => {
+            const prefA = prefsResult.Results.find(p => p.DashboardID === a.ID);
+            const prefB = prefsResult.Results.find(p => p.DashboardID === b.ID);
+            if (prefA && prefB) {
+              // we want to sort by DisplayOrder where lower numbers come first
+              return (prefA.DisplayOrder || 0) - (prefB.DisplayOrder || 0);
+            }
+            return 0;
+          });
+        } 
+        else {
+          this.error = 'Failed to load dashboards';
           this.dashboards = [];
         }
-      }
-      else {
-        // Error loading preferences
-        this.error = prefsResult?.ErrorMessage || 'Failed to load user preferences';
+      } else {
+        // No dashboard preferences found - this is normal, show default content
         this.dashboards = [];
       }
     } catch (error) {
@@ -221,6 +228,9 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
               // now that we have state loaded and our events are wired up, we can set the config
               instance.Config = config;
               instance.Refresh();
+
+              // now invoke a manual resize
+              InvokeManualResize(100);
             }
           }, 0);
           
@@ -296,6 +306,9 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
             }
           }
         });
+
+        // now invoke a manual resize
+        InvokeManualResize(100);
       }
     }
   }
