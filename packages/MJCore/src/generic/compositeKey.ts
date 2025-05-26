@@ -14,6 +14,17 @@ export class KeyValuePair {
      * Value of the key value pair
      */
     Value: any
+
+    /**
+     * Construct a new instance by optionally providing a field name and value.
+     * This is useful for creating a key value pair on the fly without needing to set the properties manually.
+     * @param fieldName 
+     * @param value 
+     */
+    constructor(fieldName?: string, value?: any) {
+        this.FieldName = fieldName || '';
+        this.Value = value;
+    }
 }
 
 /**
@@ -405,4 +416,17 @@ export class CompositeKey extends FieldValueCollection {
 
         return true;
     }
+}
+
+/**
+ * Utility function to create a simple composite key from a single key value pair which is the
+ * most common use case for composite keys.
+ * @param fieldName 
+ * @param value 
+ * @returns 
+ */
+export function SimpleCompositeKey(fieldName: string, value: any): CompositeKey {
+    let compositeKey = new CompositeKey();
+    compositeKey.LoadFromSingleKeyValuePair(fieldName, value);
+    return compositeKey;
 }
