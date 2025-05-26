@@ -86,7 +86,7 @@ ADD [AutoRowCountFrequency] int NULL,
 ALTER TABLE [${flyway:defaultSchema}].[Entity]
 ADD CONSTRAINT [CK_Entity_Status]
 CHECK ([Status] IN (N'Active', N'Deprecated', N'Disabled'));
-GO; -- commit batch
+GO -- commit batch
 
 -- Add documentation for the AutoRowCountFrequency column
 EXEC sp_addextendedproperty
