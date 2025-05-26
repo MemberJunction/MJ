@@ -48,7 +48,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   public editorMode = 'nunjucks';
   public showPreview = false;
   public supportedLanguages: LanguageDescription[] = languages;
-  public editorLanguage = 'twig';
+  public editorLanguage = 'jinja2';
   
   // Category creation
   public newCategoryName = '';

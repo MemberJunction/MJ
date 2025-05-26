@@ -257,36 +257,71 @@
       gap: 8px;
     }
     
-    .hierarchy-legend {
+    .hierarchy-controls {
       display: flex;
-      gap: 16px;
+      align-items: center;
+      gap: 20px;
       
-      .legend-item {
+      .zoom-controls {
         display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: #666;
+        gap: 4px;
         
-        .legend-circle {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          border: 2px solid;
+        .zoom-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: white;
+          border: 1px solid #e0e0e0;
+          border-radius: 4px;
+          color: #666;
+          cursor: pointer;
+          transition: all 0.2s;
           
-          &.current {
-            background: #2196f3;
-            border-color: #1976d2;
+          &:hover {
+            background: #f8f9fa;
+            border-color: #2196f3;
+            color: #2196f3;
           }
           
-          &.exposed {
-            background: #4caf50;
-            border-color: #388e3c;
+          i {
+            font-size: 12px;
           }
+        }
+      }
+      
+      .hierarchy-legend {
+        display: flex;
+        gap: 16px;
+        
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: #666;
           
-          &.normal {
-            background: white;
-            border-color: #ccc;
+          .legend-rect {
+            width: 20px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid;
+            
+            &.level-0 {
+              background: #1976d2;
+              border-color: #1565c0;
+            }
+            
+            &.level-1 {
+              background: #388e3c;
+              border-color: #2e7d32;
+            }
+            
+            &.level-2 {
+              background: #f57c00;
+              border-color: #ef6c00;
+            }
           }
         }
       }
@@ -298,6 +333,29 @@
     min-height: 300px;
     overflow: hidden;
     position: relative;
+    
+    .chart-help {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
+      z-index: 10;
+      
+      small {
+        font-size: 11px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        
+        i {
+          color: #2196f3;
+        }
+      }
+    }
     
     .empty-hierarchy {
       display: flex;
@@ -349,84 +407,6 @@
     }
   }
   
-  .hierarchy-navigation {
-    padding: 16px 20px;
-    border-top: 1px solid #f0f0f0;
-    background: #fafafa;
-    
-    &.children, &.no-children {
-      .children-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-        
-        h4 {
-          margin: 0;
-          font-size: 14px;
-          font-weight: 600;
-          color: #333;
-        }
-        
-        .add-child-btn {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          background: #2196f3;
-          border: none;
-          border-radius: 4px;
-          color: white;
-          font-size: 12px;
-          cursor: pointer;
-          transition: background 0.2s;
-          
-          &:hover {
-            background: #1976d2;
-          }
-        }
-      }
-    }
-    
-    .nav-children {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: white;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-      
-      &:hover {
-        border-color: #2196f3;
-        background: #f3f8ff;
-      }
-      
-      &.parent {
-        background: #e3f2fd;
-        border-color: #2196f3;
-      }
-      
-      span {
-        font-size: 12px;
-        font-weight: 500;
-        color: #333;
-      }
-      
-      small {
-        font-size: 10px;
-        color: #666;
-      }
-    }
-  }
 }
 
 // Prompts Section

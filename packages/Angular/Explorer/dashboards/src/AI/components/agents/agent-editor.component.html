@@ -98,23 +98,60 @@
               <i class="fa-solid fa-sitemap"></i>
               Agent Hierarchy
             </h3>
-            <div class="hierarchy-legend">
-              <div class="legend-item">
-                <div class="legend-circle current"></div>
-                <span>Current Agent</span>
+            
+            <div class="hierarchy-controls">
+              <div class="zoom-controls">
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="zoomIn()"
+                  title="Zoom In">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="zoomOut()"
+                  title="Zoom Out">
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="resetZoom()"
+                  title="Reset Zoom">
+                  <i class="fa-solid fa-expand"></i>
+                </button>
               </div>
-              <div class="legend-item">
-                <div class="legend-circle exposed"></div>
-                <span>Exposed as Action</span>
-              </div>
-              <div class="legend-item">
-                <div class="legend-circle normal"></div>
-                <span>Standard Agent</span>
+              
+              <div class="hierarchy-legend">
+                <div class="legend-item">
+                  <div class="legend-rect level-0"></div>
+                  <span>Root</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-rect level-1"></div>
+                  <span>Level 1</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-rect level-2"></div>
+                  <span>Level 2+</span>
+                </div>
               </div>
             </div>
           </div>
           
-          <div class="hierarchy-chart" #hierarchyChart>
+          <div class="hierarchy-chart" #hierarchyChart mjFillContainer>
+            <!-- Help text overlay -->
+            @if (hierarchyData && (hasChildren() || hasParent())) {
+              <div class="chart-help">
+                <small>
+                  <i class="fa-solid fa-hand-pointer"></i>
+                  Drag to pan • Use zoom controls or scroll to zoom • Click nodes to navigate
+                </small>
+              </div>
+            }
+            
             <!-- Empty state for hierarchy -->
             @if (!hierarchyData || (!hasChildren() && !hasParent())) {
               <div class="empty-hierarchy">
@@ -128,48 +165,6 @@
               </div>
             }
           </div>
-          
-          <!-- Navigation Breadcrumb -->
-          @if (selectedNode && selectedNode.parent) {
-            <div class="hierarchy-navigation">
-              <div class="nav-item parent" (click)="navigateToAgent(selectedNode.parent.id)">
-                <i class="fa-solid fa-chevron-up"></i>
-                <span>{{ selectedNode.parent.name }}</span>
-                <small>Parent</small>
-              </div>
-            </div>
-          }
-          
-          @if (selectedNode && selectedNode.children && selectedNode.children.length > 0) {
-            <div class="hierarchy-navigation children">
-              <div class="children-header">
-                <h4>Child Agents ({{ getChildCount() }})</h4>
-                <button class="add-child-btn" (click)="openCreateSubAgent()" title="Add Child Agent">
-                  <i class="fa-solid fa-plus"></i>
-                  Add Child
-                </button>
-              </div>
-              <div class="nav-children">
-                @for (child of selectedNode.children; track child.id) {
-                  <div class="nav-item child" (click)="navigateToAgent(child.id)">
-                    <i [class]="getExecutionModeIcon(child.agent.ExecutionMode)"></i>
-                    <span>{{ child.name }}</span>
-                    <small>{{ child.agent.ExecutionMode }}</small>
-                  </div>
-                }
-              </div>
-            </div>
-          } @else if (selectedNode && !hasChildren()) {
-            <div class="hierarchy-navigation no-children">
-              <div class="children-header">
-                <h4>No Child Agents</h4>
-                <button class="add-child-btn" (click)="openCreateSubAgent()" title="Add Child Agent">
-                  <i class="fa-solid fa-plus"></i>
-                  Add First Child
-                </button>
-              </div>
-            </div>
-          }
         </div>
       }
       

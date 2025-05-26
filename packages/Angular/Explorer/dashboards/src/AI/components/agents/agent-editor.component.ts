@@ -58,6 +58,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private g: any;
   private tree: any;
   private root: any;
+  private zoom: any;
 
   ngOnInit(): void {
     if (this.agentId) {
@@ -189,7 +190,6 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private initializeChart(): void {
     if (!this.hierarchyChartRef?.nativeElement) {
-      console.log('No hierarchy chart ref available');
       return;
     }
 
@@ -197,40 +197,43 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     const width = container.clientWidth || 800;
     const height = container.clientHeight || 600;
 
-    console.log('Initializing chart with dimensions:', width, 'x', height);
-
     // Clear any existing SVG
     d3.select(container).selectAll('*').remove();
 
+    // Create SVG with zoom/pan functionality
     this.svg = d3.select(container)
       .append('svg')
       .attr('width', width)
       .attr('height', height)
-      .style('background', '#fafafa');
+      .style('background', '#fafafa')
+      .style('border', '1px solid #e0e0e0');
 
-    this.g = this.svg.append('g')
-      .attr('transform', `translate(${width / 2}, 50)`);
+    // Create zoom behavior with wheel support
+    this.zoom = d3.zoom()
+      .scaleExtent([0.1, 3])
+      .wheelDelta((event: any) => -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002) * (event.ctrlKey ? 10 : 1))
+      .on('zoom', (event) => {
+        this.g.attr('transform', event.transform);
+      });
 
-    // Create tree layout
+    // Apply zoom to SVG
+    this.svg.call(this.zoom);
+
+    // Create main group for chart content
+    this.g = this.svg.append('g');
+
+    // Create tree layout with proper spacing - use nodeSize for fixed spacing
     this.tree = d3.tree()
-      .size([width - 100, height - 100])
-      .separation((a: any, b: any) => a.parent === b.parent ? 1 : 2);
+      .nodeSize([150, 100]) // Fixed node spacing: 150px horizontal, 100px vertical
+      .separation((a: any, b: any) => a.parent === b.parent ? 1 : 1.5);
 
-    console.log('Chart initialized, rendering hierarchy...');
     this.renderHierarchy();
   }
 
   private renderHierarchy(): void {
     if (!this.hierarchyData || !this.g || !this.tree) {
-      console.log('Cannot render hierarchy:', {
-        hierarchyData: !!this.hierarchyData,
-        g: !!this.g,
-        tree: !!this.tree
-      });
       return;
     }
-
-    console.log('Rendering hierarchy with data:', this.hierarchyData);
 
     // Create hierarchy
     this.root = d3.hierarchy(this.hierarchyData);
@@ -239,8 +242,22 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     // Clear previous render
     this.g.selectAll('*').remove();
 
+    // Get container dimensions
+    const container = this.hierarchyChartRef.nativeElement;
+    const containerWidth = container.clientWidth || 800;
+    
+    // Calculate the tree bounds after layout
+    const treeBounds = this.getTreeBounds(this.root);
+    
+    // Calculate centering offsets
+    const offsetX = (containerWidth - treeBounds.width) / 2 - treeBounds.minX;
+    const offsetY = 150; // Top margin for the tree
+    
+    // Apply transform to center the tree properly
+    this.g.attr('transform', `translate(${offsetX}, ${offsetY})`);
+
     // Draw links
-    const links = this.g.selectAll('.link')
+    this.g.selectAll('.link')
       .data(this.root.links())
       .enter().append('path')
       .attr('class', 'link')
@@ -248,8 +265,9 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         .x((d: any) => d.x)
         .y((d: any) => d.y))
       .style('fill', 'none')
-      .style('stroke', '#ccc')
-      .style('stroke-width', '2px');
+      .style('stroke', '#999')
+      .style('stroke-width', '2px')
+      .style('stroke-opacity', 0.6);
 
     // Draw nodes
     const nodes = this.g.selectAll('.node')
@@ -258,42 +276,155 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .attr('class', 'node')
       .attr('transform', (d: any) => `translate(${d.x}, ${d.y})`)
       .style('cursor', 'pointer')
-      .on('click', (event: any, d: any) => this.onNodeClick(d.data));
+      .on('click', (_event: any, d: any) => this.onNodeClick(d.data));
 
-    // Add circles for nodes
-    nodes.append('circle')
-      .attr('r', (d: any) => d.data.id === this.currentAgent?.ID ? 12 : 8)
-      .style('fill', (d: any) => {
-        if (d.data.id === this.currentAgent?.ID) return '#2196f3';
-        if (d.data.agent.ExposeAsAction) return '#4caf50';
-        return '#fff';
-      })
-      .style('stroke', (d: any) => d.data.id === this.currentAgent?.ID ? '#1976d2' : '#ccc')
-      .style('stroke-width', '2px');
+    // Add rectangles for nodes
+    const nodeWidth = 120;
+    const nodeHeight = 40;
+    
+    nodes.append('rect')
+      .attr('x', -nodeWidth / 2)
+      .attr('y', -nodeHeight / 2)
+      .attr('width', nodeWidth)
+      .attr('height', nodeHeight)
+      .attr('rx', 6)
+      .attr('ry', 6)
+      .style('fill', (d: any) => this.getNodeColor(d))
+      .style('stroke', (d: any) => this.getNodeStrokeColor(d))
+      .style('stroke-width', (d: any) => d.data.id === this.currentAgent?.ID ? '3px' : '2px')
+      .style('opacity', 0.9);
 
-    // Add labels
+    // Add node labels (agent names)
     nodes.append('text')
-      .attr('dy', 25)
+      .attr('dy', -2)
       .attr('text-anchor', 'middle')
-      .style('font-size', '12px')
-      .style('font-weight', (d: any) => d.data.id === this.currentAgent?.ID ? 'bold' : 'normal')
+      .style('font-size', '11px')
+      .style('font-weight', (d: any) => d.data.id === this.currentAgent?.ID ? 'bold' : '500')
+      .style('fill', '#333')
+      .style('pointer-events', 'none')
       .text((d: any) => {
         const name = d.data.name;
-        return name.length > 15 ? name.substring(0, 12) + '...' : name;
+        return name.length > 14 ? name.substring(0, 11) + '...' : name;
       });
 
-    // Add execution mode indicators
+    // Add execution mode labels
     nodes.append('text')
-      .attr('dy', -15)
+      .attr('dy', 12)
       .attr('text-anchor', 'middle')
-      .style('font-size', '10px')
+      .style('font-size', '9px')
       .style('fill', '#666')
-      .text((d: any) => d.data.agent.ExecutionMode.charAt(0));
+      .style('pointer-events', 'none')
+      .text((d: any) => d.data.agent.ExecutionMode);
+
+    // Add level indicators
+    nodes.append('text')
+      .attr('x', nodeWidth / 2 - 8)
+      .attr('y', -nodeHeight / 2 + 12)
+      .attr('text-anchor', 'middle')
+      .style('font-size', '8px')
+      .style('font-weight', 'bold')
+      .style('fill', '#fff')
+      .style('pointer-events', 'none')
+      .text((d: any) => `L${d.depth}`);
+  }
+
+  private getTreeBounds(root: any): { width: number, height: number, minX: number, maxX: number, minY: number, maxY: number } {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    
+    root.descendants().forEach((d: any) => {
+      minX = Math.min(minX, d.x);
+      maxX = Math.max(maxX, d.x);
+      minY = Math.min(minY, d.y);
+      maxY = Math.max(maxY, d.y);
+    });
+    
+    return {
+      width: maxX - minX,
+      height: maxY - minY,
+      minX,
+      maxX,
+      minY,
+      maxY
+    };
+  }
+
+  private getNodeColor(d: any): string {
+    const level = d.depth;
+    const isCurrentAgent = d.data.id === this.currentAgent?.ID;
+    
+    // Level-based color scheme
+    const levelColors = [
+      '#1976d2', // Level 0 (root) - Blue
+      '#388e3c', // Level 1 - Green  
+      '#f57c00', // Level 2 - Orange
+      '#7b1fa2', // Level 3 - Purple
+      '#c2185b', // Level 4 - Pink
+      '#5d4037'  // Level 5+ - Brown
+    ];
+    
+    const baseColor = levelColors[Math.min(level, levelColors.length - 1)];
+    
+    // Highlight current agent with brighter color
+    if (isCurrentAgent) {
+      return baseColor;
+    }
+    
+    // Make non-current agents slightly lighter
+    return this.lightenColor(baseColor, 0.3);
+  }
+
+  private getNodeStrokeColor(d: any): string {
+    const isCurrentAgent = d.data.id === this.currentAgent?.ID;
+    if (isCurrentAgent) {
+      return '#000';
+    }
+    return '#666';
+  }
+
+  private lightenColor(color: string, factor: number): string {
+    // Simple color lightening function
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    
+    const newR = Math.min(255, Math.floor(r + (255 - r) * factor));
+    const newG = Math.min(255, Math.floor(g + (255 - g) * factor));
+    const newB = Math.min(255, Math.floor(b + (255 - b) * factor));
+    
+    return `rgb(${newR}, ${newG}, ${newB})`;
   }
 
   public onNodeClick(node: AgentHierarchyNode): void {
     if (node.id !== this.currentAgent?.ID) {
       this.openAgent.emit(node.id);
+    }
+  }
+
+  public zoomIn(): void {
+    if (this.svg && this.zoom) {
+      this.svg.transition().call(
+        this.zoom.scaleBy, 1.5
+      );
+    }
+  }
+
+  public zoomOut(): void {
+    if (this.svg && this.zoom) {
+      this.svg.transition().call(
+        this.zoom.scaleBy, 1 / 1.5
+      );
+    }
+  }
+
+  public resetZoom(): void {
+    if (this.svg && this.zoom) {
+      // Reset to initial centered position
+      this.svg.transition().call(
+        this.zoom.transform,
+        d3.zoomIdentity
+      );
     }
   }
 
