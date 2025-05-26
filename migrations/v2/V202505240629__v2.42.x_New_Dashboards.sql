@@ -246,3 +246,51 @@ INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
                                     VALUES
                                        ('4EBEB02B-AC46-4440-948F-0FCD6C6C26DE', 4, 'JSON', 'JSON')
 
+
+/****************************************************/
+/********* Dashboard Metadata to MJ_Metadata dataset *********/
+/****************************************************/
+
+
+
+INSERT INTO ${flyway:defaultSchema}.DatasetItem 
+	(
+		Code, 
+		DatasetID, 
+		Sequence, 
+		EntityID, 
+		DateFieldToCheck,
+		__mj_CreatedAt,
+		__mj_UpdatedAt
+	)
+VALUES 
+	(
+		'Dashboards',
+		'E4ADCCEC-6A37-EF11-86D4-000D3A4E707E', 
+		23, 
+		'05248F34-2837-EF11-86D4-6045BDEE16E6', -- Dashboards
+		'__mj_UpdatedAt',
+		'2025-05-21 19:53:15.9200000 +00:00',
+		'2025-05-21 19:53:15.9200000 +00:00'
+	)
+
+INSERT INTO ${flyway:defaultSchema}.DatasetItem 
+	(
+		Code, 
+		DatasetID, 
+		Sequence, 
+		EntityID, 
+		DateFieldToCheck,
+		__mj_CreatedAt,
+		__mj_UpdatedAt
+	)
+VALUES 
+	(
+		'Dashboard_Categories',
+		'E4ADCCEC-6A37-EF11-86D4-000D3A4E707E', 
+		24, 
+		'26248F34-2837-EF11-86D4-6045BDEE16E6', -- Dashboard Categories
+		'__mj_UpdatedAt',
+		'2025-05-21 19:53:15.9200000 +00:00',
+		'2025-05-21 19:53:15.9200000 +00:00'
+	)
