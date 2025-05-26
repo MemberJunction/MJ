@@ -152,7 +152,16 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     '#33FFF6', // Cyan - Cool and refreshing
     '#FFD133', // Gold - Luxury and premium
     '#9C33FF', // Purple - Innovative and unique
-    '#FF8C33'  // Orange - Enthusiastic and friendly
+    '#FF8C33', // Orange - Enthusiastic and friendly
+    '#FF6B6B', // Light Red - Soft and welcoming
+    '#4ECDC4', // Teal - Modern and sophisticated
+    '#45B7D1', // Sky Blue - Fresh and clean
+    '#96CEB4', // Mint Green - Calming and natural
+    '#FFEAA7', // Pastel Yellow - Cheerful and light
+    '#DDA0DD', // Plum - Elegant and refined
+    '#FFB6C1', // Light Pink - Gentle and sweet
+    '#20B2AA', // Light Sea Green - Vibrant and lively
+    '#87CEEB'  // Sky Blue - Peaceful and serene
   ];
 
   /**
@@ -242,7 +251,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * @property {number} x - Horizontal velocity (pixels/second)
    * @property {number} y - Vertical velocity (pixels/second)
    */
-  private velocity = { x: 60, y: 40 };
+  private velocity = { x: 80, y: 60 };
 
   /**
    * Speed multiplier for the animation (1.0 = normal speed).
@@ -345,15 +354,25 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
   protected showStateUpdateNotification: boolean = false;
   
   /**
+   * Flag indicating whether the component is still loading initial state.
+   * Used to show loading indicator and hide animation until ready.
+   * 
+   * @protected - Accessible in template for conditional display
+   * @type {boolean}
+   * @default true
+   */
+  protected isLoading: boolean = true;
+  
+  
+  /**
    * Computed property that returns the current user state for persistence.
-   * Includes all user-customizable properties that should be saved and restored.
+   * Only includes user preferences, not dynamic animation state like position.
    * 
    * @private
    * @readonly
-   * @returns {object} User state object containing all persistent properties
+   * @returns {object} User state object containing persistent preferences
    * @property {string} lastColor - The user's selected text color
    * @property {string} themeColor - The user's selected theme color  
-   * @property {object} boxPosition - Current position of the animated box
    * @property {number} speed - Current animation speed multiplier
    * @property {string} featuredEntity - Currently displayed entity name
    */
@@ -361,7 +380,6 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     return {
       lastColor: this.textColor,
       themeColor: this.themeColor,
-      boxPosition: this.boxPosition,
       speed: this.speed,
       featuredEntity: this.featuredEntity
     };
@@ -415,6 +433,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
       this.UserStateChanged.emit(currentState);
     }
     
+    
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
@@ -444,7 +463,8 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    */
   /**
    * Loads user state from Config.userState if available.
-   * Called early in initialization to restore saved preferences.
+   * Only loads the 3 allowed values: speed, colors, and featured entity.
+   * Cleans up any unwanted legacy values.
    */
   private loadUserState(): void {
     console.log('🔄 HelloDashboard: Loading user state during initialization');
@@ -454,15 +474,16 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     console.log('💾 HelloDashboard: Retrieved user state:', state);
     
     if (state) {
-      console.log('✅ HelloDashboard: Restoring state from saved data');
+      console.log('✅ HelloDashboard: Restoring state from saved data (only allowed values)');
       
-      // Restore text color
+      // Only restore these 3 values - ignore everything else
+      // 1. Text color
       if (state.lastColor) {
         console.log(`🎨 HelloDashboard: Restoring text color: ${state.lastColor}`);
         this.textColor = state.lastColor;
       }
       
-      // Restore theme color (with fallback to text color for backward compatibility)
+      // 2. Theme color (with fallback to text color for backward compatibility)
       if (state.themeColor) {
         console.log(`🎨 HelloDashboard: Restoring theme color: ${state.themeColor}`);
         this.themeColor = state.themeColor;
@@ -471,20 +492,33 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
         this.themeColor = state.lastColor; // Fallback for older saved states
       }
       
-      // Restore animation properties
-      if (state.boxPosition) {
-        console.log(`📍 HelloDashboard: Restoring box position:`, state.boxPosition);
-        this.boxPosition = { ...state.boxPosition };
-      }
+      // 3. Animation speed
       if (state.speed !== undefined) {
         console.log(`⚡ HelloDashboard: Restoring speed: ${state.speed}`);
         this.speed = state.speed;
       }
       
-      // Restore entity display
+      // 4. Featured entity
       if (state.featuredEntity) {
         console.log(`🏢 HelloDashboard: Restoring featured entity: ${state.featuredEntity}`);
         this.featuredEntity = state.featuredEntity;
+      }
+      
+      // Clean up user state by saving only the allowed values
+      const cleanState = {
+        lastColor: this.textColor,
+        themeColor: this.themeColor,
+        speed: this.speed,
+        featuredEntity: this.featuredEntity
+      };
+      
+      // If the current state has extra keys, clean it up
+      if (Object.keys(state).length > 4 || 
+          state.hasOwnProperty('boxPosition') || 
+          state.hasOwnProperty('velocity') ||
+          state.hasOwnProperty('curveMotion')) {
+        console.log('🧪 HelloDashboard: Cleaning up legacy user state values');
+        this.UserStateChanged.emit(cleanState);
       }
     } else {
       console.log('🆕 HelloDashboard: No saved state found, starting with slow speed and random colors');
@@ -496,10 +530,18 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     console.log('🎯 HelloDashboard: Final component state after loading:', {
       textColor: this.textColor,
       themeColor: this.themeColor,
-      boxPosition: this.boxPosition,
       speed: this.speed,
       featuredEntity: this.featuredEntity
     });
+    
+    // Mark loading as complete
+    this.isLoading = false;
+    
+    // Update container size after a delay to ensure DOM is fully rendered
+    setTimeout(() => {
+      console.log('🔄 HelloDashboard: Delayed container size update');
+      this.updateContainerSize();
+    }, 1000);
   }
 
   private setupUserStateDebouncing(): void {
@@ -644,7 +686,10 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * ```
    */
   protected override initDashboard(): void {
-    this.startAnimation();
+    // Only start animation if loading is complete
+    if (!this.isLoading) {
+      this.startAnimation();
+    }
   }
 
   /**
@@ -700,7 +745,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
   }
 
   /**
-   * Start the screensaver animation
+   * Start the classic screensaver animation
    */
   private startAnimation(): void {
     if (this.isAnimating) return;
@@ -708,6 +753,29 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     this.isAnimating = true;
     this.lastTime = performance.now();
     this.updateContainerSize();
+    
+    // Set random starting position within full container
+    const maxWidth = this.containerSize.width - this.boxSize.width;
+    const maxHeight = this.containerSize.height - this.boxSize.height;
+    
+    if (maxWidth > 0 && maxHeight > 0) {
+      this.boxPosition.x = Math.random() * maxWidth;
+      this.boxPosition.y = Math.random() * maxHeight;
+    } else {
+      // Fallback position if container is too small
+      this.boxPosition.x = 50;
+      this.boxPosition.y = 50;
+    }
+    
+    // Always set initial velocity (classic screensaver style) - never load from state
+    this.velocity.x = 80;
+    this.velocity.y = 60;
+    
+    console.log('🎥 HelloDashboard: Starting animation with velocity:', this.velocity);
+    console.log('📍 HelloDashboard: Starting position:', this.boxPosition);
+    console.log('📏 HelloDashboard: Container size:', this.containerSize);
+    console.log('📦 HelloDashboard: Box size:', this.boxSize);
+    
     this.animate();
   }
   
@@ -764,19 +832,12 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
   }
   
   /**
-   * Updates the animated box position with accurate collision detection and bouncing.
-   * Uses time-based movement calculations for smooth, frame-rate independent animation.
+   * Updates the animated box position with classic screensaver bouncing.
+   * Simple velocity-based movement that reflects off edges using full container.
    * 
    * @private
    * @param {number} deltaTime - Time elapsed since last frame in seconds
    * @returns {void}
-   * 
-   * @example
-   * ```typescript
-   * // Called every animation frame (~60fps)
-   * // deltaTime ≈ 0.016 seconds per frame at 60fps
-   * this.updateBoxPosition(0.016);
-   * ```
    */
   private updateBoxPosition(deltaTime: number): void {
     // Calculate movement based on time for consistent speed regardless of framerate
@@ -787,31 +848,28 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     this.boxPosition.x += moveX;
     this.boxPosition.y += moveY;
     
-    // Calculate bounds - ensure box edge hits container edge for proper bouncing
+    // Calculate bounds using full container dimensions
+    const minX = 0;
     const maxX = this.containerSize.width - this.boxSize.width;
+    const minY = 0;
     const maxY = this.containerSize.height - this.boxSize.height;
     
-    // Bounce off horizontal walls (left and right)
-    if (this.boxPosition.x <= 0) {
-      this.boxPosition.x = 0;
-      this.velocity.x = Math.abs(this.velocity.x); // Ensure positive direction
+    // Bounce off left and right edges
+    if (this.boxPosition.x <= minX) {
+      this.boxPosition.x = minX;
+      this.velocity.x = Math.abs(this.velocity.x); // Bounce right
     } else if (this.boxPosition.x >= maxX) {
       this.boxPosition.x = maxX;
-      this.velocity.x = -Math.abs(this.velocity.x); // Ensure negative direction
+      this.velocity.x = -Math.abs(this.velocity.x); // Bounce left
     }
     
-    // Bounce off vertical walls (top and bottom)
-    if (this.boxPosition.y <= 0) {
-      this.boxPosition.y = 0;
-      this.velocity.y = Math.abs(this.velocity.y); // Ensure positive direction (downward)
+    // Bounce off top and bottom edges
+    if (this.boxPosition.y <= minY) {
+      this.boxPosition.y = minY;
+      this.velocity.y = Math.abs(this.velocity.y); // Bounce down
     } else if (this.boxPosition.y >= maxY) {
-      this.boxPosition.y = maxY; // Position box so bottom edge touches container bottom
-      this.velocity.y = -Math.abs(this.velocity.y); // Ensure negative direction (upward)
-    }
-    
-    // Debounced user state update (only every ~100ms)
-    if (Math.random() < 0.02) { // Roughly every 50 frames at 60fps
-      this.updateUserState();
+      this.boxPosition.y = maxY;
+      this.velocity.y = -Math.abs(this.velocity.y); // Bounce up
     }
   }
   
@@ -826,7 +884,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     // Change entity every 5 seconds
     this.entityChangeInterval = setInterval(() => {
       this.changeFeaturedEntity();
-    }, 5000);
+    }, 7500);
   }
   
   /**
@@ -852,10 +910,9 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     
     // This is how you tell the container to open an entity record
     // The container component will handle the actual navigation/opening
-    const key = new CompositeKey([new KeyValuePair('ID', this.featuredEntityObject.ID)]);
     this.OpenEntityRecord.emit({
       EntityName: 'Entities', // The entity type we're opening
-      RecordPKey: key
+      RecordPKey: CompositeKey.FromID(this.featuredEntityObject.ID),
     });
     
     // Emit interaction event for tracking
@@ -1021,10 +1078,13 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
     
     console.log('🔄 HelloDashboard: Refresh() called - reloading user state');
     
+    // Stop any existing animation first
+    this.stopAnimation();
+    
     // Reload user state (Config may have been updated)
     this.loadUserState();
     
-    // Start the animation system
+    // Start the animation system (loadUserState sets isLoading = false)
     this.startAnimation();
   }
 }

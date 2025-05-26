@@ -9,7 +9,17 @@
     <span>User state saved to container!</span>
   </div>
   
+  
+  <!-- Loading Indicator -->
+  <div class="loading-container" *ngIf="isLoading">
+    <div class="loading-spinner">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+    </div>
+    <div class="loading-text">Loading dashboard...</div>
+  </div>
+
   <div class="greeting-box" 
+       *ngIf="!isLoading"
        [style.transform]="'translate(' + boxPosition.x + 'px, ' + boxPosition.y + 'px)'"
        [style.border-color]="getLightColor(themeColor, 0.3)">
     <h1 [style.color]="textColor">Hello Dashboard</h1>

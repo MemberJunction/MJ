@@ -3,7 +3,11 @@
   width: 100%;
   height: 100%;
   min-height: 500px;
-  background: linear-gradient(135deg, #e8e9ea 0%, #d0d3d8 100%);
+  background: 
+    linear-gradient(45deg, transparent 25%, rgba(139, 132, 120, 0.03) 25%, rgba(139, 132, 120, 0.03) 50%, transparent 50%, transparent 75%, rgba(139, 132, 120, 0.03) 75%),
+    linear-gradient(-45deg, transparent 25%, rgba(139, 132, 120, 0.03) 25%, rgba(139, 132, 120, 0.03) 50%, transparent 50%, transparent 75%, rgba(139, 132, 120, 0.03) 75%),
+    linear-gradient(135deg, #f5f3f0 0%, #e8e3dc 50%, #d4ccc2 100%);
+  background-size: 20px 20px, 20px 20px, 100% 100%;
   overflow: hidden;
   border-radius: 8px;
   
@@ -16,11 +20,11 @@
     width: 200%;
     height: 200%;
     background: 
-      radial-gradient(circle at 20% 30%, rgba(76, 93, 255, 0.12) 0%, transparent 40%),
-      radial-gradient(circle at 80% 20%, rgba(255, 87, 51, 0.10) 0%, transparent 35%),
-      radial-gradient(circle at 60% 80%, rgba(51, 255, 87, 0.08) 0%, transparent 30%),
-      radial-gradient(circle at 30% 70%, rgba(255, 51, 166, 0.06) 0%, transparent 25%),
-      radial-gradient(circle at 90% 60%, rgba(51, 255, 246, 0.05) 0%, transparent 20%);
+      radial-gradient(circle at 20% 30%, rgba(160, 140, 120, 0.06) 0%, transparent 40%),
+      radial-gradient(circle at 80% 20%, rgba(180, 160, 140, 0.05) 0%, transparent 35%),
+      radial-gradient(circle at 60% 80%, rgba(140, 120, 100, 0.04) 0%, transparent 30%),
+      radial-gradient(circle at 30% 70%, rgba(200, 180, 160, 0.03) 0%, transparent 25%),
+      radial-gradient(circle at 90% 60%, rgba(120, 100, 80, 0.02) 0%, transparent 20%);
     animation: float 20s ease-in-out infinite;
     pointer-events: none;
     z-index: 0;
@@ -44,7 +48,8 @@
 .state-notification {
   position: absolute;
   top: 20px;
-  right: 20px;
+  left: 20px;
+  width: 500px;
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -78,6 +83,40 @@
   
   span {
     white-space: nowrap;
+  }
+}
+
+
+.loading-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 30px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  z-index: 10;
+  
+  .loading-spinner {
+    i {
+      font-size: 2.5rem;
+      color: #8b7355;
+      opacity: 0.8;
+    }
+  }
+  
+  .loading-text {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #6b5b4d;
+    text-align: center;
   }
 }
 
