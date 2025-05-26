@@ -253,7 +253,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * @type {number}
    * @default 1.0
    */
-  protected speed: number = 1;
+  protected speed: number = 0.5;
 
   /**
    * Cached dimensions of the container element for bounce calculations.
@@ -388,6 +388,7 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    */
   override async ngOnInit(): Promise<void> {
     await super.ngOnInit();
+    this.loadUserState();
     this.setupUserStateDebouncing();
     this.setupResizeListener();
     this.setupKeyboardListeners();
@@ -407,6 +408,13 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * ```
    */
   override ngOnDestroy(): void {
+    // Save any pending user state changes before destroying
+    const currentState = this.currentUserState;
+    if (currentState) {
+      console.log('💾 HelloDashboard: Saving final user state on destroy:', currentState);
+      this.UserStateChanged.emit(currentState);
+    }
+    
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
@@ -434,6 +442,66 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * this.updateUserState(); // ...single database write
    * ```
    */
+  /**
+   * Loads user state from Config.userState if available.
+   * Called early in initialization to restore saved preferences.
+   */
+  private loadUserState(): void {
+    console.log('🔄 HelloDashboard: Loading user state during initialization');
+    console.log('📋 HelloDashboard: Full Config object:', this.Config);
+    
+    const state = this.Config?.userState;
+    console.log('💾 HelloDashboard: Retrieved user state:', state);
+    
+    if (state) {
+      console.log('✅ HelloDashboard: Restoring state from saved data');
+      
+      // Restore text color
+      if (state.lastColor) {
+        console.log(`🎨 HelloDashboard: Restoring text color: ${state.lastColor}`);
+        this.textColor = state.lastColor;
+      }
+      
+      // Restore theme color (with fallback to text color for backward compatibility)
+      if (state.themeColor) {
+        console.log(`🎨 HelloDashboard: Restoring theme color: ${state.themeColor}`);
+        this.themeColor = state.themeColor;
+      } else if (state.lastColor) {
+        console.log(`🎨 HelloDashboard: Using text color as theme fallback: ${state.lastColor}`);
+        this.themeColor = state.lastColor; // Fallback for older saved states
+      }
+      
+      // Restore animation properties
+      if (state.boxPosition) {
+        console.log(`📍 HelloDashboard: Restoring box position:`, state.boxPosition);
+        this.boxPosition = { ...state.boxPosition };
+      }
+      if (state.speed !== undefined) {
+        console.log(`⚡ HelloDashboard: Restoring speed: ${state.speed}`);
+        this.speed = state.speed;
+      }
+      
+      // Restore entity display
+      if (state.featuredEntity) {
+        console.log(`🏢 HelloDashboard: Restoring featured entity: ${state.featuredEntity}`);
+        this.featuredEntity = state.featuredEntity;
+      }
+    } else {
+      console.log('🆕 HelloDashboard: No saved state found, starting with slow speed and random colors');
+      // Initialize with slow speed and random colors if no saved state
+      this.speed = 0.5; // Start with slow speed
+      this.setRandomColor();
+    }
+    
+    console.log('🎯 HelloDashboard: Final component state after loading:', {
+      textColor: this.textColor,
+      themeColor: this.themeColor,
+      boxPosition: this.boxPosition,
+      speed: this.speed,
+      featuredEntity: this.featuredEntity
+    });
+  }
+
   private setupUserStateDebouncing(): void {
     this.userStateSubject.pipe(
       debounceTime(3000), // Wait 3 seconds after last change
@@ -477,7 +545,6 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    * Prevents excessive recalculations during continuous resize operations.
    * 
    * @private
-   * @param {Event} event - The resize event (unused but part of listener signature)
    * @returns {void}
    */
   private onWindowResize = (): void => {
@@ -951,63 +1018,14 @@ export class HelloDashboardComponent extends BaseDashboard implements OnInit, On
    */
   public override Refresh(): void {
     super.Refresh();
-
-    console.log('🔄 HelloDashboard: Refresh() called');
-    console.log('📋 HelloDashboard: Full Config object:', this.Config);
     
-    const state = this.Config?.userState;
-    console.log('💾 HelloDashboard: Retrieved user state:', state);
+    console.log('🔄 HelloDashboard: Refresh() called - reloading user state');
     
-    if (state) {
-      console.log('✅ HelloDashboard: Restoring state from saved data');
-      
-      // Restore text color
-      if (state.lastColor) {
-        console.log(`🎨 HelloDashboard: Restoring text color: ${state.lastColor}`);
-        this.textColor = state.lastColor;
-      }
-      
-      // Restore theme color (with fallback to text color for backward compatibility)
-      if (state.themeColor) {
-        console.log(`🎨 HelloDashboard: Restoring theme color: ${state.themeColor}`);
-        this.themeColor = state.themeColor;
-      } else if (state.lastColor) {
-        console.log(`🎨 HelloDashboard: Using text color as theme fallback: ${state.lastColor}`);
-        this.themeColor = state.lastColor; // Fallback for older saved states
-      }
-      
-      // Restore animation properties
-      if (state.boxPosition) {
-        console.log(`📍 HelloDashboard: Restoring box position:`, state.boxPosition);
-        this.boxPosition = { ...state.boxPosition };
-      }
-      if (state.speed !== undefined) {
-        console.log(`⚡ HelloDashboard: Restoring speed: ${state.speed}`);
-        this.speed = state.speed;
-      }
-      
-      // Restore entity display
-      if (state.featuredEntity) {
-        console.log(`🏢 HelloDashboard: Restoring featured entity: ${state.featuredEntity}`);
-        this.featuredEntity = state.featuredEntity;
-      }
-    } else {
-      console.log('🆕 HelloDashboard: No saved state found, initializing with random colors');
-      // Initialize with random colors if no saved state
-      this.setRandomColor();
-    }
+    // Reload user state (Config may have been updated)
+    this.loadUserState();
     
     // Start the animation system
     this.startAnimation();
-    
-    // Log final state after restoration
-    console.log('🎯 HelloDashboard: Final component state after refresh:', {
-      textColor: this.textColor,
-      themeColor: this.themeColor,
-      boxPosition: this.boxPosition,
-      speed: this.speed,
-      featuredEntity: this.featuredEntity
-    });
   }
 }
 

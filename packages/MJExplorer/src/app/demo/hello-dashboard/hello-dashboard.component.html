@@ -12,11 +12,6 @@
   <div class="greeting-box" 
        [style.transform]="'translate(' + boxPosition.x + 'px, ' + boxPosition.y + 'px)'"
        [style.border-color]="getLightColor(themeColor, 0.3)">
-    <div class="color-display" [style.background]="themeColor" [style.color]="'white'"
-         title="Current Theme Color: {{ themeColor }}">
-      <i class="fa-solid fa-palette"></i>
-      <span>{{ themeColor }}</span>
-    </div>
     <h1 [style.color]="textColor">Hello Dashboard</h1>
     <div class="featured-entity" 
          [style.background]="getLightColor(themeColor, 0.08)"
