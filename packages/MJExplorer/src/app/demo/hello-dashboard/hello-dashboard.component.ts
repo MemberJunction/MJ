@@ -10,7 +10,10 @@ import { BaseDashboard } from '@memberjunction/ng-dashboards';
  * it if we have a prior persisted value, otherwise we generate a new random color on initialization 
  * and persist it.
  * 
- * For this dashboard to show up in the app UI you must create a record in the `Dashboard User Preferences` entity
+ * For this dashboard to show up in the app UI you must create a record in the `Dashboard User Preferences` entity,
+ * for example with a query such as:
+ * INSERT INTO __mj.DashboardUserPreference (DashboardID, Scope, DisplayOrder) VALUES ('61C9433E-F36B-1410-8DAB-00021F8B792E','Global',0)
+ * @description in the above INSERT statement, the `DashboardID` being inserted here is one that ships with the default MJ build and is for this Demo class
  */
 @Component({
   selector: 'mj-hello-dashboard',
@@ -35,21 +38,20 @@ export class HelloDashboardComponent extends BaseDashboard {
   // Current text color
   protected textColor: string = this.colors[0]; // Default to the first color
   
+  /**
+   * You can do one-time init stuff here as needed;
+   */
   protected override initDashboard(): void {
-    // Nothing special to initialize
-    if (this.Config?.userState?.lastColor) {
-      // there is a saved user state for the last color, use it
-      this.textColor = this.Config.userState.lastColor;
-    }
-    else {
-      this.setRandomColor();
-    }
   }
 
   /**
    * In this demo dashboard, there is no data to load for this simple dashboard from the database. 
    * In a real dashboard, you would utilize other MJ objects such as @see Metadata @see BaseEntity sub-classes from the 
    * @see Metadata.GetEntityObject methdo, and @see RunView etc
+   * 
+   * This method will get called anytime the component determines it needs to load data, at the right time during
+   * an intial load sequence but also at any future point in time during a refresh or other event that requires
+   * data to be loaded. 
    */
   protected override loadData(): void {
   }
@@ -95,6 +97,21 @@ export class HelloDashboardComponent extends BaseDashboard {
     } while (newColor === currentColor && this.colors.length > 1);
     
     this.textColor = newColor;
+  }
+
+  /**
+   * Here we are overrinding the base class Refresh method to do any special processing
+   */
+  public override Refresh(): void {
+    super.Refresh(); // first call the base class Refresh method
+
+    if (this.Config?.userState?.lastColor) {
+      // there is a saved user state for the last color, use it
+      this.textColor = this.Config.userState.lastColor;
+    }
+    else {
+      this.setRandomColor();
+    }    
   }
 }
 
