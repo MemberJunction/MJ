@@ -180,9 +180,13 @@ export abstract class ProviderBase implements IMetadataProvider {
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             //const start1 = new Date().getTime();
             const f = this.BuildDatasetFilterFromConfig();
-            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null)
 
+            // Get the dataset and cache it for anyone else who wants to use it
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null);            
             if (d && d.Success) {
+                // cache the dataset for anyone who wants to use it
+                await this.CacheDataset(ProviderBase._mjMetadataDatasetName, f.length > 0 ? f : null, d);
+
                 // got the results, let's build our response in the format we need
                 const simpleMetadata: any = {};
                 for (let r of d.Results) {
