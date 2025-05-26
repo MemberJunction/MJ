@@ -26,6 +26,11 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
   public activeTab = 'models'; // Default tab
   public selectedIndex = 0; // Track selected navigation index
   
+  // Component states
+  public promptManagementState: any = null;
+  public agentConfigurationState: any = null;
+  public systemConfigurationState: any = null;
+  
   // Navigation items for bottom navigation
   public navigationItems: string[] = ['models', 'prompts', 'agents', 'monitoring', 'config'];
   
@@ -96,13 +101,28 @@ export class AIDashboardComponent extends BaseDashboard implements AfterViewInit
     const state: AIDashboardState = {
       activeTab: this.activeTab,
       modelManagementState: {},
-      promptManagementState: {},
-      agentConfigurationState: {},
+      promptManagementState: this.promptManagementState || {},
+      agentConfigurationState: this.agentConfigurationState || {},
       executionMonitoringState: {},
-      systemConfigurationState: {}
+      systemConfigurationState: this.systemConfigurationState || {}
     };
 
     this.stateChangeSubject.next(state);
+  }
+  
+  public onPromptManagementStateChange(state: any): void {
+    this.promptManagementState = state;
+    this.emitStateChange();
+  }
+  
+  public onAgentConfigurationStateChange(state: any): void {
+    this.agentConfigurationState = state;
+    this.emitStateChange();
+  }
+  
+  public onSystemConfigurationStateChange(state: any): void {
+    this.systemConfigurationState = state;
+    this.emitStateChange();
   }
 
   public loadUserState(state: Partial<AIDashboardState>): void {

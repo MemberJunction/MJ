@@ -5,6 +5,18 @@
       <!-- Header -->
       <div class="dashboard-header">
         <div class="header-info">
+          <button 
+            type="button" 
+            class="filter-toggle-btn"
+            (click)="toggleFilterPanel()"
+            title="Toggle Filters">
+            <i class="fa-solid fa-filter"></i>
+            @if (filterPanelVisible) {
+              Hide Filters
+            } @else {
+              Show Filters
+            }
+          </button>
           <span class="prompt-count">{{ filteredPrompts.length }} prompts</span>
         </div>
         
@@ -19,60 +31,39 @@
         </div>
       </div>
 
-      <!-- Filters -->
-      <div class="filters-section">
-        <div class="filters-grid">
-          <!-- Search -->
-          <div class="filter-group">
-            <label class="filter-label">Search</label>
-            <input 
-              type="text" 
-              class="filter-input"
-              placeholder="Search prompts..."
-              [value]="searchTerm$.value"
-              (input)="onSearchChange($any($event.target).value)">
-          </div>
+      <!-- Main Content with Splitter -->
+      <div class="main-content">
+        <kendo-splitter 
+          class="main-splitter"
+          orientation="horizontal"
+          (layoutChange)="onMainSplitterChange($event)"
+          mjFillContainer>
           
-          <!-- Category Filter -->
-          <div class="filter-group">
-            <label class="filter-label">Category</label>
-            <select 
-              class="filter-select"
-              [value]="selectedCategory$.value"
-              (change)="onCategoryFilterChange($any($event.target).value)">
-              @for (option of categoryOptions; track option.value) {
-                <option [value]="option.value">{{ option.text }}</option>
-              }
-            </select>
-          </div>
+          <!-- Filter Panel (Left) -->
+          <kendo-splitter-pane 
+            [size]="filterPanelVisible ? '320px' : '0px'"
+            [collapsible]="false"
+            [resizable]="filterPanelVisible"
+            [scrollable]="false"
+            [hidden]="!filterPanelVisible">
+            <mj-prompt-filter-panel
+              [prompts]="promptsWithTemplates"
+              [filteredPrompts]="filteredPrompts"
+              [categories]="categories"
+              [types]="types"
+              [filters]="currentFilters"
+              (filtersChange)="onFiltersChange($event)"
+              (filterChange)="onFilterChange()"
+              (resetFilters)="onResetFilters()"
+              (closePanel)="toggleFilterPanel()">
+            </mj-prompt-filter-panel>
+          </kendo-splitter-pane>
           
-          <!-- Type Filter -->
-          <div class="filter-group">
-            <label class="filter-label">Type</label>
-            <select 
-              class="filter-select"
-              [value]="selectedType$.value"
-              (change)="onTypeFilterChange($any($event.target).value)">
-              @for (option of typeOptions; track option.value) {
-                <option [value]="option.value">{{ option.text }}</option>
-              }
-            </select>
-          </div>
-          
-          <!-- Status Filter -->
-          <div class="filter-group">
-            <label class="filter-label">Status</label>
-            <select 
-              class="filter-select"
-              [value]="selectedStatus$.value"
-              (change)="onStatusFilterChange($any($event.target).value)">
-              @for (option of statusOptions; track option.value) {
-                <option [value]="option.value">{{ option.text }}</option>
-              }
-            </select>
-          </div>
-        </div>
-      </div>
+          <!-- Prompts List Panel -->
+          <kendo-splitter-pane 
+            [resizable]="true"
+            [scrollable]="false">
+            <div class="prompts-content">
 
       <!-- Loading State -->
       @if (isLoading) {
@@ -110,7 +101,7 @@
           } @else {
             <div class="prompts-grid">
               @for (promptWithTemplate of filteredPrompts; track promptWithTemplate.prompt.ID || $index) {
-                <div class="prompt-card">
+                <div class="prompt-card" (click)="viewPrompt(promptWithTemplate)">
                   <!-- Card Header -->
                   <div class="card-header">
                     <div class="prompt-info">
@@ -165,7 +156,7 @@
                   </div>
 
                   <!-- Card Actions -->
-                  <div class="card-actions">
+                  <div class="card-actions" (click)="$event.stopPropagation()">
                     <button 
                       type="button" 
                       class="action-btn"
@@ -196,6 +187,10 @@
           }
         </div>
       }
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+      </div>
     </div>
   }
 
@@ -271,9 +266,17 @@
 
       <!-- Editor Content -->
       <div class="editor-content">
-        <div class="editor-layout">
+        <kendo-splitter 
+          class="editor-splitter"
+          orientation="horizontal"
+          (layoutChange)="onEditorSplitterChange($event)"
+          mjFillContainer>
+          
           <!-- Prompt Details Panel -->
-          <div class="editor-sidebar">
+          <kendo-splitter-pane 
+            [collapsible]="false"
+            [resizable]="true"
+            [scrollable]="true">
             <div class="prompt-details-panel">
               <h3>Prompt Details</h3>
               
@@ -315,8 +318,8 @@
                   @if (!showNewCategoryInput) {
                     <select 
                       class="field-select"
-                      [value]="selectedPrompt.prompt.CategoryID"
-                      (change)="onCategoryChange($any($event.target).value)">
+                      [(ngModel)]="selectedPrompt.prompt.CategoryID"
+                      (ngModelChange)="onCategoryChange($event)">
                       <option value="">Select category...</option>
                       @for (category of categories; track category.ID) {
                         <option [value]="category.ID">{{ category.Name }}</option>
@@ -412,10 +415,12 @@
                 </div>
               }
             </div>
-          </div>
+          </kendo-splitter-pane>
           
           <!-- Template Editor Panel -->
-          <div class="editor-main">
+          <kendo-splitter-pane 
+            [resizable]="true"
+            [scrollable]="true">
             <div class="template-editor-panel">
               <div class="editor-header">
                 <h3>Template Content</h3>
@@ -466,8 +471,8 @@
                 </div>
               }
             </div>
-          </div>
-        </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
       </div>
     </div>
   }

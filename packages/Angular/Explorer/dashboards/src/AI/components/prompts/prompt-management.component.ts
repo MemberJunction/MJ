@@ -23,6 +23,7 @@ interface PromptWithTemplate {
 })
 export class PromptManagementComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+  @Output() stateChange = new EventEmitter<any>();
 
   // Data properties
   public prompts: AIPromptEntity[] = [];
@@ -52,6 +53,20 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   // Category creation
   public newCategoryName = '';
   public showNewCategoryInput = false;
+  
+  // Splitter panel width
+  public promptDetailsPanelWidth = 300;
+  
+  // Filter panel visibility
+  public filterPanelVisible = true;
+  
+  // Current filters object for the filter panel
+  public currentFilters = {
+    searchTerm: '',
+    categoryId: 'all',
+    typeId: 'all',
+    status: 'all'
+  };
 
   // Filter state
   public searchTerm$ = new BehaviorSubject<string>('');
@@ -71,6 +86,42 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   constructor(private mjNotificationsService: MJNotificationService) {}
+  
+  public toggleFilterPanel(): void {
+    this.filterPanelVisible = !this.filterPanelVisible;
+    this.emitStateChange();
+  }
+  
+  public onMainSplitterChange(event: any): void {
+    // Handle main splitter layout changes if needed
+    this.emitStateChange();
+  }
+  
+  public onFiltersChange(filters: any): void {
+    this.currentFilters = { ...filters };
+    // Update the BehaviorSubjects to match the filter panel
+    this.searchTerm$.next(filters.searchTerm);
+    this.selectedCategory$.next(filters.categoryId);
+    this.selectedType$.next(filters.typeId);
+    this.selectedStatus$.next(filters.status);
+  }
+  
+  public onFilterChange(): void {
+    // This will be called by the filter panel, filtering is handled by existing logic
+  }
+  
+  public onResetFilters(): void {
+    this.currentFilters = {
+      searchTerm: '',
+      categoryId: 'all',
+      typeId: 'all',
+      status: 'all'
+    };
+    this.searchTerm$.next('');
+    this.selectedCategory$.next('all');
+    this.selectedType$.next('all');
+    this.selectedStatus$.next('all');
+  }
 
   ngOnInit(): void {
     this.setupFilters();
@@ -307,6 +358,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
     this.isEditing = false;
     this.isDirty = false;
     this.editorContent = promptWithTemplate.templateContent?.TemplateText || '';
+    this.emitStateChange();
   }
 
   public editPrompt(promptWithTemplate: PromptWithTemplate): void {
@@ -315,6 +367,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
     this.isEditing = true;
     this.isDirty = false;
     this.editorContent = promptWithTemplate.templateContent?.TemplateText || '';
+    this.emitStateChange();
   }
 
   public async createNewCategory(): Promise<string | null> {
@@ -331,8 +384,11 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
       const result = await category.Save();
       if (result) {
         LogStatus('Category created successfully');
+        this.mjNotificationsService.CreateSimpleNotification('Category created successfully', 'success', 2000);
         await this.loadCategories();
         this.buildFilterOptions();
+        // Update filter panel categories
+        this.updateFilterPanelCategories();
         this.newCategoryName = '';
         this.showNewCategoryInput = false;
         return category.ID;
@@ -341,34 +397,36 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
         const errorMessage = category.LatestResult?.Message || 'Unknown error occurred while saving category';
         console.error('Category save failed:', category.LatestResult);
         LogError('Category save failed', undefined, category.LatestResult);
+        this.mjNotificationsService.CreateSimpleNotification(errorMessage, 'error', 3500);
         this.error = `Failed to create category: ${errorMessage}`;
         return null;
       }
     } catch (error) {
       LogError('Error creating category', undefined, error);
+      this.mjNotificationsService.CreateSimpleNotification('Failed to create category. Please try again.', 'error', 3500);
       this.error = 'Failed to create category. Please try again.';
       return null;
     }
   }
   
+  private updateFilterPanelCategories(): void {
+    // Trigger update of filter panel categories when new ones are created
+    // This ensures the filter panel dropdown is updated
+  }
+  
   public onCategoryChange(categoryId: string): void {
     if (categoryId === 'new') {
       this.showNewCategoryInput = true;
-      this.selectedPrompt!.prompt.CategoryID = '';
+      this.selectedPrompt!.prompt.CategoryID = ''; // Reset to empty when creating new
     } else {
       this.showNewCategoryInput = false;
-      this.selectedPrompt!.prompt.CategoryID = categoryId;
       this.isDirty = true;
     }
   }
   
   public async onCreateNewCategoryKeyup(event: KeyboardEvent): Promise<void> {
     if (event.key === 'Enter') {
-      const newCategoryId = await this.createNewCategory();
-      if (newCategoryId) {
-        this.selectedPrompt!.prompt.CategoryID = newCategoryId;
-        this.isDirty = true;
-      }
+      await this.createAndSelectNewCategory();
     } else if (event.key === 'Escape') {
       this.newCategoryName = '';
       this.showNewCategoryInput = false;
@@ -428,6 +486,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
     this.isDirty = false;
     this.showNewCategoryInput = false;
     this.newCategoryName = '';
+    this.emitStateChange();
   }
 
   public toggleEdit(): void {
@@ -441,6 +500,37 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   public onEditorContentChange(content: string): void {
     // don't modify our modle, it is directly bound to the editor
     this.isDirty = true;
+  }
+  
+  public onEditorSplitterChange(event: any): void {
+    // Update the panel width when user resizes
+    if (event.panes && event.panes.length > 0) {
+      const firstPane = event.panes[0];
+      if (firstPane.size) {
+        // Extract numeric value from size (could be '300px' or just 300)
+        const sizeValue = typeof firstPane.size === 'string' ? 
+          parseInt(firstPane.size.replace('px', '')) : firstPane.size;
+        if (!isNaN(sizeValue)) {
+          this.promptDetailsPanelWidth = sizeValue;
+          this.emitStateChange();
+        }
+      }
+    }
+  }
+  
+  private emitStateChange(): void {
+    const state = {
+      currentView: this.currentView,
+      selectedPromptId: this.selectedPrompt?.prompt.ID || null,
+      isEditing: this.isEditing,
+      promptDetailsPanelWidth: this.promptDetailsPanelWidth,
+      filterPanelVisible: this.filterPanelVisible,
+      searchTerm: this.searchTerm$.value,
+      selectedCategory: this.selectedCategory$.value,
+      selectedType: this.selectedType$.value,
+      selectedStatus: this.selectedStatus$.value
+    };
+    this.stateChange.emit(state);
   }
 
   public async savePrompt(): Promise<void> {

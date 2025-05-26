@@ -149,6 +149,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
   
   .filter-header {
     padding: 16px;
@@ -181,9 +182,10 @@
   }
   
   .filter-content {
-    padding: 16px;
+    padding: 12px;
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     
     .search-section {
       margin-bottom: 16px;
@@ -202,11 +204,13 @@
     }
     
     .search-input, select {
-      width: 100%;
+      width: calc(100% - 4px);
+      max-width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
       border-radius: 4px;
       font-size: 12px;
+      box-sizing: border-box;
       
       &:focus {
         outline: none;
@@ -218,7 +222,8 @@
       margin-top: 20px;
       
       .clear-btn {
-        width: 100%;
+        width: calc(100% - 4px);
+        max-width: 100%;
         padding: 8px 12px;
         border: 1px solid #ccc;
         border-radius: 4px;
@@ -230,6 +235,7 @@
         justify-content: center;
         gap: 6px;
         transition: all 0.2s;
+        box-sizing: border-box;
         
         &:hover {
           background-color: #f0f0f0;

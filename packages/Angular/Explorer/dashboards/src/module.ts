@@ -12,11 +12,15 @@ import { EntityFilterPanelComponent } from './EntityAdmin/components/entity-filt
 import { EntityDetailsComponent } from './EntityAdmin/components/entity-details.component';
 import { ERDDiagramComponent } from './EntityAdmin/components/erd-diagram.component';
 import { AIDashboardComponent } from './AI/ai-dashboard.component';
-import { ModelManagementComponent } from './AI/components/model-management.component';
-import { PromptManagementComponent } from './AI/components/prompt-management.component';
-import { AgentConfigurationComponent } from './AI/components/agent-configuration.component';
+import { ModelManagementComponent } from './AI/components/models/model-management.component';
+import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
+import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
+import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
+import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
+import { AgentEditorComponent } from './AI/components/agents/agent-editor.component';
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
-import { SystemConfigurationComponent } from './AI/components/system-configuration.component';
+import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
+import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
 import { ActionsManagementDashboardComponent } from './Actions/actions-management-dashboard.component';
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
@@ -43,9 +47,13 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
     AIDashboardComponent,
     ModelManagementComponent,
     PromptManagementComponent,
+    PromptFilterPanelComponent,
     AgentConfigurationComponent,
+    AgentFilterPanelComponent,
+    AgentEditorComponent,
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
+    SystemConfigFilterPanelComponent,
     ActionsManagementDashboardComponent,
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,

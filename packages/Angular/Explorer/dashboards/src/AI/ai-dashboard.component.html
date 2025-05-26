@@ -25,6 +25,7 @@
         @if (activeTab === 'prompts') {
           <app-prompt-management
             (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onPromptManagementStateChange($event)"
             mjFillContainer>
           </app-prompt-management>
         }
@@ -32,6 +33,7 @@
         @if (activeTab === 'agents') {
           <app-agent-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onAgentConfigurationStateChange($event)"
             mjFillContainer>
           </app-agent-configuration>
         }
@@ -46,6 +48,7 @@
         @if (activeTab === 'config') {
           <app-system-configuration
             (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onSystemConfigurationStateChange($event)"
             mjFillContainer>
           </app-system-configuration>
         }
