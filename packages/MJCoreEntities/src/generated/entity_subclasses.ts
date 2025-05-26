@@ -1383,7 +1383,7 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSO')]).describe(`
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
         * * Field Name: ResponseFormat
         * * Display Name: Response Format
         * * SQL Data Type: nvarchar(20)
@@ -1394,7 +1394,7 @@ export const AIPromptSchema = z.object({
     *   * Text
     *   * Markdown
     *   * ModelSpecific
-    *   * JSO
+    *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
     ModelSpecificResponseFormat: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseFormat
@@ -10089,16 +10089,17 @@ export const TemplateContentTypeSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
     * * Description: Description of the template content type`),
-    CodeType: z.union([z.literal('JSO'), z.literal('TypeScript'), z.literal('SQL'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).describe(`
+    CodeType: z.union([z.literal('Nunjucks'), z.literal('JSON'), z.literal('Python'), z.literal('TypeScript'), z.literal('HTML'), z.literal('CSS'), z.literal('JavaScript'), z.literal('Other')]).describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * JSO
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
-    *   * SQL
     *   * HTML
     *   * CSS
     *   * JavaScript
@@ -15164,13 +15165,13 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Text
     *   * Markdown
     *   * ModelSpecific
-    *   * JSO
+    *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
-    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSO' {
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON' {
         return this.Get('ResponseFormat');
     }
-    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSO') {
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON') {
         this.Set('ResponseFormat', value);
     }
 
@@ -38292,19 +38293,20 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * JSO
+    *   * Nunjucks
+    *   * JSON
+    *   * Python
     *   * TypeScript
-    *   * SQL
     *   * HTML
     *   * CSS
     *   * JavaScript
     *   * Other
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
-    get CodeType(): 'JSO' | 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
+    get CodeType(): 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' {
         return this.Get('CodeType');
     }
-    set CodeType(value: 'JSO' | 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
+    set CodeType(value: 'Nunjucks' | 'JSON' | 'Python' | 'TypeScript' | 'HTML' | 'CSS' | 'JavaScript' | 'Other') {
         this.Set('CodeType', value);
     }
 

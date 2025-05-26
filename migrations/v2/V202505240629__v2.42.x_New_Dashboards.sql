@@ -177,3 +177,72 @@ VALUES ('BADA423E-F36B-1410-8DAC-00021F8B792E', 'Video to Text','Uses a video mo
 
 INSERT INTO ${flyway:defaultSchema}.AIPromptType (ID, Name, Description)
 VALUES ('BFDA423E-F36B-1410-8DAC-00021F8B792E', 'Generate Image','Uses a generative image model to convert text to an image');
+
+
+
+/****************************************************/
+/********* Template Content Types Support for more Types *********/
+/****************************************************/
+ALTER TABLE [${flyway:defaultSchema}].[TemplateContentType] DROP CONSTRAINT [CK_TemplateContentType_CodeType]
+ALTER TABLE [${flyway:defaultSchema}].[TemplateContentType]  WITH CHECK 
+ADD  CONSTRAINT [CK_TemplateContentType_CodeType] CHECK  
+(CodeType IN ('TypeScript','HTML','CSS','JavaScript','JSON','Python','Nunjucks','Other'))
+
+
+-- CodeGen to fix up from the above
+
+/* SQL text to delete entity field value ID 8452302D-7236-EF11-86D4-6045BDEE16E6 */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='8452302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FC5817F0-6F36-EF11-86D4-6045BDEE16E6', 6, 'Nunjucks', 'Nunjucks')
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=2 WHERE ID='8552302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=3 WHERE ID='8652302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=4 WHERE ID='8752302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=5 WHERE ID='4ECE433E-F36B-1410-8DAB-00021F8B792E'
+
+
+
+
+
+/* SQL text to delete entity field value ID 4ECE433E-F36B-1410-8DAB-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='4ECE433E-F36B-1410-8DAB-00021F8B792E'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FC5817F0-6F36-EF11-86D4-6045BDEE16E6', 5, 'JSON', 'JSON')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('FC5817F0-6F36-EF11-86D4-6045BDEE16E6', 6, 'Python', 'Python')
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='97E3423E-F36B-1410-8DAC-00021F8B792E'
+
+/* SQL text to update entity field value sequence */
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=8 WHERE ID='8952302D-7236-EF11-86D4-6045BDEE16E6'
+
+/* SQL text to delete entity field value ID 5DCE433E-F36B-1410-8DAB-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='5DCE433E-F36B-1410-8DAB-00021F8B792E'
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('4EBEB02B-AC46-4440-948F-0FCD6C6C26DE', 4, 'JSON', 'JSON')
+
