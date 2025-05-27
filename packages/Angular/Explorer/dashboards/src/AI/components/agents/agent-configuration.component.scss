@@ -1,0 +1,366 @@
+.agent-configuration-container {
+  overflow: hidden;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dashboard-header {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  
+  .header-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .filter-toggle-btn {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    color: #555;
+    
+    &:hover {
+      background-color: #f0f0f0;
+      border-color: #2196f3;
+      color: #2196f3;
+    }
+    
+    .fa-solid {
+      font-size: 10px;
+    }
+  }
+  
+  .agent-count {
+    font-size: 12px;
+    color: #2196f3;
+    font-weight: 600;
+    background: rgba(33, 150, 243, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+  }
+  
+  .header-controls {
+    display: flex;
+    gap: 8px;
+    
+    .control-btn {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      
+      &:hover {
+        background-color: #f0f0f0;
+        border-color: #2196f3;
+      }
+      
+      .fa-solid {
+        font-size: 11px;
+      }
+    }
+  }
+}
+
+.main-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.main-splitter {
+  height: 100%;
+  
+  .k-pane {
+    overflow: hidden;
+  }
+}
+
+.agents-content {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.loading-container, .error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  flex: 1;
+  
+  p {
+    color: #666;
+    font-size: 14px;
+  }
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-spinner {
+  display: flex;
+  gap: 4px;
+  
+  .spinner-ring {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2196f3;
+    animation: loading-pulse 1.5s ease-in-out infinite;
+    
+    &:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    &:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+  }
+}
+
+@keyframes loading-pulse {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.loading-text {
+  font-size: 12px;
+  color: #666;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: #fafafa;
+  border-radius: 6px;
+  margin: 24px 0;
+  
+  .fa-solid {
+    font-size: 48px;
+    color: #ddd;
+    margin-bottom: 16px;
+  }
+  
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+    font-weight: 500;
+    color: #666;
+  }
+  
+  p {
+    margin: 0;
+    font-size: 14px;
+    color: #999;
+    max-width: 400px;
+    line-height: 1.4;
+  }
+}
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.agent-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 16px;
+  transition: all 0.2s ease;
+  height: fit-content;
+  cursor: pointer;
+  
+  &:hover {
+    border-color: #2196f3;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.1);
+    transform: translateY(-1px);
+  }
+  
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    
+    .agent-info {
+      display: flex;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+      
+      .agent-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: rgba(33, 150, 243, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        
+        .fa-solid {
+          font-size: 14px;
+          color: #2196f3;
+        }
+      }
+      
+      .agent-details {
+        flex: 1;
+        min-width: 0;
+        
+        .agent-name {
+          margin: 0 0 4px 0;
+          font-size: 14px;
+          font-weight: 500;
+          color: #333;
+          line-height: 1.3;
+        }
+        
+        .agent-meta {
+          font-size: 11px;
+          color: #666;
+          
+          .agent-type {
+            font-weight: 500;
+          }
+          
+          .agent-category {
+            color: #999;
+          }
+        }
+      }
+    }
+    
+    .status-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      
+      &.status-active {
+        background: #e8f5e8;
+        color: #2e7d32;
+      }
+      
+      &.status-training {
+        background: #fff3e0;
+        color: #f57c00;
+      }
+      
+      &.status-disabled {
+        background: #ffebee;
+        color: #c62828;
+      }
+      
+      &.status-draft {
+        background: #f5f5f5;
+        color: #666;
+      }
+    }
+  }
+  
+  .card-body {
+    margin-bottom: 16px;
+    
+    .agent-description {
+      margin: 0;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
+      
+      &.text-muted {
+        font-style: italic;
+        color: #999;
+      }
+    }
+  }
+  
+  .card-actions {
+    border-top: 1px solid #f0f0f0;
+    padding-top: 12px;
+    display: flex;
+    gap: 8px;
+    
+    .action-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      background: white;
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+      
+      &:hover {
+        background-color: #f5f5f5;
+        border-color: #bbb;
+      }
+      
+      &.action-btn-primary {
+        background-color: #2196f3;
+        border-color: #2196f3;
+        color: white;
+        
+        &:hover {
+          background-color: #1976d2;
+        }
+      }
+      
+      &.action-btn-danger {
+        background-color: #f44336;
+        border-color: #f44336;
+        color: white;
+        
+        &:hover {
+          background-color: #d32f2f;
+        }
+      }
+      
+      .fa-solid {
+        font-size: 10px;
+      }
+    }
+  }
+}

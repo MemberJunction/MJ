@@ -1,0 +1,396 @@
+<div class="agent-editor-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  <!-- Header -->
+  <div class="editor-header">
+    <div class="header-info">
+      <button 
+        type="button" 
+        class="back-btn"
+        (click)="closeEditor()"
+        title="Back to Agent List">
+        <i class="fa-solid fa-arrow-left"></i>
+        Back to Agents
+      </button>
+      
+      @if (currentAgent) {
+        <div class="agent-breadcrumb">
+          <h2>{{ currentAgent.Name }}</h2>
+          @if (currentAgent.Parent) {
+            <span class="breadcrumb-item">
+              <i class="fa-solid fa-chevron-right"></i>
+              Child of {{ currentAgent.Parent }}
+            </span>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  @if (!isLoading && !error && currentAgent) {
+    <div class="tab-navigation">
+      <button 
+        type="button" 
+        class="tab-btn"
+        [class.active]="activeTab === 'hierarchy'"
+        (click)="setActiveTab('hierarchy')">
+        <i class="fa-solid fa-sitemap"></i>
+        Hierarchy
+      </button>
+      
+      <button 
+        type="button" 
+        class="tab-btn"
+        [class.active]="activeTab === 'prompts'"
+        (click)="setActiveTab('prompts')">
+        <i class="fa-solid fa-comment-dots"></i>
+        Prompts
+      </button>
+      
+      <button 
+        type="button" 
+        class="tab-btn"
+        [class.active]="activeTab === 'properties'"
+        (click)="setActiveTab('properties')">
+        <i class="fa-solid fa-cog"></i>
+        Properties
+      </button>
+    </div>
+  }
+
+  <!-- Loading State -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">Loading agent data...</div>
+      </div>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (error) {
+    <div class="error-container">
+      <div class="error-content">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        <h3>Error Loading Agent</h3>
+        <p>{{ error }}</p>
+        <button class="retry-btn" (click)="loadAgentData()">
+          <i class="fa-solid fa-retry"></i>
+          Retry
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Tab Content -->
+  @if (!isLoading && !error && currentAgent) {
+    <div class="tab-content" mjFillContainer>
+      
+      <!-- Hierarchy Tab -->
+      @if (activeTab === 'hierarchy') {
+        <div class="hierarchy-section" mjFillContainer>
+          <div class="section-header">
+            <h3>
+              <i class="fa-solid fa-sitemap"></i>
+              Agent Hierarchy
+            </h3>
+            
+            <div class="hierarchy-controls">
+              <div class="zoom-controls">
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="zoomIn()"
+                  title="Zoom In">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="zoomOut()"
+                  title="Zoom Out">
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+                <button 
+                  type="button" 
+                  class="zoom-btn"
+                  (click)="resetZoom()"
+                  title="Reset Zoom">
+                  <i class="fa-solid fa-expand"></i>
+                </button>
+              </div>
+              
+              <div class="hierarchy-legend">
+                <div class="legend-item">
+                  <div class="legend-rect level-0"></div>
+                  <span>Root</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-rect level-1"></div>
+                  <span>Level 1</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-rect level-2"></div>
+                  <span>Level 2+</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="hierarchy-chart" #hierarchyChart mjFillContainer>
+            <!-- Help text overlay -->
+            @if (hierarchyData && (hasChildren() || hasParent())) {
+              <div class="chart-help">
+                <small>
+                  <i class="fa-solid fa-hand-pointer"></i>
+                  Drag to pan • Use zoom controls or scroll to zoom • Click nodes to navigate
+                </small>
+              </div>
+            }
+            
+            <!-- Empty state for hierarchy -->
+            @if (!hierarchyData || (!hasChildren() && !hasParent())) {
+              <div class="empty-hierarchy">
+                <i class="fa-solid fa-sitemap"></i>
+                <h4>No Agent Hierarchy</h4>
+                <p>This agent doesn't have any parent or child agents yet.</p>
+                <button class="create-subagent-btn" (click)="openCreateSubAgent()">
+                  <i class="fa-solid fa-plus"></i>
+                  Create Sub-Agent
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+      
+      <!-- Prompts Tab -->
+      @if (activeTab === 'prompts') {
+        <div class="prompts-section" mjFillContainer>
+          <div class="section-header">
+            <h3>
+              <i class="fa-solid fa-comment-dots"></i>
+              Agent Prompts
+            </h3>
+            <button class="add-prompt-btn" title="Add New Prompt">
+              <i class="fa-solid fa-plus"></i>
+              Add Prompt
+            </button>
+          </div>
+          
+          <div class="prompts-list">
+            @if (agentPrompts.length === 0) {
+              <div class="empty-prompts">
+                <i class="fa-solid fa-comment-dots"></i>
+                <p>No prompts configured for this agent</p>
+                <button class="add-first-prompt-btn">
+                  <i class="fa-solid fa-plus"></i>
+                  Add First Prompt
+                </button>
+              </div>
+            } @else {
+              @for (prompt of agentPrompts; track prompt.id) {
+                <div class="prompt-card">
+                  <div class="prompt-header">
+                    <div class="prompt-info">
+                      <h4>{{ prompt.name }}</h4>
+                      <span class="prompt-type">{{ prompt.type }}</span>
+                    </div>
+                    <div class="prompt-actions">
+                      <button class="action-btn" title="Edit Prompt">
+                        <i class="fa-solid fa-edit"></i>
+                      </button>
+                      <button class="action-btn danger" title="Delete Prompt">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="prompt-content">
+                    <p>{{ prompt.content }}</p>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+      
+      <!-- Properties Tab -->
+      @if (activeTab === 'properties') {
+        <div class="properties-section" mjFillContainer>
+          <div class="section-header">
+            <h3>
+              <i class="fa-solid fa-cog"></i>
+              Agent Properties
+            </h3>
+            <button class="save-btn" title="Save Changes">
+              <i class="fa-solid fa-save"></i>
+              Save
+            </button>
+          </div>
+          
+          <div class="properties-form">
+            <div class="form-group">
+              <label>Name</label>
+              <input 
+                type="text" 
+                class="form-input"
+                [value]="currentAgent.Name"
+                placeholder="Agent name">
+            </div>
+            
+            <div class="form-group">
+              <label>Description</label>
+              <textarea 
+                class="form-textarea"
+                [value]="currentAgent.Description"
+                placeholder="Agent description"
+                rows="3"></textarea>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label>Execution Mode</label>
+                <select class="form-select" [value]="currentAgent.ExecutionMode">
+                  <option value="Sequential">Sequential</option>
+                  <option value="Parallel">Parallel</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>Execution Order</label>
+                <input 
+                  type="number" 
+                  class="form-input"
+                  [value]="currentAgent.ExecutionOrder"
+                  min="0">
+              </div>
+            </div>
+            
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  [checked]="currentAgent.ExposeAsAction">
+                <span class="checkmark"></span>
+                Expose as Action
+              </label>
+              <small>Allow this agent to be used as an action by other agents</small>
+            </div>
+            
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  [checked]="currentAgent.EnableContextCompression">
+                <span class="checkmark"></span>
+                Enable Context Compression
+              </label>
+              <small>Automatically compress conversation context when threshold is reached</small>
+            </div>
+            
+            @if (currentAgent.EnableContextCompression) {
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Message Threshold</label>
+                  <input 
+                    type="number" 
+                    class="form-input"
+                    [value]="currentAgent.ContextCompressionMessageThreshold"
+                    min="1"
+                    placeholder="Number of messages">
+                </div>
+                
+                <div class="form-group">
+                  <label>Retention Count</label>
+                  <input 
+                    type="number" 
+                    class="form-input"
+                    [value]="currentAgent.ContextCompressionMessageRetentionCount"
+                    min="0"
+                    placeholder="Messages to keep">
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Sub-Agent Creation Modal -->
+  @if (showCreateSubAgent) {
+    <div class="modal-overlay" (click)="closeCreateSubAgent()">
+      <div class="create-subagent-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>
+            <i class="fa-solid fa-plus"></i>
+            Create Sub-Agent
+          </h3>
+          <button class="close-btn" (click)="closeCreateSubAgent()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          @if (error) {
+            <div class="error-message">
+              <i class="fa-solid fa-exclamation-triangle"></i>
+              {{ error }}
+            </div>
+          }
+          
+          <div class="form-group">
+            <label>Agent Name *</label>
+            <input 
+              type="text" 
+              class="form-input"
+              [(ngModel)]="newSubAgentName"
+              placeholder="Enter agent name..."
+              maxlength="255"
+              [disabled]="isLoading">
+          </div>
+          
+          <div class="form-group">
+            <label>Description</label>
+            <textarea 
+              class="form-textarea"
+              [(ngModel)]="newSubAgentDescription"
+              placeholder="Describe what this sub-agent will do..."
+              rows="4"
+              [disabled]="isLoading"></textarea>
+          </div>
+          
+          <div class="parent-info">
+            <strong>Parent Agent:</strong> {{ currentAgent?.Name }}
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button 
+            class="cancel-btn" 
+            (click)="closeCreateSubAgent()"
+            [disabled]="isLoading">
+            Cancel
+          </button>
+          <button 
+            class="create-btn" 
+            (click)="createSubAgent()"
+            [disabled]="!newSubAgentName.trim() || isLoading">
+            @if (isLoading) {
+              <span class="loading-spinner-sm"></span>
+              Creating...
+            } @else {
+              <i class="fa-solid fa-plus"></i>
+              Create Sub-Agent
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

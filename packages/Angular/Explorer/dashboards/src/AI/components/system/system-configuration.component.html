@@ -1,0 +1,180 @@
+<div class="system-configuration-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-info">
+      <button 
+        type="button" 
+        class="filter-toggle-btn"
+        (click)="toggleFilterPanel()"
+        title="Toggle Filters">
+        <i class="fa-solid fa-filter"></i>
+        @if (filterPanelVisible) {
+          Hide Filters
+        } @else {
+          Show Filters
+        }
+      </button>
+      <span class="config-count">{{ filteredConfigurations.length }} configurations</span>
+    </div>
+    
+    <div class="header-controls">
+      <button 
+        type="button" 
+        class="control-btn"
+        (click)="loadData()"
+        title="Refresh">
+        <i class="fa-solid fa-refresh"></i>
+        Refresh
+      </button>
+      <button 
+        type="button" 
+        class="control-btn"
+        title="Create New Configuration">
+        <i class="fa-solid fa-plus"></i>
+        New Configuration
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content with Splitter -->
+  <div class="main-content">
+    <kendo-splitter 
+      class="main-splitter"
+      orientation="horizontal"
+      (layoutChange)="onMainSplitterChange($event)"
+      mjFillContainer>
+      
+      <!-- Filter Panel (Left) -->
+      <kendo-splitter-pane 
+        [size]="filterPanelVisible ? '320px' : '0px'"
+        [collapsible]="false"
+        [resizable]="filterPanelVisible"
+        [scrollable]="false"
+        [hidden]="!filterPanelVisible">
+        <mj-system-config-filter-panel
+          [configurations]="configurations"
+          [filteredConfigurations]="filteredConfigurations"
+          [filters]="currentFilters"
+          (filtersChange)="onFiltersChange($event)"
+          (filterChange)="onFilterChange()"
+          (resetFilters)="onResetFilters()"
+          (closePanel)="toggleFilterPanel()">
+        </mj-system-config-filter-panel>
+      </kendo-splitter-pane>
+      
+      <!-- Configurations List Panel -->
+      <kendo-splitter-pane 
+        [resizable]="true"
+        [scrollable]="false">
+        <div class="configurations-content">
+          <!-- Loading State -->
+          @if (isLoading) {
+            <div class="loading-container">
+              <div class="loading-content">
+                <div class="loading-spinner">
+                  <div class="spinner-ring"></div>
+                  <div class="spinner-ring"></div>
+                  <div class="spinner-ring"></div>
+                </div>
+                <div class="loading-text">Loading configurations...</div>
+              </div>
+            </div>
+          }
+
+          <!-- Error State -->
+          @if (error) {
+            <div class="error-container">
+              <p class="error-message">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                {{ error }}
+              </p>
+            </div>
+          }
+
+          <!-- Configurations List -->
+          @if (!isLoading && !error) {
+            @if (filteredConfigurations.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-cogs"></i>
+                <h3>No configurations found</h3>
+                <p>No AI configurations match your current filters. Try adjusting your search criteria or create a new configuration.</p>
+              </div>
+            } @else {
+              <div class="configurations-grid">
+                @for (config of filteredConfigurations; track config.ID) {
+                  <div class="config-card">
+                    <!-- Card Header -->
+                    <div class="card-header">
+                      <div class="config-info">
+                        <div class="config-icon">
+                          <i [class]="getConfigIcon()"></i>
+                        </div>
+                        <div class="config-details">
+                          <h4 class="config-name">{{ config.Name }}</h4>
+                          <div class="config-meta">
+                            @if (config.IsDefault) {
+                              <span class="default-badge">
+                                <i class="fa-solid fa-star"></i>
+                                Default
+                              </span>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="status-badge status-{{ config.Status.toLowerCase() }}">
+                        {{ config.Status }}
+                      </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                      @if (config.Description) {
+                        <p class="config-description">{{ config.Description }}</p>
+                      } @else {
+                        <p class="config-description text-muted">No description provided</p>
+                      }
+                    </div>
+
+                    <!-- Card Actions -->
+                    <div class="card-actions" (click)="$event.stopPropagation()">
+                      <button 
+                        type="button" 
+                        class="action-btn">
+                        <i class="fa-solid fa-eye"></i>
+                        View
+                      </button>
+                      
+                      <button 
+                        type="button" 
+                        class="action-btn action-btn-primary">
+                        <i class="fa-solid fa-edit"></i>
+                        Configure
+                      </button>
+                      
+                      @if (!config.IsDefault) {
+                        <button 
+                          type="button" 
+                          class="action-btn action-btn-warning">
+                          <i class="fa-solid fa-star"></i>
+                          Set Default
+                        </button>
+                      }
+                      
+                      <button 
+                        type="button" 
+                        class="action-btn action-btn-danger">
+                        <i class="fa-solid fa-trash"></i>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </kendo-splitter-pane>
+    </kendo-splitter>
+  </div>
+</div>

@@ -1,0 +1,141 @@
+@use "../../../../../../dist/packages/Angular/Explorer/explorer-core/src/generic/generic-browse-list.component";
+
+.config-content {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.config-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.config-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s ease;
+  position: relative;
+
+  &:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.config-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.config-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+  margin: 0;
+  flex: 1;
+}
+
+.config-badges {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.default-badge {
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+
+  &.active {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  &.inactive {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+
+  &.deprecated {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+
+  &.preview {
+    background: #e2e3e5;
+    color: #383d41;
+    border: 1px solid #d6d8db;
+  }
+}
+
+.config-description {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+  margin-bottom: 16px;
+}
+
+.config-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #888;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
+}
+
+.config-id {
+  font-family: monospace;
+  background: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.main-splitter {
+  height: 100%;
+  width: 100%;
+  
+  .k-pane {
+    overflow: hidden;
+  }
+}
+
+.no-configs-message {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  margin-top: 50px;
+  font-size: 16px;
+}
+
+.loading-message {
+  text-align: center;
+  color: #666;
+  margin-top: 50px;
+  font-size: 16px;
+}

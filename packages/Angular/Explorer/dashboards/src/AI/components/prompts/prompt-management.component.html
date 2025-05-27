@@ -1,0 +1,479 @@
+<div class="prompt-management-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  <!-- List View -->
+  @if (currentView === 'list') {
+    <div class="list-view">
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-info">
+          <button 
+            type="button" 
+            class="filter-toggle-btn"
+            (click)="toggleFilterPanel()"
+            title="Toggle Filters">
+            <i class="fa-solid fa-filter"></i>
+            @if (filterPanelVisible) {
+              Hide Filters
+            } @else {
+              Show Filters
+            }
+          </button>
+          <span class="prompt-count">{{ filteredPrompts.length }} prompts</span>
+        </div>
+        
+        <div class="header-controls">
+          <button 
+            type="button" 
+            class="control-btn"
+            (click)="createNewPrompt()">
+            <i class="fa-solid fa-plus"></i>
+            New Prompt
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Content with Splitter -->
+      <div class="main-content">
+        <kendo-splitter 
+          class="main-splitter"
+          orientation="horizontal"
+          (layoutChange)="onMainSplitterChange($event)"
+          mjFillContainer>
+          
+          <!-- Filter Panel (Left) -->
+          <kendo-splitter-pane 
+            [size]="filterPanelVisible ? '320px' : '0px'"
+            [collapsible]="false"
+            [resizable]="filterPanelVisible"
+            [scrollable]="false"
+            [hidden]="!filterPanelVisible">
+            <mj-prompt-filter-panel
+              [prompts]="promptsWithTemplates"
+              [filteredPrompts]="filteredPrompts"
+              [categories]="categories"
+              [types]="types"
+              [filters]="currentFilters"
+              (filtersChange)="onFiltersChange($event)"
+              (filterChange)="onFilterChange()"
+              (resetFilters)="onResetFilters()"
+              (closePanel)="toggleFilterPanel()">
+            </mj-prompt-filter-panel>
+          </kendo-splitter-pane>
+          
+          <!-- Prompts List Panel -->
+          <kendo-splitter-pane 
+            [resizable]="true"
+            [scrollable]="false">
+            <div class="prompts-content">
+
+      <!-- Loading State -->
+      @if (isLoading) {
+        <div class="loading-container">
+          <div class="loading-content">
+            <div class="loading-spinner">
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+              <div class="spinner-ring"></div>
+            </div>
+            <div class="loading-text">{{ loadingMessage }}</div>
+          </div>
+        </div>
+      }
+
+      <!-- Error State -->
+      @if (error) {
+        <div class="error-container">
+          <p class="error-message">
+            <i class="fa-solid fa-exclamation-triangle"></i>
+            {{ error }}
+          </p>
+        </div>
+      }
+
+      <!-- Prompts List -->
+      @if (!isLoading && !error) {
+        <div class="prompts-list">
+          @if (filteredPrompts.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-comment-dots"></i>
+              <h3>No prompts found</h3>
+              <p>No prompts match your current filters. Try adjusting your search criteria or create a new prompt.</p>
+            </div>
+          } @else {
+            <div class="prompts-grid">
+              @for (promptWithTemplate of filteredPrompts; track promptWithTemplate.prompt.ID || $index) {
+                <div class="prompt-card" (click)="viewPrompt(promptWithTemplate)">
+                  <!-- Card Header -->
+                  <div class="card-header">
+                    <div class="prompt-info">
+                      <div class="prompt-icon">
+                        <i [class]="getPromptIcon()"></i>
+                      </div>
+                      <div class="prompt-details">
+                        <h4 class="prompt-name">{{ promptWithTemplate.prompt.Name }}</h4>
+                        <div class="prompt-meta">
+                          <span class="prompt-category">{{ getCategoryName(promptWithTemplate.prompt.CategoryID) }}</span>
+                          @if (promptWithTemplate.type) {
+                            <span class="prompt-type">• {{ promptWithTemplate.type.Name }}</span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="status-badge status-{{ promptWithTemplate.prompt.Status.toLowerCase() }}">
+                      {{ promptWithTemplate.prompt.Status }}
+                    </div>
+                  </div>
+
+                  <!-- Card Body -->
+                  <div class="card-body">
+                    @if (promptWithTemplate.prompt.Description) {
+                      <p class="prompt-description">{{ promptWithTemplate.prompt.Description }}</p>
+                    } @else {
+                      <p class="prompt-description text-muted">No description provided</p>
+                    }
+                    
+                    <!-- Template Info -->
+                    <div class="template-info">
+                      @if (promptWithTemplate.template) {
+                        <div class="template-item">
+                          <i class="fa-solid fa-file-code"></i>
+                          <span>{{ promptWithTemplate.template.Name }}</span>
+                        </div>
+                        @if (promptWithTemplate.templateContent) {
+                          <div class="template-content-info">
+                            <small>
+                              Template content: {{ (promptWithTemplate.templateContent.TemplateText || '').length }} characters
+                            </small>
+                          </div>
+                        }
+                      } @else {
+                        <div class="template-item text-muted">
+                          <i class="fa-solid fa-file-code"></i>
+                          <span>No template assigned</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Card Actions -->
+                  <div class="card-actions" (click)="$event.stopPropagation()">
+                    <button 
+                      type="button" 
+                      class="action-btn"
+                      (click)="viewPrompt(promptWithTemplate)">
+                      <i class="fa-solid fa-eye"></i>
+                      View
+                    </button>
+                    
+                    <button 
+                      type="button" 
+                      class="action-btn action-btn-primary"
+                      (click)="editPrompt(promptWithTemplate)">
+                      <i class="fa-solid fa-edit"></i>
+                      Edit
+                    </button>
+                    
+                    <button 
+                      type="button" 
+                      class="action-btn action-btn-danger"
+                      (click)="deletePrompt(promptWithTemplate)">
+                      <i class="fa-solid fa-trash"></i>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+      </div>
+    </div>
+  }
+
+  <!-- Editor View -->
+  @if (currentView === 'editor' && selectedPrompt) {
+    <div class="editor-view">
+      <!-- Editor Header -->
+      <div class="editor-header">
+        <div class="breadcrumb-section">
+          <button 
+            type="button" 
+            class="back-btn"
+            (click)="backToList()">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Prompts
+          </button>
+        </div>
+        
+        <div class="editor-title">
+          <h2>
+            @if (isEditing && !selectedPrompt.prompt.ID) {
+              <i class="fa-solid fa-plus"></i>
+              Create New Prompt
+            } @else if (isEditing) {
+              <i class="fa-solid fa-edit"></i>
+              Edit Prompt
+            } @else {
+              <i class="fa-solid fa-eye"></i>
+              View Prompt
+            }
+          </h2>
+          
+          @if (selectedPrompt.prompt.ID) {
+            <div class="status-badge status-{{ selectedPrompt.prompt.Status.toLowerCase() }}">
+              {{ selectedPrompt.prompt.Status }}
+            </div>
+          }
+        </div>
+        
+        <div class="editor-actions">
+          @if (!isEditing) {
+            <button 
+              type="button" 
+              class="control-btn"
+              (click)="toggleEdit()">
+              <i class="fa-solid fa-edit"></i>
+              Edit
+            </button>
+          } @else {
+            <button 
+              type="button" 
+              class="control-btn"
+              (click)="toggleEdit()">
+              <i class="fa-solid fa-times"></i>
+              Cancel
+            </button>
+            
+            <button 
+              type="button" 
+              class="control-btn control-btn-primary"
+              (click)="savePrompt()"
+              [disabled]="isLoading">
+              @if (isLoading) {
+                <span class="loading-spinner-sm"></span>
+              } @else {
+                <i class="fa-solid fa-save"></i>
+              }
+              Save
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Editor Content -->
+      <div class="editor-content">
+        <kendo-splitter 
+          class="editor-splitter"
+          orientation="horizontal"
+          (layoutChange)="onEditorSplitterChange($event)"
+          mjFillContainer>
+          
+          <!-- Prompt Details Panel -->
+          <kendo-splitter-pane 
+            [collapsible]="false"
+            [resizable]="true"
+            [scrollable]="true">
+            <div class="prompt-details-panel">
+              <h3>Prompt Details</h3>
+              
+              <!-- Name -->
+              <div class="form-field">
+                <label class="field-label">Name *</label>
+                @if (isEditing) {
+                  <input 
+                    type="text" 
+                    class="field-input"
+                    [(ngModel)]="selectedPrompt.prompt.Name"
+                    placeholder="Enter prompt name"
+                    (input)="isDirty = true">
+                } @else {
+                  <div class="field-value">{{ selectedPrompt.prompt.Name }}</div>
+                }
+              </div>
+              
+              <!-- Description -->
+              <div class="form-field">
+                <label class="field-label">Description</label>
+                @if (isEditing) {
+                  <textarea 
+                    class="field-textarea"
+                    [(ngModel)]="selectedPrompt.prompt.Description"
+                    placeholder="Enter prompt description"
+                    (input)="isDirty = true"></textarea>
+                } @else {
+                  <div class="field-value">
+                    {{ selectedPrompt.prompt.Description || 'No description provided' }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Category -->
+              <div class="form-field">
+                <label class="field-label">Category</label>
+                @if (isEditing) {
+                  @if (!showNewCategoryInput) {
+                    <select 
+                      class="field-select"
+                      [(ngModel)]="selectedPrompt.prompt.CategoryID"
+                      (ngModelChange)="onCategoryChange($event)">
+                      <option value="">Select category...</option>
+                      @for (category of categories; track category.ID) {
+                        <option [value]="category.ID">{{ category.Name }}</option>
+                      }
+                      <option value="new" class="new-category-option">+ Create New Category</option>
+                    </select>
+                  } @else {
+                    <div class="new-category-container">
+                      <input 
+                        type="text" 
+                        class="field-input"
+                        [(ngModel)]="newCategoryName"
+                        placeholder="Enter new category name"
+                        (keyup)="onCreateNewCategoryKeyup($event)"
+                        #newCategoryInput>
+                      <div class="new-category-actions">
+                        <button 
+                          type="button" 
+                          class="action-btn action-btn-primary"
+                          (click)="createAndSelectNewCategory()">
+                          <i class="fa-solid fa-check"></i>
+                        </button>
+                        <button 
+                          type="button" 
+                          class="action-btn"
+                          (click)="cancelNewCategory()">
+                          <i class="fa-solid fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                } @else {
+                  <div class="field-value">
+                    {{ getCategoryName(selectedPrompt.prompt.CategoryID) }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Type -->
+              <div class="form-field">
+                <label class="field-label">Type</label>
+                @if (isEditing) {
+                  <select 
+                    class="field-select"
+                    [(ngModel)]="selectedPrompt.prompt.TypeID"
+                    (change)="isDirty = true">
+                    <option value="">Select type...</option>
+                    @for (type of types; track type.ID) {
+                      <option [value]="type.ID">{{ type.Name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <div class="field-value">
+                    {{ getTypeName(selectedPrompt.prompt.TypeID) }}
+                  </div>
+                }
+              </div>
+              
+              <!-- Status -->
+              <div class="form-field">
+                <label class="field-label">Status</label>
+                @if (isEditing) {
+                  <select 
+                    class="field-select"
+                    [(ngModel)]="selectedPrompt.prompt.Status"
+                    (change)="isDirty = true">
+                    <option value="Active">Active</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Disabled">Disabled</option>
+                  </select>
+                } @else {
+                  <div class="field-value">
+                    <span class="status-badge status-{{ selectedPrompt.prompt.Status.toLowerCase() }}">
+                      {{ selectedPrompt.prompt.Status }}
+                    </span>
+                  </div>
+                }
+              </div>
+              
+              <!-- Template Info -->
+              @if (selectedPrompt.template) {
+                <div class="template-info-section">
+                  <h4>Template Information</h4>
+                  <div class="template-details">
+                    <div><strong>Template:</strong> {{ selectedPrompt.template.Name }}</div>
+                    @if (selectedPrompt.template.Description) {
+                      <div><strong>Description:</strong> {{ selectedPrompt.template.Description }}</div>
+                    }
+                    @if (selectedPrompt.templateContent) {
+                      <div><strong>Content Length:</strong> {{ (selectedPrompt.templateContent.TemplateText || '').length }} characters</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </kendo-splitter-pane>
+          
+          <!-- Template Editor Panel -->
+          <kendo-splitter-pane 
+            [resizable]="true"
+            [scrollable]="true">
+            <div class="template-editor-panel">
+              <div class="editor-header">
+                <h3>Template Content</h3>
+                <div class="editor-info">
+                  @if (isEditing) {
+                    <span class="editor-badge editor-badge-info">Nunjucks Template</span>
+                    @if (isDirty) {
+                      <span class="editor-badge editor-badge-warning">Unsaved Changes</span>
+                    }
+                  } @else {
+                    <span class="editor-badge editor-badge-secondary">Read Only</span>
+                  }
+                </div>
+              </div>
+              
+              <div class="editor-container">
+                <mj-code-editor
+                  [value]="editorContent"
+                  [languages]="supportedLanguages"
+                  [language]="editorLanguage"
+                  [placeholder]="'Enter your Nunjucks template here...'"
+                  [lineWrapping]="true"
+                  [highlightWhitespace]="false"
+                  [indentWithTab]="true"
+                  [indentUnit]="'  '"
+                  [readonly]="!isEditing"
+                  (change)="onEditorContentChange($event)">
+                </mj-code-editor>
+              </div>
+              
+              <!-- Editor Help -->
+              @if (isEditing) {
+                <div class="editor-help">
+                  <div class="help-section">
+                    <h5>Nunjucks Template Syntax</h5>
+                    <div class="syntax-examples">
+                      <div class="syntax-item">
+                        <code>{{ "{{ variable }}" }}</code> - Variable output
+                      </div>
+                      <div class="syntax-item">
+                        <code>{{ "{% if condition %} ... {% endif %}" }}</code> - Conditionals
+                      </div>
+                      <div class="syntax-item">
+                        <code>{{ "{% for item in items %} ... {% endfor %}" }}</code> - Loops
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,164 @@
+<div class="agent-configuration-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  
+  <!-- Agent Editor Modal -->
+  @if (showEditor && selectedAgentId) {
+    <mj-agent-editor
+      [agentId]="selectedAgentId"
+      (close)="closeAgentEditor()"
+      (openAgent)="onOpenAgentFromEditor($event)"
+      mjFillContainer>
+    </mj-agent-editor>
+  } @else {
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-info">
+      <button 
+        type="button" 
+        class="filter-toggle-btn"
+        (click)="toggleFilterPanel()"
+        title="Toggle Filters">
+        <i class="fa-solid fa-filter"></i>
+        @if (filterPanelVisible) {
+          Hide Filters
+        } @else {
+          Show Filters
+        }
+      </button>
+      <span class="agent-count">{{ filteredAgents.length }} agents</span>
+    </div>
+    
+    <div class="header-controls">
+      <button 
+        type="button" 
+        class="control-btn"
+        title="Create New Agent">
+        <i class="fa-solid fa-plus"></i>
+        New Agent
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content with Splitter -->
+  <div class="main-content" mjFillContainer>
+    <kendo-splitter 
+      class="main-splitter"
+      orientation="horizontal"
+      (layoutChange)="onMainSplitterChange($event)"
+      mjFillContainer>
+      
+      <!-- Filter Panel (Left) -->
+      <kendo-splitter-pane 
+        [size]="filterPanelVisible ? '320px' : '0px'"
+        [collapsible]="false"
+        [resizable]="filterPanelVisible"
+        [scrollable]="false"
+        [hidden]="!filterPanelVisible">
+        <mj-agent-filter-panel
+          [agents]="agents"
+          [filteredAgents]="filteredAgents"
+          [filters]="currentFilters"
+          (filtersChange)="onFiltersChange($event)"
+          (filterChange)="onFilterChange()"
+          (resetFilters)="onResetFilters()"
+          (closePanel)="toggleFilterPanel()">
+        </mj-agent-filter-panel>
+      </kendo-splitter-pane>
+      
+      <!-- Agents List Panel -->
+      <kendo-splitter-pane 
+        [resizable]="true"
+        [scrollable]="false">
+        <div class="agents-content">
+          <!-- Loading State -->
+          @if (isLoading) {
+            <div class="loading-container">
+              <div class="loading-content">
+                <div class="loading-spinner">
+                  <div class="spinner-ring"></div>
+                  <div class="spinner-ring"></div>
+                  <div class="spinner-ring"></div>
+                </div>
+                <div class="loading-text">Loading agents...</div>
+              </div>
+            </div>
+          }
+
+          <!-- Agents List -->
+          @if (!isLoading) {
+            @if (filteredAgents.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-robot"></i>
+                <h3>No agents found</h3>
+                <p>No agents match your current filters. Try adjusting your search criteria or create a new agent.</p>
+              </div>
+            } @else {
+              <div class="agents-grid">
+                @for (agent of filteredAgents; track agent.ID) {
+                  <div class="agent-card" (click)="openAgentEditor(agent.ID)">
+                    <!-- Card Header -->
+                    <div class="card-header">
+                      <div class="agent-info">
+                        <div class="agent-icon">
+                          <i [class]="getExecutionModeIcon(agent.ExecutionMode)"></i>
+                        </div>
+                        <div class="agent-details">
+                          <h4 class="agent-name">{{ agent.Name }}</h4>
+                          <div class="agent-meta">
+                            <span class="agent-type">{{ agent.ExecutionMode }}</span>
+                            @if (agent.ExposeAsAction) {
+                              <span class="agent-category">• Exposed as Action</span>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="status-badge execution-mode-{{ agent.ExecutionMode.toLowerCase() }}">
+                        {{ agent.ExecutionMode }}
+                      </div>
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                      @if (agent.Description) {
+                        <p class="agent-description">{{ agent.Description }}</p>
+                      } @else {
+                        <p class="agent-description text-muted">No description provided</p>
+                      }
+                      
+                      @if (agent.Parent) {
+                        <div class="agent-parent">
+                          <span class="fa-solid fa-link"></span>
+                          Parent: {{ agent.Parent }}
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Card Actions -->
+                    <div class="card-actions" (click)="$event.stopPropagation()">
+                      <button 
+                        type="button" 
+                        class="action-btn"
+                        (click)="openAgentEditor(agent.ID)">
+                        <i class="fa-solid fa-eye"></i>
+                        View
+                      </button>
+                      
+                      <button 
+                        type="button" 
+                        class="action-btn action-btn-primary"
+                        (click)="openAgentEditor(agent.ID)">
+                        <i class="fa-solid fa-edit"></i>
+                        Configure
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </kendo-splitter-pane>
+    </kendo-splitter>
+  </div>
+  }
+</div>

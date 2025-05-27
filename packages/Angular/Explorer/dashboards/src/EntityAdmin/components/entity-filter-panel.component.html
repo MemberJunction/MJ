@@ -1,0 +1,86 @@
+<div class="filter-panel">
+  <div class="filter-panel-header">
+    <h3>Entity Filters</h3>
+    <div class="filter-summary-inline">
+      <span class="summary-value">{{ filteredEntities.length }}</span>
+      <span class="summary-label">of {{ entities.length }}</span>
+    </div>
+    <button class="close-btn" (click)="toggleFilterPanel()">
+      <span class="fa-solid fa-times"></span>
+    </button>
+  </div>
+  
+  <div class="filter-content">
+    <!-- Schema Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-database"></span>
+        Schema
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.schemaName"
+        (ngModelChange)="onFilterChange()">
+        <option [ngValue]="null">All Schemas</option>
+        <option *ngFor="let schema of distinctSchemas" [ngValue]="schema.value">
+          {{ schema.text }}
+        </option>
+      </select>
+    </div>
+    
+    <!-- Entity Name Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-search"></span>
+        Entity Name
+      </label>
+      <input 
+        type="text"
+        class="filter-input"
+        [(ngModel)]="filters.entityName"
+        (ngModelChange)="onFilterChange()"
+        (input)="onFilterChange()"
+        placeholder="Search entities...">
+    </div>
+    
+    <!-- Base Table Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-table"></span>
+        Base Table
+      </label>
+      <input 
+        type="text"
+        class="filter-input"
+        [(ngModel)]="filters.baseTable"
+        (ngModelChange)="onFilterChange()"
+        (input)="onFilterChange()"
+        placeholder="Search tables...">
+    </div>
+    
+    <!-- Entity Status Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-check-circle"></span>
+        Status
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.entityStatus"
+        (ngModelChange)="onFilterChange()">
+        <option [ngValue]="null">All Statuses</option>
+        <option value="Active">Active</option>
+        <option value="Deprecated">Deprecated</option>
+        <option value="Disabled">Disabled</option>
+      </select>
+    </div>
+    
+    <!-- Reset Button -->
+    <div class="filter-actions">
+      <button class="reset-btn" (click)="resetAllFilters()" title="Reset all filters">
+        <span class="fa-solid fa-undo"></span>
+        Reset Filters
+      </button>
+    </div>
+  </div>
+</div>

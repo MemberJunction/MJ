@@ -29,7 +29,7 @@ import { ConversationArtifactPermissionEntity } from '@memberjunction/core-entit
             [record]="record"
             [ShowLabel]="true"
             FieldName="AccessLevel"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

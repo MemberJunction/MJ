@@ -28,6 +28,19 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
+                        AI Prompts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','AIModelTypeID')"  
+                            [NewRecordValues]="NewRecordValues('AI Prompts')"
+                            [AllowLoad]="IsCurrentTab('AI Prompts')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>

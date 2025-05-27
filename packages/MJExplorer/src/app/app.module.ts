@@ -52,6 +52,7 @@ import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-
 import { environment } from 'src/environments/environment';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { NavigationItemDemoComponent } from './demo/navigation-item.component';
+import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
 
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
@@ -67,7 +68,11 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
 }
 
 @NgModule({
-  declarations: [AppComponent, NavigationItemDemoComponent],
+  declarations: [
+    AppComponent, 
+    NavigationItemDemoComponent,
+    HelloDashboardComponent
+  ],
   imports: [
     BrowserModule,
     FormsModule,

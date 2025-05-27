@@ -1,0 +1,69 @@
+<div class="filter-panel">
+  <div class="filter-panel-header">
+    <h3>Configuration Filters</h3>
+    <div class="filter-summary-inline">
+      <span class="summary-value">{{ filteredConfigurations.length }}</span>
+      <span class="summary-label">of {{ configurations.length }}</span>
+    </div>
+    <button class="close-btn" (click)="toggleFilterPanel()">
+      <span class="fa-solid fa-times"></span>
+    </button>
+  </div>
+  
+  <div class="filter-content">
+    <!-- Search Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-search"></span>
+        Search
+      </label>
+      <input 
+        type="text"
+        class="filter-input"
+        [(ngModel)]="filters.searchTerm"
+        (ngModelChange)="onFilterChange()"
+        (input)="onFilterChange()"
+        placeholder="Search configurations...">
+    </div>
+    
+    <!-- Status Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-check-circle"></span>
+        Status
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.status"
+        (ngModelChange)="onFilterChange()">
+        @for (option of statusOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
+    </div>
+    
+    <!-- Default Configuration Filter -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-star"></span>
+        Default
+      </label>
+      <select 
+        class="filter-select"
+        [(ngModel)]="filters.isDefault"
+        (ngModelChange)="onFilterChange()">
+        @for (option of isDefaultOptions; track option.value) {
+          <option [value]="option.value">{{ option.text }}</option>
+        }
+      </select>
+    </div>
+    
+    <!-- Reset Button -->
+    <div class="filter-actions">
+      <button class="reset-btn" (click)="resetAllFilters()" title="Reset all filters">
+        <span class="fa-solid fa-undo"></span>
+        Reset Filters
+      </button>
+    </div>
+  </div>
+</div>

@@ -2074,12 +2074,15 @@ export class SQLServerDataProvider
       // get the latest update date from all the results
       const latestUpdateDate = results.reduce(
         (acc, result) => {
-          if (result.LatestUpdatedDate && result.LatestUpdatedDate > acc) {
-            return result.LatestUpdatedDate;
+          if (result?.LatestUpdateDate) {
+            const theDate = new Date(result.LatestUpdateDate);
+            if (result.LatestUpdateDate && theDate.getTime() > acc.getTime()) {
+              return theDate;
+            }
           }
           return acc;
         },
-        new Date(1900, 1, 1)
+        new Date(0)  // Unix epoch - lowest possible date to start with
       );
 
       return {

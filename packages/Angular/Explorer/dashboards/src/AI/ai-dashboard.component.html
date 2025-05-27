@@ -1,0 +1,70 @@
+<div class="ai-dashboard-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">Loading AI Dashboard...</div>
+      </div>
+    </div>
+  }
+  
+  @if (!isLoading) {
+    <div class="dashboard-content-wrapper">
+      <div class="dashboard-content">
+        @if (activeTab === 'models') {
+          <app-model-management
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            mjFillContainer>
+          </app-model-management>
+        }
+        
+        @if (activeTab === 'prompts') {
+          <app-prompt-management
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onPromptManagementStateChange($event)"
+            mjFillContainer>
+          </app-prompt-management>
+        }
+        
+        @if (activeTab === 'agents') {
+          <app-agent-configuration
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onAgentConfigurationStateChange($event)"
+            mjFillContainer>
+          </app-agent-configuration>
+        }
+        
+        @if (activeTab === 'monitoring') {
+          <app-execution-monitoring
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            mjFillContainer>
+          </app-execution-monitoring>
+        }
+        
+        @if (activeTab === 'config') {
+          <app-system-configuration
+            (openEntityRecord)="onOpenEntityRecord($event)"
+            (stateChange)="onSystemConfigurationStateChange($event)"
+            mjFillContainer>
+          </app-system-configuration>
+        }
+      </div>
+      
+      <div class="ai-dashboard-nav">
+        @for (navItem of navigationConfig; track $index) {
+          <div 
+            class="nav-item"
+            [class.active]="navItem.selected"
+            (click)="onTabChange(navigationItems[$index])">
+            <i [class]="navItem.icon"></i>
+            <span>{{ navItem.text }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

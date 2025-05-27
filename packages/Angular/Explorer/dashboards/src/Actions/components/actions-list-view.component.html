@@ -1,0 +1,124 @@
+<div class="actions-list-view" mjFillContainer>
+  <!-- Header with filters -->
+  <div class="list-header">
+    <div class="header-title">
+      <h2><i class="fa-solid fa-cogs"></i> Actions</h2>
+      <div class="results-count">{{ filteredActions.length }} of {{ actions.length }} actions</div>
+    </div>
+    
+    <div class="filters-row">
+      <div class="search-container">
+        <kendo-textbox 
+          placeholder="Search actions..." 
+          [value]="searchTerm$.value"
+          (valueChange)="onSearchChange($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+      
+      <div class="filter-group">
+        <kendo-dropdownlist 
+          [data]="statusOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedStatus$.value"
+          (valueChange)="onStatusFilterChange($event)">
+        </kendo-dropdownlist>
+        
+        <kendo-dropdownlist 
+          [data]="typeOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedType$.value"
+          (valueChange)="onTypeFilterChange($event)">
+        </kendo-dropdownlist>
+        
+        <kendo-dropdownlist 
+          [data]="categoryOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedCategory$.value"
+          (valueChange)="onCategoryFilterChange($event)">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions List -->
+  <div class="actions-list">
+    @if (filteredActions.length > 0) {
+      @for (action of filteredActions; track action.ID) {
+        <div class="action-card" (click)="openAction(action)">
+          <div class="action-icon">
+            <i [class]="getTypeIcon(action.Type)"></i>
+          </div>
+          
+          <div class="action-main">
+            <div class="action-header">
+              <h3 class="action-name">{{ action.Name }}</h3>
+              <div class="action-badges">
+                <kendo-chip 
+                  [themeColor]="getStatusColor(action.Status)"
+                  [size]="'small'">
+                  {{ action.Status }}
+                </kendo-chip>
+                @if (action.Type === 'Generated') {
+                  <kendo-chip 
+                    themeColor="info"
+                    [size]="'small'">
+                    <i class="fa-solid fa-robot"></i> AI Generated
+                  </kendo-chip>
+                }
+              </div>
+            </div>
+            
+            <div class="action-description">
+              {{ action.Description || 'No description available' }}
+            </div>
+            
+            <div class="action-details">
+              <div class="detail-item">
+                <i class="fa-solid fa-folder"></i>
+                <span>{{ getCategoryName(action.CategoryID) }}</span>
+              </div>
+              @if (action.__mj_UpdatedAt) {
+                <div class="detail-item">
+                  <i class="fa-solid fa-clock"></i>
+                  <span>Updated {{ action.__mj_UpdatedAt | date:'MMM d, yyyy' }}</span>
+                </div>
+              }
+              @if (action.CodeApprovalStatus && action.Type === 'Generated') {
+                <div class="detail-item">
+                  <i class="fa-solid fa-check-circle"></i>
+                  <span>{{ action.CodeApprovalStatus }}</span>
+                </div>
+              }
+            </div>
+          </div>
+          
+          <div class="action-actions">
+            <button kendoButton 
+              [fillMode]="'flat'" 
+              [icon]="'more-vertical'"
+              (click)="$event.stopPropagation()">
+            </button>
+          </div>
+        </div>
+      }
+    } @else if (!isLoading) {
+      <div class="empty-state">
+        <i class="fa-solid fa-search"></i>
+        <h3>No actions found</h3>
+        <p>Try adjusting your search or filter criteria</p>
+      </div>
+    }
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+    </div>
+  }
+</div>
