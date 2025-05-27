@@ -1,0 +1,429 @@
+<div class="prompt-version-control">
+  <!-- Prompt Selector (when no prompt selected) -->
+  @if (!prompt) {
+    <div class="prompt-selector-section">
+      <h5 class="section-title">
+        <i class="fa-solid fa-history"></i>
+        Version History
+      </h5>
+      <p class="text-muted mb-3">Select a prompt to view its version history</p>
+      
+      <div class="prompt-selector">
+        <div class="search-box mb-3">
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="fa-solid fa-search"></i>
+            </span>
+            <input 
+              type="text" 
+              class="form-control" 
+              placeholder="Search prompts..."
+              [ngModel]="promptSearchTerm$.value"
+              (ngModelChange)="onPromptSearchChange($event)">
+          </div>
+        </div>
+        
+        <div class="prompts-list">
+          @if (availablePrompts.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-comment-dots text-muted"></i>
+              <p class="text-muted">No prompts available</p>
+            </div>
+          } @else {
+            @for (promptItem of filteredAvailablePrompts; track promptItem.ID) {
+              <div class="prompt-item" (click)="selectPromptForHistory(promptItem)">
+                <div class="prompt-info">
+                  <h6 class="prompt-title">{{ promptItem.Name }}</h6>
+                  @if (promptItem.Description) {
+                    <p class="prompt-description">{{ promptItem.Description }}</p>
+                  }
+                </div>
+                <div class="prompt-actions">
+                  <i class="fa-solid fa-arrow-right"></i>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  } @else {
+    <!-- Header toolbar -->
+    <div class="version-toolbar">
+    <div class="toolbar-section">
+      <h5 class="toolbar-title">
+        <i class="fa-solid fa-history"></i>
+        Version History
+        @if (prompt) {
+          <span class="prompt-name">- {{ prompt.Name }}</span>
+        }
+      </h5>
+      
+      <div class="view-mode-toggle">
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="view" id="timelineView" value="timeline" [(ngModel)]="currentView" (ngModelChange)="onViewChange($event)">
+          <label class="btn btn-outline-primary" for="timelineView">
+            <i class="fa-solid fa-timeline"></i>
+            Timeline
+          </label>
+          
+          <input type="radio" class="btn-check" name="view" id="comparisonView" value="comparison" [(ngModel)]="currentView" (ngModelChange)="onViewChange($event)">
+          <label class="btn btn-outline-primary" for="comparisonView">
+            <i class="fa-solid fa-code-compare"></i>
+            Compare
+          </label>
+          
+          <input type="radio" class="btn-check" name="view" id="detailsView" value="details" [(ngModel)]="currentView" (ngModelChange)="onViewChange($event)">
+          <label class="btn btn-outline-primary" for="detailsView">
+            <i class="fa-solid fa-list"></i>
+            Details
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="toolbar-section">
+      <div class="filter-controls">
+        <label class="form-label">Filter:</label>
+        <select class="form-select form-select-sm" [(ngModel)]="filterBy" (ngModelChange)="onFilterChange($event)">
+          <option value="all">All Changes</option>
+          <option value="updates">Updates Only</option>
+          <option value="major">Major Changes</option>
+          <option value="template">Template Changes</option>
+        </select>
+        
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="showSystem" [(ngModel)]="showSystemChanges" (ngModelChange)="applyFiltersPublic()">
+          <label class="form-check-label" for="showSystem">System</label>
+        </div>
+      </div>
+      
+      <div class="search-controls">
+        <input 
+          type="text" 
+          class="form-control form-control-sm" 
+          placeholder="Search changes..."
+          [ngModel]="searchTerm$.value" (ngModelChange)="onSearchChange($event)">
+      </div>
+    </div>
+    
+    <div class="toolbar-section">
+      <div class="action-buttons">
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="onSortDirectionChange()" [title]="'Sort ' + (sortDirection === 'asc' ? 'descending' : 'ascending')">
+          <i class="fa-solid" [class.fa-sort-up]="sortDirection === 'asc'" [class.fa-sort-down]="sortDirection === 'desc'"></i>
+          Sort
+        </button>
+        
+        <button type="button" class="btn btn-sm btn-outline-secondary" (click)="refreshHistory()" [disabled]="isLoading" title="Refresh history">
+          <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
+          Refresh
+        </button>
+        
+        <button type="button" class="btn btn-sm btn-outline-info" (click)="exportVersionHistory()" title="Export history">
+          <i class="fa-solid fa-download"></i>
+          Export
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Loading state -->
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="loading-message">{{ loadingMessage }}</p>
+      </div>
+    </div>
+  } @else {
+    
+    <!-- Timeline View -->
+    @if (currentView === 'timeline') {
+      <div class="timeline-container">
+        @if (versions.length > 0) {
+          <div class="version-timeline">
+            @for (version of versions; track version.id; let i = $index) {
+              <div class="timeline-item" 
+                   [class.selected]="selectedVersion?.id === version.id"
+                   [class.active]="version.isActive"
+                   (click)="onVersionSelect(version)">
+                
+                <div class="timeline-marker">
+                  <div class="marker-icon" [class]="getChangeTypeClass(version.changeType)">
+                    <i class="fa-solid" [class]="getChangeTypeIcon(version.changeType)"></i>
+                  </div>
+                  @if (i < versions.length - 1) {
+                    <div class="timeline-line"></div>
+                  }
+                </div>
+                
+                <div class="timeline-content">
+                  <div class="version-header">
+                    <div class="version-info">
+                      <h6 class="version-label">{{ getVersionLabel(version) }}</h6>
+                      <div class="version-meta">
+                        <span class="change-date">{{ version.changedAt | date:'medium' }}</span>
+                        <span class="changed-by">by {{ version.changedBy }}</span>
+                        <span class="change-source badge" [class.badge-primary]="version.changeSource === 'Internal'" [class.badge-secondary]="version.changeSource === 'External'">
+                          {{ version.changeSource }}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div class="version-actions">
+                      @if (showComparison && i < versions.length - 1) {
+                        <button 
+                          type="button" 
+                          class="btn btn-sm btn-outline-primary"
+                          (click)="$event.stopPropagation(); startComparison(version)"
+                          title="Compare with next version">
+                          <i class="fa-solid fa-code-compare"></i>
+                        </button>
+                      }
+                      
+                      @if (showRestoreActions && version.canRestore) {
+                        <button 
+                          type="button" 
+                          class="btn btn-sm btn-outline-success"
+                          (click)="$event.stopPropagation(); onVersionRestore(version)"
+                          title="Restore this version">
+                          <i class="fa-solid fa-undo"></i>
+                        </button>
+                      }
+                    </div>
+                  </div>
+                  
+                  <div class="version-description">
+                    {{ version.changesDescription }}
+                  </div>
+                  
+                  @if (version.changesJSON && timelineConfig.showDiffs) {
+                    <div class="changes-summary">
+                      <div class="changes-list">
+                        @for (field of getObjectKeys(version.changesJSON); track field) {
+                          <div class="change-item">
+                            <span class="field-name">{{ getFieldDisplayNamePublic(field) }}</span>
+                            @if (version.changesJSON[field].oldValue !== undefined) {
+                              <span class="change-arrow">
+                                <span class="old-value">{{ formatChangeValue(version.changesJSON[field].oldValue) }}</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                                <span class="new-value">{{ formatChangeValue(version.changesJSON[field].newValue) }}</span>
+                              </span>
+                            } @else {
+                              <span class="new-value">{{ formatChangeValue(version.changesJSON[field].newValue) }}</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="no-versions-message">
+            <i class="fa-solid fa-info-circle text-muted"></i>
+            <p class="text-muted">No version history available for this prompt.</p>
+            @if (prompt && !prompt.EntityInfo.TrackRecordChanges) {
+              <p class="text-muted"><small>Record changes tracking may not be enabled for prompts.</small></p>
+            }
+          </div>
+        }
+      </div>
+    }
+    
+    <!-- Comparison View -->
+    @if (currentView === 'comparison') {
+      <div class="comparison-container">
+        <!-- Version selectors -->
+        <div class="comparison-selectors">
+          <div class="selector-group">
+            <label class="form-label">Compare from:</label>
+            <select class="form-select" [(ngModel)]="compareFromVersion" (ngModelChange)="generateComparisonPublic()">
+              @for (version of versions; track version.id) {
+                <option [ngValue]="version">{{ getVersionLabel(version) }} - {{ version.changedAt | date:'short' }}</option>
+              }
+            </select>
+          </div>
+          
+          <div class="comparison-arrow">
+            <i class="fa-solid fa-arrow-right"></i>
+          </div>
+          
+          <div class="selector-group">
+            <label class="form-label">Compare to:</label>
+            <select class="form-select" [(ngModel)]="compareToVersion" (ngModelChange)="generateComparisonPublic()">
+              @for (version of versions; track version.id) {
+                <option [ngValue]="version">{{ getVersionLabel(version) }} - {{ version.changedAt | date:'short' }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        
+        <!-- Comparison results -->
+        @if (comparisonResult) {
+          <div class="comparison-results">
+            <div class="comparison-header">
+              <h6 class="comparison-title">
+                <i class="fa-solid fa-code-compare"></i>
+                Changes between {{ getVersionLabel(comparisonResult.fromVersion) }} and {{ getVersionLabel(comparisonResult.toVersion) }}
+              </h6>
+              <div class="changes-count">
+                {{ comparisonResult.differences.length }} change(s) found
+              </div>
+            </div>
+            
+            @if (comparisonResult.differences.length > 0) {
+              <div class="differences-list">
+                @for (diff of comparisonResult.differences; track diff.fieldName) {
+                  <div class="difference-item" [class]="'diff-' + diff.changeType">
+                    <div class="diff-header">
+                      <div class="field-info">
+                        <strong class="field-name">{{ diff.displayName }}</strong>
+                        <span class="change-type badge" 
+                              [class.badge-success]="diff.changeType === 'added'"
+                              [class.badge-warning]="diff.changeType === 'modified'"
+                              [class.badge-danger]="diff.changeType === 'removed'">
+                          {{ diff.changeType }}
+                        </span>
+                        @if (diff.isTemplate) {
+                          <span class="template-badge badge badge-info">Template</span>
+                        }
+                      </div>
+                    </div>
+                    
+                    <div class="diff-content">
+                      @if (diff.changeType === 'modified') {
+                        <div class="side-by-side-diff">
+                          <div class="diff-old">
+                            <h6 class="diff-label">Before:</h6>
+                            <div class="diff-value old-value">
+                              @if (diff.isTemplate && diff.fieldName === 'TemplateText') {
+                                <pre class="template-content">{{ diff.oldValue }}</pre>
+                              } @else {
+                                {{ formatChangeValue(diff.oldValue) }}
+                              }
+                            </div>
+                          </div>
+                          
+                          <div class="diff-new">
+                            <h6 class="diff-label">After:</h6>
+                            <div class="diff-value new-value">
+                              @if (diff.isTemplate && diff.fieldName === 'TemplateText') {
+                                <pre class="template-content">{{ diff.newValue }}</pre>
+                              } @else {
+                                {{ formatChangeValue(diff.newValue) }}
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      } @else if (diff.changeType === 'added') {
+                        <div class="diff-added">
+                          <h6 class="diff-label">Added:</h6>
+                          <div class="diff-value new-value">{{ formatChangeValue(diff.newValue) }}</div>
+                        </div>
+                      } @else if (diff.changeType === 'removed') {
+                        <div class="diff-removed">
+                          <h6 class="diff-label">Removed:</h6>
+                          <div class="diff-value old-value">{{ formatChangeValue(diff.oldValue) }}</div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="no-differences">
+                <i class="fa-solid fa-check-circle text-success"></i>
+                <p class="text-muted">No differences found between the selected versions.</p>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+    
+    <!-- Details View -->
+    @if (currentView === 'details') {
+      <div class="details-container">
+        @if (selectedVersion) {
+          <div class="version-details">
+            <div class="details-header">
+              <h6 class="details-title">{{ getVersionLabel(selectedVersion) }}</h6>
+              <div class="details-meta">
+                <span class="change-date">{{ selectedVersion.changedAt | date:'full' }}</span>
+                <span class="changed-by">Changed by {{ selectedVersion.changedBy }}</span>
+              </div>
+            </div>
+            
+            <div class="details-content">
+              <div class="detail-section">
+                <h6 class="section-title">Change Information</h6>
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span class="detail-label">Type:</span>
+                    <span class="detail-value">
+                      <i class="fa-solid" [class]="getChangeTypeIcon(selectedVersion.changeType)"></i>
+                      {{ selectedVersion.changeType }}
+                    </span>
+                  </div>
+                  
+                  <div class="detail-item">
+                    <span class="detail-label">Source:</span>
+                    <span class="detail-value">{{ selectedVersion.changeSource }}</span>
+                  </div>
+                  
+                  <div class="detail-item">
+                    <span class="detail-label">Description:</span>
+                    <span class="detail-value">{{ selectedVersion.changesDescription }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              @if (selectedVersion.fullRecordJSON) {
+                <div class="detail-section">
+                  <h6 class="section-title">Record State</h6>
+                  <div class="json-viewer">
+                    <pre class="json-content">{{ selectedVersion.fullRecordJSON | json }}</pre>
+                  </div>
+                </div>
+              }
+              
+              @if (selectedVersion.templateContent) {
+                <div class="detail-section">
+                  <h6 class="section-title">Template Content</h6>
+                  <div class="template-viewer">
+                    <pre class="template-content">{{ selectedVersion.templateContent.TemplateText }}</pre>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        } @else {
+          <div class="no-selection-message">
+            <i class="fa-solid fa-hand-pointer text-muted"></i>
+            <p class="text-muted">Select a version from the timeline to view details.</p>
+          </div>
+        }
+      </div>
+    }
+  }
+  
+  <!-- Error state -->
+  @if (error) {
+    <div class="error-container">
+      <div class="alert alert-danger" role="alert">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        {{ error }}
+        <button type="button" class="btn btn-sm btn-outline-danger ms-2" (click)="refreshHistory()">
+          <i class="fa-solid fa-refresh"></i>
+          Retry
+        </button>
+      </div>
+    </div>
+  }
+  }
+</div>

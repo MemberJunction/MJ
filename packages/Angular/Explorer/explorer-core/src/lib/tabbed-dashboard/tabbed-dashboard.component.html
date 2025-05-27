@@ -1,4 +1,12 @@
 <div class="tabbed-dashboard-container" mjFillContainer [rightMargin]="10" [bottomMargin]="10">
+  <!-- Dashboard Preferences Button -->
+  <button type="button" 
+          class="preferences-button"
+          (click)="openPreferencesDialog()"
+          title="Dashboard Preferences">
+    <i class="fa-solid fa-cog"></i>
+  </button>
+
   @if (loading) {
     <div class="loading-indicator">
       Loading dashboards...

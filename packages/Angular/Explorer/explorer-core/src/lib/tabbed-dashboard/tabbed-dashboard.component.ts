@@ -3,8 +3,10 @@ import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@membe
 import { DashboardEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
 import { InvokeManualResize, MJGlobal, SafeJSONParse } from '@memberjunction/global';
-import { MJTabComponent, MJTabStripComponent } from '@memberjunction/ng-tabstrip';
+import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 import { Router } from '@angular/router';
+import { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from '../dashboard-preferences-dialog/dashboard-preferences-dialog.component';
+import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 
 @Component({
   selector: 'mj-tabbed-dashboard',
@@ -166,19 +168,32 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         const dashboardEntity = this.dashboards.find(d => d.ID === dashboardId);
         if (dashboardEntity && this.tabstripContainer) {
           // Use the type of the dashboard to determine which class to instantiate
-          const classInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboardEntity.DriverClass!);
-          if (!classInfo || !classInfo.SubClass) {
-            // Class not found error
-            const errorMsg = `Dashboard class '${dashboardEntity.DriverClass}' not found`;
-            console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
-            this.displayDashboardError(dashboardId, `Dashboard component not available: ${dashboardEntity.DriverClass}`, 'The dashboard class is not registered. Please contact your system administrator.');
-            return undefined;
-          }
+          let instance: BaseDashboard | undefined;
+          let componentRef: ComponentRef<BaseDashboard>;
+          if (dashboardEntity.Type === 'Code') {
+            const classInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboardEntity.DriverClass!);
+            if (!classInfo || !classInfo.SubClass) {
+              // Class not found error
+              const errorMsg = `Dashboard class '${dashboardEntity.DriverClass}' not found`;
+              console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
+              this.displayDashboardError(dashboardId, `Dashboard component not available: ${dashboardEntity.DriverClass}`, 'The dashboard class is not registered. Please contact your system administrator.');
+              return undefined;
+            }
 
-          // Create the component dynamically
-          const componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
-          const instance = componentRef.instance as BaseDashboard;
-          
+            // Create the component dynamically
+            componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
+            instance = componentRef.instance as BaseDashboard;
+          }
+          else {
+            // configuration type dashboard, so we can use the 
+            // Create the component dynamically
+            componentRef = this.tabstripContainer.createComponent<BaseDashboard>(SingleDashboardComponent);
+            instance = componentRef.instance as BaseDashboard;
+            // get the single dashboard component to set the DashboardID
+            const resData = new ResourceData();
+            resData.ResourceRecordID = dashboardId;
+            (instance as SingleDashboardComponent).ResourceData = resData;  
+          }
           if (!instance) {
             // Instance creation failed error
             const errorMsg = `Failed to create instance of dashboard class '${dashboardEntity.DriverClass}'`;
@@ -310,6 +325,80 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         // now invoke a manual resize
         InvokeManualResize(100);
       }
+    }
+  }
+
+  public openPreferencesDialog(): void {
+    try {
+      // Create the preferences dialog component dynamically
+      const componentRef = this.tabstripContainer.createComponent(DashboardPreferencesDialogComponent);
+      const dialogInstance = componentRef.instance;
+      
+      // Configure the dialog
+      dialogInstance.applicationId = this.ApplicationID;
+      dialogInstance.scope = this.ApplicationID ? 'App' : 'Global';
+      
+      // Handle dialog result
+      dialogInstance.result.subscribe((result: DashboardPreferencesResult) => {
+        if (result.saved) {
+          // Preferences were saved, reload dashboards
+          this.refreshDashboards();
+        }
+        
+        // Clean up the dialog component
+        componentRef.destroy();
+      });
+      
+      // The Kendo dialog will handle its own modal overlay and positioning
+      // Just append to body for proper z-index stacking
+      document.body.appendChild(componentRef.location.nativeElement);
+      
+      // Clean up when dialog closes
+      dialogInstance.result.subscribe(() => {
+        if (document.body.contains(componentRef.location.nativeElement)) {
+          document.body.removeChild(componentRef.location.nativeElement);
+        }
+      });
+      
+    } catch (error) {
+      LogError('Error opening preferences dialog', null, error);
+    }
+  }
+
+  private async refreshDashboards(): Promise<void> {
+    try {
+      this.loading = true;
+      this.error = null;
+      
+      // Clear existing dashboard instances
+      this.dashboardComponentRefs.forEach(componentRef => {
+        componentRef.destroy();
+      });
+      this.dashboardComponentRefs.clear();
+      this.dashboardInstances.clear();
+      
+      // Reload dashboards
+      await this.loadDashboards();
+      
+      // Move content to correct container
+      setTimeout(() => {
+        this.moveContentToCorrectContainer();
+        
+        // Load first dashboard if available
+        if (this.DefaultDashboardPosition !== 'first' && this.dashboards.length > 0) {
+          const dashboardId = this.dashboards[0].ID;
+          const instance = this.getDashboardInstance(dashboardId);
+          if (instance) {
+            instance.SetVisible(true);
+            InvokeManualResize(100);
+          }
+        }
+      }, 10);
+    } catch (error) {
+      LogError('Error refreshing dashboards', null, error);
+      this.error = 'Failed to refresh dashboards';
+    } finally {
+      this.loading = false;
     }
   }
 
