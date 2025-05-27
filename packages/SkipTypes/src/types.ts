@@ -742,6 +742,13 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
     htmlReportObjectName: string | null;
 
     /**
+     * For HTML reports, it is possible the AI will generate more than one option. If more than one option was generated
+     * this array will contain the additional options that the AI generated that can be provided to the user as alternatives 
+     * to the primary HTML report that is provided in the htmlReport property.
+     */
+    additionalHTMLReportOptions?: SkipHTMLReportOption[];
+
+    /**
      * If the AI Agent decides it would be best to display the result in an artifact, this information can be used by the calling application to properly
      * associate this specific response with the artifact that is being created. This is typically used for output that is likely to have iterations where 
      * artifacts are a clean way of managing a UI in the calling application where you can show multiple versions/etc.
@@ -749,6 +756,33 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
     artifactRequest?: SkipAPIArtifactRequest;
 }
 
+/**
+ * Defines a given option for an HTML report that the user can choose. The htmlReport/htmlReportObjectName properties are used to render the HTML report in the UI.
+ */
+export type SkipHTMLReportOption = {
+    /**
+     * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
+     * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
+     * as chosen by the container application.
+     */
+    htmlRpeport: string;
+
+    /**
+     * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
+     * object name that is used to communicate with the HTML Report. This name will be a globally unique name that is used to identify the object
+     * agains the global memory of the browser (e.g. the window object) and is used to communicate with the HTML report. The object will comply with the
+     * @interface SkipHTMLReportObject interface and will be used to communicate with the HTML report.
+     * 
+     * Generally speaking, this object name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
+     * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
+     * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
+     */
+    htmlReportObjectName: string;
+}
+
+/**
+ * Defines the shape of the data that is used to request an artifact from the Skip API Server
+ */
 export type SkipAPIArtifactRequest = {
     /**
      * The agent should request new_artifact if an entirely new artifact should be created. This should be selected if there are no existing artifacts in the 

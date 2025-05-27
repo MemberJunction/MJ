@@ -187,7 +187,14 @@ const mjServerConfig = {
     enableSmartFilters: true,
   },
   askSkip: {
-    organizationInfo: '',
+    chatURL: process.env.ASK_SKIP_CHAT_URL,
+    learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,
+    learningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
+    learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
+    learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP,
+    orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
+    apiKey: process.env.ASK_SKIP_API_KEY,  
+    organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
     entitiesToSendSkip: {
       excludeSchemas: ['__mj'],
       includeEntitiesFromExcludedSchemas: [
@@ -244,8 +251,6 @@ const config = {
   enableIntrospection: process.env.ENABLE_INTROSPECTION,
   websiteRunFromPackage: process.env.WEBSITE_RUN_FROM_PACKAGE,
   userEmailMap: process.env.USER_EMAIL_MAP,
-  ___skipAPIurl: process.env.ASK_SKIP_API_URL,
-  ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   auth0Domain: process.env.AUTH0_DOMAIN,
   auth0WebClientID: process.env.AUTH0_CLIENT_ID,
   auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,

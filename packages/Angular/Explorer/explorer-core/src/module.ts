@@ -19,6 +19,7 @@ import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -54,6 +55,7 @@ import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-
 import { HomeComponent } from './lib/home-component/home.component';
 import { HomeWrapperComponent } from './lib/home-wrapper/home-wrapper.component';
 import { TabbedDashboardComponent } from './lib/tabbed-dashboard/tabbed-dashboard.component';
+import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
@@ -127,7 +129,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ResourceBrowserComponent,
     SingleListDetailComponent,
     ListDetailResource,
-    TabbedDashboardComponent
+    TabbedDashboardComponent,
+    DashboardPreferencesDialogComponent
   ],
   imports: [
     AppRoutingModule,
@@ -177,7 +180,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
-    ProgressBarModule
+    ProgressBarModule,
+    DragDropModule
   ],
   exports: [
     FormToolbarComponent,
@@ -215,7 +219,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ListViewComponent,
     ResourceBrowserComponent,
     ListDetailResource,
-    TabbedDashboardComponent
+    TabbedDashboardComponent,
+    DashboardPreferencesDialogComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

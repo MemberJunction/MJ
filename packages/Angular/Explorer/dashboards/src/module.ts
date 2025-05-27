@@ -35,6 +35,8 @@ import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { ModelPromptPriorityMatrixComponent } from './AI/components/prompts/model-prompt-priority-matrix.component';
+import { PromptVersionControlComponent } from './AI/components/prompts/prompt-version-control.component';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -61,7 +63,9 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
     SecurityPermissionsComponent,
     ActionsListViewComponent,
     ExecutionsListViewComponent,
-    CategoriesListViewComponent
+    CategoriesListViewComponent,
+    ModelPromptPriorityMatrixComponent,
+    PromptVersionControlComponent
   ],
   imports: [
     CommonModule,

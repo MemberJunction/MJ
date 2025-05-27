@@ -405,6 +405,7 @@ export abstract class BaseEntity<T = unknown> {
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
+        EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
         this.init();
     }

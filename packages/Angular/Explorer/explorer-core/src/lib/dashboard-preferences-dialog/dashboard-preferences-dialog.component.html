@@ -1,0 +1,161 @@
+<kendo-dialog title="Dashboard Preferences" 
+              [width]="800" 
+              [height]="600"
+              [minWidth]="600"
+              [minHeight]="400"
+              (close)="onCancel()">
+<div class="dashboard-preferences-dialog">
+  <div class="dialog-header">
+    <h3><i class="fa-solid fa-sliders"></i> Dashboard Preferences</h3>
+    <p class="scope-indicator">
+      @if (scope === 'Global') {
+        <i class="fa-solid fa-globe"></i> Global Scope
+      } @else {
+        <i class="fa-solid fa-layer-group"></i> Application: {{ applicationName }}
+      }
+    </p>
+    @if (isSysAdmin && scope === 'Global') {
+      <div class="preference-mode-selector">
+        <label>
+          <input type="radio" 
+                 name="preferenceMode" 
+                 value="personal" 
+                 [(ngModel)]="preferenceMode"
+                 (change)="onPreferenceModeChange()">
+          Personal Preferences
+        </label>
+        <label>
+          <input type="radio" 
+                 name="preferenceMode" 
+                 value="system" 
+                 [(ngModel)]="preferenceMode"
+                 (change)="onPreferenceModeChange()">
+          System Defaults
+        </label>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-content">
+    @if (loading) {
+      <div class="loading-container">
+        <kendo-loader></kendo-loader>
+        Loading dashboards...
+      </div>
+    }
+
+    @if (error) {
+      <div class="error-container">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        {{ error }}
+      </div>
+    }
+
+    @if (!loading && !error) {
+      <div class="preferences-panels">
+        <!-- Available Dashboards Panel -->
+        <div class="panel available-panel">
+          <h4><i class="fa-solid fa-list"></i> Available Dashboards</h4>
+          <div class="dashboard-list" 
+               cdkDropList 
+               #availableList="cdkDropList"
+               [cdkDropListData]="availableDashboards"
+               [cdkDropListConnectedTo]="[configuredList]"
+               (cdkDropListDropped)="onDrop($event)">
+            
+            @if (availableDashboards.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-info-circle"></i>
+                All dashboards are configured
+              </div>
+            }
+
+            @for (dashboard of availableDashboards; track dashboard.ID) {
+              <div class="dashboard-item available-item" 
+                   cdkDrag
+                   [cdkDragData]="dashboard">
+                <div class="dashboard-item-content">
+                  <i class="fa-solid fa-grip-vertical drag-handle"></i>
+                  <div class="dashboard-info">
+                    <span class="dashboard-name">{{ dashboard.Name }}</span>
+                    @if (dashboard.Description) {
+                      <span class="dashboard-description">{{ dashboard.Description }}</span>
+                    }
+                  </div>
+                  <button type="button" 
+                          class="add-button"
+                          (click)="addDashboard(dashboard)"
+                          title="Add to configured dashboards">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Configured Dashboards Panel -->
+        <div class="panel configured-panel">
+          <h4><i class="fa-solid fa-list-ol"></i> Configured Dashboards</h4>
+          <div class="dashboard-list" 
+               cdkDropList 
+               #configuredList="cdkDropList"
+               [cdkDropListData]="configuredDashboards"
+               [cdkDropListConnectedTo]="[availableList]"
+               (cdkDropListDropped)="onDrop($event)">
+            
+            @if (configuredDashboards.length === 0) {
+              <div class="empty-state">
+                <i class="fa-solid fa-info-circle"></i>
+                No dashboards configured
+              </div>
+            }
+
+            @for (dashboard of configuredDashboards; track dashboard.ID; let i = $index) {
+              <div class="dashboard-item configured-item" 
+                   cdkDrag
+                   [cdkDragData]="dashboard">
+                <div class="dashboard-item-content">
+                  <i class="fa-solid fa-grip-vertical drag-handle"></i>
+                  <span class="order-number">{{ i + 1 }}</span>
+                  <div class="dashboard-info">
+                    <span class="dashboard-name">{{ dashboard.Name }}</span>
+                    @if (dashboard.Description) {
+                      <span class="dashboard-description">{{ dashboard.Description }}</span>
+                    }
+                  </div>
+                  <button type="button" 
+                          class="remove-button"
+                          (click)="removeDashboard(dashboard)"
+                          title="Remove from configured dashboards">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+
+  <div class="dialog-footer">
+    <button type="button" 
+            class="btn btn-secondary" 
+            (click)="onCancel()">
+      <i class="fa-solid fa-times"></i> Cancel
+    </button>
+    <button type="button" 
+            class="btn btn-primary" 
+            [disabled]="!hasChanges || saving"
+            (click)="onSave()">
+      @if (saving) {
+        <kendo-loader size="small"></kendo-loader>
+        Saving...
+      } @else {
+        <i class="fa-solid fa-check"></i> Save Changes
+      }
+    </button>
+  </div>
+</div>
+</kendo-dialog>

@@ -10,6 +10,7 @@ import { LogError, LogStatus } from "./logging";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
+import { RunView } from "../views/runView";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -177,6 +178,50 @@ export class Metadata {
      */
     public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
         return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey);
+    }
+
+    /**
+     * Returns an array of records representing the list of changes made to a record. This functionality only works
+     * if an entity has TrackRecordChanges = 1, which is the default for most entities. If TrackRecordChanges = 0, this method will return an empty array.
+     * 
+     * This method is defined in the @memberjunction/core package, which is lower level in the dependency 
+     * hierarchy than the @memberjunction/core-entities package where the RecordChangeEntity class is defined.
+     * For this reason, we are not using the RecordChangeEntity class here, but rather returning a generic type T.
+     * When you call this method, you can specify the type T to be the RecordChangeEntity class or any other class that matches the structure of the record changes.
+     * For example:
+     * ```typescript
+     * const md = new Metadata();
+     * const changes: RecordChangeEntity[] = await md.GetRecordChanges<RecordChangeEntity>('MyEntity', myPrimaryKey);
+     * ```
+     * @param entityName 
+     * @param primaryKey 
+     * @param contextUser 
+     * @returns 
+     */
+    public async GetRecordChanges<T>(entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<Array<T>> {
+        try {
+            const e = this.EntityByName(entityName);
+            if (!e) {
+                throw new Error(`Entity ${entityName} not found`);
+            }
+            if (!e.TrackRecordChanges) {
+                LogStatus(`GetRecordChanges called for entity ${entityName} with primary key ${primaryKey.ToConcatenatedString()} but TrackRecordChanges is not enabled, returning empty array.`);
+                return []; // Return empty array if TrackRecordChanges is not enabled
+            }
+            const rv = new RunView();
+            const result = await rv.RunView<T>({
+                EntityName: "Record Changes",
+                ExtraFilter: `Entity='${entityName}' AND RecordID='${primaryKey.ToConcatenatedString()}'`,
+                OrderBy: "ChangedAt DESC"
+            }, contextUser);
+            if (result.Success) {
+                return result.Results;
+            }
+        }
+        catch (e) {
+            LogError(`GetRecordChanges failed for entityName: ${entityName} and primaryKey: ${primaryKey}. Error: ${e.message}`);
+            throw e;
+        }
     }
 
     /**

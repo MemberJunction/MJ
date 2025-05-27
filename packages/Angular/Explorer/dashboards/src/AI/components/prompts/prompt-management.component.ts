@@ -39,6 +39,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   public loadingMessage = 'Loading prompts...';
   public error: string | null = null;
   public currentView: 'list' | 'editor' = 'list';
+  public currentSubView: 'list' | 'priority-matrix' | 'version-control' = 'list';
   public selectedPrompt: PromptWithTemplate | null = null;
   public isEditing = false;
   public isDirty = false;
@@ -521,6 +522,7 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   private emitStateChange(): void {
     const state = {
       currentView: this.currentView,
+      currentSubView: this.currentSubView,
       selectedPromptId: this.selectedPrompt?.prompt.ID || null,
       isEditing: this.isEditing,
       promptDetailsPanelWidth: this.promptDetailsPanelWidth,
@@ -715,5 +717,31 @@ export class PromptManagementComponent implements OnInit, OnDestroy {
   public getTypeName(typeId: string | null): string {
     if (!typeId || typeId === '') return 'No Type';
     return this.types.find(t => t.ID === typeId)?.Name || 'Unknown Type';
+  }
+
+  public setSubView(subView: 'list' | 'priority-matrix' | 'version-control'): void {
+    this.currentSubView = subView;
+    this.emitStateChange();
+  }
+
+
+  public onPromptSelectedFromMatrix(prompt: AIPromptEntity): void {
+    const promptWithTemplate = this.promptsWithTemplates.find(p => p.prompt.ID === prompt.ID);
+    if (promptWithTemplate) {
+      this.viewPrompt(promptWithTemplate);
+    }
+  }
+
+  public onVersionSelected(version: any): void {
+    // Handle version selection from version control component
+    console.log('Version selected:', version);
+    if (version && this.selectedPrompt) {
+      this.editorContent = version.content || '';
+      this.isDirty = true;
+    }
+  }
+
+  public get promptsForMatrix(): AIPromptEntity[] {
+    return this.filteredPrompts.map(p => p.prompt);
   }
 }

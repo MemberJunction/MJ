@@ -31,13 +31,46 @@
         </div>
       </div>
 
+      <!-- Sub Navigation -->
+      <div class="sub-navigation">
+        <button 
+          type="button" 
+          class="sub-nav-btn"
+          [class.active]="currentSubView === 'list'"
+          (click)="setSubView('list')"
+          title="List View">
+          <i class="fa-solid fa-list"></i>
+          List View
+        </button>
+        <button 
+          type="button" 
+          class="sub-nav-btn"
+          [class.active]="currentSubView === 'priority-matrix'"
+          (click)="setSubView('priority-matrix')"
+          title="Priority Matrix">
+          <i class="fa-solid fa-th"></i>
+          Priority Matrix
+        </button>
+        <button 
+          type="button" 
+          class="sub-nav-btn"
+          [class.active]="currentSubView === 'version-control'"
+          (click)="setSubView('version-control')"
+          title="Version Control">
+          <i class="fa-solid fa-code-branch"></i>
+          Version Control
+        </button>
+      </div>
+
       <!-- Main Content with Splitter -->
       <div class="main-content">
-        <kendo-splitter 
-          class="main-splitter"
-          orientation="horizontal"
-          (layoutChange)="onMainSplitterChange($event)"
-          mjFillContainer>
+        <!-- List View Content -->
+        @if (currentSubView === 'list') {
+          <kendo-splitter 
+            class="main-splitter"
+            orientation="horizontal"
+            (layoutChange)="onMainSplitterChange($event)"
+            mjFillContainer>
           
           <!-- Filter Panel (Left) -->
           <kendo-splitter-pane 
@@ -190,6 +223,26 @@
             </div>
           </kendo-splitter-pane>
         </kendo-splitter>
+        }
+
+
+        <!-- Priority Matrix View -->
+        @if (currentSubView === 'priority-matrix') {
+          <app-model-prompt-priority-matrix
+            [selectedPrompts]="promptsForMatrix"
+            (promptSelected)="onPromptSelectedFromMatrix($event)"
+            mjFillContainer>
+          </app-model-prompt-priority-matrix>
+        }
+
+        <!-- Version Control View -->
+        @if (currentSubView === 'version-control') {
+          <app-prompt-version-control
+            [prompt]="selectedPrompt?.prompt || null"
+            (versionSelected)="onVersionSelected($event)"
+            mjFillContainer>
+          </app-prompt-version-control>
+        }
       </div>
     </div>
   }
