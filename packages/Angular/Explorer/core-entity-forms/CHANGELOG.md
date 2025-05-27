@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.42.1
+
+### Patch Changes
+
+- Updated dependencies [bd36dce]
+  - @memberjunction/ng-explorer-core@2.42.1
+  - @memberjunction/ng-base-forms@2.42.1
+  - @memberjunction/ng-form-toolbar@2.42.1
+  - @memberjunction/ng-timeline@2.42.1
+  - @memberjunction/ng-code-editor@2.42.1
+  - @memberjunction/ng-container-directives@2.42.1
+  - @memberjunction/ng-join-grid@2.42.1
+  - @memberjunction/ng-tabstrip@2.42.1
+  - @memberjunction/core@2.42.1
+  - @memberjunction/core-entities@2.42.1
+
 ## 2.42.0
 
 ### Patch Changes

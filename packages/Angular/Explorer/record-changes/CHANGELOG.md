@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-record-changes
 
+## 2.42.1
+
+### Patch Changes
+
+- f5da874: new UI for Record Changes
+  - @memberjunction/ng-compare-records@2.42.1
+  - @memberjunction/ng-container-directives@2.42.1
+  - @memberjunction/ng-notifications@2.42.1
+  - @memberjunction/core@2.42.1
+  - @memberjunction/global@2.42.1
+
 ## 2.42.0
 
 ### Patch Changes

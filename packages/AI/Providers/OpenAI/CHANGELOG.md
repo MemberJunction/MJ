@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-openai
 
+## 2.42.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.42.1
+- @memberjunction/global@2.42.1
+
 ## 2.42.0
 
 ### Patch Changes
