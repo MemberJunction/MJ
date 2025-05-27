@@ -55,6 +55,8 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
   public versions: PromptVersion[] = [];
   public recordChanges: RecordChangeEntity[] = [];
   public templateContents: Map<string, TemplateContentEntity> = new Map();
+  public availablePrompts: AIPromptEntity[] = [];
+  public filteredAvailablePrompts: AIPromptEntity[] = [];
   
   // UI State
   public isLoading = false;
@@ -70,6 +72,7 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
   public filterBy: 'all' | 'updates' | 'major' | 'template' = 'all';
   public sortDirection: 'asc' | 'desc' = 'desc';
   public searchTerm$ = new BehaviorSubject<string>('');
+  public promptSearchTerm$ = new BehaviorSubject<string>('');
   public showSystemChanges = false;
   
   // Timeline configuration
@@ -85,6 +88,9 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
   constructor(private notificationService: MJNotificationService) {}
   
   ngOnInit(): void {
+    this.loadAvailablePrompts();
+    this.setupPromptFiltering();
+    
     if (this.autoLoad && this.prompt) {
       this.loadVersionHistory();
     }
@@ -520,6 +526,46 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
   }
   
   public refreshHistory(): void {
+    this.loadVersionHistory();
+  }
+
+  private async loadAvailablePrompts(): Promise<void> {
+    try {
+      const metadata = new Metadata();
+      const promptEntity = await metadata.GetEntityObject<AIPromptEntity>('AI Prompts');
+      const prompts = await promptEntity.GetAll();
+      this.availablePrompts = prompts.sort((a: AIPromptEntity, b: AIPromptEntity) => a.Name.localeCompare(b.Name));
+      this.filteredAvailablePrompts = [...this.availablePrompts];
+    } catch (error) {
+      console.error('Failed to load available prompts:', error);
+      LogError('Failed to load available prompts', undefined, error);
+    }
+  }
+
+  private setupPromptFiltering(): void {
+    this.promptSearchTerm$.subscribe(searchTerm => {
+      this.filterAvailablePrompts(searchTerm);
+    });
+  }
+
+  private filterAvailablePrompts(searchTerm: string): void {
+    if (!searchTerm || searchTerm.trim() === '') {
+      this.filteredAvailablePrompts = [...this.availablePrompts];
+    } else {
+      const term = searchTerm.toLowerCase().trim();
+      this.filteredAvailablePrompts = this.availablePrompts.filter(prompt =>
+        prompt.Name.toLowerCase().includes(term) ||
+        (prompt.Description && prompt.Description.toLowerCase().includes(term))
+      );
+    }
+  }
+
+  public onPromptSearchChange(searchTerm: string): void {
+    this.promptSearchTerm$.next(searchTerm);
+  }
+
+  public selectPromptForHistory(prompt: AIPromptEntity): void {
+    this.prompt = prompt;
     this.loadVersionHistory();
   }
 }

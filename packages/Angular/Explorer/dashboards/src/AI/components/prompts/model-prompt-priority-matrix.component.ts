@@ -148,7 +148,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   private async loadAssociations(): Promise<AIPromptModelEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'AI Prompt Models',
+      EntityName: 'MJ: AI Prompt Models',
       ExtraFilter: '',
       OrderBy: 'Priority',
       UserSearchString: '',
@@ -435,11 +435,11 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
           
           if (association.association) {
             // Update existing
-            entity = await md.GetEntityObject<AIPromptModelEntity>('AI Prompt Models', md.CurrentUser);
+            entity = await md.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
             await entity.Load(association.association.ID);
           } else {
             // Create new
-            entity = await md.GetEntityObject<AIPromptModelEntity>('AI Prompt Models', md.CurrentUser);
+            entity = await md.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
           }
           
           entity.PromptID = association.promptId;

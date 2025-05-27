@@ -718,4 +718,109 @@
       padding: 0.75rem;
     }
   }
+
+  .prompt-selector-section {
+    padding: 2rem;
+    background: white;
+    border-radius: 8px;
+    margin: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+    .section-title {
+      color: #495057;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+
+      i {
+        color: #007bff;
+      }
+    }
+
+    .prompt-selector {
+      .search-box {
+        .input-group-text {
+          background: #f8f9fa;
+          border-color: #ced4da;
+
+          i {
+            color: #6c757d;
+          }
+        }
+
+        .form-control {
+          border-color: #ced4da;
+
+          &:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+          }
+        }
+      }
+
+      .prompts-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+
+        .empty-state {
+          text-align: center;
+          padding: 2rem;
+
+          i {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+          }
+        }
+
+        .prompt-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.75rem 1rem;
+          border-bottom: 1px solid #dee2e6;
+          cursor: pointer;
+          transition: background-color 0.2s;
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          &:hover {
+            background-color: #f8f9fa;
+          }
+
+          .prompt-info {
+            flex: 1;
+
+            .prompt-title {
+              margin: 0 0 0.25rem 0;
+              font-weight: 600;
+              color: #495057;
+            }
+
+            .prompt-description {
+              margin: 0;
+              font-size: 0.875rem;
+              color: #6c757d;
+              line-height: 1.4;
+            }
+          }
+
+          .prompt-actions {
+            color: #007bff;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+          }
+
+          &:hover .prompt-actions {
+            opacity: 1;
+          }
+        }
+      }
+    }
+  }
 }

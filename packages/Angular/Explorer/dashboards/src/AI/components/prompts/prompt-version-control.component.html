@@ -1,6 +1,55 @@
 <div class="prompt-version-control">
-  <!-- Header toolbar -->
-  <div class="version-toolbar">
+  <!-- Prompt Selector (when no prompt selected) -->
+  @if (!prompt) {
+    <div class="prompt-selector-section">
+      <h5 class="section-title">
+        <i class="fa-solid fa-history"></i>
+        Version History
+      </h5>
+      <p class="text-muted mb-3">Select a prompt to view its version history</p>
+      
+      <div class="prompt-selector">
+        <div class="search-box mb-3">
+          <div class="input-group">
+            <span class="input-group-text">
+              <i class="fa-solid fa-search"></i>
+            </span>
+            <input 
+              type="text" 
+              class="form-control" 
+              placeholder="Search prompts..."
+              [ngModel]="promptSearchTerm$.value"
+              (ngModelChange)="onPromptSearchChange($event)">
+          </div>
+        </div>
+        
+        <div class="prompts-list">
+          @if (availablePrompts.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-comment-dots text-muted"></i>
+              <p class="text-muted">No prompts available</p>
+            </div>
+          } @else {
+            @for (promptItem of filteredAvailablePrompts; track promptItem.ID) {
+              <div class="prompt-item" (click)="selectPromptForHistory(promptItem)">
+                <div class="prompt-info">
+                  <h6 class="prompt-title">{{ promptItem.Name }}</h6>
+                  @if (promptItem.Description) {
+                    <p class="prompt-description">{{ promptItem.Description }}</p>
+                  }
+                </div>
+                <div class="prompt-actions">
+                  <i class="fa-solid fa-arrow-right"></i>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  } @else {
+    <!-- Header toolbar -->
+    <div class="version-toolbar">
     <div class="toolbar-section">
       <h5 class="toolbar-title">
         <i class="fa-solid fa-history"></i>
@@ -375,5 +424,6 @@
         </button>
       </div>
     </div>
+  }
   }
 </div>
