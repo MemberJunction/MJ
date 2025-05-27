@@ -138,8 +138,9 @@ export class RunView  {
      * @param entityName 
      * @param callerName 
      */
-    protected EntityStatusCheck(entityName: string, callerName: string) {
+    protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
         const md = (this.ProviderToUse as any as IMetadataProvider);
+        const entityName = await RunView.GetEntityNameFromRunViewParams(params, md);
         const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
         if (!entity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -154,7 +155,7 @@ export class RunView  {
      * @returns 
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        this.EntityStatusCheck(params.EntityName, 'RunView');
+        this.EntityStatusCheck(params, 'RunView');
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
@@ -186,7 +187,7 @@ export class RunView  {
             const p = <IMetadataProvider><any>this.ProviderToUse;
         
             for (const param of params) {
-                this.EntityStatusCheck(param.EntityName, 'RunView');
+                this.EntityStatusCheck(param, 'RunView');
 
                 // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
                 // so that we can get the data to populate the entity object with.
