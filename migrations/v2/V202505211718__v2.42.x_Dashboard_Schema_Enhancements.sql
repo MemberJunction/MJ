@@ -300,12 +300,12 @@ INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
 /* SQL generated to add new permission for entity MJ: Dashboard User States for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('1b266740-f4db-43a2-b75b-7a45adb59709', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('1b266740-f4db-43a2-b75b-7a45adb59709', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: Dashboard User States for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('1b266740-f4db-43a2-b75b-7a45adb59709', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('1b266740-f4db-43a2-b75b-7a45adb59709', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: Dashboard User States for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
@@ -362,12 +362,12 @@ INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
 /* SQL generated to add new permission for entity MJ: Dashboard User Preferences for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('ddfc6120-afaf-4002-a79a-a6aa00b0df7b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('ddfc6120-afaf-4002-a79a-a6aa00b0df7b', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: Dashboard User Preferences for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('ddfc6120-afaf-4002-a79a-a6aa00b0df7b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('ddfc6120-afaf-4002-a79a-a6aa00b0df7b', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to add new permission for entity MJ: Dashboard User Preferences for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
