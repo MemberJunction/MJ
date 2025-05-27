@@ -806,7 +806,7 @@ export class EntityInfo extends BaseInfo {
     * * Default Value: Active
     * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.
     */
-    Status: string = null;
+    Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
 
 
 
@@ -891,7 +891,28 @@ export class EntityInfo extends BaseInfo {
         return EntityInfo.__deletedAtFieldName;
     }
 
-
+    /**
+     * This static factory method is used to check to see if the entity in question is active or not
+     * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
+     * either Deprecated or Disabled.
+     * @param entityName 
+     * @param callerName - the name of the caller that is calling this method, used for logging purposes such as BaseEntity::constructor as an example.
+     */
+    public static AssertEntityActiveStatus(entity: EntityInfo, callerName: string) {
+        if (!entity) {
+            throw new Error(`Entity must be provided to call AssertEntityActiveStatus. Caller: ${callerName}`);
+        }
+        if (entity.Status?.trim().toLowerCase() === 'deprecated') {
+            // warning
+            console.warn(`${callerName}: Entity ${entity.Name} is deprecated and should not be used as it could be removed in the future.`);
+        }
+        else if (entity.Status?.trim().toLowerCase() === 'disabled') {
+            // console.error and throw the exception
+            const exceptionString = `${callerName}: Entity ${entity.Name} is disabled and cannot be used.`;
+            LogError(exceptionString);
+            throw new Error(exceptionString);
+        }
+    }
 
     /**
      * @returns The BaseTable but with spaces inbetween capital letters

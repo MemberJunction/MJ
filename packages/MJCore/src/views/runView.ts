@@ -2,7 +2,6 @@ import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
-import { Metadata } from '../generic/metadata';
 import { EntityInfo } from '../generic/entityInfo';
 
 /**
@@ -133,12 +132,30 @@ export class RunView  {
     }
 
     /**
+     * Used to check to see if the entity in question is active or not
+     * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
+     * either Deprecated or Disabled.
+     * @param entityName 
+     * @param callerName 
+     */
+    protected EntityStatusCheck(entityName: string, callerName: string) {
+        const md = (this.ProviderToUse as any as IMetadataProvider);
+        const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
+        if (!entity) {
+            throw new Error(`Entity ${entityName} not found in metadata`);
+        }
+        EntityInfo.AssertEntityActiveStatus(entity, callerName);
+    }
+
+    /**
      * Runs a view based on the provided parameters, see documentation for RunViewParams for more
      * @param params 
      * @param contextUser if provided, this user is used for permissions and logging. For server based calls, this is generally required because there is no "Current User" since this object is shared across all requests.
      * @returns 
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        this.EntityStatusCheck(params.EntityName, 'RunView');
+
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
@@ -169,6 +186,8 @@ export class RunView  {
             const p = <IMetadataProvider><any>this.ProviderToUse;
         
             for (const param of params) {
+                this.EntityStatusCheck(param.EntityName, 'RunView');
+
                 // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
                 // so that we can get the data to populate the entity object with.
                 if (param.ResultType === 'entity_object') {
