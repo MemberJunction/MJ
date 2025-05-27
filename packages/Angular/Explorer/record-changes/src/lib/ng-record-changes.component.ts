@@ -1,7 +1,9 @@
 import { Component, EventEmitter, Input, OnInit, Output, Renderer2, ElementRef, AfterViewInit, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { SortDescriptor } from '@progress/kendo-data-query';
-import { BaseEntity, EntityFieldInfo, EntityFieldTSType, LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, LogError, Metadata, RunView } from '@memberjunction/core';
+import { RecordChangeEntity } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'mj-record-changes',
@@ -26,12 +28,12 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   ];
 
 
-  constructor(private sanitizer: DomSanitizer, private renderer: Renderer2) { }
+  constructor(private sanitizer: DomSanitizer, private renderer: Renderer2, private mjNotificationService: MJNotificationService) { }
 
   ngOnInit(): void {
     if(this.record){
       this.showloader = true;
-      this.LoadRecordChanges(this.record.PrimaryKey.ToConcatenatedString(), '', this.record.EntityInfo.Name);
+      this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
       this.prepareColumns();
     }
   }
@@ -48,16 +50,16 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       this.renderer.removeChild(document.body, this.wrapper.nativeElement);
   }
 
-  async LoadRecordChanges(KeyValuePairString: string, appName: string, entityName: string) {
+  public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (KeyValuePairString && entityName) {
-      const rv = new RunView();
-      const response = await rv.RunView({ EntityName: "Record Changes", ExtraFilter: `Entity='${entityName}' AND RecordID='${KeyValuePairString}'`});
-      if(response.Success){
-        this.viewData = response.Results;
+    if (pkey && entityName) {
+      const md = new Metadata();
+      const changes = await md.GetRecordChanges<RecordChangeEntity>(entityName, pkey);
+      if(changes){
+        this.viewData = changes;
         this.showloader = false;
       } else {
-        LogError(response.ErrorMessage);
+        this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
         this.showloader = false;
       }
     }
