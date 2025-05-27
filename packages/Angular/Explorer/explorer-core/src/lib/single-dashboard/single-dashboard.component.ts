@@ -1,5 +1,5 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { TileLayoutComponent, TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
+import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/core-entities';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -7,13 +7,14 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
+import { BaseDashboard } from '@memberjunction/ng-dashboards';
 
 @Component({
   selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
   styleUrls: ['./single-dashboard.component.css']
 })
-export class SingleDashboardComponent implements OnInit {
+export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
   @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
 
@@ -47,7 +48,16 @@ export class SingleDashboardComponent implements OnInit {
     return false;
   }
 
+  protected initDashboard(): void {
+    
+  }
+  protected loadData(): void {
+    
+  }
+
   constructor(private route: ActivatedRoute, public sharedService: SharedService) {
+    super();
+    
     this.saveChangesSubject
     .pipe(debounceTime(500))
     .subscribe(() => {
