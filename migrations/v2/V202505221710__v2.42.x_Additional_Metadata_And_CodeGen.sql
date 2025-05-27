@@ -86,7 +86,7 @@ ADD [AutoRowCountFrequency] int NULL,
 ALTER TABLE [${flyway:defaultSchema}].[Entity]
 ADD CONSTRAINT [CK_Entity_Status]
 CHECK ([Status] IN (N'Active', N'Deprecated', N'Disabled'));
-GO -- commit batch
+--GO -- commit batch
 
 -- Add documentation for the AutoRowCountFrequency column
 EXEC sp_addextendedproperty
@@ -120,7 +120,7 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'Entity',
     @level2type = N'COLUMN', @level2name = N'Status';    
 
-GO -- finish the above batch so we can update status field
+--GO -- finish the above batch so we can update status field
 
 -- Update the Status field for these to deprecated 
 UPDATE ${flyway:defaultSchema}.Entity SET Status='Deprecated' WHERE ID IN (
