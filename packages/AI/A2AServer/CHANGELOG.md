@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/a2aserver
 
+## 2.42.0
+
+### Patch Changes
+
+- Updated dependencies [5c4ff39]
+  - @memberjunction/sqlserver-dataprovider@2.42.0
+  - @memberjunction/core@2.42.0
+  - @memberjunction/global@2.42.0
+
 ## 2.41.0
 
 ### Patch Changes

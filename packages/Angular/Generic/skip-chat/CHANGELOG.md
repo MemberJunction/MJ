@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-skip-chat
 
+## 2.42.0
+
+### Minor Changes
+
+- 5a3466c: Added a kendo dialog component that asks users to provide (optional) feedback after a Skip response is given either a thumbs up or thumbs down. The feedback is pushed into the UserFeedback in the ConversationDetail entity.
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.42.0
+- @memberjunction/ng-container-directives@2.42.0
+- @memberjunction/ng-data-context@2.42.0
+- @memberjunction/ng-notifications@2.42.0
+- @memberjunction/ng-resource-permissions@2.42.0
+- @memberjunction/graphql-dataprovider@2.42.0
+- @memberjunction/core@2.42.0
+- @memberjunction/core-entities@2.42.0
+- @memberjunction/data-context@2.42.0
+- @memberjunction/global@2.42.0
+- @memberjunction/skip-types@2.42.0
+
 ## 2.41.0
 
 ### Minor Changes

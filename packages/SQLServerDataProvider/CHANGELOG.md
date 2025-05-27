@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.42.0
+
+### Minor Changes
+
+- 5c4ff39: bug fix for DatasetTimestamp comparison
+
+### Patch Changes
+
+- Updated dependencies [d49f25c]
+  - @memberjunction/ai@2.42.0
+  - @memberjunction/aiengine@2.42.0
+  - @memberjunction/ai-vector-dupe@2.42.0
+  - @memberjunction/actions@2.42.0
+  - @memberjunction/queue@2.42.0
+  - @memberjunction/core@2.42.0
+  - @memberjunction/core-entities@2.42.0
+  - @memberjunction/global@2.42.0
+
 ## 2.41.0
 
 ### Patch Changes

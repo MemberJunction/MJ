@@ -1,0 +1,15 @@
+# @memberjunction/ng-dashboards
+
+## 2.42.0
+
+### Minor Changes
+
+- d49f25c: Key Areas Addressed:
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.42.0
+- @memberjunction/ng-notifications@2.42.0
+- @memberjunction/core@2.42.0
+- @memberjunction/core-entities@2.42.0
+- @memberjunction/templates-base-types@2.42.0

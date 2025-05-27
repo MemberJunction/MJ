@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/storage
 
+## 2.42.0
+
+### Patch Changes
+
+- 8efc301: Remove BoxSDK in favor of REST
+  - @memberjunction/core@2.42.0
+  - @memberjunction/core-entities@2.42.0
+  - @memberjunction/global@2.42.0
+
 ## 2.41.0
 
 ### Patch Changes
