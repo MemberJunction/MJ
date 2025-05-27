@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.42.0
+
+### Minor Changes
+
+- d49f25c: Key Areas Addressed:
+
+### Patch Changes
+
+- @memberjunction/global@2.42.0
+
 ## 2.41.0
 
 ### Patch Changes
