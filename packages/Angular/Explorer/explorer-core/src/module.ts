@@ -38,6 +38,7 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 import { SkipChatModule } from '@memberjunction/ng-skip-chat';
+import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
@@ -51,6 +52,8 @@ import { ResourceContainerComponent } from './lib/generic/resource-container-com
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
+import { HomeWrapperComponent } from './lib/home-wrapper/home-wrapper.component';
+import { TabbedDashboardComponent } from './lib/tabbed-dashboard/tabbed-dashboard.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
@@ -92,6 +95,7 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    HomeWrapperComponent,
     NavigationComponent,
     ReportBrowserComponent,
     QueryBrowserComponent,
@@ -122,7 +126,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ListViewComponent,
     ResourceBrowserComponent,
     SingleListDetailComponent,
-    ListDetailResource
+    ListDetailResource,
+    TabbedDashboardComponent
   ],
   imports: [
     AppRoutingModule,
@@ -161,6 +166,7 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     DropDownsModule,
     MemberJunctionSharedModule,
     AskSkipModule,
+    DashboardsModule,
     SkipChatModule,
     EntityPermissionsModule,
     ExplorerSettingsModule,
@@ -182,6 +188,7 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    HomeWrapperComponent,
     NavigationComponent,
     ReportBrowserComponent,
     DashboardResource,
@@ -207,7 +214,8 @@ import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource
     ApplicationViewComponent,
     ListViewComponent,
     ResourceBrowserComponent,
-    ListDetailResource
+    ListDetailResource,
+    TabbedDashboardComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

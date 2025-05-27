@@ -1,0 +1,50 @@
+<div class="entity-admin-dashboard-container" mjFillContainer [rightMargin]="8" [bottomMargin]="8">
+  <div class="dashboard-header">
+    <div class="header-info">
+      <span class="visible-entities-count">{{ filteredEntities.length }} visible entities</span>
+    </div>
+    <div class="header-controls">
+      <button 
+        class="control-btn" 
+        (click)="toggleFilterPanel()" 
+        [class.active]="filterPanelVisible"
+        title="Toggle Filters">
+        <span class="fa-solid fa-filter"></span>
+        Filters
+      </button>
+    </div>
+  </div>
+  
+  @if (isLoading) {
+    <div class="loading-container">
+      <div class="loading-content">
+        <div class="loading-spinner">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <div class="loading-text">{{ loadingMessage }}</div>
+      </div>
+    </div>
+  }
+  
+  @if (error) {
+    <div class="error-container">
+      <p class="error-message">{{ error }}</p>
+    </div>
+  }
+  
+  @if (!isLoading && !error) {
+    <div class="dashboard-content">
+      <mj-erd-composite 
+        #erdComposite
+        [isRefreshingERD]="isRefreshingERD"
+        (stateChange)="onStateChange($event)"
+        (userStateChange)="onUserStateChange($event)"
+        (entityOpened)="onEntityOpened($event)"
+        (openRecord)="onOpenRecord($event)"
+        mjFillContainer>
+      </mj-erd-composite>
+    </div>
+  }
+</div>

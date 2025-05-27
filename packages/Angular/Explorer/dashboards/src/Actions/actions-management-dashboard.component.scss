@@ -1,0 +1,134 @@
+.actions-management-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem;
+  background-color: var(--kendo-color-surface);
+
+  .dashboard-header {
+    margin-bottom: 1.5rem;
+    
+    .dashboard-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 0 0 0.5rem 0;
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--kendo-color-on-app-surface);
+      
+      i {
+        color: var(--kendo-color-primary);
+      }
+    }
+    
+    .dashboard-subtitle {
+      color: var(--kendo-color-subtle);
+      font-size: 1rem;
+      margin-left: 2.25rem;
+    }
+  }
+
+  .dashboard-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+
+    .actions-navigation {
+      margin-bottom: 1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .tab-content {
+      flex: 1;
+      min-height: 0;
+      background: var(--kendo-color-app-surface);
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+
+      .sub-view-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+
+        .sub-view-header {
+          padding: 1rem 1.5rem;
+          border-bottom: 1px solid var(--kendo-color-border);
+          background: var(--kendo-color-surface);
+
+          .back-button {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--kendo-color-primary);
+            font-weight: 600;
+
+            &:hover {
+              color: var(--kendo-color-primary-darker);
+            }
+          }
+        }
+
+        mj-actions-list-view,
+        mj-executions-list-view,
+        mj-categories-list-view {
+          flex: 1;
+          min-height: 0;
+        }
+      }
+    }
+  }
+
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+}
+
+// Navigation styling
+:host ::ng-deep {
+  .k-bottom-nav {
+    .k-bottom-nav-item {
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background-color: var(--kendo-color-base-hover);
+      }
+      
+      &.k-state-selected {
+        background-color: var(--kendo-color-primary);
+        color: var(--kendo-color-on-primary);
+      }
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .actions-management-dashboard {
+    padding: 0.5rem;
+    
+    .dashboard-header {
+      margin-bottom: 1rem;
+      
+      .dashboard-title {
+        font-size: 1.5rem;
+      }
+      
+      .dashboard-subtitle {
+        font-size: 0.9rem;
+      }
+    }
+  }
+}

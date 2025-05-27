@@ -124,8 +124,6 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
       
       // also ask for a resize now
       this.ResizeContainer.emit();
-      // TO-DO: @AN-BC Go through code base and find all uses of Tab Strip and call SharedService whenever
-      // ResizeContainer is emitted.... SharedService.Instance.InvokeManualResize();
     });
   }
 

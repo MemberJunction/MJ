@@ -99,7 +99,7 @@ const codegenConfig = {
   advancedGeneration: {
     enableAdvancedGeneration: true,
     AIVendor: 'openai',
-    AIModel: 'gpt-4o-mini',
+    AIModel: 'gpt-4.1', // throw a powerful model at this - want best code generation possible!
     features: [
       {
         name: 'EntityNames',

@@ -1,0 +1,212 @@
+<div class="execution-monitoring" mjFillContainer>
+  <!-- Header with filters -->
+  <div class="monitoring-header">
+    <div class="header-title">
+      <h3><i class="fa-solid fa-chart-line"></i> Execution Monitoring</h3>
+      <button kendoButton [primary]="true" [icon]="'refresh'" (click)="refreshData()" class="refresh-btn">
+        Refresh
+      </button>
+    </div>
+    
+    <div class="filters-row">
+      <div class="search-container">
+        <kendo-textbox 
+          placeholder="Search executions..." 
+          [value]="searchTerm$.value"
+          (valueChange)="onSearchChange($event)">
+          <ng-template kendoTextBoxPrefixTemplate>
+            <i class="fa-solid fa-search"></i>
+          </ng-template>
+        </kendo-textbox>
+      </div>
+      
+      <div class="filter-group">
+        <kendo-dropdownlist 
+          [data]="timeRangeOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedTimeRange$.value"
+          (valueChange)="onTimeRangeChange($event)">
+        </kendo-dropdownlist>
+        
+        <kendo-dropdownlist 
+          [data]="resultOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedResult$.value"
+          (valueChange)="onResultFilterChange($event)">
+        </kendo-dropdownlist>
+        
+        <kendo-dropdownlist 
+          [data]="actionOptions"
+          textField="text"
+          valueField="value"
+          [value]="selectedAction$.value"
+          (valueChange)="onActionFilterChange($event)">
+        </kendo-dropdownlist>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metrics Summary -->
+  <div class="metrics-summary">
+    <div class="metric-card total clickable" (click)="onTotalExecutionsClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-play-circle"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.totalExecutions }}</div>
+        <div class="metric-label">Total Executions</div>
+      </div>
+    </div>
+
+    <div class="metric-card success clickable" (click)="onSuccessRateClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-check-circle"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ getSuccessRate() }}%</div>
+        <div class="metric-label">Success Rate</div>
+        <div class="metric-detail">{{ metrics.successfulExecutions }}/{{ metrics.totalExecutions }}</div>
+      </div>
+    </div>
+
+    <div class="metric-card error clickable" (click)="onFailedExecutionsClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-exclamation-circle"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.failedExecutions }}</div>
+        <div class="metric-label">Failed Executions</div>
+      </div>
+    </div>
+
+    <div class="metric-card duration">
+      <div class="metric-icon">
+        <i class="fa-solid fa-clock"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.averageDuration }}s</div>
+        <div class="metric-label">Avg Duration</div>
+      </div>
+    </div>
+
+    <div class="metric-card activity">
+      <div class="metric-icon">
+        <i class="fa-solid fa-calendar-day"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.executionsToday }}</div>
+        <div class="metric-label">Today</div>
+        <div class="metric-detail">{{ metrics.executionsThisWeek }} this week</div>
+      </div>
+    </div>
+
+    <div class="metric-card running clickable" (click)="onRunningExecutionsClick()">
+      <div class="metric-icon">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+      </div>
+      <div class="metric-content">
+        <div class="metric-value">{{ metrics.currentlyRunning }}</div>
+        <div class="metric-label">Currently Running</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Execution Trends Chart -->
+  <div class="trends-section">
+    <div class="section-header">
+      <h4><i class="fa-solid fa-chart-area"></i> 7-Day Execution Trends</h4>
+    </div>
+    <div class="trends-chart">
+      @if (executionTrends.length > 0) {
+        <div class="trend-bars">
+          @for (trend of executionTrends; track trend.date) {
+            <div class="trend-bar">
+              <div class="bar-container">
+                <div class="bar-success" [style.height.%]="trend.total > 0 ? (trend.successful / trend.total) * 100 : 0"></div>
+                <div class="bar-failed" [style.height.%]="trend.total > 0 ? (trend.failed / trend.total) * 100 : 0"></div>
+              </div>
+              <div class="bar-label">{{ trend.date | date:'MMM d' }}</div>
+              <div class="bar-total">{{ trend.total }}</div>
+            </div>
+          }
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-color success"></div>
+            <span>Successful</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color failed"></div>
+            <span>Failed</span>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-chart">
+          <i class="fa-solid fa-chart-area"></i>
+          <p>No execution trends available</p>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Execution List -->
+  <div class="executions-section">
+    <div class="section-header">
+      <h4><i class="fa-solid fa-list"></i> Recent Executions</h4>
+      <div class="results-count">{{ filteredExecutions.length }} executions</div>
+    </div>
+    
+    <div class="executions-list">
+      @if (filteredExecutions.length > 0) {
+        @for (execution of filteredExecutions; track execution.ID) {
+          <div class="execution-item" (click)="openExecution(execution)">
+            <div class="execution-status">
+              <i [class]="getResultIcon(execution.ResultCode)"></i>
+            </div>
+            
+            <div class="execution-main">
+              <div class="execution-action" (click)="openAction(execution.ActionID!); $event.stopPropagation()">
+                {{ getActionName(execution.ActionID!) }}
+              </div>
+              <div class="execution-details">
+                <span class="execution-time">{{ execution.StartedAt | date:'MMM d, HH:mm:ss' }}</span>
+                <span class="execution-user">{{ execution.UserID }}</span>
+                <span class="execution-duration">{{ getDuration(execution) }}</span>
+              </div>
+            </div>
+            
+            <div class="execution-result">
+              <kendo-chip 
+                [themeColor]="getResultColor(execution.ResultCode)"
+                [size]="'small'">
+                {{ execution.ResultCode || 'Unknown' }}
+              </kendo-chip>
+            </div>
+            
+            <div class="execution-actions">
+              <button kendoButton 
+                [fillMode]="'flat'" 
+                [icon]="'more-vertical'"
+                (click)="$event.stopPropagation()">
+              </button>
+            </div>
+          </div>
+        }
+      } @else {
+        <div class="empty-state">
+          <i class="fa-solid fa-search"></i>
+          <h5>No executions found</h5>
+          <p>Try adjusting your filters or search terms</p>
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (isLoading) {
+    <div class="loading-overlay">
+      <kendo-loader type="converging-spinner" [themeColor]="'primary'"></kendo-loader>
+    </div>
+  }
+</div>

@@ -1,0 +1,49 @@
+.tabbed-dashboard-container {
+  border: solid 1px white;
+  background-color: white;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.error-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  font-size: 1.2rem;
+  color: #d9534f;
+}
+
+.dashboard-container {
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+.dashboard-instance-container {
+  height: 100%;
+  width: 100%;
+}
+
+.dashboard-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  font-size: 1.2rem;
+  color: #666;
+  border: 1px dashed #ccc;
+  padding: 20px;
+}
+
+.tab-icon {
+  margin-right: 8px;
+}

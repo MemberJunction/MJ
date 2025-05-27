@@ -1062,47 +1062,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     this.loading = false;
-
-    return;
-
-    // the Drawer configuraion has the following sections:
-    /*
-       * Home - a simple view that shows all the other options - dashboards, reports, data, etc, and ALSO shows Favorites and Most Recently Used Records
-       * Ask Skip - interaction with Skip AI
-       * Data
-       * Dashboards
-       * Reports
-       * Settings
-    */
-
-    // Home
-    await this.loadHome(md);
-
-    // Skip
-    await this.loadSkip(md);
-
-    // Data
-    await this.loadApplications(md);
-
-    // Dashboards
-    await this.loadResourceType('Dashboards','Dashboards','/dashboards', md.CurrentUser.ID);
-
-    // Reports
-    await this.loadResourceType('Reports','Reports','/reports', md.CurrentUser.ID);
-
-    // Queries
-    await this.loadResourceType('Queries','Queries','/queries', md.CurrentUser.ID);
-
-    // Files
-    await this.loadFiles();
-
-    // Lists
-    await this.loadLists();
-
-    // Settings
-    await this.loadSettings(md);
-
-
   }
 
   protected async loadSkip(md: Metadata) {

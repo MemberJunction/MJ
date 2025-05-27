@@ -72,6 +72,26 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
      * This is an internal property that is turned on just after a user succesfully rates a message, and is never true otherwise. This allows the UI to show a thank you message for the rating.
      */
     public UserJustRated: boolean = false;
+    
+    /**
+     * Controls the visibility of the feedback dialog
+     */
+    public ShowingFeedbackDialog: boolean = false;
+    
+    /**
+     * Stores the rating value selected by the user before submitting feedback
+     */
+    private SelectedRating: number | null = null;
+    
+    /**
+     * Stores the feedback text entered by the user
+     */
+    public UserFeedbackText: string = '';
+    
+    /**
+     * The title to show in the feedback dialog based on the rating
+     */
+    public FeedbackDialogTitle: string = 'Share more feedback';
 
     /**
      * Name of the artifact associated with this message, if any
@@ -275,10 +295,47 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     }
 
     /**
-     * Rate the AI response with either thumbs up (10) or thumbs down (0)
-     * @param rating The rating to assign, 10 for thumbs up, 0 for thumbs down
+     * Shows the feedback dialog with the appropriate title based on the rating
+     * @param rating The rating selected by the user (10 for thumbs up, 1 for thumbs down)
      */
-    public async RateMessage(rating: number): Promise<void> {
+    public ShowFeedbackDialog(rating: number): void {
+      if (!this.ConversationDetailRecord || !this.IsAIMessage) {
+        return;
+      }
+      
+      this.SelectedRating = rating;
+      this.FeedbackDialogTitle = rating === 10 ? 
+        'Thanks for the positive feedback! Would you like to share more?' : 
+        'Thanks for your feedback. What could be improved?';
+      this.ShowingFeedbackDialog = true;
+    }
+    
+    /**
+     * Closes the feedback dialog without saving feedback
+     */
+    public CancelFeedback(): void {
+      // If the user cancels, still save the rating but without feedback
+      this.RateMessage(this.SelectedRating, '');
+      this.UserFeedbackText = '';
+      this.ShowingFeedbackDialog = false;
+    }
+    
+    /**
+     * Submits the feedback and rating
+     */
+    public SubmitFeedback(): void {
+      // Save both the rating and feedback text
+      this.RateMessage(this.SelectedRating, this.UserFeedbackText);
+      this.UserFeedbackText = '';
+      this.ShowingFeedbackDialog = false;
+    }
+
+    /**
+     * Rate the AI response with either thumbs up (10) or thumbs down (1)
+     * @param rating The rating to assign, 10 for thumbs up, 1 for thumbs down
+     * @param feedback Optional text feedback from the user
+     */
+    public async RateMessage(rating: number | null, feedback: string = ''): Promise<void> {
       if (!this.ConversationDetailRecord || !this.IsAIMessage) {
         return;
       }
@@ -287,6 +344,11 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
         this.RatingBeingSaved = true;
         // Update the UserRating property in the local object
         this.ConversationDetailRecord.UserRating = rating;
+        
+        // Update the UserFeedback property if provided
+        if (feedback) {
+          this.ConversationDetailRecord.UserFeedback = feedback;
+        }
 
         let objToSave = this.ConversationDetailRecord;
         
@@ -296,7 +358,12 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
           const savedID = this.ConversationDetailRecord.ID;
           objToSave = await p.GetEntityObject<ConversationDetailEntity>("Conversation Details", p.CurrentUser);
           await objToSave.Load(savedID);
-          objToSave.UserRating = rating
+          objToSave.UserRating = rating;
+          
+          // Set feedback if provided
+          if (feedback) {
+            objToSave.UserFeedback = feedback;
+          }
           // now we have a real object, we can save it below
         }
 
@@ -316,7 +383,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
       } catch (error) {
         LogError('Error rating message:' + error);
 
-        this.notificationService.CreateSimpleNotification('Error rating message', "error", 3500);
+        this.notificationService.CreateSimpleNotification('Error saving feedback', "error", 3500);
       } finally {
         this.RatingBeingSaved = false;
       }

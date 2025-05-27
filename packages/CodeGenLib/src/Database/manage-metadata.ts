@@ -1,6 +1,6 @@
 import { DataSource } from "typeorm";
 import { configInfo, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
+import { ApplicationInfo, CodeNameFromString, EntityInfo, ExtractActualDefaultValue, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "../Misc/advanced_generation";
@@ -1487,8 +1487,9 @@ export class ManageMetadataBase {
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
+      const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");      
       const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
-      if (!structureRegex.test(constraintDefinition)) {
+      if (!structureRegex.test(processedConstraint)) {
          // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
          // check constraints that are not simple OR conditions
          //logWarning(`         Can't extract value list from [${entityName}].[${fieldName}]. The check constraint does not match the simple OR condition pattern or field name does not match:   ${constraintDefinition}`);
@@ -1501,7 +1502,7 @@ export class ManageMetadataBase {
          const possibleValues: string[] = [];
 
          // Use regex to find matches and extract the values
-         while ((match = valueRegex.exec(constraintDefinition)) !== null) {
+         while ((match = valueRegex.exec(processedConstraint)) !== null) {
             // This is necessary to avoid infinite loops with zero-width matches
             if (match.index === valueRegex.lastIndex) {
                valueRegex.lastIndex++;
@@ -1711,32 +1712,40 @@ export class ManageMetadataBase {
 
             // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if
             // our config option is set to create new applications from new schemas, then create a new application for this schema
-            let appUUID: string | null = '';
+            let apps: string[] | null;
             if (isNewSchema && configInfo.newSchemaDefaults.CreateNewApplicationWithSchemaName) {
                // new schema and config option is to create a new application from the schema name so do that
 
                // check to see if the app already exists
-               appUUID = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
-               if (!appUUID || appUUID.length === 0 || appUUID.trim().length === 0) {
+               apps = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               if (!apps || apps.length === 0) {
                   // doesn't already exist, so create it
-                  appUUID = this.createNewUUID();
-                  await this.createNewApplication(ds, appUUID, newEntity.SchemaName);
+                  const appUUID = this.createNewUUID();
+                  const newAppID = await this.createNewApplication(ds, appUUID, newEntity.SchemaName, newEntity.SchemaName);
+                  if (newAppID) {
+                     apps = [newAppID];
+                  }
+                  else {
+                     LogError(`   >>>> ERROR: Unable to create new application for schema ${newEntity.SchemaName}`);
+                  }
                   await md.Refresh(); // refresh now since we've added a new application, not super efficient to do this for each new application but that won't happen super
                                       // often so not a huge deal, would be more efficient do this in batch after all new apps are created but that would be an over optimization IMO
                }
             }
             else {
                // not a new schema, attempt to look up the application for this schema
-               appUUID = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
+               apps = await this.getApplicationIDForSchema(ds, newEntity.SchemaName);
             }
 
-            if (appUUID && appUUID.length > 0) {
+            if (apps && apps.length > 0) {
                if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                   // only do this if the configuration setting is set to add new entities to applications for schema names
-                  const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
-                                    (ApplicationID, EntityID, Sequence) VALUES
-                                    ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
-                  await this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
+                  for (const appUUID of apps) {
+                     const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('${appUUID}', '${newEntityID}', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationID = '${appUUID}'))`;
+                     await this.LogSQLAndExecute(ds, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
+                  }
                }
                else {
                   // this is NOT an error condition, we do have an application UUID, but the configuration setting is to NOT add new entities to applications for schema names
@@ -1783,8 +1792,8 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].Count === 0 : true;
    }
 
-   protected async createNewApplication(ds: DataSource, appID: string, appName: string): Promise<number | null>{
-      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema')";
+   protected async createNewApplication(ds: DataSource, appID: string, appName: string, schemaName: string): Promise<string | null>{
+      const sSQL: string = "INSERT INTO [" + mj_core_schema() + "].Application (ID, Name, Description, SchemaAutoAddNewEntities) VALUES ('" + appID + "', '" + appName + "', 'Generated for schema', '" + schemaName + "')";
       const result = await this.LogSQLAndExecute(ds, sSQL, `SQL generated to create new application ${appName}`);
       return result && result.length > 0 ? result[0].ID : null;
    }
@@ -1795,10 +1804,26 @@ export class ManageMetadataBase {
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
    }
 
-   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string | null>{
-      const sSQL: string = `SELECT ID FROM [${mj_core_schema()}].Application WHERE Name = '${schemaName}'`;
+   protected async getApplicationIDForSchema(ds: DataSource, schemaName: string): Promise<string[] | null>{
+      // get all the apps each time from DB as we might be adding, don't use Metadata here for that reason
+      const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM [${mj_core_schema()}].vwApplications`;
       const result = await ds.query(sSQL);
-      return result && result.length > 0 ? result[0].ID : null;
+
+      if (!result || result.length === 0) {
+         // no applications found, return null
+         return null;
+      }
+      else {
+         const apps = result.filter((a: ApplicationInfo) =>  {
+            if (a.SchemaAutoAddNewEntities && a.SchemaAutoAddNewEntities.length > 0) {
+               const schemas = a.SchemaAutoAddNewEntities.split(",");
+               if (schemas && schemas.length > 0) {
+                  return schemas.find((s: string) => s.trim().toLowerCase() === schemaName.trim().toLowerCase());
+               }
+            }
+         });
+         return apps.map((a: ApplicationInfo) => a.ID);
+      }
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string): string {

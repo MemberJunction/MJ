@@ -68,14 +68,14 @@ export class RunCommandsBase {
           const message: string = data.toString();
           output += message
           if (message.toUpperCase().indexOf('ERROR') >= 0) {
-            logError(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
+            console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
             bErrors = true;
           }
         });
 
         cp.on('error', (error) => {
           const elapsedTime = new Date().getTime() - startTime.getTime();
-          logError(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
+          console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
           if (!cp.killed)
             treeKill(cp.pid!);
           reject(error);
@@ -103,7 +103,7 @@ export class RunCommandsBase {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
               treeKill(cp.pid!);
-              logStatus(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime / 1000} seconds`);
+              console.error(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime / 1000} seconds`);
               output += `Process killed after ${timeout} ms`;
             }
 

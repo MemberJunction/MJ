@@ -1,0 +1,46 @@
+{
+  "name": "@memberjunction/ng-dashboards",
+  "version": "2.41.0",
+  "description": "MemberJunction Dashboards",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "18.0.2",
+    "@angular/compiler-cli": "18.0.2",
+    "@types/d3": "^7.4.0"
+  },
+  "peerDependencies": {
+    "@angular/common": "18.0.2",
+    "@angular/core": "18.0.2",
+    "@angular/forms": "18.0.2"
+  },
+  "dependencies": {
+    "@memberjunction/core": "2.41.0",
+    "@memberjunction/core-entities": "2.41.0",
+    "@memberjunction/templates-base-types": "2.41.0",
+    "@memberjunction/ng-container-directives": "2.41.0",
+    "@memberjunction/ng-notifications": "2.41.0",
+    "@progress/kendo-angular-dropdowns": "16.2.0",
+    "@progress/kendo-angular-navigation": "16.2.0",
+    "@progress/kendo-angular-inputs": "16.2.0",
+    "@progress/kendo-angular-layout": "16.2.0",
+    "@progress/kendo-angular-indicators": "16.2.0",
+    "@codemirror/language-data": "^6.5.1",
+    "@codemirror/merge": "^6.6.3",
+    "codemirror": "^6.0.1",
+    "d3": "^7.8.5",
+    "rxjs": "^7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}

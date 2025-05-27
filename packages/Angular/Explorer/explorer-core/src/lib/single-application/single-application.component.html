@@ -1,1 +1,5 @@
-<mj-application-view/>
+@if (app) {
+    <mj-tabbed-dashboard [ApplicationID]="app.ID">
+        <mj-application-view/>
+    </mj-tabbed-dashboard>
+}

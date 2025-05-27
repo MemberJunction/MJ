@@ -775,6 +775,41 @@ export class EntityInfo extends BaseInfo {
     RowsToPackSampleOrder: string | null = null; 
 
 
+    /**
+    * * Field Name: AutoRowCountFrequency
+    * * Display Name: Auto Row Count Frequency
+    * * SQL Data Type: int
+    * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.
+    */
+    AutoRowCountFrequency: number | null = null;
+
+    /**
+    * * Field Name: RowCount
+    * * Display Name: Row Count
+    * * SQL Data Type: bigint
+    * * Description: Cached row count for this entity, populated by automatic row count processes when AutoRowCountFrequency is configured.
+    */
+    RowCount: number | null = null;
+
+    /**
+    * * Field Name: RowCountRunAt
+    * * Display Name: Row Count Run At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp indicating when the last automatic row count was performed for this entity.
+    */
+    RowCountRunAt: Date | null = null;
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.
+    */
+    Status: string = null;
+
+
+
     // virtual fields - returned by the database VIEW
     /**
      * CodeName is a unique name that can be used for various programatic purposes, singular version of the entity name but modified from entity name in some cases to remove whitespace and prefix with _ in the event that the entity name begins with a number or other non-alpha character

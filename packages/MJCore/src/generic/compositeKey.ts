@@ -14,6 +14,17 @@ export class KeyValuePair {
      * Value of the key value pair
      */
     Value: any
+
+    /**
+     * Construct a new instance by optionally providing a field name and value.
+     * This is useful for creating a key value pair on the fly without needing to set the properties manually.
+     * @param fieldName 
+     * @param value 
+     */
+    constructor(fieldName?: string, value?: any) {
+        this.FieldName = fieldName || '';
+        this.Value = value;
+    }
 }
 
 /**
@@ -330,6 +341,39 @@ export class CompositeKey extends FieldValueCollection {
     }
 
     /**
+     * Static factory method to create a CompositeKey from a single key value pair.
+     * @param key 
+     * @param value 
+     * @returns 
+     */
+    public static FromKeyValuePair(key: string, value: any): CompositeKey {
+        let compositeKey = new CompositeKey();
+        compositeKey.LoadFromSingleKeyValuePair(key, value);
+        return compositeKey;
+    }
+
+    /**
+     * Static factory method to create a CompositeKey from an array of key value pairs. Mirrors the 
+     * constructor but allows for a more explicit creation of a CompositeKey from an array of KeyValuePair objects.
+     * @param keyValuePairs 
+     * @returns 
+     */
+    public static FromKeyValuePairs(keyValuePairs: KeyValuePair[]): CompositeKey {
+        return new CompositeKey(keyValuePairs);
+    }
+
+    /**
+     * Many entities have a single primary key field called ID, this utility method allows you to create a CompositeKey from just that ID value.
+     * @param id 
+     * @returns 
+     */
+    public static FromID(id: any): CompositeKey {
+        let compositeKey = new CompositeKey();
+        compositeKey.LoadFromSingleKeyValuePair('ID', id);
+        return compositeKey;
+    }
+
+    /**
     * Utility function to compare this composite key to another
     * @param compositeKey the composite key to compare against
     * @returns true if the primary key values are the same, false if they are different
@@ -406,3 +450,4 @@ export class CompositeKey extends FieldValueCollection {
         return true;
     }
 }
+

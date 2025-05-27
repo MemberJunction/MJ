@@ -256,3 +256,66 @@
     margin-top: 5px;
     display: inline-block;
 }
+
+/* Input wrapper styles */
+::ng-deep .input-wrapper {
+    margin-bottom: 16px;
+}
+
+::ng-deep .input-wrapper label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+::ng-deep .k-dialog-actions {
+    padding: 16px 20px;
+    border-top: 1px solid #eee;
+}
+
+::ng-deep .k-dialog button[kendoButton],
+::ng-deep .k-window button[kendoButton] {
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+::ng-deep .k-textbox-container,
+::ng-deep .k-textarea-container {
+    width: 100%;
+}
+
+::ng-deep .k-textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 1rem;
+    border-color: #ddd;
+    padding: 8px 12px;
+    border-radius: 4px;
+    resize: none;
+    box-sizing: border-box;
+}
+
+/* Style the kendo-textarea resize handle */
+::ng-deep .k-textarea-container .k-resize-handle {
+    background-color: #ddd;
+    height: 6px;
+    border-radius: 0 0 4px 4px;
+}
+
+::ng-deep .k-textarea-container .k-resize-handle:hover {
+    background-color: #5cc0ed;
+}
+
+::ng-deep .k-textarea:focus {
+    border-color: #5cc0ed;
+    box-shadow: 0 0 0 2px rgba(92, 192, 237, 0.2);
+}
+
+/* Ensure dialog stays within viewport */
+::ng-deep .k-dialog {
+    max-height: 90vh;
+    overflow: auto;
+}
