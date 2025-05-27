@@ -15,9 +15,9 @@ VALUES
 	('DBCB423E-F36B-1410-8DAC-00021F8B792E', 'Entity Admin','Entity Administration', 1, 'fa-solid fa-database')
 
 INSERT INTO ${flyway:defaultSchema}.Dashboard 
-	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass) 
+	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass, ApplicationID) 
 VALUES 
-	('F4C9433E-F36B-1410-8DAB-00021F8B792E', 'Entity Admin', 'Entity Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'EntityAdmin')
+	('F4C9433E-F36B-1410-8DAB-00021F8B792E', 'Entity Admin', 'Entity Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'EntityAdmin', 'DBCB423E-F36B-1410-8DAC-00021F8B792E')
 
 INSERT INTO ${flyway:defaultSchema}.DashboardUserPreference 
 	(ID, DashboardID, ApplicationID, Scope, DisplayOrder)
@@ -66,9 +66,9 @@ VALUES
 	('7ACD423E-F36B-1410-8DAC-00021F8B792E', 'AI', 'AI Administration', 1, 'fa-solid fa-robot')
 
 INSERT INTO ${flyway:defaultSchema}.Dashboard 
-	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass) 
+	(ID, Name, Description, UserID, UIConfigDetails, Type, DriverClass, ApplicationID) 
 VALUES 
-	('7DCD423E-F36B-1410-8DAC-00021F8B792E', 'AI Admin', 'AI Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'AIDashboard')
+	('7DCD423E-F36B-1410-8DAC-00021F8B792E', 'AI Admin', 'AI Administration Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', '', 'Code', 'AIDashboard', '7ACD423E-F36B-1410-8DAC-00021F8B792E')
 
 INSERT INTO ${flyway:defaultSchema}.DashboardUserPreference 
 	(DashboardID, ApplicationID, Scope, DisplayOrder)
@@ -115,10 +115,10 @@ VALUES
 
 INSERT INTO ${flyway:defaultSchema}.Dashboard 
 	(ID, Name, Description, UserID, 
-     UIConfigDetails, Type, DriverClass) 
+     UIConfigDetails, Type, DriverClass, ApplicationID) 
 VALUES 
 	('0BD5423E-F36B-1410-8DAC-00021F8B792E', 'Actions', 'Actions Framework Dashboard', 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', 
-     '', 'Code', 'ActionsManagement')
+     '', 'Code', 'ActionsManagement', '02D5423E-F36B-1410-8DAC-00021F8B792E')
 
 INSERT INTO ${flyway:defaultSchema}.DashboardUserPreference 
 	(ID, DashboardID, ApplicationID, Scope, DisplayOrder)
