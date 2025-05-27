@@ -690,6 +690,47 @@ mj-code-editor {
   overflow: hidden;
 }
 
+.sub-navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+
+  .sub-nav-btn {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    color: #555;
+    font-weight: 500;
+
+    &:hover {
+      background-color: #f0f0f0;
+      border-color: #2196f3;
+      color: #2196f3;
+    }
+
+    &.active {
+      background-color: #2196f3;
+      border-color: #2196f3;
+      color: white;
+      box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+    }
+
+    .fa-solid {
+      font-size: 11px;
+    }
+  }
+}
+
 .main-content {
   flex: 1;
   overflow: hidden;
