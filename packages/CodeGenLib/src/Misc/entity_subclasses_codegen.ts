@@ -158,6 +158,11 @@ export const loadModule = () => {
 
     const validateFunction: string | null = await this.LogAndGenerateValidateFunction(ds, entity, skipDBUpdate);
 
+    const status = entity.Status.trim().toLowerCase();
+    const deprecatedFlag: string = status === 'deprecated' || status === 'disabled' ? 
+        `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
+    const disabledFlag: string = status === 'disabled' ? 
+        `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
       let sRet: string = `
 
 /**
@@ -167,8 +172,8 @@ export const loadModule = () => {
  * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + entity.Description : ''}
  * * Primary Key${entity.PrimaryKeys.length > 1 ? 's' : ''}: ${entity.PrimaryKeys.map((f) => f.Name).join(', ')}
  * @extends {BaseEntity}
- * @class
- * @public
+ * @class${disabledFlag}
+ * @public${deprecatedFlag}
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
 export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
