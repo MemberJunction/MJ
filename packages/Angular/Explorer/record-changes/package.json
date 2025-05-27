@@ -31,6 +31,7 @@
     "@memberjunction/global": "2.42.0",
     "@memberjunction/ng-compare-records": "2.42.0",
     "@memberjunction/ng-container-directives": "2.42.0",
+    "@memberjunction/ng-notifications": "2.42.0",
     "diff": "8.0.2",
     "tslib": "^2.3.0"
   },
