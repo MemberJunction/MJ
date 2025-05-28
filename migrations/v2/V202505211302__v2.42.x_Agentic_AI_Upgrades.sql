@@ -344,21 +344,51 @@ BEGIN TRY
 	-- now, only if the above worked, get rid of the old columns and then create the new vwAIModels view
 	-- ---------------------------------------------------------------------------
 	-- Remove redundant columns from AIModel (now stored in AIModelVendor)
-	-- ---------------------------------------------------------------------------
-	ALTER TABLE ${flyway:defaultSchema}.AIModel
-		DROP CONSTRAINT 
-			[DF__AIModel__Support__61274A53],
-			[DF__AIModel__Support__7C655074];
+	-- --------------------------------------------------------------------------- 
 
-	ALTER TABLE [${flyway:defaultSchema}].[AIModel] 
-		DROP COLUMN 
-			Vendor,
-			[DriverClass], 
-			[DriverImportPath], 
-			[APIName], 
-			[InputTokenLimit], 
-			[SupportsEffortLevel],
-			[SupportedResponseFormats];  
+   -- 1) build a list of DROP CONSTRAINT statements for all default‐ and check‐
+   --    constraints on the columns we’re about to remove
+   DECLARE
+   @sql NVARCHAR(MAX) = N'';
+
+   SELECT
+      @sql += N'ALTER TABLE '
+            + QUOTENAME(SCHEMA_NAME(o.schema_id)) + N'.'
+            + QUOTENAME(o.name)
+            + N' DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';' + CHAR(13)
+   FROM sys.default_constraints dc
+      JOIN sys.objects o ON dc.parent_object_id = o.object_id
+      JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+   WHERE
+      SCHEMA_NAME(o.schema_id) = '${flyway:defaultSchema}'
+      AND o.name                 = 'AIModel'
+      AND c.name IN (
+         'Vendor',
+         'DriverClass',
+         'DriverImportPath',
+         'APIName',
+         'InputTokenLimit',
+         'SupportsEffortLevel',
+         'SupportedResponseFormats'
+      );
+
+   -- (repeat the same join logic for sys.check_constraints if you have any CHECKs to drop)
+   -- SELECT … FROM sys.check_constraints cc … WHERE …  >>
+
+   -- 2) run it
+   EXEC sp_executesql @sql;
+
+   -- 3) now that all the unnamed defaults/checks are gone, drop the columns
+   ALTER TABLE ${flyway:defaultSchema}.AIModel
+      DROP COLUMN
+         [Vendor],
+         [DriverClass],
+         [DriverImportPath],
+         [APIName],
+         [InputTokenLimit],
+         [SupportsEffortLevel],
+         [SupportedResponseFormats];
+ 
 
     -- Commit the transaction if everything succeeded
     COMMIT TRANSACTION;
@@ -1339,13 +1369,39 @@ BEGIN TRY
         CONSTRAINT [PK_AIPromptRun_ID] PRIMARY KEY ([ID])
     );
 
-    ALTER TABLE [${flyway:defaultSchema}].[AIPrompt] DROP CONSTRAINT [DF__AIPrompt__CacheR__3C94E422]
-    ALTER TABLE [${flyway:defaultSchema}].[AIPrompt] DROP CONSTRAINT [DF__AIPrompt__CacheE__3D89085B]
+   -- =================================================================================
+   -- V____drop_AIPrompt_cache.sql
+   --   1) dynamically drop any default or check constraints on AIPrompt.CacheResults
+   --      and AIPrompt.CacheExpiration (names vary by database)
+   --   2) then drop the two columns
+   -- =================================================================================
 
-    -- Drop existing cache columns that will be replaced
-    ALTER TABLE [${flyway:defaultSchema}].[AIPrompt] DROP COLUMN 
-        [CacheResults],  -- Will be replaced by EnableCaching
-        [CacheExpiration]; -- Will be replaced by CacheTTLSeconds
+   DECLARE
+   @sql NVARCHAR(MAX) = N'';
+
+   -- === 1a) DEFAULT constraints ===
+   SELECT
+      @sql += N'ALTER TABLE '
+            + QUOTENAME(SCHEMA_NAME(o.schema_id)) + N'.'
+            + QUOTENAME(o.name)
+            + N' DROP CONSTRAINT ' + QUOTENAME(dc.name) + N';' + CHAR(13)
+   FROM sys.default_constraints AS dc
+   JOIN sys.objects            AS o  ON dc.parent_object_id = o.object_id
+   JOIN sys.columns            AS c  ON c.object_id = dc.parent_object_id
+                                    AND c.column_id = dc.parent_column_id
+   WHERE
+      SCHEMA_NAME(o.schema_id) = '${flyway:defaultSchema}'
+      AND o.name                 = 'AIPrompt'
+      AND c.name IN ('CacheResults','CacheExpiration');
+
+   IF @sql <> N''
+   EXEC sp_executesql @sql;
+
+   -- === 2) now drop the columns themselves ===
+   ALTER TABLE ${flyway:defaultSchema}.AIPrompt
+   DROP COLUMN
+      [CacheResults],
+      [CacheExpiration];
     
     -- Add caching control fields to AIPrompt
     ALTER TABLE [${flyway:defaultSchema}].[AIPrompt] ADD
