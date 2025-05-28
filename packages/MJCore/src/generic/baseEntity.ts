@@ -55,6 +55,9 @@ export class EntityField {
      * Returns the current value of the field.
      */
     get Value(): any {
+        // Asserting status here for deprecated or disabled fields, not in constructor because
+        // we legacy fields will exist
+        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
         return this._Value;
     }
 
@@ -84,6 +87,7 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
+        EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
@@ -183,6 +187,12 @@ export class EntityField {
 
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
+        // NOTE: Do not assert EntityFieldInfo status here, because we are 
+        // creating a new EntityField object and it is possible that the field 
+        // is disabled or is deprecated, but we still need to create the object 
+        // since it is physically part of the entity. We DO assert for the status
+        // if the Value is later accessed or set.
+        
         this._entityFieldInfo = fieldInfo;
         if (Value) {
             this.Value = Value;

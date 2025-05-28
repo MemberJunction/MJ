@@ -5871,6 +5871,10 @@ export class EntityField_ {
     @MaxLength(20)
     ValuesToPackWithSchema: string;
         
+    @Field({description: `Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`}) 
+    @MaxLength(50)
+    Status: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -6014,6 +6018,9 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     ValuesToPackWithSchema?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 }
     
 
@@ -6111,6 +6118,9 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     ValuesToPackWithSchema?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
