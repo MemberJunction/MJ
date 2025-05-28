@@ -17,6 +17,7 @@ import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Ac
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
+import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 
 @NgModule({
     declarations: [
@@ -45,7 +46,8 @@ import { JoinGridModule } from "@memberjunction/ng-join-grid";
         BaseFormsModule,
         FormToolbarModule,
         MJTabStripModule,
-        ContainerDirectivesModule
+        ContainerDirectivesModule,
+        CodeEditorModule
     ],
     exports: [
         EntityFormExtendedComponent,

@@ -255,19 +255,14 @@
                                         }
                                     </div>
                                     
-                                    @if (EditMode) {
-                                        <textarea id="templateContent"
-                                                  class="form-control" 
-                                                  [(ngModel)]="currentTemplateContent.TemplateText"
-                                                  name="templateContent"
-                                                  (input)="onContentChange()"
-                                                  placeholder="Enter your template content here...&#10;&#10;You can use template parameters like: {{'{{'}} paramName {{'}}'}}&#10;And template includes like: {% template &quot;OtherTemplateName&quot; %}"
-                                                  style="flex: 1; min-height: 350px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.5; resize: vertical; border: 1px solid #ced4da; border-radius: 4px;">
-                                        </textarea>
-                                    } @else {
-                                        <div class="content-readonly" 
-                                             style="flex: 1; min-height: 350px; padding: 12px; border: 1px solid #e9ecef; border-radius: 4px; background: #f8f9fa; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-y: auto;">{{ currentTemplateContent.TemplateText || 'No content' }}</div>
-                                    }
+                                    <mj-code-editor 
+                                        [value]="currentTemplateContent?.TemplateText || ''"
+                                        (change)="onTemplateTextChange($event)"
+                                        [readonly]="!EditMode"
+                                        [language]="getEditorLanguage()"
+                                        [languages]="supportedLanguages"
+                                        style="flex: 1; height: 350px; border: 1px solid #ced4da; border-radius: 4px;">
+                                    </mj-code-editor>
                                     
                                     <!-- Template Syntax Help -->
                                     <div class="syntax-help" style="margin-top: 16px; padding: 12px; background: #e8f5e8; border-left: 4px solid #28a745; border-radius: 4px; font-size: 0.85em;">

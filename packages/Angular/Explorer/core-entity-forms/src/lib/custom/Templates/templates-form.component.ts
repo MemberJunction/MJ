@@ -7,6 +7,8 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { LanguageDescription } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
 
 @RegisterClass(BaseFormComponent, 'Templates') 
 @Component({
@@ -29,6 +31,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         // TODO: Load from database
     ];
     public contentTypeOptions: Array<{text: string, value: string}> = [];
+    public supportedLanguages: LanguageDescription[] = languages;
     
     private destroy$ = new Subject<void>();
 
@@ -304,6 +307,15 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         this.hasUnsavedChanges = true;
     }
 
+    onTemplateTextChange(event: any) {
+        if (this.currentTemplateContent) {
+            // Extract value from event - might be event.target.value or just event depending on component
+            const value = typeof event === 'string' ? event : (event.target?.value || event);
+            this.currentTemplateContent.TemplateText = value;
+            this.hasUnsavedChanges = true;
+        }
+    }
+
     async saveTemplateContents(): Promise<boolean> {
         try {
             // Save all template contents that have changes
@@ -412,6 +424,38 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         if (!typeId) return '-';
         const option = this.contentTypeOptions.find(opt => opt.value === typeId);
         return option ? option.text : typeId;
+    }
+
+    getEditorLanguage(): string {
+        if (!this.currentTemplateContent?.TypeID) {
+            return 'jinja2'; // default to jinja2 for template syntax (compatible with Nunjucks)
+        }
+
+        const contentType = this.currentTemplateContent.TypeID.toLowerCase();
+        
+        // Map content types to CodeMirror language modes
+        switch (contentType) {
+            case 'html':
+                return 'jinja2'; // Use jinja2 for HTML templates to get template syntax highlighting
+            case 'markdown':
+            case 'md':
+                return 'markdown';
+            case 'javascript':
+            case 'js':
+                return 'javascript';
+            case 'css':
+                return 'css';
+            case 'json':
+                return 'json';
+            case 'xml':
+                return 'xml';
+            case 'sql':
+                return 'sql';
+            case 'text':
+            case 'plain':
+            default:
+                return 'jinja2'; // Default to jinja2 since templates often contain template syntax
+        }
     }
 
     private isDuplicateCategory(categoryName: string): boolean {
