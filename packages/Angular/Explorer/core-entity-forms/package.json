@@ -26,6 +26,7 @@
   "dependencies": {
     "@memberjunction/core": "2.42.1",
     "@memberjunction/core-entities": "2.42.1",
+    "@memberjunction/templates-base-types": "2.42.1",
     "@memberjunction/ng-explorer-core": "2.42.1",
     "@memberjunction/ng-base-forms": "2.42.1",
     "@memberjunction/ng-form-toolbar": "2.42.1",
@@ -33,7 +34,7 @@
     "@memberjunction/ng-container-directives": "2.42.1",
     "@memberjunction/ng-code-editor": "2.42.1",
     "@memberjunction/ng-timeline": "2.42.1",
-    "@memberjunction/ng-join-grid": "2.42.1",
+    "@memberjunction/ng-join-grid": "2.42.1",    
     "@progress/kendo-angular-grid": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",
     "tslib": "^2.3.0"

@@ -58,3 +58,54 @@
   - Create the package structure with its own package.json
   - Add dependencies to the package.json
   - Run `npm install` at the repo root to update the workspace
+
+## MemberJunction Entity and Data Access Patterns
+
+### Entity Object Creation
+**Never directly instantiate BaseEntity subclasses** - always use the Metadata system to ensure proper class registration and potential subclassing:
+
+```typescript
+// ❌ Wrong - bypasses MJ class system
+const entity = new TemplateContentEntity();
+
+// ✅ Correct - uses MJ metadata system
+const md = new Metadata();
+const entity = await md.GetEntityObject<TemplateContentEntity>('Template Contents');
+```
+
+### Loading Multiple Records with RunView
+For loading collections of records, use the RunView class with proper generic typing and ResultType parameter:
+
+```typescript
+// ✅ Optimal pattern for loading entity collections
+const rv = new RunView();
+const results = await rv.RunView<TemplateContentEntity>({
+    EntityName: 'Template Contents',
+    ExtraFilter: `TemplateID='${recordId}'`,
+    OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
+    ResultType: 'entity_object'  // Returns actual entity objects, not raw data
+});
+
+// results.Results is now properly typed as TemplateContentEntity[]
+const entities = results.Results; // No casting needed!
+```
+
+### Key Benefits of This Pattern
+- **Type Safety**: Generic method provides full TypeScript typing
+- **Performance**: `ResultType: 'entity_object'` eliminates manual conversion loops
+- **Class System Compliance**: Respects MJ's entity registration and potential subclassing
+- **Clean Code**: No type casting or manual data loading required
+
+### What to Avoid
+```typescript
+// ❌ Manual conversion approach (inefficient)
+const results = await rv.RunView({...});
+for (const result of results.Results) {
+    const entity = await md.GetEntityObject<SomeEntity>('EntityName');
+    entity.LoadFromData(result);
+    entities.push(entity);
+}
+
+// ❌ Type casting approach (unnecessary with proper generics)
+const entities = results.Results as SomeEntity[];
+```

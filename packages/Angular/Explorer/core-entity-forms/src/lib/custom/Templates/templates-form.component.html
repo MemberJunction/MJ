@@ -1,0 +1,426 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    @if (record) {
+        <form class="record-form" #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+        <!-- Top Section - Key Fields -->
+        <div class="template-header" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 8px 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 12px; align-items: start;">
+                
+                <!-- Name -->
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
+                        <i class="fa-solid fa-file-text"></i> Template Name
+                    </label>
+                    @if (EditMode) {
+                        <kendo-textbox [(ngModel)]="record.Name" name="templateName" placeholder="Enter template name..."></kendo-textbox>
+                    } @else {
+                        <div class="form-control-plaintext" style="font-size: 1em; font-weight: 500; padding: 6px 0;">
+                            {{ record.Name || 'Unnamed Template' }}
+                        </div>
+                    }
+                </div>
+
+                <!-- Description -->
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
+                        <i class="fa-solid fa-align-left"></i> Description
+                    </label>
+                    @if (EditMode) {
+                        <kendo-textarea [(ngModel)]="record.Description" 
+                                       name="description"
+                                       [rows]="2"
+                                       placeholder="Enter template description..."></kendo-textarea>
+                    } @else {
+                        <div class="form-control-plaintext" style="padding: 8px 0; color: #6c757d;">
+                            {{ record.Description || 'No description provided' }}
+                        </div>
+                    }
+                </div>
+
+                <!-- Category -->
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" style="font-weight: 500; margin-bottom: 3px; color: #495057; font-size: 0.85em;">
+                        <i class="fa-solid fa-folder"></i> Category
+                    </label>
+                    @if (EditMode) {
+                        <kendo-combobox [(ngModel)]="record.CategoryID" 
+                                       name="categoryId"
+                                       [data]="categoryOptions"
+                                       textField="text"
+                                       valueField="value"
+                                       [valuePrimitive]="true"
+                                       [allowCustom]="true"
+                                       (valueChange)="onCategoryChange($event)"
+                                       placeholder="Select or enter new category...">
+                        </kendo-combobox>
+                    } @else {
+                        <div class="form-control-plaintext" style="padding: 8px 0;">
+                            {{ record.Category || 'Uncategorized' }}
+                        </div>
+                    }
+                </div>
+
+                <!-- Template Status -->
+                <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center;">
+                    @if (record.IsActive) {
+                        <span class="badge badge-success" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85em;">
+                            <i class="fa-solid fa-check-circle"></i> Active
+                        </span>
+                    } @else {
+                        <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 6px 12px; border-radius: 4px; font-size: 0.85em;">
+                            <i class="fa-solid fa-pause-circle"></i> Inactive
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer (ResizeContainer)="InvokeManualResize()" [bottomMargin]="140">
+            
+            <!-- Contents Tab - Main Focus -->
+            <mj-tab Name="Contents">
+                <i class="fa-solid fa-file-lines"></i> Contents 
+                <span class="badge badge-info" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.7em; margin-left: 6px;">
+                    {{ templateContents.length }}
+                </span>
+            </mj-tab>
+            <mj-tab-body>
+                <div class="template-contents-main content-margin" mjFillContainer [bottomMargin]="80">
+
+
+                        <!-- Content Versions List/Tabs -->
+                        @if (templateContents.length > 0) {
+                            <div class="content-versions-tabs" style="margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">
+                                <div class="content-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    
+                                    @for (content of templateContents; track content.ID || $index; let i = $index) {
+                                        <div class="content-version-tab" 
+                                             [class.active]="selectedContentIndex === i && !isAddingNewContent"
+                                             (click)="selectTemplateContent(i, false)"
+                                             style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; background: #fff; display: flex; align-items: center; gap: 6px; transition: all 0.2s; position: relative;"
+                                             [style.border-color]="selectedContentIndex === i && !isAddingNewContent ? '#007bff' : '#ccc'"
+                                             [style.background]="selectedContentIndex === i && !isAddingNewContent ? '#e3f2fd' : '#fff'">
+                                            
+                                            <div style="flex: 1;">
+                                                <div style="font-weight: 600; font-size: 0.85em; color: #495057;">
+                                                    {{ content.Type || 'Version ' + (i + 1) }}
+                                                </div>
+                                                <div style="font-size: 0.7em; color: #6c757d;">
+                                                    P:{{ content.Priority }}
+                                                    @if (!content.IsActive) {
+                                                        • <span style="color: #dc3545;">Inactive</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            @if (templateContents.length > 1 && EditMode) {
+                                                <button type="button" 
+                                                        (click)="deleteTemplateContent(i); $event.stopPropagation()"
+                                                        class="btn-sm delete-btn"
+                                                        style="background: none; border: none; color: #dc3545; padding: 4px; border-radius: 3px; transition: all 0.2s; cursor: pointer;"
+                                                        onmouseover="this.style.backgroundColor='#dc3545'; this.style.color='white';"
+                                                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='#dc3545';"
+                                                        title="Delete this content version">
+                                                    <i class="fa-solid fa-trash fa-xs"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+                                    
+                                    @if (isAddingNewContent) {
+                                        <div class="content-version-tab active" 
+                                             style="padding: 8px 12px; border: 1px solid #28a745; border-radius: 6px; background: #d4edda; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-plus text-success"></i>
+                                            <span style="font-weight: 600; color: #155724; font-size: 0.85em;">New</span>
+                                        </div>
+                                    }
+                                    
+                                    <!-- Add New Content (Edit Mode Only) -->
+                                    @if (EditMode && !isAddingNewContent) {
+                                        <div class="content-version-tab add-new" 
+                                             (click)="addNewTemplateContent()"
+                                             style="padding: 8px 12px; border: 1px dashed #28a745; border-radius: 6px; background: #f8f9fa; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;"
+                                             onmouseover="this.style.backgroundColor='#e8f5e9'; this.style.borderStyle='solid';"
+                                             onmouseout="this.style.backgroundColor='#f8f9fa'; this.style.borderStyle='dashed';"
+                                             title="Add new template content">
+                                            <i class="fa-solid fa-plus" style="color: #28a745; font-size: 0.75em;"></i>
+                                            <span style="font-weight: 500; color: #28a745; font-size: 0.85em;">New</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Content Editor -->
+                        @if (currentTemplateContent) {
+                            <div class="content-editor-container" style="flex: 1; display: flex; flex-direction: column; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden;">
+                                
+                                <!-- Content Metadata Bar -->
+                                <div class="content-metadata-bar" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 16px 20px;">
+                                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 20px; align-items: end;">
+                                        
+                                        <div class="form-group" style="margin: 0;">
+                                            <label for="contentType" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                                                <i class="fa-solid fa-tag"></i> Content Type
+                                            </label>
+                                            @if (EditMode) {
+                                                <kendo-dropdownlist [(ngModel)]="currentTemplateContent.TypeID"
+                                                                   name="contentType"
+                                                                   [data]="getContentTypeOptionsForContent()"
+                                                                   textField="text"
+                                                                   valueField="value"
+                                                                   [valuePrimitive]="true"
+                                                                   (valueChange)="onContentTypeChange()">
+                                                </kendo-dropdownlist>
+                                            } @else {
+                                                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                                                    {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
+                                                </div>
+                                            }
+                                        </div>
+                                        
+                                        <div class="form-group" style="margin: 0;">
+                                            <label for="priority" class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                                                <i class="fa-solid fa-sort-numeric-up"></i> Priority
+                                            </label>
+                                            @if (EditMode) {
+                                                <kendo-numerictextbox [(ngModel)]="currentTemplateContent.Priority"
+                                                                     name="priority"
+                                                                     [min]="1"
+                                                                     [step]="1"
+                                                                     [format]="'n0'">
+                                                </kendo-numerictextbox>
+                                            } @else {
+                                                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                                                    {{ currentTemplateContent.Priority || '-' }}
+                                                </div>
+                                            }
+                                        </div>
+                                        
+                                        <div class="form-group" style="margin: 0;">
+                                            <label class="form-label" style="margin-bottom: 4px; font-size: 0.9em; font-weight: 600;">
+                                                <i class="fa-solid fa-toggle-on"></i> Status
+                                            </label>
+                                            @if (EditMode) {
+                                                <div class="form-check" style="margin-top: 8px;">
+                                                    <input type="checkbox" 
+                                                           id="isActive"
+                                                           class="form-check-input" 
+                                                           [(ngModel)]="currentTemplateContent.IsActive"
+                                                           name="isActive">
+                                                    <label class="form-check-label" for="isActive" style="font-size: 0.9em;">
+                                                        Active
+                                                    </label>
+                                                </div>
+                                            } @else {
+                                                <div class="form-control-plaintext" style="font-size: 0.9em; padding: 4px 0;">
+                                                    @if (currentTemplateContent.IsActive) {
+                                                        <span class="badge badge-success" style="background: #28a745; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
+                                                            <i class="fa-solid fa-check-circle"></i> Active
+                                                        </span>
+                                                    } @else {
+                                                        <span class="badge badge-secondary" style="background: #6c757d; color: white; padding: 3px 8px; border-radius: 3px; font-size: 0.75em;">
+                                                            <i class="fa-solid fa-pause-circle"></i> Inactive
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                    </div>
+                                </div>
+                                
+                                <!-- Content Text Editor -->
+                                <div class="content-text-editor" style="flex: 1; padding: 20px; display: flex; flex-direction: column;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                        <label for="templateContent" class="form-label" style="margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fa-solid fa-code"></i> Template Content
+                                            <span class="badge" style="padding: 4px 8px; border-radius: 4px; font-size: 0.75em;"
+                                                  [style.background]="!currentTemplateContent.ID ? '#28a745' : '#6c757d'"
+                                                  [style.color]="'white'">
+                                                @if (!currentTemplateContent.ID) {
+                                                    New
+                                                } @else {
+                                                    {{ getContentTypeDisplayText(currentTemplateContent.TypeID) }}
+                                                }
+                                            </span>
+                                        </label>
+                                        
+                                        @if (!isAddingNewContent && hasUnsavedChanges) {
+                                            <span class="unsaved-indicator" style="color: #fd7e14; font-size: 0.85em; display: flex; align-items: center; gap: 4px;">
+                                                <i class="fa-solid fa-circle" style="font-size: 0.5em;"></i>
+                                                Unsaved changes
+                                            </span>
+                                        }
+                                    </div>
+                                    
+                                    @if (EditMode) {
+                                        <textarea id="templateContent"
+                                                  class="form-control" 
+                                                  [(ngModel)]="currentTemplateContent.TemplateText"
+                                                  name="templateContent"
+                                                  (input)="onContentChange()"
+                                                  placeholder="Enter your template content here...&#10;&#10;You can use template parameters like: {{'{{'}} paramName {{'}}'}}&#10;And template includes like: {% template &quot;OtherTemplateName&quot; %}"
+                                                  style="flex: 1; min-height: 350px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.5; resize: vertical; border: 1px solid #ced4da; border-radius: 4px;">
+                                        </textarea>
+                                    } @else {
+                                        <div class="content-readonly" 
+                                             style="flex: 1; min-height: 350px; padding: 12px; border: 1px solid #e9ecef; border-radius: 4px; background: #f8f9fa; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-y: auto;">{{ currentTemplateContent.TemplateText || 'No content' }}</div>
+                                    }
+                                    
+                                    <!-- Template Syntax Help -->
+                                    <div class="syntax-help" style="margin-top: 16px; padding: 12px; background: #e8f5e8; border-left: 4px solid #28a745; border-radius: 4px; font-size: 0.85em;">
+                                        <div style="font-weight: 600; margin-bottom: 8px; color: #155724;">
+                                            <i class="fa-solid fa-lightbulb"></i> Template Syntax Quick Reference:
+                                        </div>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                            <div>
+                                                <strong>Parameters:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{{'}} paramName {{'}}'}}</code><br>
+                                                <strong>Includes:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% template "TemplateName" %}'}}</code>
+                                            </div>
+                                            <div>
+                                                <strong>Conditionals:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% if condition %}'}}</code><br>
+                                                <strong>Loops:</strong> <code style="background: #fff; padding: 2px 4px; border-radius: 3px;">{{'{% for item in items %}'}}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        } @else {
+                            <!-- No Content State -->
+                            <div class="no-content-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 8px; padding: 40px; text-align: center;">
+                                <i class="fa-solid fa-file-plus" style="font-size: 48px; margin-bottom: 16px; color: #6c757d; opacity: 0.6;"></i>
+                                <h5 style="color: #495057; margin-bottom: 8px;">No Template Content</h5>
+                                <p style="color: #6c757d; margin-bottom: 20px;">Create your first template content version to get started.</p>
+                                <button type="button" 
+                                        (click)="addNewTemplateContent()"
+                                        class="btn btn-primary">
+                                    <i class="fa-solid fa-plus"></i> Create First Content Version
+                                </button>
+                            </div>
+                        }
+                </div>
+            </mj-tab-body>
+
+            <!-- Details Tab - Extra Fields -->
+            <mj-tab Name="Details">
+                <i class="fa-solid fa-cogs"></i> Details
+            </mj-tab>
+            <mj-tab-body>
+                <div style="padding: 20px;">
+                    <div class="record-form">
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="UserPrompt"
+                            Type="textarea"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="UserID"
+                            Type="textbox"
+                            [EditMode]="EditMode"
+                            LinkType="Record"
+                            LinkComponentType="Search">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="ActiveAt"
+                            Type="datepicker"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="DisabledAt"
+                            Type="datepicker"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="IsActive"
+                            Type="checkbox"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="__mj_CreatedAt"
+                            Type="textbox"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="__mj_UpdatedAt"
+                            Type="textbox"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="Category"
+                            Type="textbox"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                        <mj-form-field 
+                            [record]="record"
+                            [ShowLabel]="true"
+                            FieldName="User"
+                            Type="textbox"
+                            [EditMode]="EditMode">
+                        </mj-form-field>
+                    </div>
+                </div>
+            </mj-tab-body>
+
+            <!-- Template Params Tab -->
+            <mj-tab Name="Template Params" [Visible]="record.IsSaved"> 
+                <i class="fa-solid fa-sliders"></i> Parameters
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-view-grid 
+                    [Params]="BuildRelationshipViewParamsByEntityName('Template Params','TemplateID')"  
+                    [NewRecordValues]="NewRecordValues('Template Params')"
+                    [AllowLoad]="IsCurrentTab('Template Params')"  
+                    [EditMode]="GridEditMode()"  
+                    [BottomMargin]="GridBottomMargin">
+                </mj-user-view-grid>                    
+            </mj-tab-body>
+
+            <!-- AI Prompts Tab -->
+            <mj-tab Name="AI Prompts" [Visible]="record.IsSaved"> 
+                <i class="fa-solid fa-robot"></i> AI Prompts
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-view-grid 
+                    [Params]="BuildRelationshipViewParamsByEntityName('AI Prompts','TemplateID')"  
+                    [NewRecordValues]="NewRecordValues('AI Prompts')"
+                    [AllowLoad]="IsCurrentTab('AI Prompts')"  
+                    [EditMode]="GridEditMode()"  
+                    [BottomMargin]="GridBottomMargin">
+                </mj-user-view-grid>                    
+            </mj-tab-body>
+
+            <!-- Entity Documents Tab -->
+            <mj-tab Name="Entity Documents" [Visible]="record.IsSaved"> 
+                <i class="fa-solid fa-file-text"></i> Documents
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-view-grid 
+                    [Params]="BuildRelationshipViewParamsByEntityName('Entity Documents','TemplateID')"  
+                    [NewRecordValues]="NewRecordValues('Entity Documents')"
+                    [AllowLoad]="IsCurrentTab('Entity Documents')"  
+                    [EditMode]="GridEditMode()"  
+                    [BottomMargin]="GridBottomMargin">
+                </mj-user-view-grid>                    
+            </mj-tab-body>
+        </mj-tabstrip>
+        </form>
+    }
+</div>

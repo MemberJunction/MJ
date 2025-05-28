@@ -19,6 +19,8 @@
     "@memberjunction/global": "2.42.1",
     "@memberjunction/core-entities": "2.42.1",
     "@memberjunction/ai": "2.42.1",
+    "@memberjunction/templates": "2.42.1",
+    "@memberjunction/templates-base-types": "2.42.1",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },
