@@ -5627,6 +5627,17 @@ export const EntityFieldSchema = z.object({
     *   * None
     *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(25)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -12943,6 +12954,7 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'AI Actions')
 export class AIActionEntity extends BaseEntity<AIActionEntityType> {
@@ -13347,6 +13359,7 @@ export class AIAgentLearningCycleEntity extends BaseEntity<AIAgentLearningCycleE
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'AI Agent Models')
 export class AIAgentModelEntity extends BaseEntity<AIAgentModelEntityType> {
@@ -14218,6 +14231,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'AI Model Actions')
 export class AIModelActionEntity extends BaseEntity<AIModelActionEntityType> {
@@ -24349,6 +24363,7 @@ export class EntityActionEntity extends BaseEntity<EntityActionEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'Entity AI Actions')
 export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
@@ -26186,6 +26201,25 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     }
     set ValuesToPackWithSchema(value: 'Auto' | 'None' | 'All') {
         this.Set('ValuesToPackWithSchema', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
     }
 
     /**
