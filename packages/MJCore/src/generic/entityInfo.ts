@@ -377,6 +377,22 @@ export class EntityFieldInfo extends BaseInfo {
      */
     GeneratedValidationFunctionCheckConstraint: string | null = null;
 
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(25)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use
+    */
+    Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
+
+
     
     // virtual fields - returned by the database VIEW
     FieldCodeName: string =  null
@@ -621,6 +637,34 @@ export class EntityFieldInfo extends BaseInfo {
             }
         }
     }
+
+
+    /**
+     * This static factory method is used to check to see if the entity field in question is active or not
+     * If it is not active, it will throw an exception or log a warning depending on the status of the entity field being
+     * either Deprecated or Disabled.
+     * @param entityField - the EntityFieldInfo object to check the status of 
+     * @param callerName - the name of the caller that is calling this method, used for logging purposes such as EntityField::constructor as an example.
+     */
+    public static AssertEntityFieldActiveStatus(entityField: EntityFieldInfo, callerName: string) {
+        if (!entityField) {
+            throw new Error(`Entity must be provided to call AssertEntityFieldActiveStatus. Caller: ${callerName}`);
+        }
+        if (entityField.Status === 'Active') {
+            return; // no need to check further, the field is active
+        }
+
+        if (entityField.Status?.trim().toLowerCase() === 'deprecated') {
+            // warning
+            console.warn(`${callerName}: Entity Field ${entityField.Entity}.${entityField.Name} is deprecated and should not be used as it could be removed in the future.`);
+        }
+        else if (entityField.Status?.trim().toLowerCase() === 'disabled') {
+            // console.error and throw the exception
+            const exceptionString = `${callerName}: Entity Field ${entityField.Entity}.${entityField.Name} is disabled and cannot be used.`;
+            LogError(exceptionString);
+            throw new Error(exceptionString);
+        }
+    }    
 }
 
 
@@ -895,7 +939,7 @@ export class EntityInfo extends BaseInfo {
      * This static factory method is used to check to see if the entity in question is active or not
      * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
      * either Deprecated or Disabled.
-     * @param entityName 
+     * @param entity - the EntityInfo object to check the status of 
      * @param callerName - the name of the caller that is calling this method, used for logging purposes such as BaseEntity::constructor as an example.
      */
     public static AssertEntityActiveStatus(entity: EntityInfo, callerName: string) {
