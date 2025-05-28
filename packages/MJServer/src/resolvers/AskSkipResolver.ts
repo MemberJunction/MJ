@@ -1959,6 +1959,7 @@ cycle.`);
     const convoDetailEntity = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', user);
     convoDetailEntity.NewRecord();
     convoDetailEntity.ConversationID = ConversationId;
+    convoDetailEntity.UserID = user.ID;
     convoDetailEntity.Message = UserQuestion;
     convoDetailEntity.Role = 'User';
     convoDetailEntity.HiddenToUser = false;
