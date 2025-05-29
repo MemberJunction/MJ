@@ -57,6 +57,30 @@ export class AIPromptExtension extends TemplateExtensionBase {
         return new nodes.CallExtensionAsync(this, 'run', params, [body]);    
     }
 
+    /**
+     * Executes AI prompt processing using the configured language model.
+     * 
+     * **Parameter Mapping from CallExtensionAsync:**
+     * - In parse(): `new nodes.CallExtensionAsync(this, 'run', params, [body])`
+     * - Results in: `run(context, params, body, callBack)`
+     * 
+     * The key difference from TemplateEmbed is that we pass `[body]` as the 4th parameter
+     * to CallExtensionAsync, which shifts the parameter order to include both params and body
+     * as separate arguments. The body contains the prompt text between the opening and closing tags.
+     * 
+     * @param context - Nunjucks template rendering context containing variables and data
+     * @param params - Parsed parameters from the opening tag (AIModel, AllowFormatting, etc.)
+     * @param body - Function that returns the rendered prompt content between {% AIPrompt %} and {% endAIPrompt %}
+     * @param callBack - Async callback function to return the AI-generated response or errors
+     * 
+     * @example
+     * ```nunjucks
+     * {% AIPrompt AIModel="gpt-4", AllowFormatting=true %}
+     * Generate a personalized greeting for {{ user.name }} who works as {{ user.jobTitle }}.
+     * Make it professional but warm.
+     * {% endAIPrompt %}
+     * ```
+     */
     public run(context: Context, params: any, body: any, callBack: NunjucksCallback) {
         const prompt = body();
         const config: AIPromptConfig = {};

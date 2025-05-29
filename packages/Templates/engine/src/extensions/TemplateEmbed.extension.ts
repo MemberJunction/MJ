@@ -78,6 +78,28 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
         return new nodes.CallExtensionAsync(this, 'run', params);    
     }
 
+    /**
+     * Executes the template embedding logic with recursive template inclusion.
+     * 
+     * **Parameter Mapping from CallExtensionAsync:**
+     * - In parse(): `new nodes.CallExtensionAsync(this, 'run', params)`
+     * - Results in: `run(context, body, callBack)`
+     * 
+     * The `body` parameter will be undefined since TemplateEmbed is a self-closing tag
+     * that doesn't parse body content. The template name and configuration come from
+     * the parsed parameters instead.
+     * 
+     * @param context - Nunjucks template rendering context containing variables and data
+     * @param body - Will be undefined for self-closing template tags (not used)
+     * @param callBack - Async callback function to return results or errors
+     * 
+     * @example
+     * ```nunjucks
+     * {% template "HeaderTemplate" %}
+     * {% template "UserCard", type="HTML" %}
+     * {% template "Footer", data={year: 2024} %}
+     * ```
+     */
     public run(context: Context, body: any, callBack: NunjucksCallback) {
         try {
             // Extract template name (first parameter)
