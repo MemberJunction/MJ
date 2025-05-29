@@ -9,6 +9,7 @@ The MemberJunction Templates system provides a powerful, extensible templating e
 - [Database Schema](#database-schema)
 - [Getting Started](#getting-started)
 - [Core Features](#core-features)
+- [Template Naming Conventions](#template-naming-conventions)
 - [Template Extensions](#template-extensions)
 - [Built-in Extensions](#built-in-extensions)
 - [Creating Custom Extensions](#creating-custom-extensions)
@@ -204,6 +205,62 @@ The engine automatically caches compiled templates for performance:
 engine.ClearTemplateCache();
 ```
 
+## Template Naming Conventions
+
+**CRITICAL**: Template names must be unique across the entire system since `FindTemplate()` performs case-insensitive name lookups. Poor naming can lead to conflicts and unexpected behavior.
+
+### Recommended Naming Patterns
+
+#### **Organization.Category.Purpose**
+```
+"Acme.Email.Header"
+"Acme.Email.Footer" 
+"Acme.Email.Welcome"
+"Acme.Report.MonthlyStatus"
+"Global.Shared.Signature"
+```
+
+#### **Department.Type.Variant**
+```
+"Sales.Proposal.Header"
+"Sales.Proposal.Footer"
+"HR.Onboarding.Welcome"
+"Marketing.Campaign.CTA"
+```
+
+#### **Simple Descriptive Names**
+```
+"EMAIL_HEADER"
+"EMAIL_FOOTER"
+"WELCOME_EMAIL"
+"PASSWORD_RESET"
+"INVOICE_TEMPLATE"
+```
+
+### Naming Guidelines
+
+✅ **DO**:
+- Use UPPER_CASE or PascalCase for consistency
+- Include content type hints (`EMAIL_`, `SMS_`, `REPORT_`)
+- Be specific and descriptive
+- Consider team/department ownership
+- Document template purposes
+
+❌ **DON'T**:
+- Use generic names like "Template1", "Header", "Content"
+- Create ambiguous names that could conflict
+- Use special characters or spaces
+- Make names too long (keep under 50 characters)
+
+### Conflict Prevention
+
+Since template lookup is **case-insensitive** and **global**, consider:
+
+1. **Prefix conventions**: Team or application prefixes
+2. **Category usage**: Leverage `CategoryID` for logical grouping
+3. **Name registry**: Maintain a shared naming registry for large teams
+4. **Validation**: Check for existing names before creating new templates
+
 ## Template Extensions
 
 Extensions allow you to add custom functionality to the Nunjucks templating engine. They are implemented as classes that extend `TemplateExtensionBase` and are automatically registered with the template engine.
@@ -251,7 +308,7 @@ Create a bulleted list of benefits for {{ productName }}:
 - `AIModel`: Specific AI model to use (defaults to highest power available)
 - `AllowFormatting`: Allow HTML/Markdown formatting in AI responses (default: false)
 
-### Template Extension (Planned)
+### TemplateEmbed Extension
 
 Enables recursive template embedding for modular template composition.
 
@@ -259,14 +316,28 @@ Enables recursive template embedding for modular template composition.
 
 ```nunjucks
 <!-- Basic embedding -->
-{% template "HeaderTemplate" %}
+{% template "EMAIL_HEADER" %}
 
 <!-- With specific content type -->
-{% template "FooterTemplate", type="HTML" %}
+{% template "EMAIL_FOOTER", type="HTML" %}
 
 <!-- With additional data context -->
-{% template "SignatureTemplate", data={department: "Sales"} %}
+{% template "USER_SIGNATURE", data={department: "Sales"} %}
 ```
+
+#### Features
+
+- **Recursive inclusion**: Templates can embed other templates
+- **Content type inheritance**: Embedded templates inherit parent content type by default
+- **Cycle detection**: Prevents infinite recursion with clear error messages
+- **Data context merging**: Pass additional data to embedded templates
+- **Error handling**: Comprehensive validation and meaningful error messages
+
+#### Content Type Resolution Priority
+
+1. **Explicit type parameter**: `{% template "TemplateName", type="HTML" %}`
+2. **Current content type**: Inherits from parent template
+3. **Highest priority content**: Falls back to best available content in target template
 
 ## Creating Custom Extensions
 
@@ -381,46 +452,111 @@ Result object returned by template rendering operations.
 
 ## Examples
 
-### Email Template with AI Personalization
+### Complete Email Template System
+
+This example demonstrates modular template composition with reusable header and footer components.
+
+#### Template: "EMAIL_HEADER" (HTML Content Type)
 
 ```nunjucks
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Welcome to {{ companyName }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ emailTitle | default("Message from " + companyName) }}</title>
+    <style>
+        .email-container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+        .header { background-color: #2c3e50; color: white; padding: 20px; text-align: center; }
+        .logo { font-size: 24px; font-weight: bold; }
+    </style>
 </head>
 <body>
-    <h1>Welcome {{ customerName }}!</h1>
-    
-    <p>{% AIPrompt %}
-    Create a personalized welcome message for {{ customerName }} who just signed up 
-    for our {{ serviceType }} service. Mention their industry: {{ customerIndustry }}.
-    Keep it professional and under 100 words.
-    {% endAIPrompt %}</p>
-    
-    <p>Best regards,<br>
-    The {{ companyName }} Team</p>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo">{{ companyName | default("Company Name") }}</div>
+            {% if tagline %}
+            <div style="font-size: 14px; margin-top: 5px;">{{ tagline }}</div>
+            {% endif %}
+        </div>
+        <div class="content" style="padding: 20px;">
+```
+
+#### Template: "EMAIL_FOOTER" (HTML Content Type)
+
+```nunjucks
+        </div>
+        <div class="footer" style="background-color: #ecf0f1; padding: 20px; text-align: center; font-size: 12px; color: #7f8c8d;">
+            <p>{{ companyName | default("Your Company") }}<br>
+            {{ companyAddress | default("123 Business St, City, State 12345") }}</p>
+            
+            {% if unsubscribeUrl %}
+            <p><a href="{{ unsubscribeUrl }}" style="color: #3498db;">Unsubscribe</a> | 
+               <a href="{{ preferencesUrl | default('#') }}" style="color: #3498db;">Update Preferences</a></p>
+            {% endif %}
+            
+            <p>&copy; {{ currentYear | default(2024) }} {{ companyName | default("Your Company") }}. All rights reserved.</p>
+        </div>
+    </div>
 </body>
 </html>
 ```
 
-### Modular Template Composition
+#### Template: "WELCOME_EMAIL" (HTML Content Type)
+
+This template demonstrates embedding the header and footer components:
 
 ```nunjucks
-<!-- Main email template -->
-{% template "EmailHeader" %}
+{% template "EMAIL_HEADER" %}
 
-<div class="content">
-    <h1>{{ title }}</h1>
-    
-    {% template "UserGreeting", data={userName: customerName} %}
-    
-    {{ mainContent }}
-    
-    {% template "CallToAction", type="HTML" %}
+<h1>Welcome to {{ companyName }}, {{ customerName }}! 🎉</h1>
+
+<p>Thank you for signing up for our {{ serviceType }} service. We're excited to have you on board!</p>
+
+{% AIPrompt %}
+Create a personalized welcome message for {{ customerName }} who just signed up 
+for our {{ serviceType }} service. Mention their industry: {{ customerIndustry }}.
+Keep it professional, warm, and under 100 words.
+{% endAIPrompt %}
+
+<div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>What's Next?</h3>
+    <ul>
+        <li>Complete your profile setup</li>
+        <li>Explore our {{ serviceType }} features</li>
+        <li>Join our community forum</li>
+    </ul>
 </div>
 
-{% template "EmailFooter" %}
+<p style="text-align: center;">
+    <a href="{{ dashboardUrl }}" style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+        Get Started Now
+    </a>
+</p>
+
+<p>If you have any questions, feel free to reach out to our support team at {{ supportEmail }}.</p>
+
+<p>Best regards,<br>
+The {{ companyName }} Team</p>
+
+{% template "EMAIL_FOOTER" %}
+```
+
+#### Usage Example
+
+```typescript
+const result = await engine.RenderTemplate(welcomeTemplate, htmlContent, {
+    companyName: "MemberJunction",
+    tagline: "Powerful Database Solutions",
+    customerName: "Sarah Johnson",
+    serviceType: "Enterprise Platform",
+    customerIndustry: "Healthcare Technology",
+    companyAddress: "123 Tech Park Dr, Innovation City, CA 94000",
+    supportEmail: "support@memberjunction.com",
+    dashboardUrl: "https://app.memberjunction.com/dashboard",
+    unsubscribeUrl: "https://memberjunction.com/unsubscribe?token=xyz",
+    currentYear: 2024
+});
 ```
 
 ### Report Template with Dynamic Sections
@@ -431,7 +567,7 @@ Result object returned by template rendering operations.
 Generated on: {{ currentDate }}
 
 ## Summary
-{% template "ReportSummary", data={metrics: summaryMetrics} %}
+{% template "REPORT_SUMMARY", data={metrics: summaryMetrics} %}
 
 ## Detailed Analysis
 {% for section in reportSections %}
@@ -439,16 +575,48 @@ Generated on: {{ currentDate }}
 {% template section.templateName, data=section.data %}
 {% endfor %}
 
-{% template "ReportFooter", type="PlainText" %}
+{% template "REPORT_FOOTER", type="PlainText" %}
+```
+
+### Multi-Format Templates
+
+Templates can support multiple content types for different output channels:
+
+```nunjucks
+<!-- Same template with PlainText content type -->
+Welcome to {{ companyName }}, {{ customerName }}!
+
+Thank you for signing up for our {{ serviceType }} service.
+
+{% AIPrompt %}
+Create a brief welcome message for {{ customerName }} in plain text format.
+Keep it under 50 words and professional.
+{% endAIPrompt %}
+
+What's Next:
+- Complete your profile setup
+- Explore our {{ serviceType }} features  
+- Join our community forum
+
+Questions? Contact us at {{ supportEmail }}
+
+Best regards,
+The {{ companyName }} Team
+
+---
+{{ companyName }} | {{ companyAddress }}
 ```
 
 ## Best Practices
 
-### Template Organization
+### Template Naming and Organization
 
-1. **Use descriptive names**: Template names should clearly indicate their purpose
-2. **Organize by category**: Use Template Categories to group related templates
-3. **Version control**: Use Priority field to manage template versions
+1. **Follow naming conventions**: Use the patterns outlined in [Template Naming Conventions](#template-naming-conventions)
+2. **Prevent conflicts**: Check for existing names before creating new templates
+3. **Use prefixes**: Consider team/application prefixes for large organizations
+4. **Document purposes**: Maintain clear descriptions for all templates
+5. **Organize by category**: Use Template Categories to group related templates
+6. **Version control**: Use Priority field to manage template versions
 
 ### Content Type Strategy
 

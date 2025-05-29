@@ -75,17 +75,50 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
 
         // Template embedding is a self-closing tag, no body content to parse
         // Return a CallExtensionAsync node with the parsed parameters
-        return new nodes.CallExtensionAsync(this, 'run', params, []);    
+        return new nodes.CallExtensionAsync(this, 'run', params);    
     }
 
-    public run(context: Context, _body: any, _errorBody: any, params: any[], callBack: NunjucksCallback) {
+    public run(context: Context, body: any, callBack: NunjucksCallback) {
         try {
             // Extract template name (first parameter)
-            if (!params || params.length === 0) {
+            const bodyString: string = body ? body : '';
+            const params = bodyString.split(',');
+
+            /*
+                Possible Formats for the body of the template tag:
+
+                Basic Usage:
+
+                {% template "TemplateName" %}
+
+                With Optional Parameters:
+
+                {% template "TemplateName", type="HTML" %}
+                {% template "TemplateName", data={key: "value"} %}
+                {% template "TemplateName", type="PlainText", data={extra: "data"} %}              
+
+
+                So we need to take the params array we have above and each item is either just a string
+                ' e.g. the TemplateName, or a key-value pair like 'type="HTML"' or 'data={key: "value"}'
+                We will parse these into a structured object for easier handling.
+             */
+            const parsedParams: Array<{propertyName: string, value: string}> = params.map(param => {
+                // Split by the first '=' to separate property name and value
+                const [propertyName, ...valueParts] = param.split('=');
+                const value = valueParts.join('=').trim().replace(/^"|"$/g, ''); // Remove surrounding quotes if any
+                if (value.trim() === '') {
+                    return { propertyName: 'template', value: propertyName.trim() }; // Default to 'template' if no value provided
+                }
+                else {
+                    return { propertyName: propertyName.trim(), value: value };
+                }
+            });
+
+            if (!parsedParams || parsedParams.length === 0) {
                 throw new Error('Template name is required for template embedding');
             }
 
-            const templateName = params[0];
+            const templateName = parsedParams.find(param => param.propertyName === 'template')?.value || parsedParams[0].value;
             if (!templateName || typeof templateName !== 'string') {
                 throw new Error('Template name must be a non-empty string');
             }
