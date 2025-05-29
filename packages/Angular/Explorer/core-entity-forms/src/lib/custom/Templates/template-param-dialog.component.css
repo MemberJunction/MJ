@@ -1,0 +1,100 @@
+.dialog-content {
+    min-height: 500px;
+    max-height: 650px;
+}
+
+.parameter-row:hover {
+    background-color: #f8f9fa !important;
+}
+
+.parameter-row:last-child {
+    border-bottom: none;
+}
+
+.param-name,
+.param-value {
+    min-width: 0; /* Allow flex items to shrink */
+}
+
+.param-name kendo-textbox,
+.param-value kendo-textarea {
+    width: 100%;
+}
+
+.json-preview pre {
+    line-height: 1.3;
+}
+
+.test-results {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.result-content pre {
+    line-height: 1.4;
+}
+
+/* Improved scrollbar styling for better UX */
+.parameters-list::-webkit-scrollbar,
+.result-content::-webkit-scrollbar,
+.json-preview > div::-webkit-scrollbar {
+    width: 6px;
+}
+
+.parameters-list::-webkit-scrollbar-track,
+.result-content::-webkit-scrollbar-track,
+.json-preview > div::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.parameters-list::-webkit-scrollbar-thumb,
+.result-content::-webkit-scrollbar-thumb,
+.json-preview > div::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.parameters-list::-webkit-scrollbar-thumb:hover,
+.result-content::-webkit-scrollbar-thumb:hover,
+.json-preview > div::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+}
+
+/* Ensure proper grid alignment */
+.parameter-row {
+    align-items: flex-start;
+}
+
+.parameters-section {
+    flex-shrink: 0;
+}
+
+/* Better text wrapping for parameter names and descriptions */
+.param-name > div {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Expandable section headers */
+.header-section > div:first-child:hover,
+.json-preview-header > div:first-child:hover,
+.result-header:hover {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    transition: background-color 0.2s ease;
+}
+
+/* Chevron icons transition */
+.fa-chevron-down,
+.fa-chevron-right {
+    transition: transform 0.2s ease;
+}
+
+/* Save button styling */
+.test-results .result-header kendo-button {
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+
+.test-results .result-header:hover kendo-button {
+    opacity: 1;
+}

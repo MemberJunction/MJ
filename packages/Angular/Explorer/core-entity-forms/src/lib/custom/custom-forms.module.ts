@@ -6,6 +6,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule, ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule } from '@progress/kendo-angular-layout';
+import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
@@ -16,6 +17,7 @@ import { ContainerDirectivesModule } from "@memberjunction/ng-container-directiv
 import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Actions/actions-top-area-extended";
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
+import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 
@@ -24,13 +26,15 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         EntityFormExtendedComponent,
         EntityActionExtendedFormComponent,
         ActionTopComponentExtended,
-        TemplatesFormExtendedComponent
+        TemplatesFormExtendedComponent,
+        TemplateParamDialogComponent
     ],
     imports: [
         CommonModule,
         FormsModule,
         LayoutModule,
         ExpansionPanelModule,
+        DialogsModule,
         InputsModule,
         TextBoxModule,
         TextAreaModule,

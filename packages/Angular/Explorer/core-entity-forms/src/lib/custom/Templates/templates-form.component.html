@@ -438,5 +438,12 @@
             </mj-tab-body>
         </mj-tabstrip>
         </form>
+
+        <!-- Template Parameter Dialog -->
+        <mj-template-param-dialog 
+            [template]="record"
+            [(isVisible)]="showParamDialog"
+            (onClose)="onParamDialogClose()">
+        </mj-template-param-dialog>
     }
 </div>

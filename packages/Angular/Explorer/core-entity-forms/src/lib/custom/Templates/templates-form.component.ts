@@ -39,6 +39,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     public isRunningTemplate = false;
     public templateTestResult: string | null = null;
     public templateTestError: string | null = null;
+    public showParamDialog = false;
     
     private destroy$ = new Subject<void>();
 
@@ -516,7 +517,7 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
     /**
-     * Test run the current template with optional context data
+     * Test run the current template using the parameter dialog
      */
     async runTemplate() {
         if (!this.record?.IsSaved || !this.currentTemplateContent) {
@@ -539,87 +540,15 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
             }
         }
 
-        // Prompt for context data
-        const contextDataStr = prompt('Enter context data (JSON format) or leave empty for no context:', '{}');
-        if (contextDataStr === null) return; // User cancelled
-
-        this.isRunningTemplate = true;
-        this.templateTestResult = null;
-        this.templateTestError = null;
-
-        try {
-            // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
-            
-            // Execute the TestTemplate GraphQL mutation
-            const query = `
-                mutation TestTemplate($templateId: String!, $contextData: String) {
-                    TestTemplate(templateId: $templateId, contextData: $contextData) {
-                        success
-                        output
-                        error
-                        executionTimeMs
-                    }
-                }
-            `;
-
-            const variables = {
-                templateId: this.record.ID,
-                contextData: contextDataStr.trim() || '{}'
-            };
-
-            const result = await dataProvider.ExecuteGQL(query, variables);
-            
-            if (result?.TestTemplate) {
-                const testResult = result.TestTemplate;
-                
-                if (testResult.success) {
-                    this.templateTestResult = testResult.output;
-                    this.templateTestError = null;
-                    
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template executed successfully in ${testResult.executionTimeMs}ms`, 
-                        'success',
-                        2000
-                    );
-                    
-                    // Show result in a modal or expandable area
-                    this.showTemplateResult(testResult.output, testResult.executionTimeMs);
-                } else {
-                    this.templateTestError = testResult.error;
-                    this.templateTestResult = null;
-                    
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template execution failed: ${testResult.error}`, 
-                        'error',
-                        3500
-                    );
-                }
-            } else {
-                throw new Error(result.errors?.[0]?.message || 'Unknown GraphQL error');
-            }
-
-        } catch (error) {
-            console.error('Template test error:', error);
-            this.templateTestError = (error as Error).message || 'Unknown error occurred';
-            this.templateTestResult = null;
-            
-            MJNotificationService.Instance.CreateSimpleNotification(
-                `Template test failed: ${this.templateTestError}`, 
-                'error'
-            );
-        } finally {
-            this.isRunningTemplate = false;
-        }
+        // Show the parameter dialog
+        this.showParamDialog = true;
     }
 
     /**
-     * Show template execution result in a simple alert for now
-     * TODO: Could be enhanced with a proper modal or expandable section
+     * Handle parameter dialog close
      */
-    private showTemplateResult(output: string, executionTimeMs: number) {
-        const message = `Template Output (${executionTimeMs}ms):\n\n${output}`;
-        alert(message);
+    onParamDialogClose() {
+        this.showParamDialog = false;
     }
 
     getContentTypeOptionsForContent(): Array<{text: string, value: string}> {
