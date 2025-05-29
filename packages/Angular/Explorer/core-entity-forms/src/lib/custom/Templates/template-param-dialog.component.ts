@@ -13,7 +13,7 @@ export interface ParameterPair {
     type?: string;
 }
 
-export interface TemplateTestResult {
+export interface TemplateRunResult {
     success: boolean;
     output?: string;
     error?: string;
@@ -49,7 +49,7 @@ export class TemplateParamDialogComponent implements OnInit {
     public parameters: ParameterPair[] = [];
     public isLoading = false;
     public isRunning = false;
-    public testResult: TemplateTestResult | null = null;
+    public testResult: TemplateRunResult | null = null;
     public hasUnsavedParameters = false;
     public parametersExpanded = true;
     public jsonPreviewExpanded = false;
@@ -170,10 +170,10 @@ export class TemplateParamDialogComponent implements OnInit {
             // Get GraphQL data provider
             const dataProvider = Metadata.Provider as GraphQLDataProvider;
             
-            // Execute the TestTemplate GraphQL mutation
+            // Execute the RunTemplate GraphQL mutation
             const query = `
-                mutation TestTemplate($templateId: String!, $contextData: String) {
-                    TestTemplate(templateId: $templateId, contextData: $contextData) {
+                mutation RunTemplate($templateId: String!, $contextData: String) {
+                    RunTemplate(templateId: $templateId, contextData: $contextData) {
                         success
                         output
                         error
@@ -189,8 +189,8 @@ export class TemplateParamDialogComponent implements OnInit {
 
             const result = await dataProvider.ExecuteGQL(query, variables);
             
-            if (result?.TestTemplate) {
-                this.testResult = result.TestTemplate;
+            if (result?.RunTemplate) {
+                this.testResult = result.RunTemplate;
                 
                 if (this.testResult?.success) {
                     MJNotificationService.Instance.CreateSimpleNotification(

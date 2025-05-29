@@ -4,10 +4,10 @@ import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { TemplateContentEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
-import { ResolverBase } from './ResolverBase.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
-export class TemplateTestResult {
+export class TemplateRunResult {
     @Field()
     success: boolean;
 
@@ -22,17 +22,17 @@ export class TemplateTestResult {
 }
 
 @Resolver()
-export class TemplateTestResolver extends ResolverBase {
-    @Mutation(() => TemplateTestResult)
-    async TestTemplate(
+export class RunTemplateResolver extends ResolverBase {
+    @Mutation(() => TemplateRunResult)
+    async RunTemplate(
         @Arg('templateId') templateId: string,
         @Ctx() { userPayload }: { userPayload: UserPayload },
         @Arg('contextData', { nullable: true }) contextData?: string
-    ): Promise<TemplateTestResult> {
+    ): Promise<TemplateRunResult> {
         const startTime = Date.now();
         
         try {
-            LogStatus(`=== TESTING TEMPLATE ENGINE FOR ID: ${templateId} ===`);
+            LogStatus(`=== RUNNING TEMPLATE FOR ID: ${templateId} ===`);
 
             // Parse context data (JSON string)
             let data = {};
@@ -96,20 +96,20 @@ export class TemplateTestResolver extends ResolverBase {
                 templateEntity, 
                 templateContentResult.Results[0], 
                 data, 
-                true // skip validation for testing
+                true // skip validation for execution
             );
 
             const executionTime = Date.now() - startTime;
 
             if (result.Success) {
-                LogStatus(`=== TEMPLATE ENGINE TEST COMPLETED FOR: ${templateEntity.Name} (${executionTime}ms) ===`);
+                LogStatus(`=== TEMPLATE RUN COMPLETED FOR: ${templateEntity.Name} (${executionTime}ms) ===`);
                 return {
                     success: true,
                     output: result.Output,
                     executionTimeMs: executionTime
                 };
             } else {
-                LogError(`Template engine test failed for ${templateEntity.Name}: ${result.Message}`);
+                LogError(`Template run failed for ${templateEntity.Name}: ${result.Message}`);
                 return {
                     success: false,
                     error: result.Message,
@@ -119,7 +119,7 @@ export class TemplateTestResolver extends ResolverBase {
 
         } catch (error) {
             const executionTime = Date.now() - startTime;
-            LogError(`Template engine test failed:`, undefined, error);
+            LogError(`Template run failed:`, undefined, error);
             return {
                 success: false,
                 error: (error as Error).message || 'Unknown error occurred',
