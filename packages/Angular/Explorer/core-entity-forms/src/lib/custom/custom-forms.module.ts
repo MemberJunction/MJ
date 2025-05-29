@@ -18,6 +18,9 @@ import { ActionTopComponentExtended, LoadActionExtendedTopComponent } from "./Ac
 import { EntityActionExtendedFormComponent, LoadEntityActionExtendedFormComponent } from "./EntityActions/entityaction.form.component";
 import { TemplatesFormExtendedComponent, LoadTemplatesFormExtendedComponent } from "./Templates/templates-form.component";
 import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.component";
+import { TemplateEditorComponent } from "../shared/components/template-editor.component";
+import { AIPromptExecutionDialogComponent } from "./AIPrompts/ai-prompt-execution-dialog.component";
+import { AIPromptFormComponentExtended, LoadAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 
@@ -27,7 +30,10 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         EntityActionExtendedFormComponent,
         ActionTopComponentExtended,
         TemplatesFormExtendedComponent,
-        TemplateParamDialogComponent
+        TemplateParamDialogComponent,
+        TemplateEditorComponent,
+        AIPromptExecutionDialogComponent,
+        AIPromptFormComponentExtended
     ],
     imports: [
         CommonModule,
@@ -57,7 +63,9 @@ import { CodeEditorModule } from "@memberjunction/ng-code-editor";
         EntityFormExtendedComponent,
         ActionTopComponentExtended,
         EntityActionExtendedFormComponent,
-        TemplatesFormExtendedComponent
+        TemplatesFormExtendedComponent,
+        TemplateEditorComponent,
+        AIPromptFormComponentExtended
     ]
 })
 export class MemberJunctionCoreEntityFormsModule { }
@@ -67,4 +75,5 @@ export function LoadCoreCustomForms() {
     LoadActionExtendedTopComponent();
     LoadEntityActionExtendedFormComponent();
     LoadTemplatesFormExtendedComponent();
+    LoadAIPromptFormComponentExtended();
 }

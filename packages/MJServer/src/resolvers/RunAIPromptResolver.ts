@@ -43,6 +43,7 @@ export class RunAIPromptResolver extends ResolverBase {
         @Ctx() { userPayload }: { userPayload: UserPayload },
         @Arg('data', { nullable: true }) data?: string,
         @Arg('modelId', { nullable: true }) modelId?: string,
+        @Arg('vendorId', { nullable: true }) vendorId?: string,
         @Arg('configurationId', { nullable: true }) configurationId?: string,
         @Arg('skipValidation', { nullable: true }) skipValidation?: boolean,
         @Arg('templateData', { nullable: true }) templateData?: string
@@ -122,6 +123,7 @@ export class RunAIPromptResolver extends ResolverBase {
             promptParams.data = parsedData;
             promptParams.templateData = parsedTemplateData;
             promptParams.modelId = modelId;
+            promptParams.vendorId = vendorId;
             promptParams.configurationId = configurationId;
             promptParams.contextUser = currentUser;
             promptParams.skipValidation = skipValidation || false;

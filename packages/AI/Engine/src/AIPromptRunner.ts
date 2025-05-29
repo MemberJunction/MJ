@@ -1,5 +1,5 @@
 import { BaseLLM, BaseResult, ChatParams, ChatResult, ChatMessageRole, GetAIAPIKey } from "@memberjunction/ai";
-import { LogError, Metadata, UserInfo, ValidationResult } from "@memberjunction/core";
+import { LogError, Metadata, UserInfo, ValidationResult, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from "@memberjunction/templates";
@@ -27,6 +27,11 @@ export class AIPromptParams {
      * Optional specific model to use (overrides prompt's model selection)
      */
     modelId?: string;
+    
+    /**
+     * Optional specific vendor to use for inference routing
+     */
+    vendorId?: string;
     
     /**
      * Optional configuration ID for environment-specific behavior
@@ -208,13 +213,13 @@ export class AIPromptRunner {
         startTime: Date
     ): Promise<AIPromptRunResult> {
         // Select the model to use based on prompt configuration
-        const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId);
+        const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
         if (!selectedModel) {
             throw new Error(`No suitable model found for prompt ${prompt.Name}`);
         }
 
         // Create AIPromptRun record for tracking
-        const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime);
+        const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
 
         // Execute the AI model
         const modelResult = await this.executeModel(selectedModel, renderedPromptText, prompt, params.contextUser);
@@ -318,7 +323,8 @@ export class AIPromptRunner {
             prompt, 
             selectedResult.task.model, 
             params, 
-            startTime
+            startTime,
+            params.vendorId
         );
 
         // Update with parallel execution metadata
@@ -385,21 +391,48 @@ export class AIPromptRunner {
         prompt: AIPromptEntity, 
         explicitModelId?: string, 
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        vendorId?: string
     ): Promise<AIModelEntityExtended | null> {
         try {
             // Load AI Engine to access cached models and prompt models
             const { AIEngine } = await import('./AIEngine');
             await AIEngine.Instance.Config(false, contextUser);
 
+            // Resolve vendor ID to vendor name if provided
+            let vendorName: string | undefined;
+            if (vendorId) {
+                try {
+                    const rv = new RunView();
+                    const vendorResult = await rv.RunView({
+                        EntityName: 'AI Vendors',
+                        ExtraFilter: `ID='${vendorId}'`,
+                        ResultType: 'entity_object'
+                    });
+                    
+                    if (vendorResult.Results && vendorResult.Results.length > 0) {
+                        vendorName = vendorResult.Results[0].Name;
+                    } else {
+                        LogError(`Vendor with ID ${vendorId} not found`);
+                        // Continue without vendor filtering rather than fail
+                    }
+                } catch (error) {
+                    LogError(`Error loading vendor ${vendorId}: ${error.message}`);
+                    // Continue without vendor filtering rather than fail
+                }
+            }
+
             // If explicit model is specified, validate it from cached models
             if (explicitModelId) {
-                const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
+                const model = AIEngine.Instance.Models.find(m => 
+                    m.ID === explicitModelId && 
+                    (!vendorName || m.Vendor === vendorName)
+                );
                 if (model && model.IsActive) {
                     return model;
                 }
                 // If explicit model not found or inactive, log warning but continue with normal selection
-                LogError(`Explicit model ${explicitModelId} not found or inactive, using prompt model selection`);
+                LogError(`Explicit model ${explicitModelId} not found, inactive, or not from specified vendor, using prompt model selection`);
             }
 
             // Get prompt-specific model associations from AIPromptModels
@@ -418,7 +451,11 @@ export class AIPromptRunner {
                 // Use prompt-specific models if defined
                 candidateModels = promptModels
                     .map(pm => AIEngine.Instance.Models.find(m => m.ID === pm.ModelID))
-                    .filter(m => m && m.IsActive) as AIModelEntityExtended[];
+                    .filter(m => 
+                        m && 
+                        m.IsActive && 
+                        (!vendorName || m.Vendor === vendorName)
+                    ) as AIModelEntityExtended[];
 
                 // Sort by priority from AIPromptModels (higher priority first)
                 candidateModels.sort((a, b) => {
@@ -432,7 +469,8 @@ export class AIPromptRunner {
                 candidateModels = AIEngine.Instance.Models.filter(m => 
                     m.IsActive && 
                     m.PowerRank >= minPowerRank &&
-                    (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
+                    (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+                    (!vendorName || m.Vendor === vendorName)
                 );
 
                 // Sort by power rank based on preference
@@ -473,7 +511,8 @@ export class AIPromptRunner {
         prompt: AIPromptEntity,
         model: AIModelEntityExtended,
         params: AIPromptParams,
-        startTime: Date
+        startTime: Date,
+        vendorId?: string
     ): Promise<AIPromptRunEntity> {
         try {
             const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
@@ -481,7 +520,7 @@ export class AIPromptRunner {
             
             promptRun.PromptID = prompt.ID;
             promptRun.ModelID = model.ID;
-            // promptRun.VendorID = model.VendorID; // TODO: Fix VendorID field
+            promptRun.VendorID = vendorId || model.Vendor;
             promptRun.ConfigurationID = params.configurationId;
             promptRun.RunAt = startTime;
             

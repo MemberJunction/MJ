@@ -1,0 +1,223 @@
+<kendo-dialog *ngIf="_isVisible"
+              [minWidth]="700"
+              [width]="900"
+              [height]="700"
+              (close)="close()"
+              [title]="'Execute AI Prompt: ' + (aiPrompt?.Name || 'Unknown')">
+              
+    <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        
+        <!-- Header Section -->
+        <div class="header-section" style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e9ecef;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <i class="fa-solid fa-robot" style="color: #6f42c1; font-size: 1.2em;"></i>
+                <h5 style="margin: 0; color: #495057; font-weight: 600;">AI Prompt Execution</h5>
+                @if (aiPrompt?.ParallelizationMode && aiPrompt?.ParallelizationMode !== 'None') {
+                    <span class="badge" style="background: #6f42c1; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.7em;">
+                        {{ aiPrompt?.ParallelizationMode }}
+                    </span>
+                }
+            </div>
+            <p style="margin: 0; color: #6c757d; font-size: 0.9em;">
+                Provide data context for the AI prompt to process. This could be text, structured data, or any information the AI should analyze.
+            </p>
+        </div>
+
+        <!-- Loading State -->
+        @if (isLoading) {
+            <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                <span style="color: #6c757d;">Loading prompt configuration...</span>
+            </div>
+        } @else {
+            
+            <!-- Data Context Section -->
+            <div class="data-context-section" style="display: flex; flex-direction: column; margin-bottom: 20px; flex: 1;">
+                <div class="section-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <i class="fa-solid fa-database" style="color: #6c757d;"></i>
+                    <h6 style="margin: 0; color: #495057; font-weight: 600;">Data Context</h6>
+                    <span style="color: #dc3545; font-weight: bold;">*</span>
+                </div>
+                
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <kendo-textarea [(ngModel)]="dataContext"
+                                   [rows]="12"
+                                   placeholder="Enter the data or context you want the AI to process. This could be:&#10;&#10;• Text to analyze, summarize, or transform&#10;• Structured data (JSON, CSV, etc.)&#10;• Questions or instructions&#10;• Documents or content to process&#10;&#10;Example:&#10;{&#10;  &quot;customerFeedback&quot;: &quot;The product was amazing but shipping was slow&quot;,&#10;  &quot;productId&quot;: &quot;ABC123&quot;&#10;}"
+                                   style="font-family: 'Courier New', monospace; font-size: 0.9em; flex: 1; resize: vertical;">
+                    </kendo-textarea>
+                    
+                    <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 0.75em; color: #6c757d;">
+                            <i class="fa-solid fa-info-circle"></i>
+                            The AI will process this data according to the prompt's template and configuration.
+                        </div>
+                        <div style="font-size: 0.75em; color: #6c757d;">
+                            {{ dataContext?.length || 0 }} characters
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Options Section -->
+            <div class="options-section" style="margin-bottom: 20px;">
+                <div class="section-header" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;" (click)="optionsExpanded = !optionsExpanded">
+                    <i class="fa-solid" [class.fa-chevron-down]="optionsExpanded" [class.fa-chevron-right]="!optionsExpanded" style="color: #6c757d; font-size: 0.8em;"></i>
+                    <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                    <h6 style="margin: 0; color: #495057; font-weight: 600;">Execution Options</h6>
+                </div>
+                
+                @if (optionsExpanded) {
+                    <div class="options-content" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            
+                            <!-- Model Selection -->
+                            <div class="option-group">
+                                <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                    <i class="fa-solid fa-microchip" style="margin-right: 6px; color: #6c757d;"></i>
+                                    AI Model Override
+                                </label>
+                                <kendo-dropdownlist [(ngModel)]="executionOptions.modelId"
+                                                   [data]="availableModels"
+                                                   textField="Name"
+                                                   valueField="ID"
+                                                   [valuePrimitive]="true"
+                                                   [filterable]="true"
+                                                   placeholder="(use prompt default)"
+                                                   style="width: 100%;">
+                                </kendo-dropdownlist>
+                                <div style="font-size: 0.75em; color: #6c757d; margin-top: 4px;">
+                                    Leave empty to use prompt's configured model selection
+                                </div>
+                            </div>
+                            
+                            <!-- Configuration -->
+                            <div class="option-group">
+                                <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                    <i class="fa-solid fa-gear" style="margin-right: 6px; color: #6c757d;"></i>
+                                    Configuration ID
+                                </label>
+                                <kendo-textbox [(ngModel)]="executionOptions.configurationId"
+                                              placeholder="(optional configuration context)"
+                                              style="width: 100%;">
+                                </kendo-textbox>
+                                <div style="font-size: 0.75em; color: #6c757d; margin-top: 4px;">
+                                    Optional configuration context for environment-specific behavior
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Validation Options -->
+                        <div style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+                            <kendo-checkbox [(ngModel)]="executionOptions.skipValidation"></kendo-checkbox>
+                            <label style="margin: 0; font-size: 0.9em; color: #495057;">Skip output validation</label>
+                            <i class="fa-solid fa-info-circle" style="color: #6c757d; font-size: 0.8em;" 
+                               title="When enabled, output type validation and example matching will be skipped"></i>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Execution Results -->
+            @if (executionResult) {
+                <div class="execution-results" style="flex: 1; display: flex; flex-direction: column; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; margin-bottom: 16px; min-height: 200px;">
+                    <div class="result-header" 
+                         style="padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; cursor: pointer;"
+                         [style.background]="executionResult.success ? '#d4edda' : '#f8d7da'"
+                         [style.border-bottom]="'1px solid ' + (executionResult.success ? '#c3e6cb' : '#f5c6cb')"
+                         (click)="resultsExpanded = !resultsExpanded">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid" [class.fa-chevron-down]="resultsExpanded" [class.fa-chevron-right]="!resultsExpanded" style="font-size: 0.8em;" [style.color]="executionResult.success ? '#155724' : '#721c24'"></i>
+                            @if (executionResult.success) {
+                                <i class="fa-solid fa-check-circle" style="color: #155724;"></i>
+                                <span style="font-weight: 600; color: #155724; font-size: 0.9em;">Success</span>
+                                @if (executionResult.executionTimeMs) {
+                                    <span style="color: #155724; font-size: 0.8em;">({{ executionResult.executionTimeMs }}ms)</span>
+                                }
+                                @if (executionResult.tokensUsed) {
+                                    <span style="color: #155724; font-size: 0.8em;">• {{ executionResult.tokensUsed }} tokens</span>
+                                }
+                            } @else {
+                                <i class="fa-solid fa-exclamation-triangle" style="color: #721c24;"></i>
+                                <span style="font-weight: 600; color: #721c24; font-size: 0.9em;">Error</span>
+                            }
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;" (click)="$event.stopPropagation()">
+                            <kendo-button
+                                    fillMode="flat"
+                                    size="small"
+                                    (click)="saveResults()"
+                                    title="Save results to file"
+                                    style="min-width: auto; padding: 4px 8px;">
+                                <i class="fa-solid fa-download"></i>
+                            </kendo-button>
+                        </div>
+                    </div>
+                    
+                    @if (resultsExpanded) {
+                        <div class="result-content" style="flex: 1; padding: 12px; background: white; overflow-y: auto; overflow-x: auto;">
+                            @if (executionResult.success) {
+                                @if (executionResult.parsedResult && executionResult.parsedResult !== executionResult.output) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #495057; font-size: 0.85em; font-weight: 600;">Parsed Result:</h6>
+                                        <pre style="margin: 0; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8em; color: #495057; line-height: 1.4; background: #f8f9fa; padding: 8px; border-radius: 4px;">{{ executionResult.parsedResult }}</pre>
+                                    </div>
+                                }
+                                
+                                @if (executionResult.output) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #495057; font-size: 0.85em; font-weight: 600;">AI Response:</h6>
+                                        <pre style="margin: 0; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8em; color: #495057; line-height: 1.4;">{{ executionResult.output }}</pre>
+                                    </div>
+                                }
+                                
+                                @if (executionResult.promptRunId) {
+                                    <div style="font-size: 0.75em; color: #6c757d; margin-top: 12px; padding-top: 8px; border-top: 1px solid #e9ecef;">
+                                        <i class="fa-solid fa-link"></i> Run ID: {{ executionResult.promptRunId }}
+                                    </div>
+                                }
+                            } @else if (executionResult.error) {
+                                <pre style="margin: 0; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8em; color: #721c24; line-height: 1.4;">{{ executionResult.error }}</pre>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Dialog Actions -->
+    <kendo-dialog-actions>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div>
+                @if (dataContext && dataContext.trim()) {
+                    <span style="font-size: 0.8em; color: #28a745;">
+                        <i class="fa-solid fa-check-circle"></i> Data context provided
+                    </span>
+                } @else {
+                    <span style="font-size: 0.8em; color: #dc3545;">
+                        <i class="fa-solid fa-exclamation-triangle"></i> Data context required
+                    </span>
+                }
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+                <kendo-button
+                        themeColor="primary"
+                        [disabled]="isRunning || isLoading || !dataContext?.trim()"
+                        (click)="runAIPrompt()">
+                    @if (isRunning) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Executing...
+                    } @else {
+                        <i class="fa-solid fa-robot"></i> Execute AI Prompt
+                    }
+                </kendo-button>
+                
+                <kendo-button
+                        fillMode="outline"
+                        (click)="close()">
+                    Close
+                </kendo-button>
+            </div>
+        </div>
+    </kendo-dialog-actions>
+</kendo-dialog>

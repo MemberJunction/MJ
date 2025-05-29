@@ -1,0 +1,77 @@
+.dialog-content {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.section-header h6 {
+    font-size: 0.9em;
+}
+
+.parameter-row:hover {
+    background-color: #f8f9fa !important;
+}
+
+.option-group label {
+    display: flex;
+    align-items: center;
+}
+
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.badge {
+    display: inline-block;
+    font-size: 0.7em;
+    line-height: 1;
+}
+
+.execution-results {
+    transition: box-shadow 0.2s ease;
+}
+
+.execution-results:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.result-header {
+    transition: background-color 0.2s ease;
+}
+
+.result-content {
+    line-height: 1.4;
+}
+
+.result-content pre {
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+/* Kendo UI overrides for better integration */
+.ai-prompt-execution-dialog kendo-textbox,
+.ai-prompt-execution-dialog kendo-textarea,
+.ai-prompt-execution-dialog kendo-dropdownlist {
+    width: 100%;
+}
+
+.ai-prompt-execution-dialog kendo-button {
+    min-width: auto;
+}
+
+.ai-prompt-execution-dialog kendo-checkbox {
+    margin-right: 8px;
+}
+
+/* Grid layouts for responsive design */
+@media (max-width: 768px) {
+    .options-content > div {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .parameter-row {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+}

@@ -11,6 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
+import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 
 @RegisterClass(BaseFormComponent, 'Templates') 
 @Component({
@@ -40,6 +41,13 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     public templateTestResult: string | null = null;
     public templateTestError: string | null = null;
     public showParamDialog = false;
+    
+    // Template editor configuration for shared component
+    public templateEditorConfig: TemplateEditorConfig = {
+        allowEdit: true,
+        showRunButton: true,
+        compactMode: false
+    };
     
     private destroy$ = new Subject<void>();
 
@@ -554,6 +562,21 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     getContentTypeOptionsForContent(): Array<{text: string, value: string}> {
         // Always exclude "Select Type..." option for all content
         return this.contentTypeOptions.filter(option => option.value !== '');
+    }
+
+    /**
+     * Handles template content changes from the shared editor
+     */
+    public onSharedTemplateContentChange(content: TemplateContentEntity[]) {
+        this.templateContents = content;
+        this.updateUnsavedChangesFlag();
+    }
+
+    /**
+     * Handles template run requests from the shared editor
+     */
+    public onSharedTemplateRun(template: TemplateEntity) {
+        this.runTemplate();
     }
 
 } 
