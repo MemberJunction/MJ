@@ -40,7 +40,7 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     public get templateEditorConfig(): TemplateEditorConfig {
         return {
             allowEdit: this.EditMode,
-            showRunButton: true,
+            showRunButton: false,
             compactMode: false
         };
     }
@@ -734,7 +734,6 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
             const [categoriesResult, promptsResult] = await Promise.all([
                 new RunView().RunView<AIPromptCategoryEntity>({
                     EntityName: 'AI Prompt Categories',
-                    ExtraFilter: 'IsActive=1',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 }),

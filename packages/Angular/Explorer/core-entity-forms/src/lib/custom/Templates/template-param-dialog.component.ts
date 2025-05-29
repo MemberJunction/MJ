@@ -192,16 +192,21 @@ export class TemplateParamDialogComponent implements OnInit {
             if (result?.RunTemplate) {
                 this.testResult = result.RunTemplate;
                 
+                // Collapse parameters and expand results after execution
+                this.parametersExpanded = false;
+                this.resultsExpanded = true;
+                
                 if (this.testResult?.success) {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Template executed successfully in ${this.testResult.executionTimeMs || 0}ms`,
                         'success',
-                        2000
+                        4000
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Template execution failed: ${this.testResult?.error || 'Unknown error'}`,
-                        'error'
+                        'error',
+                        5000
                     );
                 }
             } else {
@@ -215,9 +220,14 @@ export class TemplateParamDialogComponent implements OnInit {
                 error: (error as Error).message || 'Unknown error occurred'
             };
             
+            // Still collapse parameters and expand results on error
+            this.parametersExpanded = false;
+            this.resultsExpanded = true;
+            
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Template test failed: ${this.testResult?.error || 'Unknown error'}`,
-                'error'
+                'error',
+                5000
             );
         } finally {
             this.isRunning = false;

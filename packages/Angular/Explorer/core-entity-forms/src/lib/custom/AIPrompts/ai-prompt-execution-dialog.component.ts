@@ -25,6 +25,12 @@ export interface AIPromptExecutionOptions {
     parallelizationMode?: string;
 }
 
+export interface DataContextVariable {
+    name: string;
+    value: string;
+    type: 'string' | 'number' | 'boolean' | 'object';
+}
+
 @Component({
     selector: 'mj-ai-prompt-execution-dialog',
     templateUrl: './ai-prompt-execution-dialog.component.html',
@@ -52,6 +58,7 @@ export class AIPromptExecutionDialogComponent implements OnInit {
     @Output() onClose = new EventEmitter<void>();
 
     public dataContext: string = '';
+    public dataContextVariables: DataContextVariable[] = [];
     public executionOptions: AIPromptExecutionOptions = {};
     public availableModels: AIModelEntityExtended[] = [];
     public availableVendors: AIVendorEntity[] = [];
@@ -60,8 +67,9 @@ export class AIPromptExecutionDialogComponent implements OnInit {
     public executionResult: AIPromptRunResult | null = null;
     
     // UI State
+    public dataContextExpanded = true;
     public optionsExpanded = false;
-    public resultsExpanded = true;
+    public resultsExpanded = false;
 
     constructor() {}
 
@@ -72,8 +80,15 @@ export class AIPromptExecutionDialogComponent implements OnInit {
      */
     private resetDialogState() {
         this.dataContext = '';
+        this.dataContextVariables = [];
         this.executionResult = null;
         this.executionOptions = {};
+        this.dataContextExpanded = true;
+        this.optionsExpanded = false;
+        this.resultsExpanded = false;
+        
+        // Initialize with one default variable
+        this.addDataContextVariable();
         
         if (this.aiPrompt?.ID) {
             this.loadDialogData();
@@ -151,19 +166,94 @@ export class AIPromptExecutionDialogComponent implements OnInit {
 
 
     /**
+     * Adds a new data context variable
+     */
+    addDataContextVariable() {
+        this.dataContextVariables.push({
+            name: '',
+            value: '',
+            type: 'string'
+        });
+        this.updateDataContextFromVariables();
+    }
+
+    /**
+     * Removes a data context variable
+     */
+    removeDataContextVariable(index: number) {
+        if (index >= 0 && index < this.dataContextVariables.length) {
+            this.dataContextVariables.splice(index, 1);
+            this.updateDataContextFromVariables();
+        }
+    }
+
+    /**
+     * Updates the JSON data context from variables
+     */
+    updateDataContextFromVariables() {
+        const context: any = {};
+        
+        for (const variable of this.dataContextVariables) {
+            if (variable.name?.trim()) {
+                let value: any = variable.value;
+                
+                // Convert value based on type
+                switch (variable.type) {
+                    case 'number':
+                        value = value ? parseFloat(value) : 0;
+                        break;
+                    case 'boolean':
+                        value = value === 'true';
+                        break;
+                    case 'object':
+                        try {
+                            value = value ? JSON.parse(value) : {};
+                        } catch {
+                            value = variable.value; // Keep as string if invalid JSON
+                        }
+                        break;
+                    default:
+                        value = variable.value || '';
+                }
+                
+                context[variable.name.trim()] = value;
+            }
+        }
+        
+        this.dataContext = Object.keys(context).length > 0 ? JSON.stringify(context, null, 2) : '';
+    }
+
+    /**
+     * Validates that at least one variable has a name
+     */
+    private validateDataContext(): boolean {
+        const hasValidVariable = this.dataContextVariables.some(v => v.name?.trim());
+        
+        if (!hasValidVariable) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Please provide at least one variable name for the AI prompt to process.',
+                'warning',
+                4000
+            );
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
      * Executes the AI prompt
      */
     async runAIPrompt() {
         if (!this.aiPrompt?.ID) return;
 
         // Validate data context
-        if (!this.dataContext?.trim()) {
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Please provide data context for the AI prompt to process.',
-                'warning'
-            );
+        if (!this.validateDataContext()) {
             return;
         }
+
+        // Update data context from variables before execution
+        this.updateDataContextFromVariables();
 
         this.isRunning = true;
         this.executionResult = null;
@@ -204,10 +294,15 @@ export class AIPromptExecutionDialogComponent implements OnInit {
             if (result?.RunAIPrompt) {
                 this.executionResult = result.RunAIPrompt;
                 
+                // Collapse data context and expand results after execution
+                this.dataContextExpanded = false;
+                this.resultsExpanded = true;
+                
                 if (this.executionResult?.success) {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `AI Prompt executed successfully in ${this.executionResult.executionTimeMs}ms`,
-                        'success'
+                        'success',
+                        4000
                     );
                 }
             } else {
@@ -220,6 +315,10 @@ export class AIPromptExecutionDialogComponent implements OnInit {
                 success: false,
                 error: (error as Error).message || 'Unknown error occurred'
             };
+            
+            // Still collapse data context and expand results on error
+            this.dataContextExpanded = false;
+            this.resultsExpanded = true;
         } finally {
             this.isRunning = false;
         }
