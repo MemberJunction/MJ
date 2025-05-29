@@ -1,0 +1,102 @@
+.record-form-container {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 10px;
+}
+
+.custom-toolbar-actions {
+    margin-left: auto;
+}
+
+.status-badge {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.config-summary {
+    position: sticky;
+    top: 0;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.config-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.config-item:last-child {
+    border-bottom: none;
+}
+
+.template-tab-content {
+    background: #fff;
+}
+
+.template-header h5 {
+    font-size: 1.1em;
+}
+
+.loading-state,
+.no-template-state,
+.invalid-template-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.no-template-state i,
+.invalid-template-state i {
+    opacity: 0.6;
+}
+
+.template-editor-container {
+    background: #fff;
+    border-radius: 6px;
+}
+
+/* Grid layout adjustments */
+@media (max-width: 1200px) {
+    .record-form-container .mj-tab-body > div {
+        grid-template-columns: 1fr !important;
+        gap: 20px;
+    }
+    
+    .config-summary {
+        order: -1;
+        position: static;
+        max-height: none;
+    }
+}
+
+/* Responsive toolbar */
+@media (max-width: 768px) {
+    .custom-toolbar-actions {
+        flex-direction: column;
+        gap: 4px !important;
+    }
+    
+    .status-badge {
+        align-self: flex-start;
+    }
+}
+
+/* Ensure proper spacing in form sections */
+.record-form-container mj-form-section {
+    padding: 16px;
+}
+
+/* Smooth transitions for better UX */
+.status-badge,
+.config-item,
+.template-header {
+    transition: all 0.2s ease;
+}
+
+.config-item:hover {
+    background-color: rgba(0,0,0,0.02);
+    border-radius: 4px;
+    margin: 0 -8px;
+    padding: 8px;
+}

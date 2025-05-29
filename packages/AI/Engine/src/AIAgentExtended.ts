@@ -10,6 +10,9 @@ export class AIAgentEntityExtended extends AIAgentEntity {
     }
 
     private _models: AIAgentModelEntity[] = [];
+    /**
+     * @deprecated - models are associated with prompts now
+     */
     public get Models(): AIAgentModelEntity[] {
         return this._models;
     }

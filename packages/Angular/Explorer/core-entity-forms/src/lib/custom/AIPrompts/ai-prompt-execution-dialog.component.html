@@ -1,0 +1,399 @@
+<kendo-dialog *ngIf="_isVisible"
+              [minWidth]="700"
+              [width]="900"
+              [height]="850"
+              (close)="close()"
+              [title]="'Execute AI Prompt: ' + (aiPrompt?.Name || 'Unknown')">
+              
+    <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        
+        <!-- Header Section -->
+        <div class="header-section" style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e9ecef;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <i class="fa-solid fa-robot" style="color: #6f42c1; font-size: 1.2em;"></i>
+                <h5 style="margin: 0; color: #495057; font-weight: 600;">AI Prompt Execution</h5>
+                @if (aiPrompt?.ParallelizationMode && aiPrompt?.ParallelizationMode !== 'None') {
+                    <span class="badge" style="background: #6f42c1; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.7em;">
+                        {{ aiPrompt?.ParallelizationMode }}
+                    </span>
+                }
+            </div>
+            <p style="margin: 0; color: #6c757d; font-size: 0.9em;">
+                Define variables for the AI prompt to process. Each variable will be available as data context during execution.
+            </p>
+        </div>
+
+        <!-- Loading State -->
+        @if (isLoading) {
+            <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px;">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                <span style="color: #6c757d;">Loading prompt configuration...</span>
+            </div>
+        } @else {
+            
+            <!-- Data Context Variables Section -->
+            <kendo-expansionpanel 
+                [(expanded)]="dataContextExpanded"
+                style="margin-bottom: 16px; flex-shrink: 0;">
+                <ng-template kendoExpansionPanelTitleDirective>
+                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                        <i class="fa-solid fa-database" style="color: #6c757d;"></i>
+                        Data Context Variables
+                        <span style="color: #dc3545; font-weight: bold;">*</span>
+                        @if (dataContextVariables.length > 0) {
+                            <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                {{ dataContextVariables.length }}
+                            </span>
+                        }
+                    </span>
+                </ng-template>
+                
+                <div style="padding: 12px 0;">
+                    <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
+                        <i class="fa-solid fa-info-circle"></i>
+                        Define variables that will be available to the AI prompt during execution. These are converted to JSON format automatically.
+                    </div>
+                    
+                    <!-- Variables Table -->
+                    @if (dataContextVariables.length > 0) {
+                        <div style="border: 1px solid #dee2e6; border-radius: 6px; background: #f8f9fa;">
+                            <!-- Header -->
+                            <div style="display: grid; grid-template-columns: 200px 1fr 120px 60px; gap: 12px; padding: 12px 16px; background: #e9ecef; font-weight: 600; font-size: 0.85em; color: #495057; border-bottom: 1px solid #dee2e6;">
+                                <div>Variable Name <span style="color: #dc3545;">*</span></div>
+                                <div>Value</div>
+                                <div>Type</div>
+                                <div>Actions</div>
+                            </div>
+                            
+                            <!-- Variable Rows -->
+                            @for (variable of dataContextVariables; track $index; let i = $index) {
+                                <div [style.background]="!variable.name.trim() ? '#fff3cd' : 'white'"
+                                     [style.border-left]="!variable.name.trim() ? '3px solid #ffc107' : 'none'"
+                                     style="display: grid; grid-template-columns: 200px 1fr 120px 60px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e9ecef; align-items: center;">
+                                    
+                                    <!-- Variable Name -->
+                                    <div>
+                                        <kendo-textbox [(ngModel)]="variable.name"
+                                                      [name]="'varName_' + i"
+                                                      placeholder="Variable name..."
+                                                      [disabled]="isRunning"
+                                                      (valueChange)="updateDataContextFromVariables()"
+                                                      style="width: 100%; font-size: 0.9em;">
+                                        </kendo-textbox>
+                                    </div>
+                                    
+                                    <!-- Variable Value -->
+                                    <div>
+                                        @if (variable.type === 'object') {
+                                            <kendo-textarea [(ngModel)]="variable.value"
+                                                           [name]="'varValue_' + i"
+                                                           [rows]="2"
+                                                           placeholder="JSON object..."
+                                                           [disabled]="isRunning"
+                                                           (valueChange)="updateDataContextFromVariables()"
+                                                           style="width: 100%; font-size: 0.85em; font-family: 'Courier New', monospace;">
+                                            </kendo-textarea>
+                                        } @else if (variable.type === 'boolean') {
+                                            <kendo-dropdownlist [(ngModel)]="variable.value"
+                                                               [name]="'varValue_' + i"
+                                                               [data]="[{text: 'True', value: 'true'}, {text: 'False', value: 'false'}]"
+                                                               textField="text"
+                                                               valueField="value"
+                                                               [valuePrimitive]="true"
+                                                               [disabled]="isRunning"
+                                                               (valueChange)="updateDataContextFromVariables()"
+                                                               style="width: 100%; font-size: 0.9em;">
+                                            </kendo-dropdownlist>
+                                        } @else {
+                                            <kendo-textbox [(ngModel)]="variable.value"
+                                                          [name]="'varValue_' + i"
+                                                          [placeholder]="variable.type === 'number' ? 'Enter number...' : 'Enter text...'"
+                                                          [disabled]="isRunning"
+                                                          (valueChange)="updateDataContextFromVariables()"
+                                                          style="width: 100%; font-size: 0.9em;">
+                                            </kendo-textbox>
+                                        }
+                                    </div>
+                                    
+                                    <!-- Variable Type -->
+                                    <div>
+                                        <kendo-dropdownlist [(ngModel)]="variable.type"
+                                                           [name]="'varType_' + i"
+                                                           [data]="[{text: 'String', value: 'string'}, {text: 'Number', value: 'number'}, {text: 'Boolean', value: 'boolean'}, {text: 'Object', value: 'object'}]"
+                                                           textField="text"
+                                                           valueField="value"
+                                                           [valuePrimitive]="true"
+                                                           [disabled]="isRunning"
+                                                           (valueChange)="updateDataContextFromVariables()"
+                                                           style="width: 100%; font-size: 0.85em;">
+                                        </kendo-dropdownlist>
+                                    </div>
+                                    
+                                    <!-- Actions -->
+                                    <div style="text-align: center;">
+                                        <kendo-button fillMode="flat" themeColor="error" size="small"
+                                                    (click)="removeDataContextVariable(i)"
+                                                    [disabled]="isRunning"
+                                                    title="Remove variable">
+                                            <i class="fa-solid fa-times"></i>
+                                        </kendo-button>
+                                    </div>
+                                </div>
+                            }
+                            
+                            <!-- Add Variable Row -->
+                            <div style="padding: 12px 16px; text-align: center; background: white; border-top: 1px solid #dee2e6;">
+                                <kendo-button fillMode="outline" themeColor="success" size="small"
+                                            (click)="addDataContextVariable()"
+                                            [disabled]="isRunning">
+                                    <i class="fa-solid fa-plus"></i> Add Variable
+                                </kendo-button>
+                            </div>
+                        </div>
+                    } @else {
+                        <div style="text-align: center; padding: 20px; color: #6c757d;">
+                            <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 12px; opacity: 0.5;"></i>
+                            <p style="margin: 0 0 12px 0;">No variables defined yet</p>
+                            <kendo-button themeColor="primary" size="small"
+                                        (click)="addDataContextVariable()"
+                                        [disabled]="isRunning">
+                                <i class="fa-solid fa-plus"></i> Add First Variable
+                            </kendo-button>
+                        </div>
+                    }
+                    
+                    <!-- Generated JSON Preview -->
+                    @if (dataContext) {
+                        <div style="margin-top: 16px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <i class="fa-solid fa-code" style="color: #6c757d; font-size: 0.9em;"></i>
+                                <span style="font-weight: 600; color: #495057; font-size: 0.9em;">Generated JSON:</span>
+                            </div>
+                            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.85em; white-space: pre-wrap; overflow: auto; max-height: 150px;">{{ dataContext }}</div>
+                        </div>
+                    }
+                </div>
+            </kendo-expansionpanel>
+
+            <!-- Execution Options Section -->
+            <kendo-expansionpanel 
+                [(expanded)]="optionsExpanded"
+                style="margin-bottom: 16px; flex-shrink: 0;">
+                <ng-template kendoExpansionPanelTitleDirective>
+                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                        <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                        Execution Options
+                    </span>
+                </ng-template>
+                
+                <div style="padding: 12px 0;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        
+                        <!-- Model Selection -->
+                        <div class="option-group">
+                            <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                <i class="fa-solid fa-microchip" style="margin-right: 6px; color: #6c757d;"></i>
+                                AI Model Override
+                            </label>
+                            <kendo-dropdownlist [(ngModel)]="executionOptions.modelId"
+                                               [data]="availableModels"
+                                               textField="Name"
+                                               valueField="ID"
+                                               [valuePrimitive]="true"
+                                               [filterable]="true"
+                                               [disabled]="isRunning"
+                                               placeholder="Use prompt's configured models..."
+                                               style="width: 100%;">
+                            </kendo-dropdownlist>
+                            <div style="margin-top: 4px; font-size: 0.75em; color: #6c757d;">
+                                Optional: Override the prompt's configured models
+                            </div>
+                        </div>
+                        
+                        <!-- Vendor Selection -->
+                        <div class="option-group">
+                            <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                <i class="fa-solid fa-server" style="margin-right: 6px; color: #6c757d;"></i>
+                                AI Vendor Override
+                            </label>
+                            <kendo-dropdownlist [(ngModel)]="executionOptions.vendorId"
+                                               [data]="availableVendors"
+                                               textField="Name"
+                                               valueField="ID"
+                                               [valuePrimitive]="true"
+                                               [filterable]="true"
+                                               [disabled]="isRunning"
+                                               placeholder="Use prompt's configured vendors..."
+                                               style="width: 100%;">
+                            </kendo-dropdownlist>
+                            <div style="margin-top: 4px; font-size: 0.75em; color: #6c757d;">
+                                Optional: Override the vendor for model inference
+                            </div>
+                        </div>
+                        
+                        <!-- Configuration ID -->
+                        <div class="option-group">
+                            <label style="display: block; font-weight: 500; margin-bottom: 6px; color: #495057; font-size: 0.9em;">
+                                <i class="fa-solid fa-gear" style="margin-right: 6px; color: #6c757d;"></i>
+                                Configuration ID
+                            </label>
+                            <kendo-textbox [(ngModel)]="executionOptions.configurationId"
+                                          placeholder="Optional configuration identifier..."
+                                          [disabled]="isRunning"
+                                          style="width: 100%;">
+                            </kendo-textbox>
+                            <div style="margin-top: 4px; font-size: 0.75em; color: #6c757d;">
+                                Environment-specific configuration identifier
+                            </div>
+                        </div>
+                        
+                        <!-- Skip Validation -->
+                        <div class="option-group">
+                            <label style="display: flex; align-items: center; font-weight: 500; color: #495057; font-size: 0.9em;">
+                                <kendo-checkbox [(ngModel)]="executionOptions.skipValidation"
+                                               [disabled]="isRunning">
+                                </kendo-checkbox>
+                                <i class="fa-solid fa-shield-alt" style="margin-right: 6px; color: #6c757d;"></i>
+                                Skip Output Validation
+                            </label>
+                            <div style="margin-top: 4px; margin-left: 24px; font-size: 0.75em; color: #6c757d;">
+                                Bypass output format validation for faster execution
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </kendo-expansionpanel>
+
+            <!-- Results Section -->
+            <kendo-expansionpanel 
+                [(expanded)]="resultsExpanded"
+                style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
+                <ng-template kendoExpansionPanelTitleDirective>
+                    <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                        <i class="fa-solid fa-chart-line" style="color: #6c757d;"></i>
+                        Execution Results
+                        @if (executionResult) {
+                            <span class="badge" 
+                                  [style.background]="executionResult.success ? '#28a745' : '#dc3545'"
+                                  style="color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                {{ executionResult.success ? 'Success' : 'Error' }}
+                            </span>
+                        }
+                    </span>
+                </ng-template>
+                
+                <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
+                    @if (isRunning) {
+                        <div class="loading-state" style="display: flex; align-items: center; justify-content: center; padding: 40px; flex: 1;">
+                            <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
+                            <span style="color: #6c757d;">Executing AI prompt...</span>
+                        </div>
+                    } @else if (executionResult) {
+                        <div style="flex: 1; display: flex; flex-direction: column;">
+                            <!-- Result Header with Stats -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.75em; color: #6c757d; margin-bottom: 2px;">STATUS</div>
+                                    <div [style.color]="executionResult.success ? '#28a745' : '#dc3545'" style="font-weight: 600;">
+                                        {{ executionResult.success ? 'Success' : 'Failed' }}
+                                    </div>
+                                </div>
+                                @if (executionResult.executionTimeMs) {
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 0.75em; color: #6c757d; margin-bottom: 2px;">EXECUTION TIME</div>
+                                        <div style="font-weight: 600; color: #495057;">{{ executionResult.executionTimeMs }}ms</div>
+                                    </div>
+                                }
+                                @if (executionResult.tokensUsed) {
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 0.75em; color: #6c757d; margin-bottom: 2px;">TOKENS USED</div>
+                                        <div style="font-weight: 600; color: #495057;">{{ executionResult.tokensUsed }}</div>
+                                    </div>
+                                }
+                                @if (executionResult.promptRunId) {
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 0.75em; color: #6c757d; margin-bottom: 2px;">RUN ID</div>
+                                        <div style="font-weight: 600; color: #495057; font-size: 0.8em;">{{ executionResult.promptRunId }}</div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Result Content -->
+                            <div style="flex: 1; overflow-y: auto; padding-right: 8px;">
+                                @if (executionResult.success && executionResult.output) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-check-circle" style="color: #28a745;"></i>
+                                            Output
+                                        </h6>
+                                        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 300px;">{{ executionResult.output }}</div>
+                                    </div>
+                                }
+                                
+                                @if (executionResult.error) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #dc3545; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-exclamation-triangle"></i>
+                                            Error
+                                        </h6>
+                                        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 12px; color: #721c24; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 300px;">{{ executionResult.error }}</div>
+                                    </div>
+                                }
+                                
+                                @if (executionResult.parsedResult && executionResult.parsedResult !== executionResult.output) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-code" style="color: #17a2b8;"></i>
+                                            Parsed Result
+                                        </h6>
+                                        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; font-family: 'Courier New', monospace; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 200px;">{{ executionResult.parsedResult }}</div>
+                                    </div>
+                                }
+                                
+                                @if (executionResult.validationResult) {
+                                    <div style="margin-bottom: 16px;">
+                                        <h6 style="margin: 0 0 8px 0; color: #495057; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fa-solid fa-shield-alt" style="color: #ffc107;"></i>
+                                            Validation Result
+                                        </h6>
+                                        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; color: #856404; font-size: 0.9em; white-space: pre-wrap; overflow: auto; max-height: 150px;">{{ executionResult.validationResult }}</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    } @else {
+                        <div style="display: flex; align-items: center; justify-content: center; padding: 40px; color: #6c757d; flex: 1;">
+                            <div style="text-align: center;">
+                                <i class="fa-solid fa-play-circle" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
+                                <p style="margin: 0;">No execution results yet. Run the prompt to see results here.</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </kendo-expansionpanel>
+        }
+    </div>
+
+    <!-- Dialog Actions -->
+    <kendo-dialog-actions>
+        <kendo-button fillMode="outline" (click)="close()">
+            Close
+        </kendo-button>
+        
+        @if (executionResult) {
+            <kendo-button fillMode="outline" themeColor="info" (click)="saveResults()">
+                <i class="fa-solid fa-download"></i> Save Results
+            </kendo-button>
+        }
+        
+        <kendo-button themeColor="primary" 
+                     (click)="runAIPrompt()" 
+                     [disabled]="isRunning || isLoading">
+            @if (isRunning) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Running...
+            } @else {
+                <i class="fa-solid fa-play"></i> Run Prompt
+            }
+        </kendo-button>
+    </kendo-dialog-actions>
+</kendo-dialog>

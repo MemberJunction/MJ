@@ -1,9 +1,13 @@
 import { BaseLLM, BaseResult, ChatParams, ChatResult, ChatMessageRole, GetAIAPIKey } from "@memberjunction/ai";
-import { LogError, Metadata, UserInfo, ValidationResult } from "@memberjunction/core";
+import { LogError, Metadata, UserInfo, ValidationResult, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from "@memberjunction/templates";
-import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/templates-base-types"
+import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/templates-base-types";
+import { ExecutionPlanner } from "./ExecutionPlanner";
+import { ParallelExecutionCoordinator } from "./ParallelExecutionCoordinator";
+import { ResultSelectionConfig } from "./ParallelExecution";
+import { AIEngine } from "./AIEngine";
 
 /**
  * Parameters for executing an AI prompt
@@ -24,6 +28,11 @@ export class AIPromptParams {
      * Optional specific model to use (overrides prompt's model selection)
      */
     modelId?: string;
+    
+    /**
+     * Optional specific vendor to use for inference routing
+     */
+    vendorId?: string;
     
     /**
      * Optional configuration ID for environment-specific behavior
@@ -106,10 +115,14 @@ export class AIPromptRunResult {
 export class AIPromptRunner {
     private _metadata: Metadata;
     private _templateEngine: TemplateEngineServer;
+    private _executionPlanner: ExecutionPlanner;
+    private _parallelCoordinator: ParallelExecutionCoordinator;
 
     constructor() {
         this._metadata = new Metadata();
         this._templateEngine = TemplateEngineServer.Instance;
+        this._executionPlanner = new ExecutionPlanner();
+        this._parallelCoordinator = new ParallelExecutionCoordinator();
     }
 
     /**
@@ -142,50 +155,22 @@ export class AIPromptRunner {
                 throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
             }
 
-            // Select the model to use based on prompt configuration
-            const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId);
-            if (!selectedModel) {
-                throw new Error(`No suitable model found for prompt ${prompt.Name}`);
-            }
-
-            // Create AIPromptRun record for tracking
-            promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime);
-
             // Render the template with provided data
             const renderedPrompt = await this.renderPromptTemplate(template, params.data, params.templateData);
             if (!renderedPrompt.Success) {
                 throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
             }
 
-            // Execute the AI model
-            const modelResult = await this.executeModel(selectedModel, renderedPrompt.Output, prompt, params.contextUser);
+            // Check if we need parallel execution based on ParallelizationMode
+            const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
             
-            // Parse and validate the result
-            const parsedResult = await this.parseAndValidateResult(
-                modelResult, 
-                prompt, 
-                params.skipValidation
-            );
-
-            // Calculate execution metrics
-            const endTime = new Date();
-            const executionTimeMS = endTime.getTime() - startTime.getTime();
-
-            // Update the prompt run with results
-            if (promptRun) {
-                await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS);
+            if (shouldUseParallelExecution) {
+                // Use parallel execution path
+                return await this.executePromptInParallel(prompt, renderedPrompt.Output, params, startTime);
+            } else {
+                // Use traditional single execution path
+                return await this.executeSinglePrompt(prompt, renderedPrompt.Output, params, startTime);
             }
-
-            const chatResult = modelResult as ChatResult;
-            return {
-                success: true,
-                rawResult: chatResult.data?.choices?.[0]?.message?.content,
-                result: parsedResult.result,
-                promptRun,
-                executionTimeMS,
-                tokensUsed: chatResult.data?.usage?.totalTokens,
-                validationResult: parsedResult.validationResult
-            };
 
         } catch (error) {
             LogError(error);
@@ -213,6 +198,177 @@ export class AIPromptRunner {
         }
     }
 
+    /**
+     * Executes a single prompt (non-parallel) using traditional model selection.
+     * 
+     * @param prompt - The AI prompt to execute
+     * @param renderedPromptText - The rendered prompt text
+     * @param params - Original execution parameters
+     * @param startTime - Execution start time
+     * @returns Promise<AIPromptRunResult> - The execution result
+     */
+    private async executeSinglePrompt(
+        prompt: AIPromptEntity,
+        renderedPromptText: string,
+        params: AIPromptParams,
+        startTime: Date
+    ): Promise<AIPromptRunResult> {
+        // Select the model to use based on prompt configuration
+        const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId, params.vendorId);
+        if (!selectedModel) {
+            throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+        }
+
+        // Create AIPromptRun record for tracking
+        const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
+
+        // Execute the AI model
+        const modelResult = await this.executeModel(selectedModel, renderedPromptText, prompt, params.contextUser);
+        
+        // Parse and validate the result
+        const parsedResult = await this.parseAndValidateResult(
+            modelResult, 
+            prompt, 
+            params.skipValidation
+        );
+
+        // Calculate execution metrics
+        const endTime = new Date();
+        const executionTimeMS = endTime.getTime() - startTime.getTime();
+
+        // Update the prompt run with results
+        await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS);
+
+        const chatResult = modelResult as ChatResult;
+        return {
+            success: true,
+            rawResult: chatResult.data?.choices?.[0]?.message?.content,
+            result: parsedResult.result,
+            promptRun,
+            executionTimeMS,
+            tokensUsed: chatResult.data?.usage?.totalTokens,
+            validationResult: parsedResult.validationResult
+        };
+    }
+
+    /**
+     * Executes a prompt using parallel execution with multiple models/tasks.
+     * 
+     * @param prompt - The AI prompt to execute
+     * @param renderedPromptText - The rendered prompt text
+     * @param params - Original execution parameters
+     * @param startTime - Execution start time
+     * @returns Promise<AIPromptRunResult> - The aggregated execution result
+     */
+    private async executePromptInParallel(
+        prompt: AIPromptEntity,
+        renderedPromptText: string,
+        params: AIPromptParams,
+        startTime: Date
+    ): Promise<AIPromptRunResult> {
+        // Load AI Engine to get models and prompt models
+        const { AIEngine } = await import('./AIEngine');
+        await AIEngine.Instance.Config(false, params.contextUser);
+
+        // Get prompt-specific model associations
+        const promptModels = AIEngine.Instance.PromptModels.filter(pm => 
+            pm.PromptID === prompt.ID && 
+            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+            (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId)
+        );
+
+        // Create execution plan
+        const executionTasks = this._executionPlanner.createExecutionPlan(
+            prompt,
+            promptModels,
+            AIEngine.Instance.Models,
+            renderedPromptText,
+            params.contextUser,
+            params.configurationId
+        );
+
+        if (executionTasks.length === 0) {
+            throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
+        }
+
+        // Execute tasks in parallel
+        const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks);
+
+        if (!parallelResult.success) {
+            throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
+        }
+
+        // Select best result if multiple successful results
+        const successfulResults = parallelResult.taskResults.filter(r => r.success);
+        if (successfulResults.length === 0) {
+            throw new Error(`No successful results from parallel execution`);
+        }
+
+        let selectedResult = successfulResults[0]; // Default to first
+
+        // Use result selector if configured
+        if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
+            const selectionConfig: ResultSelectionConfig = {
+                method: 'PromptSelector',
+                selectorPromptId: prompt.ResultSelectorPromptID
+            };
+            
+            const aiSelectedResult = await this._parallelCoordinator.selectBestResult(successfulResults, selectionConfig);
+            if (aiSelectedResult) {
+                selectedResult = aiSelectedResult;
+            }
+        }
+
+        // Create a consolidated AIPromptRun record for the parallel execution
+        const consolidatedPromptRun = await this.createPromptRun(
+            prompt, 
+            selectedResult.task.model, 
+            params, 
+            startTime,
+            params.vendorId
+        );
+
+        // Update with parallel execution metadata
+        const endTime = new Date();
+        consolidatedPromptRun.CompletedAt = endTime;
+        consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
+        consolidatedPromptRun.Result = selectedResult.rawResult || '';
+        consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+        // Add parallel execution metadata to Messages field
+        const parallelMetadata = {
+            parallelizationMode: prompt.ParallelizationMode,
+            totalTasks: executionTasks.length,
+            successfulTasks: parallelResult.successCount,
+            failedTasks: parallelResult.failureCount,
+            selectedTaskId: selectedResult.task.taskId,
+            executionGroups: Array.from(parallelResult.groupResults.keys())
+        };
+
+        if (params.data || params.templateData || parallelMetadata) {
+            consolidatedPromptRun.Messages = JSON.stringify({
+                data: params.data,
+                templateData: params.templateData,
+                parallelExecution: parallelMetadata
+            });
+        }
+
+        const saveResult = await consolidatedPromptRun.Save();
+        if (!saveResult) {
+            LogError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.Message || 'Unknown error'}`);
+        }
+
+        return {
+            success: true,
+            rawResult: selectedResult.rawResult,
+            result: selectedResult.parsedResult,
+            promptRun: consolidatedPromptRun,
+            executionTimeMS: parallelResult.totalExecutionTimeMS,
+            tokensUsed: parallelResult.totalTokensUsed,
+            validationResult: selectedResult.validationResult
+        };
+    }
+
 
     /**
      * Loads a template entity by ID
@@ -236,27 +392,57 @@ export class AIPromptRunner {
         prompt: AIPromptEntity, 
         explicitModelId?: string, 
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        vendorId?: string
     ): Promise<AIModelEntityExtended | null> {
         try {
             // Load AI Engine to access cached models and prompt models
             const { AIEngine } = await import('./AIEngine');
             await AIEngine.Instance.Config(false, contextUser);
 
+            // Resolve vendor ID to vendor name if provided
+            let vendorName: string | undefined;
+            if (vendorId) {
+                try {
+                    const rv = new RunView();
+                    const vendorResult = await rv.RunView({
+                        EntityName: 'AI Vendors',
+                        ExtraFilter: `ID='${vendorId}'`,
+                        ResultType: 'entity_object'
+                    });
+                    
+                    if (vendorResult.Results && vendorResult.Results.length > 0) {
+                        vendorName = vendorResult.Results[0].Name;
+                    } else {
+                        LogError(`Vendor with ID ${vendorId} not found`);
+                        // Continue without vendor filtering rather than fail
+                    }
+                } catch (error) {
+                    LogError(`Error loading vendor ${vendorId}: ${error.message}`);
+                    // Continue without vendor filtering rather than fail
+                }
+            }
+
             // If explicit model is specified, validate it from cached models
             if (explicitModelId) {
-                const model = AIEngine.Instance.Models.find(m => m.ID === explicitModelId);
+                const model = AIEngine.Instance.Models.find(m => 
+                    m.ID === explicitModelId && 
+                    (!vendorName || m.Vendor === vendorName)
+                );
                 if (model && model.IsActive) {
                     return model;
                 }
                 // If explicit model not found or inactive, log warning but continue with normal selection
-                LogError(`Explicit model ${explicitModelId} not found or inactive, using prompt model selection`);
+                LogError(`Explicit model ${explicitModelId} not found, inactive, or not from specified vendor, using prompt model selection`);
             }
 
             // Get prompt-specific model associations from AIPromptModels
             const promptModels = AIEngine.Instance.PromptModels.filter(pm => 
                 pm.PromptID === prompt.ID && 
-                pm.Status === 'Active' &&
+                (
+                    pm.Status === 'Active' ||
+                    pm.Status === 'Preview'
+                ) &&
                 (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
             );
 
@@ -266,7 +452,11 @@ export class AIPromptRunner {
                 // Use prompt-specific models if defined
                 candidateModels = promptModels
                     .map(pm => AIEngine.Instance.Models.find(m => m.ID === pm.ModelID))
-                    .filter(m => m && m.IsActive) as AIModelEntityExtended[];
+                    .filter(m => 
+                        m && 
+                        m.IsActive && 
+                        (!vendorName || m.Vendor === vendorName)
+                    ) as AIModelEntityExtended[];
 
                 // Sort by priority from AIPromptModels (higher priority first)
                 candidateModels.sort((a, b) => {
@@ -280,7 +470,8 @@ export class AIPromptRunner {
                 candidateModels = AIEngine.Instance.Models.filter(m => 
                     m.IsActive && 
                     m.PowerRank >= minPowerRank &&
-                    (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
+                    (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID) &&
+                    (!vendorName || m.Vendor === vendorName)
                 );
 
                 // Sort by power rank based on preference
@@ -321,7 +512,8 @@ export class AIPromptRunner {
         prompt: AIPromptEntity,
         model: AIModelEntityExtended,
         params: AIPromptParams,
-        startTime: Date
+        startTime: Date,
+        vendorId?: string
     ): Promise<AIPromptRunEntity> {
         try {
             const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntity>('MJ: AI Prompt Runs', params.contextUser);
@@ -329,7 +521,18 @@ export class AIPromptRunner {
             
             promptRun.PromptID = prompt.ID;
             promptRun.ModelID = model.ID;
-            // promptRun.VendorID = model.VendorID; // TODO: Fix VendorID field
+            if (vendorId) {
+                promptRun.VendorID = vendorId;
+            } else {
+                // need to grab the highest priority
+                // AI Model Vendor record for this model
+                const promptModels = AIEngine.Instance.PromptModels.filter(pm => pm.ModelID === model.ID)
+                    .sort((a, b) => b.Priority - a.Priority);
+                if (promptModels.length > 0) {
+                    const highestPriorityModel = promptModels[0];
+                    promptRun.VendorID = highestPriorityModel.VendorID;
+                }
+            }
             promptRun.ConfigurationID = params.configurationId;
             promptRun.RunAt = startTime;
             
