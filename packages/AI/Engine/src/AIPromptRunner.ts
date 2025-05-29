@@ -7,6 +7,7 @@ import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/te
 import { ExecutionPlanner } from "./ExecutionPlanner";
 import { ParallelExecutionCoordinator } from "./ParallelExecutionCoordinator";
 import { ResultSelectionConfig } from "./ParallelExecution";
+import { AIEngine } from "./AIEngine";
 
 /**
  * Parameters for executing an AI prompt
@@ -520,7 +521,18 @@ export class AIPromptRunner {
             
             promptRun.PromptID = prompt.ID;
             promptRun.ModelID = model.ID;
-            promptRun.VendorID = vendorId || model.Vendor;
+            if (vendorId) {
+                promptRun.VendorID = vendorId;
+            } else {
+                // need to grab the highest priority
+                // AI Model Vendor record for this model
+                const promptModels = AIEngine.Instance.PromptModels.filter(pm => pm.ModelID === model.ID)
+                    .sort((a, b) => b.Priority - a.Priority);
+                if (promptModels.length > 0) {
+                    const highestPriorityModel = promptModels[0];
+                    promptRun.VendorID = highestPriorityModel.VendorID;
+                }
+            }
             promptRun.ConfigurationID = params.configurationId;
             promptRun.RunAt = startTime;
             
