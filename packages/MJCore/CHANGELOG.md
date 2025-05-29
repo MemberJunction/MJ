@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 2.43.0
+
+### Minor Changes
+
+- 1629c04: Templates Improvements + EntityField.Status Column added with related changes
+
+### Patch Changes
+
+- @memberjunction/global@2.43.0
+
 ## 2.42.1
 
 ### Patch Changes

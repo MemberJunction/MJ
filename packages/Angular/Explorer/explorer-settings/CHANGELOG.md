@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 2.43.0
+
+### Patch Changes
+
+- Updated dependencies [1629c04]
+  - @memberjunction/core@2.43.0
+  - @memberjunction/ng-base-forms@2.43.0
+  - @memberjunction/ng-entity-form-dialog@2.43.0
+  - @memberjunction/ng-entity-permissions@2.43.0
+  - @memberjunction/ng-shared@2.43.0
+  - @memberjunction/ng-simple-record-list@2.43.0
+  - @memberjunction/ng-user-view-grid@2.43.0
+  - @memberjunction/ng-container-directives@2.43.0
+  - @memberjunction/ng-notifications@2.43.0
+  - @memberjunction/core-entities@2.43.0
+  - @memberjunction/ng-tabstrip@2.43.0
+  - @memberjunction/global@2.43.0
+
 ## 2.42.1
 
 ### Patch Changes

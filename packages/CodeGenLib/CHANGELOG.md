@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.43.0
+
+### Minor Changes
+
+- 1629c04: Templates Improvements + EntityField.Status Column added with related changes
+
+### Patch Changes
+
+- Updated dependencies [1629c04]
+  - @memberjunction/core@2.43.0
+  - @memberjunction/aiengine@2.43.0
+  - @memberjunction/actions@2.43.0
+  - @memberjunction/core-entities@2.43.0
+  - @memberjunction/sqlserver-dataprovider@2.43.0
+  - @memberjunction/ai@2.43.0
+  - @memberjunction/ai-anthropic@2.43.0
+  - @memberjunction/ai-groq@2.43.0
+  - @memberjunction/ai-mistral@2.43.0
+  - @memberjunction/ai-openai@2.43.0
+  - @memberjunction/global@2.43.0
+
 ## 2.42.1
 
 ### Patch Changes
