@@ -414,7 +414,7 @@ export class AskSkipResolver {
       conversationDetailID: convoDetailEntity.ID,
     });
 
-    return this.handleSimpleSkipChatPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
+    return this.handleSimpleSkipChatPostRequest(input, convoEntity, convoDetailEntity, true, user);
   }
 
   /**
@@ -641,51 +641,69 @@ export class AskSkipResolver {
    * Sends the chat request and processes the response
    * 
    * @param input The chat request payload
-   * @param conversationID ID of the conversation, or empty for a new conversation
-   * @param UserMessageConversationDetailId ID of the user's message in the conversation
+   * @param convoEntity The conversation entity object
+   * @param convoDetailEntity The conversation detail entity object
    * @param createAIMessageConversationDetail Whether to create a conversation detail for the AI response
    * @param user User context for the request
    * @returns Result of the Skip interaction
    */
   protected async handleSimpleSkipChatPostRequest(
     input: SkipAPIRequest,
-    conversationID: string = '',
-    UserMessageConversationDetailId: string = '',
+    convoEntity: ConversationEntity = null,
+    convoDetailEntity: ConversationDetailEntity = null,
     createAIMessageConversationDetail: boolean = false,
     user: UserInfo = null
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
     LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
 
-    const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
+    try {
+      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, null);
 
-    if (response && response.length > 0) {
-      // the last object in the response array is the final response from the Skip API
-      const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
-      const AIMessageConversationDetailID = createAIMessageConversationDetail
-        ? await this.CreateAIMessageConversationDetail(apiResponse, conversationID, user)
-        : '';
-      //      const apiResponse = <SkipAPIResponse>response.data;
-      LogStatus(`  Skip API response: ${apiResponse.responsePhase}`);
-      return {
-        Success: true,
-        Status: 'OK',
-        ResponsePhase: SkipResponsePhase.AnalysisComplete,
-        ConversationId: conversationID,
-        UserMessageConversationDetailId: UserMessageConversationDetailId,
-        AIMessageConversationDetailId: AIMessageConversationDetailID,
-        Result: JSON.stringify(apiResponse),
-      };
-    } else {
-      return {
-        Success: false,
-        Status: 'Error',
-        Result: `Request failed`,
-        ResponsePhase: SkipResponsePhase.AnalysisComplete,
-        ConversationId: conversationID,
-        UserMessageConversationDetailId: UserMessageConversationDetailId,
-        AIMessageConversationDetailId: '',
-      };
+      if (response && response.length > 0) {
+        // the last object in the response array is the final response from the Skip API
+        const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
+        const AIMessageConversationDetailID = createAIMessageConversationDetail && convoEntity
+          ? await this.CreateAIMessageConversationDetail(apiResponse, convoEntity.ID, user)
+          : '';
+        //      const apiResponse = <SkipAPIResponse>response.data;
+        LogStatus(`  Skip API response: ${apiResponse.responsePhase}`);
+        return {
+          Success: true,
+          Status: 'OK',
+          ResponsePhase: SkipResponsePhase.AnalysisComplete,
+          ConversationId: convoEntity ? convoEntity.ID : '',
+          UserMessageConversationDetailId: convoDetailEntity ? convoDetailEntity.ID : '',
+          AIMessageConversationDetailId: AIMessageConversationDetailID,
+          Result: JSON.stringify(apiResponse),
+        };
+      } else {
+        // Set conversation status to Available on failure so user can try again (if conversation exists)
+        if (convoEntity) {
+          await this.setConversationStatus(convoEntity, 'Available');
+        }
+        
+        return {
+          Success: false,
+          Status: 'Error',
+          Result: `Request failed`,
+          ResponsePhase: SkipResponsePhase.AnalysisComplete,
+          ConversationId: convoEntity ? convoEntity.ID : '',
+          UserMessageConversationDetailId: convoDetailEntity ? convoDetailEntity.ID : '',
+          AIMessageConversationDetailId: '',
+        };
+      }
+    } catch (error) {
+      // Set conversation status to Available on error so user can try again (if conversation exists)
+      if (convoEntity) {
+        await this.setConversationStatus(convoEntity, 'Available');
+      }
+      
+      // Log the error for debugging
+      LogError(`Error in handleSimpleSkipChatPostRequest: ${error}`);
+      
+      // Re-throw the error to propagate it up the stack
+      throw error;
     }
   }
 
@@ -1343,7 +1361,7 @@ cycle.`);
     );
 
     // Set the conversation status to 'Processing' when a request is initiated
-    this.setConversationStatus(convoEntity, 'Processing');
+    await this.setConversationStatus(convoEntity, 'Processing');
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -1941,6 +1959,7 @@ cycle.`);
     const convoDetailEntity = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', user);
     convoDetailEntity.NewRecord();
     convoDetailEntity.ConversationID = ConversationId;
+    convoDetailEntity.UserID = user.ID;
     convoDetailEntity.Message = UserQuestion;
     convoDetailEntity.Role = 'User';
     convoDetailEntity.HiddenToUser = false;
@@ -2141,38 +2160,61 @@ cycle.`);
       };
     }
 
-    const response = await sendPostRequest(
-      skipConfigInfo.chatURL,
-      input,
-      true,
-      null,
-      (message: {
-        type: string;
-        value: {
-          success: boolean;
-          error: string;
-          responsePhase: string;
-          messages: {
-            role: string;
-            content: string;
-          }[];
-        };
-      }) => {
-        LogStatus(JSON.stringify(message, null, 4));
-        if (message.type === 'status_update') {
-          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-            message: JSON.stringify({
-              type: 'AskSkip',
-              status: 'OK',
-              conversationID: ConversationId,
-              ResponsePhase: message.value.responsePhase,
-              message: message.value.messages[0].content,
-            }),
-            sessionId: userPayload.sessionId,
-          });
+    let response;
+    try {
+      response = await sendPostRequest(
+        skipConfigInfo.chatURL,
+        input,
+        true,
+        null,
+        (message: {
+          type: string;
+          value: {
+            success: boolean;
+            error: string;
+            responsePhase: string;
+            messages: {
+              role: string;
+              content: string;
+            }[];
+          };
+        }) => {
+          LogStatus(JSON.stringify(message, null, 4));
+          if (message.type === 'status_update') {
+            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+              message: JSON.stringify({
+                type: 'AskSkip',
+                status: 'OK',
+                conversationID: ConversationId,
+                ResponsePhase: message.value.responsePhase,
+                message: message.value.messages[0].content,
+              }),
+              sessionId: userPayload.sessionId,
+            });
+          }
         }
-      }
-    );
+      );
+    } catch (error) {
+      // Set conversation status to Available on error so user can try again
+      await this.setConversationStatus(convoEntity, 'Available');
+      
+      // Log the error for debugging
+      LogError(`Error in HandleSkipChatRequest sendPostRequest: ${error}`);
+      
+      // Publish error status update to user
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        message: JSON.stringify({
+          type: 'AskSkip',
+          status: 'Error',
+          conversationID: ConversationId,
+          message: 'Request failed. Please try again later and if this continues, contact your support desk.',
+        }),
+        sessionId: userPayload.sessionId,
+      });
+      
+      // Re-throw the error to propagate it up the stack
+      throw error;
+    }
 
     if (response && response.length > 0) {
       // response.status === 200) {
@@ -2409,7 +2451,7 @@ cycle.`);
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
     
     // Set conversation status back to Available since we need user input for the clarifying question
-    this.setConversationStatus(convoEntity, 'Available');
+    await this.setConversationStatus(convoEntity, 'Available');
     
     if (await convoDetailEntityAI.Save()) {
       return {
@@ -2804,12 +2846,12 @@ cycle.`);
 
   private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available'): Promise<boolean> {
     if (convoEntity.Status !== status) {
-      convoEntity.Status = status;
-      const convoSaveResult = await convoEntity.Save();
-      if (!convoSaveResult) {
-        LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
-      }
-      return convoSaveResult;
+    convoEntity.Status = status;
+    const convoSaveResult = await convoEntity.Save();
+    if (!convoSaveResult) {
+      LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
+    }
+    return convoSaveResult;
     }
     return true;
   }
