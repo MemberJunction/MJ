@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { TemplateEntity, TemplateContentEntity, TemplateCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -9,6 +9,7 @@ import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
+import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 
 @RegisterClass(BaseFormComponent, 'Templates') 
 @Component({
@@ -16,14 +17,13 @@ import { languages } from '@codemirror/language-data';
     templateUrl: './templates-form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class TemplatesFormExtendedComponent extends TemplateFormComponent implements OnInit, OnDestroy {
+export class TemplatesFormExtendedComponent extends TemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: TemplateEntity;
     public templateContents: TemplateContentEntity[] = [];
     public selectedContentIndex: number = 0;
     public isAddingNewContent: boolean = false;
     public newTemplateContent: TemplateContentEntity | null = null;
     public hasUnsavedChanges: boolean = false;
-    public originalContentValues: Map<string, any> = new Map();
     public templateInfoExpanded: boolean = true;
     public templateContentsExpanded: boolean = true;
     public categoryOptions: Array<{text: string, value: string}> = [
@@ -32,6 +32,9 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     ];
     public contentTypeOptions: Array<{text: string, value: string}> = [];
     public supportedLanguages: LanguageDescription[] = languages;
+    
+    @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
+    private isUpdatingEditorValue = false;
     
     private destroy$ = new Subject<void>();
 
@@ -45,6 +48,11 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     ngOnDestroy() {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    ngAfterViewInit() {
+        // Initial sync when view is ready
+        this.syncEditorValue();
     }
 
     async loadTemplateContents() {
@@ -70,8 +78,10 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                     await this.createDefaultTemplateContent();
                 }
 
-                // Store original values for change tracking
-                this.storeOriginalValues();
+                // Entity change tracking is handled automatically by BaseEntity
+                
+                // Sync editor value after loading content
+                this.syncEditorValue();
             } catch (error) {
                 console.error('Error loading template contents:', error);
             }
@@ -93,6 +103,9 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         
         this.templateContents = [defaultContent];
         this.selectedContentIndex = 0;
+        
+        // Sync editor value after creating default content
+        this.syncEditorValue();
     }
 
     selectTemplateContent(index: number, confirmSwitch: boolean = true) {
@@ -107,6 +120,9 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
             this.selectedContentIndex = index;
             this.isAddingNewContent = false;
             // Don't clear newTemplateContent to preserve the work in progress
+            
+            // Sync editor value when switching content
+            this.syncEditorValue();
         }
     }
 
@@ -226,6 +242,9 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         this.templateContents.push(this.newTemplateContent);
         this.selectedContentIndex = this.templateContents.length - 1;
         this.isAddingNewContent = true;
+        
+        // Sync editor value when adding new content
+        this.syncEditorValue();
     }
 
     cancelNewTemplateContent() {
@@ -299,21 +318,60 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
     }
 
     onContentTypeChange() {
-        this.hasUnsavedChanges = true;
         // Content type changes just modify the current content, no new record creation
+        this.updateUnsavedChangesFlag();
     }
 
     onContentChange() {
-        this.hasUnsavedChanges = true;
+        this.updateUnsavedChangesFlag();
+    }
+
+    /**
+     * Updates the hasUnsavedChanges flag based on entity dirty states
+     */
+    private updateUnsavedChangesFlag() {
+        this.hasUnsavedChanges = this.templateContents.some(content => content.Dirty) || 
+                                this.isAddingNewContent ||
+                                this.record?.Dirty || false;
     }
 
     onTemplateTextChange(event: any) {
+        if (this.isUpdatingEditorValue) {
+            // Ignore change events when we're programmatically updating the editor
+            return;
+        }
+        
         if (this.currentTemplateContent) {
             // Extract value from event - might be event.target.value or just event depending on component
             const value = typeof event === 'string' ? event : (event.target?.value || event);
             this.currentTemplateContent.TemplateText = value;
-            this.hasUnsavedChanges = true;
+            // hasUnsavedChanges is automatically handled by entity's IsDirty flag
+            this.updateUnsavedChangesFlag();
         }
+    }
+
+    /**
+     * Manually sync the editor value without triggering change events
+     */
+    private syncEditorValue() {
+        // Use Promise.resolve() to wait for the next microtask after any pending changes
+        Promise.resolve().then(() => {
+            // Then setTimeout for the next macrotask to ensure DOM is updated
+            setTimeout(() => {
+                if (!this.codeEditor) {
+                    console.log('Code editor ViewChild is null - element may not be rendered yet');
+                    console.log('currentTemplateContent exists:', !!this.currentTemplateContent);
+                    return;
+                }
+                
+                this.isUpdatingEditorValue = true;
+                const newValue = this.currentTemplateContent?.TemplateText || '';
+                
+                // Use the setValue method from mj-code-editor component
+                this.codeEditor.setValue(newValue);  
+                this.isUpdatingEditorValue = false;
+            }, 0);
+        });
     }
 
     async saveTemplateContents(): Promise<boolean> {
@@ -330,10 +388,9 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
                 }
             }
 
-            this.hasUnsavedChanges = false;
             this.isAddingNewContent = false;
             this.newTemplateContent = null;
-            this.storeOriginalValues();
+            this.updateUnsavedChangesFlag(); // Update based on current entity states
             return true;
         } catch (error) {
             console.error('Error saving template contents:', error);
@@ -408,17 +465,6 @@ export class TemplatesFormExtendedComponent extends TemplateFormComponent implem
         return false;
     }
 
-    private storeOriginalValues() {
-        this.originalContentValues.clear();
-        this.templateContents.forEach((content, index) => {
-            this.originalContentValues.set(`content_${index}`, {
-                TypeID: content.TypeID,
-                TemplateText: content.TemplateText,
-                Priority: content.Priority,
-                IsActive: content.IsActive
-            });
-        });
-    }
 
     getContentTypeDisplayText(typeId: string): string {
         if (!typeId) return '-';

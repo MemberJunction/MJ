@@ -256,7 +256,7 @@
                                     </div>
                                     
                                     <mj-code-editor 
-                                        [value]="currentTemplateContent?.TemplateText || ''"
+                                        #codeEditor
                                         (change)="onTemplateTextChange($event)"
                                         [readonly]="!EditMode"
                                         [language]="getEditorLanguage()"
