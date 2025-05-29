@@ -13,7 +13,7 @@ import {
   RunViewResult,
   UserInfo,
 } from '@memberjunction/core';
-import { AuditLogEntity, TemplateContentEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
 import { GraphQLError } from 'graphql';
@@ -27,8 +27,6 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
-import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
@@ -745,8 +743,6 @@ export class ResolverBase {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(dataSource, input); // fire event
         
-        this.TestTemplateEngine(entityObject.EntityInfo.Name, entityObject); // TEMPORARY TEST CODE - REMOVE LATER
-        
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
@@ -759,42 +755,6 @@ export class ResolverBase {
       });
   }
   
-  private async TestTemplateEngine(entityName: string, entityObject?: BaseEntity) {
-    // TEMPORARY TEST CODE - REMOVE LATER
-    // Test template engine when Template with "test" in name is saved
-    if (entityName.toLowerCase() === 'templates' && entityObject.Get('Name')?.toLowerCase().includes('test')) {
-      try {
-        LogStatus(`=== TESTING TEMPLATE ENGINE FOR: ${entityObject.Get('Name')} ===`);
-        const templateId: string = entityObject.Get('ID');
-        
-        // Import and test template engine
-        
-        LogStatus(`Template Engine created, testing template ID: ${templateId}`);
-        
-        // Test with empty context to see if template loads and processes
-        const md = new Metadata();
-        const templateEntity = await md.GetEntityObject<TemplateEntityExtended>('Templates', entityObject.ContextCurrentUser );
-        await templateEntity.Load(templateId);
-        const rv = new RunView();
-        const templateContentResult = await rv.RunView<TemplateContentEntity>({
-          EntityName: 'Template Contents',
-          ExtraFilter: `TemplateID = '${templateId}'`,
-          OrderBy: 'Priority ASC',
-          MaxRows: 1,
-          ResultType: 'entity_object'
-        },entityObject.ContextCurrentUser);
-        const data = {};
-        await TemplateEngineServer.Instance.Config(false, entityObject.ContextCurrentUser);
-        const result = await TemplateEngineServer.Instance.RenderTemplate(
-                       templateEntity, templateContentResult.Results[0], data, true);
-        console.log(`Template Engine Test Result for ${entityObject.Get('Name')}:`, result);
-        LogStatus(`=== TEMPLATE ENGINE TEST COMPLETED FOR: ${entityObject.Get('Name')} ===`);
-      } catch (error) {
-        LogError(`Template engine test failed for ${entityObject.Get('Name')}:`, undefined, error);
-      }
-    }
-    // END TEMPORARY TEST CODE
-  }
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values

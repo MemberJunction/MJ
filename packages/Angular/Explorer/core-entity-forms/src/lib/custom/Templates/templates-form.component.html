@@ -247,12 +247,33 @@
                                             </span>
                                         </label>
                                         
-                                        @if (!isAddingNewContent && hasUnsavedChanges) {
-                                            <span class="unsaved-indicator" style="color: #fd7e14; font-size: 0.85em; display: flex; align-items: center; gap: 4px;">
-                                                <i class="fa-solid fa-circle" style="font-size: 0.5em;"></i>
-                                                Unsaved changes
-                                            </span>
-                                        }
+                                        <div style="display: flex; align-items: center; gap: 12px;">
+                                            @if (!isAddingNewContent && hasUnsavedChanges) {
+                                                <span class="unsaved-indicator" style="color: #fd7e14; font-size: 0.85em; display: flex; align-items: center; gap: 4px;">
+                                                    <i class="fa-solid fa-circle" style="font-size: 0.5em;"></i>
+                                                    Unsaved changes
+                                                </span>
+                                            }
+                                            
+                                            @if (record.IsSaved && currentTemplateContent) {
+                                                <button type="button" 
+                                                        class="btn btn-sm"
+                                                        [disabled]="isRunningTemplate"
+                                                        (click)="runTemplate()"
+                                                        style="background: #17a2b8; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.85em; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+                                                        onmouseover="this.style.background='#138496'"
+                                                        onmouseout="this.style.background='#17a2b8'"
+                                                        title="Test run this template">
+                                                    @if (isRunningTemplate) {
+                                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                                        Running...
+                                                    } @else {
+                                                        <i class="fa-solid fa-play"></i>
+                                                        Run
+                                                    }
+                                                </button>
+                                            }
+                                        </div>
                                     </div>
                                     
                                     <mj-code-editor 
