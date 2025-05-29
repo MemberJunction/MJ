@@ -742,6 +742,7 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(dataSource, input); // fire event
+        
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
@@ -753,7 +754,7 @@ export class ResolverBase {
         extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
       });
   }
-
+  
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values

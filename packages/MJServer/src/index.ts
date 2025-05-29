@@ -52,6 +52,7 @@ export { TokenExpiredError, getSystemUser } from './auth/index.js';
 export * from './generic/PushStatusResolver.js';
 export * from './generic/ResolverBase.js';
 export * from './generic/RunViewResolver.js';
+export * from './generic/TemplateTestResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';

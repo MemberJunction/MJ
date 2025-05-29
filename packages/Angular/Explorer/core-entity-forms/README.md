@@ -133,6 +133,71 @@ The `MemberJunctionCoreEntityFormsModule` contains extended form components that
 2. `EntityActionExtendedFormComponent` - Enhanced form for EntityAction management
 3. `ActionTopComponentExtended` - Custom top section for Action forms
 
+## Custom Form Development Guide
+
+### **Core Architecture & Setup**
+- **Location**: Custom forms live in `packages/Angular/Explorer/core-entity-forms/src/lib/custom/{EntityName}/`
+- **File Structure**: 
+  - `{entity-name}-form.component.ts` (main logic)
+  - `{entity-name}-form.component.html` (template)
+- **Inheritance**: Extend generated form components (e.g., `TemplateFormComponent`) which inherit from `BaseFormComponent`
+- **Registration**: Use `@RegisterClass(BaseFormComponent, 'EntityName')` decorator
+- **Module Integration**: Add to `custom-forms.module.ts` declarations, exports, and import required Kendo modules
+
+### **Entity & Data Management**
+- **Strong Typing**: Never use `any` - always use proper entity types (`TemplateEntity`, `TemplateCategoryEntity`)
+- **Entity Creation**: Use `Metadata.GetEntityObject<EntityType>('EntityName')` pattern
+- **Data Loading**: Use `RunView` with `ResultType='entity_object'` and generic typing
+- **Cache Integration**: Leverage engine caches like `TemplateEngineBase.Instance.TemplateContentTypes`
+
+### **Angular Best Practices**
+- **Modern Syntax**: Always use `@if`, `@for`, `@switch` instead of structural directives
+- **Track Functions**: Include `track` in `@for` loops for performance
+- **Component Integration**: Use Kendo UI components for consistency (textbox, textarea, dropdownlist, combobox, numerictextbox, button)
+
+### **Save Lifecycle & Validation**
+- **Override SaveRecord()**: Handle complex saving by overriding `SaveRecord(StopEditModeAfterSave: boolean)`
+- **Related Entity Creation**: Create related entities (categories) BEFORE calling `super.SaveRecord()`
+- **Duplicate Prevention**: Implement validation like `trim().toLowerCase()` comparison for category names
+- **Error Handling**: Use `MJNotificationService.Instance.CreateSimpleNotification()` for user feedback
+- **State Management**: Respect `EditMode` state, implement proper change tracking
+
+### **UI/UX Patterns**
+- **Layout**: Use `mjFillContainer` directive with `bottomMargin` for proper container sizing
+- **Form Fields**: Use `mj-form-field` for individual fields; avoid problematic `mj-form-section` properties
+- **Responsive Design**: CSS Grid and Flexbox for layouts
+- **Visual Feedback**: Implement hover effects, loading states, progress indicators
+- **Smart Controls**: Conditional displays (e.g., show "New" badge for unsaved records, content type names for saved)
+
+### **Development Workflow**
+- **Package Building**: Always run `npm run build` in specific package directory for TypeScript checking
+- **Workspace Management**: Never `npm install` in package directories - always at repo root
+- **Dependencies**: Add to individual package.json, then `npm install` at root
+- **Styling**: Add custom CSS to `src/shared/form-styles.css`
+
+### **Advanced Features Implemented**
+- **Dynamic Content Management**: Multiple related entities (Template Contents) with priority-based ordering
+- **Type-Safe Dropdowns**: Filter invalid options, auto-select defaults
+- **Smart Validation**: Prevent duplicates with normalized comparisons
+- **User Feedback**: Comprehensive notification system for success/warning/error states
+- **State Synchronization**: Proper coordination between main entity and related entity saves
+
+### **Common Patterns & Anti-Patterns**
+✅ **Do:**
+- Use strong typing throughout
+- Respect MemberJunction entity patterns
+- Implement comprehensive error handling
+- Provide clear user feedback
+- Follow modern Angular syntax
+
+❌ **Avoid:**
+- Using `any` types
+- Bypassing `Metadata.GetEntityObject()`
+- Ignoring `EditMode` state
+- Using outdated Angular syntax
+- Running `npm install` in package directories
+- Creating duplicate entities without validation
+
 ## Forms Structure
 
 Each entity form typically follows this structure:

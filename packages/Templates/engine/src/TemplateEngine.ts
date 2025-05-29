@@ -1,4 +1,4 @@
-import { LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { TemplateContentEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
@@ -49,6 +49,11 @@ export class TemplateEngineServer extends TemplateEngineBase {
     }
 
     private _oneTimeLoadingComplete: boolean = false;
+    override Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // call the base class to ensure we get the config loaded
+        this.ClearTemplateCache(); // clear the template cache before we load the config
+        return super.Config(forceRefresh, contextUser, provider);
+    }
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // pass along the call to our base class so it can do whatever it wants
         await super.AdditionalLoading(contextUser);

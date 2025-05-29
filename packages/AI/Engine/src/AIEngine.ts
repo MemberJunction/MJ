@@ -4,11 +4,15 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEngine, BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptTypeEntity, AIResultCacheEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
 import { AIAgentEntityExtended } from "./AIAgentExtended";
+import { AIPromptRunner, AIPromptParams, AIPromptRunResult } from "./AIPromptRunner";
 
 
+/**
+ * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
+ */
 export class AIActionParams {
     actionId: string
     modelId: string
@@ -17,6 +21,9 @@ export class AIActionParams {
     userPrompt?: string
 }
 
+/**
+ * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
+ */
 export class EntityAIActionParams extends AIActionParams {
     entityAIActionId: string
     entityRecord: BaseEntity
@@ -31,6 +38,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
     private _prompts: AIPromptEntity[] = [];
+    private _promptModels: AIPromptModelEntity[] = [];
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
     private _agentActions: AIAgentActionEntity[] = [];
@@ -49,6 +57,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_prompts',
                 EntityName: 'AI Prompts'
+            },
+            {
+                PropertyName: '_promptModels',
+                EntityName: 'MJ: AI Prompt Models'
             },
             {
                 PropertyName: '_promptTypes',
@@ -146,8 +158,8 @@ export class AIEngine extends BaseEngine<AIEngine> {
     public async GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo): Promise<AIModelEntityExtended> {
         try {
             await AIEngine.Instance.Config(false, contextUser); // most of the time this is already loaded, but just in case it isn't we will load it here
-            const models = AIEngine.Instance.Models.filter(m => m.AIModelType.trim().toLowerCase() === modelType.trim().toLowerCase() && 
-                                                                (vendorName && vendorName.length > 0 ? m.Vendor.trim().toLowerCase() === vendorName.trim().toLowerCase() : true)); // if vendorname is not provided, then we get all models of the specified type 
+            const models = AIEngine.Instance.Models.filter(m => m.AIModelType?.trim().toLowerCase() === modelType.trim().toLowerCase() && 
+                                                                (vendorName && vendorName.length > 0 ? m.Vendor?.trim().toLowerCase() === vendorName.trim().toLowerCase() : true)); // if vendorname is not provided, then we get all models of the specified type 
             // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
             models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
             return models[0];    
@@ -364,6 +376,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
         return AIEngine.Instance._prompts;
     }
 
+    public get PromptModels(): AIPromptModelEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._promptModels;
+    }
+
     public get PromptTypes(): AIPromptTypeEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._promptTypes;
@@ -402,11 +419,17 @@ export class AIEngine extends BaseEngine<AIEngine> {
         return AIEngine.Instance._modelActions;
     }
 
+    /**
+     * @deprecated AI Actions are deprecated.  
+     */
     public get Actions(): AIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._actions;
     }
 
+    /**
+     * @deprecated Entity AI Actions are deprecated. 
+     */
     public get EntityAIActions(): EntityAIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._entityActions;
@@ -421,6 +444,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             throw new Error("AI Metadata not loaded, call AIEngine.Config() first.");
     }
 
+    /**
+     * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
+     * This method will be removed in a future version.
+     */
     public async ExecuteEntityAIAction(params: EntityAIActionParams): Promise<BaseResult> {
         const startTime = new Date();
         try {
@@ -551,6 +578,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
         return temp;
     }
 
+    /**
+     * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
+     * This method will be removed in a future version.
+     */
     public async ExecuteAIAction(params: AIActionParams): Promise<BaseResult> {
         const action = AIEngine.Instance.Actions.find(a => a.ID === params.actionId);
         if (!action)
@@ -598,6 +629,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             throw new Error(`Driver ${model.DriverClass} not found or couldn't be loaded.`);
     }
 
+    /**
+     * @deprecated This method is related to deprecated AI Actions. Use AIPromptRunner instead.
+     * This method will be removed in a future version.
+     */
     protected GetStringOutputFromActionResults(action: AIActionEntity, result: BaseResult): string {
         switch (action.Name.trim().toLowerCase()) {
             case 'classify':
@@ -673,5 +708,37 @@ export class AIEngine extends BaseEngine<AIEngine> {
         cacheItem.Status = 'Active';    
         cacheItem.RunAt = new Date();
         return await cacheItem.Save();
+    }
+
+    /**
+     * Executes an AI prompt using the AIPromptRunner class.
+     * This is a convenience method that creates an AIPromptRunner instance and executes the prompt.
+     * 
+     * @param params Parameters for prompt execution including the prompt entity, data context, and optional configuration
+     * @returns Promise<AIPromptRunResult> The execution result with comprehensive tracking information
+     * 
+     * @example
+     * ```typescript
+     * // Load AI Engine and get a prompt
+     * await AIEngine.Instance.Config(false, contextUser);
+     * const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'WelcomeEmail');
+     * 
+     * // Execute the prompt
+     * const result = await AIEngine.Instance.ExecutePrompt({
+     *     prompt: prompt,
+     *     data: { userName: 'John', companyName: 'Acme Corp' },
+     *     contextUser: contextUser
+     * });
+     * 
+     * if (result.success) {
+     *     console.log('Generated content:', result.result);
+     * } else {
+     *     console.error('Error:', result.errorMessage);
+     * }
+     * ```
+     */
+    public async ExecutePrompt(params: AIPromptParams): Promise<AIPromptRunResult> {
+        const runner = new AIPromptRunner();
+        return await runner.ExecutePrompt(params);
     }
 }
