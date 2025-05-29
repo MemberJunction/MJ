@@ -3,7 +3,10 @@ import { LogError, Metadata, UserInfo, ValidationResult } from "@memberjunction/
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from "@memberjunction/templates";
-import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/templates-base-types"
+import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/templates-base-types";
+import { ExecutionPlanner } from "./ExecutionPlanner";
+import { ParallelExecutionCoordinator } from "./ParallelExecutionCoordinator";
+import { ResultSelectionConfig } from "./ParallelExecution";
 
 /**
  * Parameters for executing an AI prompt
@@ -106,10 +109,14 @@ export class AIPromptRunResult {
 export class AIPromptRunner {
     private _metadata: Metadata;
     private _templateEngine: TemplateEngineServer;
+    private _executionPlanner: ExecutionPlanner;
+    private _parallelCoordinator: ParallelExecutionCoordinator;
 
     constructor() {
         this._metadata = new Metadata();
         this._templateEngine = TemplateEngineServer.Instance;
+        this._executionPlanner = new ExecutionPlanner();
+        this._parallelCoordinator = new ParallelExecutionCoordinator();
     }
 
     /**
@@ -142,50 +149,22 @@ export class AIPromptRunner {
                 throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
             }
 
-            // Select the model to use based on prompt configuration
-            const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId);
-            if (!selectedModel) {
-                throw new Error(`No suitable model found for prompt ${prompt.Name}`);
-            }
-
-            // Create AIPromptRun record for tracking
-            promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime);
-
             // Render the template with provided data
             const renderedPrompt = await this.renderPromptTemplate(template, params.data, params.templateData);
             if (!renderedPrompt.Success) {
                 throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
             }
 
-            // Execute the AI model
-            const modelResult = await this.executeModel(selectedModel, renderedPrompt.Output, prompt, params.contextUser);
+            // Check if we need parallel execution based on ParallelizationMode
+            const shouldUseParallelExecution = prompt.ParallelizationMode && prompt.ParallelizationMode !== 'None';
             
-            // Parse and validate the result
-            const parsedResult = await this.parseAndValidateResult(
-                modelResult, 
-                prompt, 
-                params.skipValidation
-            );
-
-            // Calculate execution metrics
-            const endTime = new Date();
-            const executionTimeMS = endTime.getTime() - startTime.getTime();
-
-            // Update the prompt run with results
-            if (promptRun) {
-                await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS);
+            if (shouldUseParallelExecution) {
+                // Use parallel execution path
+                return await this.executePromptInParallel(prompt, renderedPrompt.Output, params, startTime);
+            } else {
+                // Use traditional single execution path
+                return await this.executeSinglePrompt(prompt, renderedPrompt.Output, params, startTime);
             }
-
-            const chatResult = modelResult as ChatResult;
-            return {
-                success: true,
-                rawResult: chatResult.data?.choices?.[0]?.message?.content,
-                result: parsedResult.result,
-                promptRun,
-                executionTimeMS,
-                tokensUsed: chatResult.data?.usage?.totalTokens,
-                validationResult: parsedResult.validationResult
-            };
 
         } catch (error) {
             LogError(error);
@@ -211,6 +190,176 @@ export class AIPromptRunner {
                 executionTimeMS
             };
         }
+    }
+
+    /**
+     * Executes a single prompt (non-parallel) using traditional model selection.
+     * 
+     * @param prompt - The AI prompt to execute
+     * @param renderedPromptText - The rendered prompt text
+     * @param params - Original execution parameters
+     * @param startTime - Execution start time
+     * @returns Promise<AIPromptRunResult> - The execution result
+     */
+    private async executeSinglePrompt(
+        prompt: AIPromptEntity,
+        renderedPromptText: string,
+        params: AIPromptParams,
+        startTime: Date
+    ): Promise<AIPromptRunResult> {
+        // Select the model to use based on prompt configuration
+        const selectedModel = await this.selectModel(prompt, params.modelId, params.contextUser, params.configurationId);
+        if (!selectedModel) {
+            throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+        }
+
+        // Create AIPromptRun record for tracking
+        const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime);
+
+        // Execute the AI model
+        const modelResult = await this.executeModel(selectedModel, renderedPromptText, prompt, params.contextUser);
+        
+        // Parse and validate the result
+        const parsedResult = await this.parseAndValidateResult(
+            modelResult, 
+            prompt, 
+            params.skipValidation
+        );
+
+        // Calculate execution metrics
+        const endTime = new Date();
+        const executionTimeMS = endTime.getTime() - startTime.getTime();
+
+        // Update the prompt run with results
+        await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS);
+
+        const chatResult = modelResult as ChatResult;
+        return {
+            success: true,
+            rawResult: chatResult.data?.choices?.[0]?.message?.content,
+            result: parsedResult.result,
+            promptRun,
+            executionTimeMS,
+            tokensUsed: chatResult.data?.usage?.totalTokens,
+            validationResult: parsedResult.validationResult
+        };
+    }
+
+    /**
+     * Executes a prompt using parallel execution with multiple models/tasks.
+     * 
+     * @param prompt - The AI prompt to execute
+     * @param renderedPromptText - The rendered prompt text
+     * @param params - Original execution parameters
+     * @param startTime - Execution start time
+     * @returns Promise<AIPromptRunResult> - The aggregated execution result
+     */
+    private async executePromptInParallel(
+        prompt: AIPromptEntity,
+        renderedPromptText: string,
+        params: AIPromptParams,
+        startTime: Date
+    ): Promise<AIPromptRunResult> {
+        // Load AI Engine to get models and prompt models
+        const { AIEngine } = await import('./AIEngine');
+        await AIEngine.Instance.Config(false, params.contextUser);
+
+        // Get prompt-specific model associations
+        const promptModels = AIEngine.Instance.PromptModels.filter(pm => 
+            pm.PromptID === prompt.ID && 
+            (pm.Status === 'Active' || pm.Status === 'Preview') &&
+            (!params.configurationId || !pm.ConfigurationID || pm.ConfigurationID === params.configurationId)
+        );
+
+        // Create execution plan
+        const executionTasks = this._executionPlanner.createExecutionPlan(
+            prompt,
+            promptModels,
+            AIEngine.Instance.Models,
+            renderedPromptText,
+            params.contextUser,
+            params.configurationId
+        );
+
+        if (executionTasks.length === 0) {
+            throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
+        }
+
+        // Execute tasks in parallel
+        const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks);
+
+        if (!parallelResult.success) {
+            throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
+        }
+
+        // Select best result if multiple successful results
+        const successfulResults = parallelResult.taskResults.filter(r => r.success);
+        if (successfulResults.length === 0) {
+            throw new Error(`No successful results from parallel execution`);
+        }
+
+        let selectedResult = successfulResults[0]; // Default to first
+
+        // Use result selector if configured
+        if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
+            const selectionConfig: ResultSelectionConfig = {
+                method: 'PromptSelector',
+                selectorPromptId: prompt.ResultSelectorPromptID
+            };
+            
+            const aiSelectedResult = await this._parallelCoordinator.selectBestResult(successfulResults, selectionConfig);
+            if (aiSelectedResult) {
+                selectedResult = aiSelectedResult;
+            }
+        }
+
+        // Create a consolidated AIPromptRun record for the parallel execution
+        const consolidatedPromptRun = await this.createPromptRun(
+            prompt, 
+            selectedResult.task.model, 
+            params, 
+            startTime
+        );
+
+        // Update with parallel execution metadata
+        const endTime = new Date();
+        consolidatedPromptRun.CompletedAt = endTime;
+        consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
+        consolidatedPromptRun.Result = selectedResult.rawResult || '';
+        consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+        // Add parallel execution metadata to Messages field
+        const parallelMetadata = {
+            parallelizationMode: prompt.ParallelizationMode,
+            totalTasks: executionTasks.length,
+            successfulTasks: parallelResult.successCount,
+            failedTasks: parallelResult.failureCount,
+            selectedTaskId: selectedResult.task.taskId,
+            executionGroups: Array.from(parallelResult.groupResults.keys())
+        };
+
+        if (params.data || params.templateData || parallelMetadata) {
+            consolidatedPromptRun.Messages = JSON.stringify({
+                data: params.data,
+                templateData: params.templateData,
+                parallelExecution: parallelMetadata
+            });
+        }
+
+        const saveResult = await consolidatedPromptRun.Save();
+        if (!saveResult) {
+            LogError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.Message || 'Unknown error'}`);
+        }
+
+        return {
+            success: true,
+            rawResult: selectedResult.rawResult,
+            result: selectedResult.parsedResult,
+            promptRun: consolidatedPromptRun,
+            executionTimeMS: parallelResult.totalExecutionTimeMS,
+            tokensUsed: parallelResult.totalTokensUsed,
+            validationResult: selectedResult.validationResult
+        };
     }
 
 
@@ -256,7 +405,10 @@ export class AIPromptRunner {
             // Get prompt-specific model associations from AIPromptModels
             const promptModels = AIEngine.Instance.PromptModels.filter(pm => 
                 pm.PromptID === prompt.ID && 
-                pm.Status === 'Active' &&
+                (
+                    pm.Status === 'Active' ||
+                    pm.Status === 'Preview'
+                ) &&
                 (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
             );
 
