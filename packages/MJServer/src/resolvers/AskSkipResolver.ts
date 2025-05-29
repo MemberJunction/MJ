@@ -1361,7 +1361,7 @@ cycle.`);
     );
 
     // Set the conversation status to 'Processing' when a request is initiated
-    this.setConversationStatus(convoEntity, 'Processing');
+    await this.setConversationStatus(convoEntity, 'Processing');
 
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(
@@ -2451,7 +2451,7 @@ cycle.`);
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
     
     // Set conversation status back to Available since we need user input for the clarifying question
-    this.setConversationStatus(convoEntity, 'Available');
+    await this.setConversationStatus(convoEntity, 'Available');
     
     if (await convoDetailEntityAI.Save()) {
       return {
@@ -2846,12 +2846,12 @@ cycle.`);
 
   private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available'): Promise<boolean> {
     if (convoEntity.Status !== status) {
-      convoEntity.Status = status;
-      const convoSaveResult = await convoEntity.Save();
-      if (!convoSaveResult) {
-        LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
-      }
-      return convoSaveResult;
+    convoEntity.Status = status;
+    const convoSaveResult = await convoEntity.Save();
+    if (!convoSaveResult) {
+      LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
+    }
+    return convoSaveResult;
     }
     return true;
   }
