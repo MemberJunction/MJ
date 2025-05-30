@@ -13,7 +13,7 @@ The MemberJunction AI Prompts package provides sophisticated prompt management, 
 - **🔄 Template Integration**: Dynamic prompt generation with MemberJunction template system
 - **📊 Execution Analytics**: Comprehensive metrics, token usage tracking, and performance monitoring
 - **🎯 Result Selection**: AI-powered selection of best results from parallel executions
-- **🔧 Output Validation**: Structured output validation with retry logic
+- **🔧 Enhanced Output Validation**: JSON schema validation against OutputExample with intelligent retry logic
 - **⚙️ Configuration-Driven**: Metadata-driven prompt configuration and execution
 - **🗃️ Hierarchical Logging**: Parent-child relationship tracking for parallel executions
 - **🚫 Cancellation Support**: AbortSignal integration for graceful execution cancellation

@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
-import { LogError, Metadata, UserInfo, ValidationResult, RunView } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, UserInfo, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -8,6 +8,7 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
+import Ajv, { JSONSchemaType, ValidateFunction, ErrorObject } from 'ajv';
 
 /**
  * Callback function type for execution progress updates
@@ -156,6 +157,26 @@ export interface JudgeMetadata {
 }
 
 /**
+ * Extended validation result with detailed information about validation attempts
+ */
+export interface ValidationAttempt {
+  /** Attempt number (1-based) */
+  attemptNumber: number;
+  /** Whether this attempt passed validation */
+  success: boolean;
+  /** Error message if validation failed */
+  errorMessage?: string;
+  /** Detailed validation errors */
+  validationErrors?: ValidationErrorInfo[];
+  /** Raw output that was validated */
+  rawOutput: string;
+  /** Parsed output if successful */
+  parsedOutput?: unknown;
+  /** Timestamp of this validation attempt */
+  timestamp: Date;
+}
+
+/**
  * Result of an AI prompt execution
  */
 export class AIPromptRunResult {
@@ -213,6 +234,11 @@ export class AIPromptRunResult {
    * Validation result if output validation was performed
    */
   validationResult?: ValidationResult;
+
+  /**
+   * Detailed information about all validation attempts made
+   */
+  validationAttempts?: ValidationAttempt[];
 
   /**
    * Additional results from parallel execution, ranked by judge
@@ -274,12 +300,41 @@ export class AIPromptRunner {
   private _templateEngine: TemplateEngineServer;
   private _executionPlanner: ExecutionPlanner;
   private _parallelCoordinator: ParallelExecutionCoordinator;
+  private _ajv: Ajv;
+  
+  // Static/global schema cache shared across all instances
+  private static _schemaCache: Map<string, ValidateFunction> = new Map();
+  private static _ajvInstance: Ajv | null = null;
 
   constructor() {
     this._metadata = new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._parallelCoordinator = new ParallelExecutionCoordinator();
+    
+    // Use shared AJV instance for consistency
+    if (!AIPromptRunner._ajvInstance) {
+      AIPromptRunner._ajvInstance = new Ajv({ allErrors: true, verbose: true });
+    }
+    this._ajv = AIPromptRunner._ajvInstance;
+  }
+
+  /**
+   * Clears the global schema cache. Useful for testing or when prompt schemas change.
+   */
+  public static clearSchemaCache(): void {
+    AIPromptRunner._schemaCache.clear();
+    LogStatus('Cleared global JSON schema cache');
+  }
+
+  /**
+   * Gets cache statistics for monitoring purposes
+   */
+  public static getSchemaCacheStats(): { size: number; keys: string[] } {
+    return {
+      size: AIPromptRunner._schemaCache.size,
+      keys: Array.from(AIPromptRunner._schemaCache.keys())
+    };
   }
 
   /**
@@ -412,26 +467,21 @@ export class AIPromptRunner {
       throw new Error('Prompt execution was cancelled before model execution');
     }
 
-    // Execute the AI model
-    const modelResult = await this.executeModel(
+    // Execute with retry logic for validation failures
+    const { modelResult, parsedResult, validationAttempts } = await this.executeWithValidationRetries(
       selectedModel,
       renderedPromptText,
       prompt,
-      params.contextUser,
-      params.conversationMessages,
-      params.templateMessageRole || 'system',
-      params.cancellationToken,
+      params,
+      promptRun,
     );
-
-    // Parse and validate the result
-    const parsedResult = await this.parseAndValidateResult(modelResult, prompt, params.skipValidation);
 
     // Calculate execution metrics
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - startTime.getTime();
 
-    // Update the prompt run with results
-    await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS);
+    // Update the prompt run with results including validation attempts
+    await this.updatePromptRun(promptRun, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts);
 
     const chatResult = modelResult as ChatResult;
     return {
@@ -442,6 +492,7 @@ export class AIPromptRunner {
       executionTimeMS,
       tokensUsed: chatResult.data?.usage?.totalTokens,
       validationResult: parsedResult.validationResult,
+      validationAttempts,
     };
   }
 
@@ -572,7 +623,8 @@ export class AIPromptRunner {
     for (const result of sortedResults) {
       if (result.task.taskId !== selectedResult.task.taskId) {
         // Parse and validate this result
-        const parsedResult = await this.parseAndValidateResult(result.modelResult!, prompt, params.skipValidation);
+        const { result: parsedResultData, validationResult, validationErrors } = await this.parseAndValidateResultEnhanced(result.modelResult!, prompt, params.skipValidation);
+        const parsedResult = { result: parsedResultData, validationResult };
 
         additionalResults.push({
           success: result.success,
@@ -594,7 +646,8 @@ export class AIPromptRunner {
     }
 
     // Parse and validate the selected result
-    const selectedParsedResult = await this.parseAndValidateResult(selectedResult.modelResult!, prompt, params.skipValidation);
+    const { result: selectedResultData, validationResult: selectedValidationResult } = await this.parseAndValidateResultEnhanced(selectedResult.modelResult!, prompt, params.skipValidation);
+    const selectedParsedResult = { result: selectedResultData, validationResult: selectedValidationResult };
 
     return {
       success: true,
@@ -916,6 +969,476 @@ export class AIPromptRunner {
   }
 
   /**
+   * Executes the model with retry logic for validation failures
+   */
+  private async executeWithValidationRetries(
+    selectedModel: AIModelEntityExtended,
+    renderedPromptText: string,
+    prompt: AIPromptEntity,
+    params: AIPromptParams,
+    promptRun: AIPromptRunEntity,
+  ): Promise<{
+    modelResult: ChatResult;
+    parsedResult: { result: unknown; validationResult?: ValidationResult };
+    validationAttempts: ValidationAttempt[];
+  }> {
+    const validationAttempts: ValidationAttempt[] = [];
+    const maxRetries = Math.max(0, prompt.MaxRetries || 0);
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Check for cancellation before each attempt
+        if (params.cancellationToken?.aborted) {
+          throw new Error('Execution was cancelled during validation retries');
+        }
+
+        if (attempt > 0) {
+          LogStatus(`🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
+          await this.applyRetryDelay(prompt, attempt);
+        }
+
+        // Execute the AI model
+        const modelResult = await this.executeModel(
+          selectedModel,
+          renderedPromptText,
+          prompt,
+          params.contextUser,
+          params.conversationMessages,
+          params.templateMessageRole || 'system',
+          params.cancellationToken,
+        );
+
+        // Parse and validate the result
+        const { result, validationResult, validationErrors } = await this.parseAndValidateResultEnhanced(
+          modelResult,
+          prompt,
+          params.skipValidation,
+        );
+
+        // Record this validation attempt
+        const validationAttempt: ValidationAttempt = {
+          attemptNumber: attempt + 1,
+          success: validationResult?.Success || false,
+          errorMessage: validationErrors?.length ? validationErrors.map(e => e.Message).join('; ') : undefined,
+          validationErrors,
+          rawOutput: modelResult.data?.choices?.[0]?.message?.content || '',
+          parsedOutput: result,
+          timestamp: new Date(),
+        };
+        validationAttempts.push(validationAttempt);
+
+        // Update prompt run with current attempt information
+        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
+
+        if (validationResult?.Success !== false) {
+          // Validation succeeded, return the result
+          LogStatus(`✅ Validation succeeded on attempt ${attempt + 1}/${maxRetries + 1}`);
+          return {
+            modelResult,
+            parsedResult: { result, validationResult },
+            validationAttempts,
+          };
+        }
+
+        // Validation failed, check if we should retry
+        if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
+          lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
+          LogStatus(`❌ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
+          continue; // Retry
+        } else {
+          // Either not strict mode or no more retries, return what we have
+          const reason = prompt.ValidationBehavior !== 'Strict' 
+            ? `${prompt.ValidationBehavior} mode - continuing with invalid output`
+            : 'max retries exceeded';
+          LogStatus(`⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
+          return {
+            modelResult,
+            parsedResult: { result, validationResult },
+            validationAttempts,
+          };
+        }
+      } catch (error) {
+        lastError = error;
+        LogError(`Execution attempt ${attempt + 1} failed: ${error.message}`);
+
+        // Record failed attempt
+        const validationAttempt: ValidationAttempt = {
+          attemptNumber: attempt + 1,
+          success: false,
+          errorMessage: error.message,
+          rawOutput: '',
+          timestamp: new Date(),
+        };
+        validationAttempts.push(validationAttempt);
+
+        // Update prompt run with failed attempt
+        await this.updatePromptRunWithValidationAttempt(promptRun, validationAttempt, attempt + 1, maxRetries + 1);
+
+        if (attempt === maxRetries) {
+          throw error; // Last attempt, propagate error
+        }
+      }
+    }
+
+    // Should not reach here, but just in case
+    throw lastError || new Error('Execution failed after all retry attempts');
+  }
+
+  /**
+   * Applies retry delay based on the prompt's retry strategy
+   */
+  private async applyRetryDelay(prompt: AIPromptEntity, attemptNumber: number): Promise<void> {
+    const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
+    let delay = baseDelay;
+
+    switch (prompt.RetryStrategy) {
+      case 'Fixed':
+        delay = baseDelay;
+        break;
+      case 'Linear':
+        delay = baseDelay * attemptNumber;
+        break;
+      case 'Exponential':
+        delay = baseDelay * Math.pow(2, attemptNumber - 1);
+        break;
+      default:
+        delay = baseDelay;
+    }
+
+    LogStatus(`Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  /**
+   * Updates the prompt run entity with information about a validation attempt
+   */
+  private async updatePromptRunWithValidationAttempt(
+    promptRun: AIPromptRunEntity,
+    attempt: ValidationAttempt,
+    currentAttempt: number,
+    totalAttempts: number,
+  ): Promise<void> {
+    try {
+      // Update the Messages field with validation progress
+      const currentMessages = promptRun.Messages ? JSON.parse(promptRun.Messages) : {};
+      
+      if (!currentMessages.validationAttempts) {
+        currentMessages.validationAttempts = [];
+      }
+      
+      currentMessages.validationAttempts.push({
+        attempt: currentAttempt,
+        totalAttempts,
+        success: attempt.success,
+        timestamp: attempt.timestamp.toISOString(),
+        errorMessage: attempt.errorMessage,
+        validationErrorCount: attempt.validationErrors?.length || 0,
+        rawOutput: attempt.rawOutput?.substring(0, 500) + (attempt.rawOutput?.length > 500 ? '...' : ''), // Truncate for storage
+        parsedOutput: attempt.parsedOutput ? JSON.stringify(attempt.parsedOutput).substring(0, 500) : undefined,
+        validationErrors: attempt.validationErrors?.map(e => ({
+          source: e.Source,
+          message: e.Message,
+          type: e.Type,
+          value: typeof e.Value === 'string' ? e.Value.substring(0, 100) : e.Value
+        })) || []
+      });
+
+      promptRun.Messages = JSON.stringify(currentMessages);
+      
+      // Don't save yet - we'll save at the end with final results
+      LogStatus(`Recorded validation attempt ${currentAttempt}/${totalAttempts} for prompt run ${promptRun.ID}`);
+    } catch (error) {
+      LogError(`Error updating prompt run with validation attempt: ${error.message}`);
+    }
+  }
+
+  /**
+   * Provides a human-readable description of the validation decision
+   */
+  private getValidationDecisionDescription(
+    finalSuccess: boolean, 
+    totalAttempts: number, 
+    validationBehavior: string
+  ): string {
+    if (finalSuccess) {
+      return totalAttempts === 1 
+        ? 'Validation passed on first attempt'
+        : `Validation passed after ${totalAttempts} attempts`;
+    } else {
+      switch (validationBehavior) {
+        case 'Strict':
+          return `Validation failed after ${totalAttempts} attempts - execution marked as failed (Strict mode)`;
+        case 'Warn':
+          return `Validation failed after ${totalAttempts} attempts - warning logged, execution continued (Warn mode)`;
+        case 'None':
+          return `Validation skipped or ignored (None mode)`;
+        default:
+          return `Validation failed after ${totalAttempts} attempts - behavior: ${validationBehavior}`;
+      }
+    }
+  }
+
+  /**
+   * Generates a JSON schema from an example object for validation
+   */
+  private generateSchemaFromExample(example: unknown): object {
+    if (typeof example !== 'object' || example === null) {
+      return { type: 'object' };
+    }
+
+    const schema: any = {
+      type: 'object',
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    };
+
+    for (const [key, value] of Object.entries(example)) {
+      schema.properties[key] = this.generateSchemaForValue(value);
+      schema.required.push(key);
+    }
+
+    return schema;
+  }
+
+  /**
+   * Generates schema for a specific value type
+   */
+  private generateSchemaForValue(value: unknown): object {
+    if (value === null) {
+      return { type: 'null' };
+    }
+
+    switch (typeof value) {
+      case 'string':
+        return { type: 'string' };
+      case 'number':
+        return { type: 'number' };
+      case 'boolean':
+        return { type: 'boolean' };
+      case 'object':
+        if (Array.isArray(value)) {
+          if (value.length > 0) {
+            return {
+              type: 'array',
+              items: this.generateSchemaForValue(value[0]),
+            };
+          } else {
+            return { type: 'array' };
+          }
+        } else {
+          return this.generateSchemaFromExample(value);
+        }
+      default:
+        return { type: 'string' }; // Fallback
+    }
+  }
+
+  /**
+   * Enhanced parsing and validation with detailed error reporting
+   */
+  private async parseAndValidateResultEnhanced(
+    modelResult: ChatResult,
+    prompt: AIPromptEntity,
+    skipValidation: boolean = false,
+  ): Promise<{
+    result: unknown;
+    validationResult?: ValidationResult;
+    validationErrors?: ValidationErrorInfo[];
+  }> {
+    const validationErrors: ValidationErrorInfo[] = [];
+    
+    try {
+      if (!modelResult.success) {
+        throw new Error(`Model execution failed: ${modelResult.errorMessage}`);
+      }
+
+      const rawOutput = modelResult.data?.choices?.[0]?.message?.content;
+      if (!rawOutput) {
+        throw new Error('No output received from model');
+      }
+
+      // Parse based on output type
+      let parsedResult: unknown = rawOutput;
+
+      try {
+        switch (prompt.OutputType) {
+          case 'string':
+            parsedResult = rawOutput.toString();
+            break;
+
+          case 'number': {
+            const numberResult = parseFloat(rawOutput);
+            if (isNaN(numberResult)) {
+              const error = new ValidationErrorInfo('output', `Expected number output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+              validationErrors.push(error);
+              throw new Error(error.Message);
+            }
+            parsedResult = numberResult;
+            break;
+          }
+
+          case 'boolean': {
+            const lowerOutput = rawOutput.toLowerCase().trim();
+            if (['true', 'yes', '1'].includes(lowerOutput)) {
+              parsedResult = true;
+            } else if (['false', 'no', '0'].includes(lowerOutput)) {
+              parsedResult = false;
+            } else {
+              const error = new ValidationErrorInfo('output', `Expected boolean output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+              validationErrors.push(error);
+              throw new Error(error.Message);
+            }
+            break;
+          }
+
+          case 'date': {
+            const dateResult = new Date(rawOutput);
+            if (isNaN(dateResult.getTime())) {
+              const error = new ValidationErrorInfo('output', `Expected date output but got: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+              validationErrors.push(error);
+              throw new Error(error.Message);
+            }
+            parsedResult = dateResult;
+            break;
+          }
+
+          case 'object':
+            try {
+              parsedResult = JSON.parse(rawOutput);
+            } catch (jsonError) {
+              const error = new ValidationErrorInfo('output', `Expected JSON object but got invalid JSON: ${rawOutput}`, rawOutput, ValidationErrorType.Failure);
+              validationErrors.push(error);
+              throw new Error(error.Message);
+            }
+            break;
+
+          default:
+            parsedResult = rawOutput;
+        }
+      } catch (parseError) {
+        // Type parsing failed
+        const validationResult = new ValidationResult();
+        validationResult.Success = false;
+        validationResult.Errors = validationErrors;
+        return { result: rawOutput, validationResult, validationErrors };
+      }
+
+      // Perform JSON schema validation for object types
+      if (!skipValidation && prompt.OutputExample && prompt.OutputType === 'object' && parsedResult) {
+        try {
+          const schemaValidationErrors = await this.validateAgainstSchema(parsedResult, prompt.OutputExample, prompt.ID);
+          validationErrors.push(...schemaValidationErrors);
+        } catch (schemaError) {
+          const error = new ValidationErrorInfo('schema', `Schema validation failed: ${schemaError.message}`, undefined, ValidationErrorType.Failure);
+          validationErrors.push(error);
+        }
+      }
+
+      // Create validation result
+      const validationResult = new ValidationResult();
+      validationResult.Success = validationErrors.length === 0;
+      validationResult.Errors = validationErrors;
+
+      return { result: parsedResult, validationResult, validationErrors };
+
+    } catch (error) {
+      LogError(`Error parsing/validating result: ${error.message}`);
+
+      // Handle validation behavior
+      const validationResult = new ValidationResult();
+      validationResult.Success = false;
+      validationResult.Errors = validationErrors.length > 0 ? validationErrors : [
+        new ValidationErrorInfo('general', error.message, undefined, ValidationErrorType.Failure)
+      ];
+
+      switch (prompt.ValidationBehavior) {
+        case 'Strict':
+          return { result: undefined, validationResult, validationErrors: validationResult.Errors };
+        case 'Warn':
+          LogError(`Validation warning for prompt ${prompt.Name}: ${error.message}`);
+          return { result: modelResult.data?.choices?.[0]?.message?.content, validationResult, validationErrors: validationResult.Errors };
+        case 'None':
+        default:
+          // For None, we still return the validation result but mark as successful
+          validationResult.Success = true;
+          return { result: modelResult.data?.choices?.[0]?.message?.content, validationResult, validationErrors: [] };
+      }
+    }
+  }
+
+  /**
+   * Validates parsed result against JSON schema derived from OutputExample
+   */
+  private async validateAgainstSchema(
+    parsedResult: unknown,
+    outputExample: string,
+    promptId: string,
+  ): Promise<ValidationErrorInfo[]> {
+    const validationErrors: ValidationErrorInfo[] = [];
+
+    try {
+      // Get or create cached validator for this prompt using static cache
+      let validator = AIPromptRunner._schemaCache.get(promptId);
+      
+      if (!validator) {
+        // Parse the output example
+        let exampleObject: unknown;
+        try {
+          exampleObject = JSON.parse(outputExample);
+        } catch (parseError) {
+          const error = new ValidationErrorInfo('outputExample', `Invalid OutputExample JSON: ${parseError.message}`, outputExample, ValidationErrorType.Failure);
+          validationErrors.push(error);
+          return validationErrors;
+        }
+
+        // Generate schema from example
+        const schema = this.generateSchemaFromExample(exampleObject);
+        
+        // Compile and cache the validator
+        try {
+          validator = this._ajv.compile(schema);
+          AIPromptRunner._schemaCache.set(promptId, validator);
+          const cacheStats = AIPromptRunner.getSchemaCacheStats();
+          LogStatus(`📋 Compiled and cached JSON schema for prompt ${promptId} (global cache size: ${cacheStats.size})`);
+        } catch (compileError) {
+          const error = new ValidationErrorInfo('schema', `Failed to compile schema: ${compileError.message}`, schema, ValidationErrorType.Failure);
+          validationErrors.push(error);
+          return validationErrors;
+        }
+      }
+
+      // Validate the result
+      const isValid = validator(parsedResult);
+      
+      if (!isValid && validator.errors) {
+        for (const ajvError of validator.errors) {
+          const fieldPath = ajvError.instancePath || ajvError.schemaPath || 'root';
+          const message = `${ajvError.instancePath || 'root'}: ${ajvError.message}`;
+          const error = new ValidationErrorInfo(fieldPath, message, ajvError.data, ValidationErrorType.Failure);
+          validationErrors.push(error);
+        }
+      }
+
+      if (validationErrors.length === 0) {
+        LogStatus(`✅ Schema validation passed for prompt ${promptId}`);
+      } else {
+        LogStatus(`❌ Schema validation found ${validationErrors.length} errors for prompt ${promptId}:`);
+        validationErrors.forEach((error, index) => {
+          LogStatus(`   ${index + 1}. ${error.Source}: ${error.Message}`);
+        });
+      }
+
+    } catch (error) {
+      const validationError = new ValidationErrorInfo('validation', `Unexpected validation error: ${error.message}`, undefined, ValidationErrorType.Failure);
+      validationErrors.push(validationError);
+    }
+
+    return validationErrors;
+  }
+
+  /**
    * Parses and validates the AI model result based on prompt configuration
    */
   private async parseAndValidateResult(
@@ -1019,6 +1542,7 @@ export class AIPromptRunner {
     parsedResult: { result: unknown; validationResult?: ValidationResult },
     endTime: Date,
     executionTimeMS: number,
+    validationAttempts?: ValidationAttempt[],
   ): Promise<void> {
     try {
       promptRun.CompletedAt = endTime;
@@ -1031,6 +1555,45 @@ export class AIPromptRunner {
         promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
         promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
       }
+
+      // Add validation information to Messages field
+      if (validationAttempts && validationAttempts.length > 0) {
+        try {
+          const currentMessages = promptRun.Messages ? JSON.parse(promptRun.Messages) : {};
+          
+          // Add final validation summary
+          currentMessages.validationSummary = {
+            totalAttempts: validationAttempts.length,
+            successfulAttempts: validationAttempts.filter(a => a.success).length,
+            finalValidationSuccess: parsedResult.validationResult?.Success || false,
+            validationBehavior: promptRun.Messages ? 'Logged during execution' : 'Updated at completion',
+            outputType: currentMessages.data?.prompt?.OutputType || 'unknown',
+            hasOutputExample: !!(currentMessages.data?.prompt?.OutputExample),
+            schemaValidationUsed: !!(currentMessages.data?.prompt?.OutputExample && currentMessages.data?.prompt?.OutputType === 'object'),
+            retryStrategy: currentMessages.data?.prompt?.RetryStrategy || 'Fixed',
+            maxRetries: currentMessages.data?.prompt?.MaxRetries || 0,
+            finalValidationErrors: parsedResult.validationResult?.Errors?.map(e => ({
+              source: e.Source,
+              message: e.Message,
+              type: e.Type,
+              value: e.Value
+            })) || [],
+            validationDecision: this.getValidationDecisionDescription(
+              parsedResult.validationResult?.Success || false,
+              validationAttempts.length,
+              currentMessages.data?.prompt?.ValidationBehavior || 'Warn'
+            )
+          };
+
+          promptRun.Messages = JSON.stringify(currentMessages);
+          LogStatus(`Updated prompt run ${promptRun.ID} with ${validationAttempts.length} validation attempts`);
+        } catch (jsonError) {
+          LogError(`Error updating Messages field with validation info: ${jsonError.message}`);
+        }
+      }
+
+      // Set Success flag based on validation result
+      promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
 
       // Calculate cost if possible (would need cost per token data)
       // TODO: Implement cost calculation based on model pricing
