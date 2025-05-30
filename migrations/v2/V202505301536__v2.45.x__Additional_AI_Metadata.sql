@@ -945,4 +945,662 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelVendor] TO [cdp_Integ
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelVendor] TO [cdp_Integration]
 
 
+/**** Add columns to AIPromptRun table ****/
+/**** Add columns to AIPromptRun table ****/
+/**** Add columns to AIPromptRun table ****/
+/**** Add columns to AIPromptRun table ****/
+/**** Add columns to AIPromptRun table ****/
+ALTER TABLE [${flyway:defaultSchema}].[AIPromptRun]
+  ADD
+      [ParentID] uniqueidentifier NULL
+          CONSTRAINT [FK_AIPromptRun_ParentID]
+          REFERENCES [${flyway:defaultSchema}].[AIPromptRun]([ID]),
+      [RunType] nvarchar(20) NOT NULL
+          CONSTRAINT [DF_AIPromptRun_RunType] DEFAULT 'Single'
+          CONSTRAINT [CK_AIPromptRun_RunType]
+          CHECK ([RunType] IN ('Single', 'ParallelParent', 'ParallelChild', 'ResultSelector')),
+      [ExecutionOrder] int NULL;
+
+  -- Document the ParentID column
+EXEC sp_addextendedproperty
+      @name = N'MS_Description',
+      @value = N'References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.',
+      @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+      @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+      @level2type = N'COLUMN', @level2name = N'ParentID';
+
+  -- Document the RunType column  
+  EXEC sp_addextendedproperty
+      @name = N'MS_Description',
+      @value = N'Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)',
+      @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+      @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+      @level2type = N'COLUMN', @level2name = N'RunType';
+
+  -- Document the ExecutionOrder column
+  EXEC sp_addextendedproperty
+      @name = N'MS_Description',
+      @value = N'Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.',
+      @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+      @level1type = N'TABLE',  @level1name = N'AIPromptRun',
+      @level2type = N'COLUMN', @level2name = N'ExecutionOrder';
+
+/**** CodeGen Output Here ****/
+/**** CodeGen Output Here ****/
+/**** CodeGen Output Here ****/
+/**** CodeGen Output Here ****/
+/**** CodeGen Output Here ****/
+/**** CodeGen Output Here ****/
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '559a6c83-012d-436e-bcd0-bf5bc195d1dd'  OR 
+               (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'ParentID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '559a6c83-012d-436e-bcd0-bf5bc195d1dd',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
+            20,
+            'ParentID',
+            'Parent ID',
+            'References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '0524d957-c4aa-4cb6-afeb-eaa4a0b831a0'  OR 
+               (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'RunType')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '0524d957-c4aa-4cb6-afeb-eaa4a0b831a0',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
+            21,
+            'RunType',
+            'Run Type',
+            'Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Single',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '54dfb777-475b-4c79-a736-10556471d86e'  OR 
+               (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'ExecutionOrder')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '54dfb777-475b-4c79-a736-10556471d86e',
+            '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
+            22,
+            'ExecutionOrder',
+            'Execution Order',
+            'Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0', 1, 'Single', 'Single')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0', 2, 'ParallelParent', 'ParallelParent')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0', 3, 'ParallelChild', 'ParallelChild')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0', 4, 'ResultSelector', 'ResultSelector')
+
+/* SQL text to update ValueListType for entity field ID 0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0'
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = 'd54f8e97-fd0a-47d0-a0c6-d65b281622c6'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('d54f8e97-fd0a-47d0-a0c6-d65b281622c6', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'ParentID', 'One To Many', 1, 1, 'MJ: AI Prompt Runs', 2);
+   END
+                              
+
+/* Index for Foreign Keys for AIPromptRun */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key PromptID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_PromptID ON [${flyway:defaultSchema}].[AIPromptRun] ([PromptID]);
+
+-- Index for foreign key ModelID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ModelID ON [${flyway:defaultSchema}].[AIPromptRun] ([ModelID]);
+
+-- Index for foreign key VendorID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_VendorID ON [${flyway:defaultSchema}].[AIPromptRun] ([VendorID]);
+
+-- Index for foreign key AgentID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_AgentID ON [${flyway:defaultSchema}].[AIPromptRun] ([AgentID]);
+
+-- Index for foreign key ConfigurationID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ConfigurationID ON [${flyway:defaultSchema}].[AIPromptRun] ([ConfigurationID]);
+
+-- Index for foreign key ParentID in table AIPromptRun
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIPromptRun]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_ParentID ON [${flyway:defaultSchema}].[AIPromptRun] ([ParentID]);
+
+/* Base View SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: vwAIPromptRuns
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Prompt Runs
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIPromptRun
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIPromptRuns]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptRuns]
+AS
+SELECT
+    a.*,
+    AIPrompt_PromptID.[Name] AS [Prompt],
+    AIModel_ModelID.[Name] AS [Model],
+    AIVendor_VendorID.[Name] AS [Vendor],
+    AIAgent_AgentID.[Name] AS [Agent],
+    AIConfiguration_ConfigurationID.[Name] AS [Configuration]
+FROM
+    [${flyway:defaultSchema}].[AIPromptRun] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_PromptID
+  ON
+    [a].[PromptID] = AIPrompt_PromptID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS AIModel_ModelID
+  ON
+    [a].[ModelID] = AIModel_ModelID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[AIVendor] AS AIVendor_VendorID
+  ON
+    [a].[VendorID] = AIVendor_VendorID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_AgentID
+  ON
+    [a].[AgentID] = AIAgent_AgentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIConfiguration] AS AIConfiguration_ConfigurationID
+  ON
+    [a].[ConfigurationID] = AIConfiguration_ConfigurationID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: Permissions for vwAIPromptRuns
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: spCreateAIPromptRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIPromptRun
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIPromptRun]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIPromptRun]
+    @PromptID uniqueidentifier,
+    @ModelID uniqueidentifier,
+    @VendorID uniqueidentifier,
+    @AgentID uniqueidentifier,
+    @ConfigurationID uniqueidentifier,
+    @RunAt datetime2,
+    @CompletedAt datetime2,
+    @ExecutionTimeMS int,
+    @Messages nvarchar(MAX),
+    @Result nvarchar(MAX),
+    @TokensUsed int,
+    @TokensPrompt int,
+    @TokensCompletion int,
+    @TotalCost decimal(18, 6),
+    @Success bit,
+    @ErrorMessage nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @RunType nvarchar(20),
+    @ExecutionOrder int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    INSERT INTO
+    [${flyway:defaultSchema}].[AIPromptRun]
+        (
+            [PromptID],
+            [ModelID],
+            [VendorID],
+            [AgentID],
+            [ConfigurationID],
+            [RunAt],
+            [CompletedAt],
+            [ExecutionTimeMS],
+            [Messages],
+            [Result],
+            [TokensUsed],
+            [TokensPrompt],
+            [TokensCompletion],
+            [TotalCost],
+            [Success],
+            [ErrorMessage],
+            [ParentID],
+            [RunType],
+            [ExecutionOrder]
+        )
+    OUTPUT INSERTED.[ID] INTO @InsertedRow
+    VALUES
+        (
+            @PromptID,
+            @ModelID,
+            @VendorID,
+            @AgentID,
+            @ConfigurationID,
+            @RunAt,
+            @CompletedAt,
+            @ExecutionTimeMS,
+            @Messages,
+            @Result,
+            @TokensUsed,
+            @TokensPrompt,
+            @TokensCompletion,
+            @TotalCost,
+            @Success,
+            @ErrorMessage,
+            @ParentID,
+            @RunType,
+            @ExecutionOrder
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIPromptRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: AI Prompt Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: spUpdateAIPromptRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIPromptRun
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIPromptRun]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIPromptRun]
+    @ID uniqueidentifier,
+    @PromptID uniqueidentifier,
+    @ModelID uniqueidentifier,
+    @VendorID uniqueidentifier,
+    @AgentID uniqueidentifier,
+    @ConfigurationID uniqueidentifier,
+    @RunAt datetime2,
+    @CompletedAt datetime2,
+    @ExecutionTimeMS int,
+    @Messages nvarchar(MAX),
+    @Result nvarchar(MAX),
+    @TokensUsed int,
+    @TokensPrompt int,
+    @TokensCompletion int,
+    @TotalCost decimal(18, 6),
+    @Success bit,
+    @ErrorMessage nvarchar(MAX),
+    @ParentID uniqueidentifier,
+    @RunType nvarchar(20),
+    @ExecutionOrder int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIPromptRun]
+    SET
+        [PromptID] = @PromptID,
+        [ModelID] = @ModelID,
+        [VendorID] = @VendorID,
+        [AgentID] = @AgentID,
+        [ConfigurationID] = @ConfigurationID,
+        [RunAt] = @RunAt,
+        [CompletedAt] = @CompletedAt,
+        [ExecutionTimeMS] = @ExecutionTimeMS,
+        [Messages] = @Messages,
+        [Result] = @Result,
+        [TokensUsed] = @TokensUsed,
+        [TokensPrompt] = @TokensPrompt,
+        [TokensCompletion] = @TokensCompletion,
+        [TotalCost] = @TotalCost,
+        [Success] = @Success,
+        [ErrorMessage] = @ErrorMessage,
+        [ParentID] = @ParentID,
+        [RunType] = @RunType,
+        [ExecutionOrder] = @ExecutionOrder
+    WHERE
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIPromptRuns]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIPromptRun table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIPromptRun
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIPromptRun
+ON [${flyway:defaultSchema}].[AIPromptRun]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIPromptRun]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIPromptRun] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: AI Prompt Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: AI Prompt Runs */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Prompt Runs
+-- Item: spDeleteAIPromptRun
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIPromptRun
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIPromptRun]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIPromptRun]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIPromptRun]
+    WHERE
+        [ID] = @ID
+
+
+    SELECT @ID AS [ID] -- Return the primary key to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: AI Prompt Runs */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPromptRun] TO [cdp_Developer], [cdp_Integration]
+
+
 

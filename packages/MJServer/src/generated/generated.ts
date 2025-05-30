@@ -35360,6 +35360,17 @@ export class AIPromptRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({description: `Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)`}) 
+    @MaxLength(40)
+    RunType: string;
+        
+    @Field(() => Int, {nullable: true, description: `Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`}) 
+    ExecutionOrder?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -35380,6 +35391,9 @@ export class AIPromptRun_ {
     @MaxLength(200)
     Configuration?: string;
         
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
     @Field(() => [AIResultCache_])
     AIResultCache_PromptRunIDArray: AIResultCache_[]; // Link to AIResultCache
     
@@ -35437,6 +35451,15 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionOrder: number | null;
 }
     
 
@@ -35495,6 +35518,15 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionOrder?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35556,6 +35588,15 @@ export class AIPromptRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_ParentIDArray(@Root() aipromptrun_: AIPromptRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ParentID]='${aipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [AIResultCache_])
     async AIResultCache_PromptRunIDArray(@Root() aipromptrun_: AIPromptRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);

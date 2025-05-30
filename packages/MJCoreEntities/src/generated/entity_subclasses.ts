@@ -7545,6 +7545,29 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`),
+    RunType: z.union([z.literal('Single'), z.literal('ParallelParent'), z.literal('ParallelChild'), z.literal('ResultSelector')]).describe(`
+        * * Field Name: RunType
+        * * Display Name: Run Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Single
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Single
+    *   * ParallelParent
+    *   * ParallelChild
+    *   * ResultSelector
+    * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)`),
+    ExecutionOrder: z.number().nullable().describe(`
+        * * Field Name: ExecutionOrder
+        * * Display Name: Execution Order
+        * * SQL Data Type: int
+    * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -31285,6 +31308,53 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: RunType
+    * * Display Name: Run Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Single
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Single
+    *   * ParallelParent
+    *   * ParallelChild
+    *   * ResultSelector
+    * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)
+    */
+    get RunType(): 'Single' | 'ParallelParent' | 'ParallelChild' | 'ResultSelector' {
+        return this.Get('RunType');
+    }
+    set RunType(value: 'Single' | 'ParallelParent' | 'ParallelChild' | 'ResultSelector') {
+        this.Set('RunType', value);
+    }
+
+    /**
+    * * Field Name: ExecutionOrder
+    * * Display Name: Execution Order
+    * * SQL Data Type: int
+    * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.
+    */
+    get ExecutionOrder(): number | null {
+        return this.Get('ExecutionOrder');
+    }
+    set ExecutionOrder(value: number | null) {
+        this.Set('ExecutionOrder', value);
     }
 
     /**
