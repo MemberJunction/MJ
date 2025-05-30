@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/server
 
+## 2.44.0
+
+### Minor Changes
+
+- 091c5f6: Align Entity Field sequence ordering with base views for core entities.
+
+### Patch Changes
+
+- 161f82b: Fix bug where conversation remains stuck on "Processing" state when HTTP post request to Skip API throws an error. Conversation will now be switched back to "Available".
+- 99b27c5: various updates
+- Updated dependencies [f7aec1c]
+- Updated dependencies [fbc30dc]
+- Updated dependencies [d723c0c]
+- Updated dependencies [9f02cd8]
+- Updated dependencies [99b27c5]
+- Updated dependencies [091c5f6]
+  - @memberjunction/aiengine@2.44.0
+  - @memberjunction/ai-prompts@2.44.0
+  - @memberjunction/ai@2.44.0
+  - @memberjunction/core-actions@2.44.0
+  - @memberjunction/core@2.44.0
+  - @memberjunction/core-entities@2.44.0
+  - @memberjunction/templates@2.44.0
+  - @memberjunction/ai-vectors-pinecone@2.44.0
+  - @memberjunction/actions@2.44.0
+  - @memberjunction/queue@2.44.0
+  - @memberjunction/sqlserver-dataprovider@2.44.0
+  - @memberjunction/ai-mistral@2.44.0
+  - @memberjunction/ai-openai@2.44.0
+  - @memberjunction/entity-communications-server@2.44.0
+  - @memberjunction/doc-utils@2.44.0
+  - @memberjunction/external-change-detection@2.44.0
+  - @memberjunction/graphql-dataprovider@2.44.0
+  - @memberjunction/data-context@2.44.0
+  - @memberjunction/storage@2.44.0
+  - @memberjunction/skip-types@2.44.0
+  - @memberjunction/data-context-server@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes
