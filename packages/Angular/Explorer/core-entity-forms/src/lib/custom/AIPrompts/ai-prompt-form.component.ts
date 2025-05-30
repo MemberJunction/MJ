@@ -6,6 +6,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
 import { AIPromptFormComponent } from '../../generated/Entities/AIPrompt/aiprompt.form.component';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 @RegisterClass(BaseFormComponent, 'AI Prompts')
 @Component({
@@ -46,11 +47,27 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
     }
 
     private _metadata = new Metadata();
-    
+    private __InferenceProvider_VendorTypeDefinitionID: string = '';
+
     @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
 
     async ngOnInit() {
         await super.ngOnInit();
+
+        // make sure AI Engine Base is configured, this will load stuff only if not already
+        // loaded in the current process space
+        await AIEngineBase.Instance.Config(false, this._metadata.CurrentUser);
+        this.__InferenceProvider_VendorTypeDefinitionID = AIEngineBase.Instance.VendorTypeDefinitions.find(
+            vtd => vtd.Name.trim().toLowerCase() === 'inference provider')?.ID || '';
+        if (!this.__InferenceProvider_VendorTypeDefinitionID) {
+            console.error('Inference Provider Vendor Type Definition ID not found');
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Inference Provider Vendor Type Definition not found',
+                'error',
+                5000
+            );
+            return;
+        }
         
         // Load template when record changes
         if (this.record?.TemplateID) {
@@ -385,11 +402,11 @@ export class AIPromptFormComponentExtended extends AIPromptFormComponent impleme
         }
 
         try {
-            // Load model vendors for this model
+            // Load model vendors for this model, filtering by TypeID for inference providers only
             const rv = new RunView();
             const modelVendorsResult = await rv.RunView<AIModelVendorEntity>({
                 EntityName: 'MJ: AI Model Vendors',
-                ExtraFilter: `ModelID='${modelId}'`,
+                ExtraFilter: `ModelID='${modelId}' AND TypeID='${this.__InferenceProvider_VendorTypeDefinitionID}'`,
                 OrderBy: 'VendorID ASC',
                 ResultType: 'entity_object'
             });
