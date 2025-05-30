@@ -16,6 +16,19 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="MJ: AI Model Vendors" [Visible]="record.IsSaved"> 
+                        MJ: AI Model Vendors
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','TypeID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Model Vendors')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Vendor Types" [Visible]="record.IsSaved"> 
                         MJ: AI Vendor Types
                     </mj-tab>

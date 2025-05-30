@@ -1,11 +1,13 @@
-import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
-import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
-import { ExecutionTask, ParallelizationStrategy } from "./ParallelExecution";
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from '@memberjunction/core-entities';
+import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
+import { ChatMessage } from '@memberjunction/ai';
+import { TemplateMessageRole } from './AIPromptRunner';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Plans and organizes execution tasks for AI prompts based on parallelization configuration.
- * 
+ *
  * This class analyzes prompt configuration and creates execution plans that determine:
  * - Which models to use
  * - How many parallel executions to perform
@@ -13,459 +15,514 @@ import { v4 as uuidv4 } from 'uuid';
  * - Priority and ordering of tasks
  */
 export class ExecutionPlanner {
+  /**
+   * Creates an execution plan for a prompt based on its parallelization configuration.
+   *
+   * Analyzes the prompt's ParallelizationMode and associated models to determine
+   * the optimal execution strategy and task distribution.
+   *
+   * @param prompt - The AI prompt to create an execution plan for
+   * @param promptModels - Associated model configurations for this prompt
+   * @param allModels - All available AI models in the system
+   * @param renderedPrompt - The rendered prompt text ready for execution
+   * @param contextUser - User context for authentication and permissions
+   * @param configurationId - Optional configuration ID for environment-specific behavior
+   * @returns ExecutionTask[] - Array of execution tasks to be processed
+   */
+  public createExecutionPlan(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    LogStatus(`Creating execution plan for prompt "${prompt.Name}" with parallelization mode: ${prompt.ParallelizationMode}`);
 
-    /**
-     * Creates an execution plan for a prompt based on its parallelization configuration.
-     * 
-     * Analyzes the prompt's ParallelizationMode and associated models to determine
-     * the optimal execution strategy and task distribution.
-     * 
-     * @param prompt - The AI prompt to create an execution plan for
-     * @param promptModels - Associated model configurations for this prompt
-     * @param allModels - All available AI models in the system
-     * @param renderedPrompt - The rendered prompt text ready for execution
-     * @param contextUser - User context for authentication and permissions
-     * @param configurationId - Optional configuration ID for environment-specific behavior
-     * @returns ExecutionTask[] - Array of execution tasks to be processed
-     */
-    public createExecutionPlan(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        renderedPrompt: string,
-        contextUser?: UserInfo,
-        configurationId?: string
-    ): ExecutionTask[] {
-        LogStatus(`Creating execution plan for prompt "${prompt.Name}" with parallelization mode: ${prompt.ParallelizationMode}`);
+    const strategy = prompt.ParallelizationMode as ParallelizationStrategy;
 
-        const strategy = prompt.ParallelizationMode as ParallelizationStrategy;
+    switch (strategy) {
+      case 'None':
+        return this.createSingleExecutionPlan(
+          prompt,
+          promptModels,
+          allModels,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          conversationMessages,
+          templateMessageRole,
+        );
 
-        switch (strategy) {
-            case 'None':
-                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      case 'StaticCount':
+        return this.createStaticCountPlan(
+          prompt,
+          promptModels,
+          allModels,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          conversationMessages,
+          templateMessageRole,
+        );
 
-            case 'StaticCount':
-                return this.createStaticCountPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      case 'ConfigParam':
+        return this.createConfigParamPlan(
+          prompt,
+          promptModels,
+          allModels,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          conversationMessages,
+          templateMessageRole,
+        );
 
-            case 'ConfigParam':
-                return this.createConfigParamPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      case 'ModelSpecific':
+        return this.createModelSpecificPlan(
+          prompt,
+          promptModels,
+          allModels,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          conversationMessages,
+          templateMessageRole,
+        );
 
-            case 'ModelSpecific':
-                return this.createModelSpecificPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+      default:
+        LogError(`Unknown parallelization strategy: ${strategy}, falling back to single execution`);
+        return this.createSingleExecutionPlan(
+          prompt,
+          promptModels,
+          allModels,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          conversationMessages,
+          templateMessageRole,
+        );
+    }
+  }
 
-            default:
-                LogError(`Unknown parallelization strategy: ${strategy}, falling back to single execution`);
-                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
-        }
+  /**
+   * Creates a single execution task (no parallelization).
+   *
+   * Selects the best model based on prompt configuration and creates a single task.
+   *
+   * @param prompt - The AI prompt to execute
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param renderedPrompt - Rendered prompt text
+   * @param contextUser - User context
+   * @param configurationId - Configuration ID
+   * @returns ExecutionTask[] - Array containing single execution task
+   */
+  private createSingleExecutionPlan(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    const selectedModel = this.selectBestModel(prompt, promptModels, allModels, configurationId);
+
+    if (!selectedModel) {
+      LogError(`No suitable model found for prompt "${prompt.Name}"`);
+      return [];
     }
 
-    /**
-     * Creates a single execution task (no parallelization).
-     * 
-     * Selects the best model based on prompt configuration and creates a single task.
-     * 
-     * @param prompt - The AI prompt to execute
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param renderedPrompt - Rendered prompt text
-     * @param contextUser - User context
-     * @param configurationId - Configuration ID
-     * @returns ExecutionTask[] - Array containing single execution task
-     */
-    private createSingleExecutionPlan(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        renderedPrompt: string,
-        contextUser?: UserInfo,
-        configurationId?: string
-    ): ExecutionTask[] {
-        const selectedModel = this.selectBestModel(prompt, promptModels, allModels, configurationId);
-        
-        if (!selectedModel) {
-            LogError(`No suitable model found for prompt "${prompt.Name}"`);
-            return [];
-        }
+    const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
 
-        const promptModel = promptModels.find(pm => pm.ModelID === selectedModel.ID);
+    const task: ExecutionTask = {
+      taskId: uuidv4(),
+      prompt,
+      model: selectedModel,
+      promptModel,
+      executionGroup: 0,
+      priority: promptModel?.Priority || 0,
+      renderedPrompt,
+      contextUser,
+      configurationId,
+      modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
+      conversationMessages,
+      templateMessageRole,
+    };
 
+    LogStatus(`Created single execution plan with model: ${selectedModel.Name}`);
+    return [task];
+  }
+
+  /**
+   * Creates execution tasks based on a static count of parallel executions.
+   *
+   * Uses the ParallelCount field to determine how many parallel executions to create.
+   *
+   * @param prompt - The AI prompt to execute
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param renderedPrompt - Rendered prompt text
+   * @param contextUser - User context
+   * @param configurationId - Configuration ID
+   * @returns ExecutionTask[] - Array of execution tasks for parallel processing
+   */
+  private createStaticCountPlan(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    const parallelCount = prompt.ParallelCount || 1;
+
+    if (parallelCount <= 1) {
+      LogStatus(`StaticCount parallelization with count ${parallelCount}, falling back to single execution`);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+    }
+
+    const tasks: ExecutionTask[] = [];
+    const availableModels = this.getAvailableModels(prompt, promptModels, allModels, configurationId);
+
+    if (availableModels.length === 0) {
+      LogError(`No suitable models found for prompt "${prompt.Name}"`);
+      return [];
+    }
+
+    // Create tasks by cycling through available models
+    for (let i = 0; i < parallelCount; i++) {
+      const modelIndex = i % availableModels.length;
+      const selectedModel = availableModels[modelIndex];
+      const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+
+      const task: ExecutionTask = {
+        taskId: uuidv4(),
+        prompt,
+        model: selectedModel,
+        promptModel,
+        executionGroup: 0, // All in same group for true parallelization
+        priority: promptModel?.Priority || 0,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
+        conversationMessages,
+        templateMessageRole,
+      };
+
+      tasks.push(task);
+    }
+
+    LogStatus(`Created StaticCount execution plan with ${tasks.length} parallel tasks`);
+    return tasks;
+  }
+
+  /**
+   * Creates execution tasks based on a configuration parameter.
+   *
+   * Looks up the parallel count from a configuration parameter specified in ParallelConfigParam.
+   *
+   * @param prompt - The AI prompt to execute
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param renderedPrompt - Rendered prompt text
+   * @param contextUser - User context
+   * @param configurationId - Configuration ID
+   * @returns ExecutionTask[] - Array of execution tasks for parallel processing
+   */
+  private createConfigParamPlan(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    const configParamName = prompt.ParallelConfigParam;
+
+    if (!configParamName) {
+      LogError(`ConfigParam parallelization specified but ParallelConfigParam is not set for prompt "${prompt.Name}"`);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+    }
+
+    // TODO: Implement configuration parameter lookup
+    // This would involve loading the configuration and extracting the parallel count
+    const parallelCount = this.getConfigurationParameter(configParamName, configurationId) || 1;
+
+    LogStatus(`ConfigParam parallelization: ${configParamName} = ${parallelCount}`);
+
+    // Create tasks using the resolved parallel count
+    if (parallelCount <= 1) {
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+    }
+
+    const tasks: ExecutionTask[] = [];
+    const availableModels = this.getAvailableModels(prompt, promptModels, allModels, configurationId);
+
+    if (availableModels.length === 0) {
+      LogError(`No suitable models found for prompt "${prompt.Name}"`);
+      return [];
+    }
+
+    // Create tasks by cycling through available models
+    for (let i = 0; i < parallelCount; i++) {
+      const modelIndex = i % availableModels.length;
+      const selectedModel = availableModels[modelIndex];
+      const promptModel = promptModels.find((pm) => pm.ModelID === selectedModel.ID);
+
+      const task: ExecutionTask = {
+        taskId: uuidv4(),
+        prompt,
+        model: selectedModel,
+        promptModel,
+        executionGroup: 0, // All in same group for true parallelization
+        priority: promptModel?.Priority || 0,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
+        conversationMessages,
+        templateMessageRole,
+      };
+
+      tasks.push(task);
+    }
+
+    LogStatus(`Created ConfigParam execution plan with ${tasks.length} parallel tasks`);
+    return tasks;
+  }
+
+  /**
+   * Creates execution tasks based on model-specific parallelization settings.
+   *
+   * Uses individual AIPromptModel configurations to determine execution groups and parallel counts.
+   *
+   * @param prompt - The AI prompt to execute
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param renderedPrompt - Rendered prompt text
+   * @param contextUser - User context
+   * @param configurationId - Configuration ID
+   * @returns ExecutionTask[] - Array of execution tasks organized by execution groups
+   */
+  private createModelSpecificPlan(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    renderedPrompt: string,
+    contextUser?: UserInfo,
+    configurationId?: string,
+    conversationMessages?: ChatMessage[],
+    templateMessageRole: TemplateMessageRole = 'system',
+  ): ExecutionTask[] {
+    const tasks: ExecutionTask[] = [];
+    const activePromptModels = promptModels.filter((pm) => pm.Status === 'Active' || pm.Status === 'Preview');
+
+    if (activePromptModels.length === 0) {
+      LogError(`No active prompt models found for ModelSpecific parallelization of prompt "${prompt.Name}"`);
+      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+    }
+
+    // Create tasks based on each prompt model's configuration
+    for (const promptModel of activePromptModels) {
+      const model = allModels.find((m) => m.ID === promptModel.ModelID && m.IsActive);
+
+      if (!model) {
+        LogError(`Model ${promptModel.ModelID} not found or inactive for prompt "${prompt.Name}"`);
+        continue;
+      }
+
+      const parallelCount = this.getModelParallelCount(promptModel);
+
+      // Create multiple tasks for this model if parallel count > 1
+      for (let i = 0; i < parallelCount; i++) {
         const task: ExecutionTask = {
-            taskId: uuidv4(),
-            prompt,
-            model: selectedModel,
-            promptModel,
-            executionGroup: 0,
-            priority: promptModel?.Priority || 0,
-            renderedPrompt,
-            contextUser,
-            configurationId,
-            modelParameters: this.parseModelParameters(promptModel?.ModelParameters)
+          taskId: uuidv4(),
+          prompt,
+          model,
+          promptModel,
+          executionGroup: promptModel.ExecutionGroup,
+          priority: promptModel.Priority,
+          renderedPrompt,
+          contextUser,
+          configurationId,
+          modelParameters: this.parseModelParameters(promptModel.ModelParameters),
+          conversationMessages,
+          templateMessageRole,
         };
 
-        LogStatus(`Created single execution plan with model: ${selectedModel.Name}`);
-        return [task];
+        tasks.push(task);
+      }
     }
 
-    /**
-     * Creates execution tasks based on a static count of parallel executions.
-     * 
-     * Uses the ParallelCount field to determine how many parallel executions to create.
-     * 
-     * @param prompt - The AI prompt to execute
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param renderedPrompt - Rendered prompt text
-     * @param contextUser - User context
-     * @param configurationId - Configuration ID
-     * @returns ExecutionTask[] - Array of execution tasks for parallel processing
-     */
-    private createStaticCountPlan(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        renderedPrompt: string,
-        contextUser?: UserInfo,
-        configurationId?: string
-    ): ExecutionTask[] {
-        const parallelCount = prompt.ParallelCount || 1;
-        
-        if (parallelCount <= 1) {
-            LogStatus(`StaticCount parallelization with count ${parallelCount}, falling back to single execution`);
-            return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
-        }
+    LogStatus(`Created ModelSpecific execution plan with ${tasks.length} tasks across ${new Set(tasks.map((t) => t.executionGroup)).size} execution groups`);
+    return tasks;
+  }
 
-        const tasks: ExecutionTask[] = [];
-        const availableModels = this.getAvailableModels(prompt, promptModels, allModels, configurationId);
+  /**
+   * Selects the best model based on prompt configuration and available models.
+   *
+   * @param prompt - The AI prompt requiring a model
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param configurationId - Configuration ID
+   * @returns AIModelEntityExtended | null - The selected model or null if none suitable
+   */
+  private selectBestModel(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    configurationId?: string,
+  ): AIModelEntityExtended | null {
+    // First try to use prompt-specific models
+    const availablePromptModels = promptModels.filter(
+      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+    );
 
-        if (availableModels.length === 0) {
-            LogError(`No suitable models found for prompt "${prompt.Name}"`);
-            return [];
-        }
+    if (availablePromptModels.length > 0) {
+      // Sort by priority and return the highest priority model
+      availablePromptModels.sort((a, b) => b.Priority - a.Priority);
+      const selectedPromptModel = availablePromptModels[0];
 
-        // Create tasks by cycling through available models
-        for (let i = 0; i < parallelCount; i++) {
-            const modelIndex = i % availableModels.length;
-            const selectedModel = availableModels[modelIndex];
-            const promptModel = promptModels.find(pm => pm.ModelID === selectedModel.ID);
-
-            const task: ExecutionTask = {
-                taskId: uuidv4(),
-                prompt,
-                model: selectedModel,
-                promptModel,
-                executionGroup: 0, // All in same group for true parallelization
-                priority: promptModel?.Priority || 0,
-                renderedPrompt,
-                contextUser,
-                configurationId,
-                modelParameters: this.parseModelParameters(promptModel?.ModelParameters)
-            };
-
-            tasks.push(task);
-        }
-
-        LogStatus(`Created StaticCount execution plan with ${tasks.length} parallel tasks`);
-        return tasks;
+      const model = allModels.find((m) => m.ID === selectedPromptModel.ModelID && m.IsActive);
+      if (model) {
+        return model;
+      }
     }
 
-    /**
-     * Creates execution tasks based on a configuration parameter.
-     * 
-     * Looks up the parallel count from a configuration parameter specified in ParallelConfigParam.
-     * 
-     * @param prompt - The AI prompt to execute
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param renderedPrompt - Rendered prompt text
-     * @param contextUser - User context
-     * @param configurationId - Configuration ID
-     * @returns ExecutionTask[] - Array of execution tasks for parallel processing
-     */
-    private createConfigParamPlan(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        renderedPrompt: string,
-        contextUser?: UserInfo,
-        configurationId?: string
-    ): ExecutionTask[] {
-        const configParamName = prompt.ParallelConfigParam;
-        
-        if (!configParamName) {
-            LogError(`ConfigParam parallelization specified but ParallelConfigParam is not set for prompt "${prompt.Name}"`);
-            return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
-        }
+    // Fall back to automatic model selection
+    const candidateModels = allModels.filter(
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+    );
 
-        // TODO: Implement configuration parameter lookup
-        // This would involve loading the configuration and extracting the parallel count
-        const parallelCount = this.getConfigurationParameter(configParamName, configurationId) || 1;
-
-        LogStatus(`ConfigParam parallelization: ${configParamName} = ${parallelCount}`);
-        
-        // Create tasks using the resolved parallel count
-        if (parallelCount <= 1) {
-            return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
-        }
-
-        const tasks: ExecutionTask[] = [];
-        const availableModels = this.getAvailableModels(prompt, promptModels, allModels, configurationId);
-
-        if (availableModels.length === 0) {
-            LogError(`No suitable models found for prompt "${prompt.Name}"`);
-            return [];
-        }
-
-        // Create tasks by cycling through available models
-        for (let i = 0; i < parallelCount; i++) {
-            const modelIndex = i % availableModels.length;
-            const selectedModel = availableModels[modelIndex];
-            const promptModel = promptModels.find(pm => pm.ModelID === selectedModel.ID);
-
-            const task: ExecutionTask = {
-                taskId: uuidv4(),
-                prompt,
-                model: selectedModel,
-                promptModel,
-                executionGroup: 0, // All in same group for true parallelization
-                priority: promptModel?.Priority || 0,
-                renderedPrompt,
-                contextUser,
-                configurationId,
-                modelParameters: this.parseModelParameters(promptModel?.ModelParameters)
-            };
-
-            tasks.push(task);
-        }
-
-        LogStatus(`Created ConfigParam execution plan with ${tasks.length} parallel tasks`);
-        return tasks;
+    if (candidateModels.length === 0) {
+      return null;
     }
 
-    /**
-     * Creates execution tasks based on model-specific parallelization settings.
-     * 
-     * Uses individual AIPromptModel configurations to determine execution groups and parallel counts.
-     * 
-     * @param prompt - The AI prompt to execute
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param renderedPrompt - Rendered prompt text
-     * @param contextUser - User context
-     * @param configurationId - Configuration ID
-     * @returns ExecutionTask[] - Array of execution tasks organized by execution groups
-     */
-    private createModelSpecificPlan(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        renderedPrompt: string,
-        contextUser?: UserInfo,
-        configurationId?: string
-    ): ExecutionTask[] {
-        const tasks: ExecutionTask[] = [];
-        const activePromptModels = promptModels.filter(pm => 
-            pm.Status === 'Active' || pm.Status === 'Preview'
-        );
-
-        if (activePromptModels.length === 0) {
-            LogError(`No active prompt models found for ModelSpecific parallelization of prompt "${prompt.Name}"`);
-            return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
-        }
-
-        // Create tasks based on each prompt model's configuration
-        for (const promptModel of activePromptModels) {
-            const model = allModels.find(m => m.ID === promptModel.ModelID && m.IsActive);
-            
-            if (!model) {
-                LogError(`Model ${promptModel.ModelID} not found or inactive for prompt "${prompt.Name}"`);
-                continue;
-            }
-
-            const parallelCount = this.getModelParallelCount(promptModel);
-            
-            // Create multiple tasks for this model if parallel count > 1
-            for (let i = 0; i < parallelCount; i++) {
-                const task: ExecutionTask = {
-                    taskId: uuidv4(),
-                    prompt,
-                    model,
-                    promptModel,
-                    executionGroup: promptModel.ExecutionGroup,
-                    priority: promptModel.Priority,
-                    renderedPrompt,
-                    contextUser,
-                    configurationId,
-                    modelParameters: this.parseModelParameters(promptModel.ModelParameters)
-                };
-
-                tasks.push(task);
-            }
-        }
-
-        LogStatus(`Created ModelSpecific execution plan with ${tasks.length} tasks across ${new Set(tasks.map(t => t.executionGroup)).size} execution groups`);
-        return tasks;
+    // Sort by power preference
+    switch (prompt.PowerPreference) {
+      case 'Highest':
+        candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
+        break;
+      case 'Lowest':
+        candidateModels.sort((a, b) => a.PowerRank - b.PowerRank);
+        break;
+      case 'Balanced':
+      default:
+        candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
+        break;
     }
 
-    /**
-     * Selects the best model based on prompt configuration and available models.
-     * 
-     * @param prompt - The AI prompt requiring a model
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param configurationId - Configuration ID
-     * @returns AIModelEntityExtended | null - The selected model or null if none suitable
-     */
-    private selectBestModel(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        configurationId?: string
-    ): AIModelEntityExtended | null {
-        // First try to use prompt-specific models
-        const availablePromptModels = promptModels.filter(pm => 
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
-            (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
-        );
+    return candidateModels[0];
+  }
 
-        if (availablePromptModels.length > 0) {
-            // Sort by priority and return the highest priority model
-            availablePromptModels.sort((a, b) => b.Priority - a.Priority);
-            const selectedPromptModel = availablePromptModels[0];
-            
-            const model = allModels.find(m => m.ID === selectedPromptModel.ModelID && m.IsActive);
-            if (model) {
-                return model;
-            }
-        }
+  /**
+   * Gets all available models for a prompt considering configuration constraints.
+   *
+   * @param prompt - The AI prompt
+   * @param promptModels - Associated model configurations
+   * @param allModels - All available models
+   * @param configurationId - Configuration ID
+   * @returns AIModelEntityExtended[] - Array of suitable models
+   */
+  private getAvailableModels(
+    prompt: AIPromptEntity,
+    promptModels: AIPromptModelEntity[],
+    allModels: AIModelEntityExtended[],
+    configurationId?: string,
+  ): AIModelEntityExtended[] {
+    const availablePromptModels = promptModels.filter(
+      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+    );
 
-        // Fall back to automatic model selection
-        const candidateModels = allModels.filter(m => 
-            m.IsActive && 
-            (m.PowerRank >= (prompt.MinPowerRank || 0)) &&
-            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
-        );
+    if (availablePromptModels.length > 0) {
+      // Use prompt-specific models
+      const models = availablePromptModels
+        .map((pm) => allModels.find((m) => m.ID === pm.ModelID && m.IsActive))
+        .filter((m) => m !== undefined) as AIModelEntityExtended[];
 
-        if (candidateModels.length === 0) {
-            return null;
-        }
+      // Sort by priority from prompt models
+      models.sort((a, b) => {
+        const aPriority = availablePromptModels.find((pm) => pm.ModelID === a.ID)?.Priority || 0;
+        const bPriority = availablePromptModels.find((pm) => pm.ModelID === b.ID)?.Priority || 0;
+        return bPriority - aPriority;
+      });
 
-        // Sort by power preference
-        switch (prompt.PowerPreference) {
-            case 'Highest':
-                candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
-                break;
-            case 'Lowest':
-                candidateModels.sort((a, b) => a.PowerRank - b.PowerRank);
-                break;
-            case 'Balanced':
-            default:
-                candidateModels.sort((a, b) => b.PowerRank - a.PowerRank);
-                break;
-        }
-
-        return candidateModels[0];
+      return models;
     }
 
-    /**
-     * Gets all available models for a prompt considering configuration constraints.
-     * 
-     * @param prompt - The AI prompt
-     * @param promptModels - Associated model configurations
-     * @param allModels - All available models
-     * @param configurationId - Configuration ID
-     * @returns AIModelEntityExtended[] - Array of suitable models
-     */
-    private getAvailableModels(
-        prompt: AIPromptEntity,
-        promptModels: AIPromptModelEntity[],
-        allModels: AIModelEntityExtended[],
-        configurationId?: string
-    ): AIModelEntityExtended[] {
-        const availablePromptModels = promptModels.filter(pm => 
-            (pm.Status === 'Active' || pm.Status === 'Preview') &&
-            (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
-        );
+    // Fall back to all suitable models
+    return allModels.filter(
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+    );
+  }
 
-        if (availablePromptModels.length > 0) {
-            // Use prompt-specific models
-            const models = availablePromptModels
-                .map(pm => allModels.find(m => m.ID === pm.ModelID && m.IsActive))
-                .filter(m => m !== undefined) as AIModelEntityExtended[];
-            
-            // Sort by priority from prompt models
-            models.sort((a, b) => {
-                const aPriority = availablePromptModels.find(pm => pm.ModelID === a.ID)?.Priority || 0;
-                const bPriority = availablePromptModels.find(pm => pm.ModelID === b.ID)?.Priority || 0;
-                return bPriority - aPriority;
-            });
+  /**
+   * Determines the parallel count for a specific model configuration.
+   *
+   * @param promptModel - The prompt model configuration
+   * @returns number - Number of parallel executions for this model
+   */
+  private getModelParallelCount(promptModel: AIPromptModelEntity): number {
+    switch (promptModel.ParallelizationMode) {
+      case 'StaticCount':
+        return promptModel.ParallelCount || 1;
 
-            return models;
-        }
+      case 'ConfigParam': {
+        const configValue = this.getConfigurationParameter(promptModel.ParallelConfigParam, null);
+        return configValue || 1;
+      }
 
-        // Fall back to all suitable models
-        return allModels.filter(m => 
-            m.IsActive && 
-            (m.PowerRank >= (prompt.MinPowerRank || 0)) &&
-            (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
-        );
+      case 'None':
+      default:
+        return 1;
+    }
+  }
+
+  /**
+   * Looks up a configuration parameter value.
+   *
+   * @param paramName - Name of the configuration parameter
+   * @param configurationId - Configuration context ID
+   * @returns number | null - The parameter value or null if not found
+   */
+  private getConfigurationParameter(paramName: string | null, _configurationId: string | null): number | null {
+    if (!paramName) {
+      return null;
     }
 
-    /**
-     * Determines the parallel count for a specific model configuration.
-     * 
-     * @param promptModel - The prompt model configuration
-     * @returns number - Number of parallel executions for this model
-     */
-    private getModelParallelCount(promptModel: AIPromptModelEntity): number {
-        switch (promptModel.ParallelizationMode) {
-            case 'StaticCount':
-                return promptModel.ParallelCount || 1;
-                
-            case 'ConfigParam':
-                const configValue = this.getConfigurationParameter(promptModel.ParallelConfigParam, null);
-                return configValue || 1;
-                
-            case 'None':
-            default:
-                return 1;
-        }
+    // TODO: Implement actual configuration parameter lookup
+    // This would involve querying the MJ: AI Configurations system
+    // For now, return a default value
+    LogStatus(`Configuration parameter lookup not yet implemented: ${paramName}`);
+    return 2; // Default parallel count
+  }
+
+  /**
+   * Parses model parameters from JSON string.
+   *
+   * @param modelParametersJson - JSON string containing model parameters
+   * @returns Record<string, any> | undefined - Parsed parameters or undefined
+   */
+  private parseModelParameters(modelParametersJson: string | null | undefined): Record<string, unknown> | undefined {
+    if (!modelParametersJson) {
+      return undefined;
     }
 
-    /**
-     * Looks up a configuration parameter value.
-     * 
-     * @param paramName - Name of the configuration parameter
-     * @param configurationId - Configuration context ID
-     * @returns number | null - The parameter value or null if not found
-     */
-    private getConfigurationParameter(paramName: string | null, _configurationId: string | null): number | null {
-        if (!paramName) {
-            return null;
-        }
-
-        // TODO: Implement actual configuration parameter lookup
-        // This would involve querying the MJ: AI Configurations system
-        // For now, return a default value
-        LogStatus(`Configuration parameter lookup not yet implemented: ${paramName}`);
-        return 2; // Default parallel count
+    try {
+      return JSON.parse(modelParametersJson);
+    } catch (error) {
+      LogError(`Failed to parse model parameters JSON: ${error.message}`);
+      return undefined;
     }
-
-    /**
-     * Parses model parameters from JSON string.
-     * 
-     * @param modelParametersJson - JSON string containing model parameters
-     * @returns Record<string, any> | undefined - Parsed parameters or undefined
-     */
-    private parseModelParameters(modelParametersJson: string | null | undefined): Record<string, any> | undefined {
-        if (!modelParametersJson) {
-            return undefined;
-        }
-
-        try {
-            return JSON.parse(modelParametersJson);
-        } catch (error) {
-            LogError(`Failed to parse model parameters JSON: ${error.message}`);
-            return undefined;
-        }
-    }
+  }
 }

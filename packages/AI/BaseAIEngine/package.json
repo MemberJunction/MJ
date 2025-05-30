@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai-prompts",
+  "name": "@memberjunction/ai-engine-base",
   "version": "2.44.0",
-  "description": "MemberJunction: AI Prompt Execution and Management",
+  "description": "MemberJunction: Base AI Engine Package - does extended types and data caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,9 +19,6 @@
     "@memberjunction/global": "2.44.0",
     "@memberjunction/core-entities": "2.44.0",
     "@memberjunction/ai": "2.44.0",
-    "@memberjunction/aiengine": "2.44.0",
-    "@memberjunction/templates": "2.44.0",
-    "ajv": "^8.12.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },
