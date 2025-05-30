@@ -727,6 +727,7 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
      * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
      * as chosen by the container application.
+     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
      */
     htmlReport: string | null;
     /**
@@ -738,15 +739,14 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * Generally speaking, this object name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
      * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
      * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
+     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
      */
     htmlReportObjectName: string | null;
 
     /**
-     * For HTML reports, it is possible the AI will generate more than one option. If more than one option was generated
-     * this array will contain the additional options that the AI generated that can be provided to the user as alternatives 
-     * to the primary HTML report that is provided in the htmlReport property.
+     * Contains a list of all the possible HTML reports that were generated (1 or more) for the given request.
      */
-    additionalHTMLReportOptions?: SkipHTMLReportOption[];
+    htmlReportOptions?: SkipHTMLReportOption[];
 
     /**
      * If the AI Agent decides it would be best to display the result in an artifact, this information can be used by the calling application to properly
