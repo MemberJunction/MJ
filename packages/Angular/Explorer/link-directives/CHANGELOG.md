@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.44.0
+
+### Patch Changes
+
+- Updated dependencies [fbc30dc]
+  - @memberjunction/core@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes

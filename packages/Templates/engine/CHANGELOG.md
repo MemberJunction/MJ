@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/templates
 
+## 2.44.0
+
+### Patch Changes
+
+- d723c0c: minor bump
+- 99b27c5: various updates
+- Updated dependencies [f7aec1c]
+- Updated dependencies [fbc30dc]
+- Updated dependencies [9f02cd8]
+- Updated dependencies [99b27c5]
+- Updated dependencies [091c5f6]
+  - @memberjunction/aiengine@2.44.0
+  - @memberjunction/ai@2.44.0
+  - @memberjunction/core@2.44.0
+  - @memberjunction/core-entities@2.44.0
+  - @memberjunction/templates-base-types@2.44.0
+  - @memberjunction/ai-groq@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Minor Changes
