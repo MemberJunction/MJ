@@ -7,7 +7,7 @@ import { TemplateEntityExtended, TemplateRenderResult } from "@memberjunction/te
 import { ExecutionPlanner } from "./ExecutionPlanner";
 import { ParallelExecutionCoordinator } from "./ParallelExecutionCoordinator";
 import { ResultSelectionConfig } from "./ParallelExecution";
-import { AIEngine } from "./AIEngine";
+import { AIEngine } from "@memberjunction/aiengine";
 
 /**
  * Parameters for executing an AI prompt
@@ -267,7 +267,6 @@ export class AIPromptRunner {
         startTime: Date
     ): Promise<AIPromptRunResult> {
         // Load AI Engine to get models and prompt models
-        const { AIEngine } = await import('./AIEngine');
         await AIEngine.Instance.Config(false, params.contextUser);
 
         // Get prompt-specific model associations
@@ -397,7 +396,6 @@ export class AIPromptRunner {
     ): Promise<AIModelEntityExtended | null> {
         try {
             // Load AI Engine to access cached models and prompt models
-            const { AIEngine } = await import('./AIEngine');
             await AIEngine.Instance.Config(false, contextUser);
 
             // Resolve vendor ID to vendor name if provided

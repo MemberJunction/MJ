@@ -7,7 +7,6 @@ import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
 import { AIAgentEntityExtended } from "./AIAgentExtended";
-import { AIPromptRunner, AIPromptParams, AIPromptRunResult } from "./AIPromptRunner";
 
 
 /**
@@ -708,37 +707,5 @@ export class AIEngine extends BaseEngine<AIEngine> {
         cacheItem.Status = 'Active';    
         cacheItem.RunAt = new Date();
         return await cacheItem.Save();
-    }
-
-    /**
-     * Executes an AI prompt using the AIPromptRunner class.
-     * This is a convenience method that creates an AIPromptRunner instance and executes the prompt.
-     * 
-     * @param params Parameters for prompt execution including the prompt entity, data context, and optional configuration
-     * @returns Promise<AIPromptRunResult> The execution result with comprehensive tracking information
-     * 
-     * @example
-     * ```typescript
-     * // Load AI Engine and get a prompt
-     * await AIEngine.Instance.Config(false, contextUser);
-     * const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'WelcomeEmail');
-     * 
-     * // Execute the prompt
-     * const result = await AIEngine.Instance.ExecutePrompt({
-     *     prompt: prompt,
-     *     data: { userName: 'John', companyName: 'Acme Corp' },
-     *     contextUser: contextUser
-     * });
-     * 
-     * if (result.success) {
-     *     console.log('Generated content:', result.result);
-     * } else {
-     *     console.error('Error:', result.errorMessage);
-     * }
-     * ```
-     */
-    public async ExecutePrompt(params: AIPromptParams): Promise<AIPromptRunResult> {
-        const runner = new AIPromptRunner();
-        return await runner.ExecutePrompt(params);
     }
 }
