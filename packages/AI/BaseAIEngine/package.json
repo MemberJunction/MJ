@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/aiengine",
+  "name": "@memberjunction/ai-engine-base",
   "version": "2.43.0",
-  "description": "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
+  "description": "MemberJunction: Base AI Engine Package - does extended types and data caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +19,6 @@
     "@memberjunction/global": "2.43.0",
     "@memberjunction/core-entities": "2.43.0",
     "@memberjunction/ai": "2.43.0",
-    "@memberjunction/ai-engine-base": "2.43.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },
