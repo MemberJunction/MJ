@@ -25,7 +25,20 @@ This library has the following peer dependencies:
 - @memberjunction/core
 - @memberjunction/global
 - @memberjunction/core-entities
-- Multiple Kendo UI Angular components (Dialog, Layout, Inputs, etc.)
+- @memberjunction/ng-base-forms
+- @memberjunction/ng-find-record
+- @memberjunction/ng-resource-permissions
+- @memberjunction/ng-shared
+- @memberjunction/ng-tabstrip
+- Multiple Kendo UI Angular components:
+  - @progress/kendo-angular-sortable
+  - @progress/kendo-angular-dialog
+  - @progress/kendo-angular-layout
+  - @progress/kendo-angular-inputs
+  - @progress/kendo-angular-buttons
+  - @progress/kendo-angular-filter
+  - @progress/kendo-angular-dropdowns
+  - @progress/kendo-data-query
 
 ## Usage
 
@@ -72,6 +85,10 @@ createCategorizedView() {
 
 ## API Reference
 
+### Component Class: UserViewPropertiesDialogComponent
+
+Extends `BaseFormComponent` from @memberjunction/ng-base-forms.
+
 ### Inputs
 
 | Input                 | Type               | Description                                            |
@@ -95,17 +112,32 @@ createCategorizedView() {
 | CreateViewInCategory   | entityName: string, viewCategoryID: string | void | Creates a view in a specific category     |
 | Open                   | ViewID?: string                  | void      | Opens the dialog for editing an existing view   |
 | saveProperties         | -                                | Promise<void> | Saves the current view properties           |
+| closePropertiesDialog  | -                                | void      | Closes the dialog and emits dialogClosed event |
+| Load                   | -                                | Promise<void> | Loads view data from database or creates new record |
+| toggleColumn           | column: any                      | Promise<void> | Toggles visibility of a column in the view |
+| onDragEnd              | e: DragEndEvent                  | void      | Handles field reordering via drag and drop     |
+| addSort                | -                                | void      | Adds a new sort field to the view              |
+| removeSort             | item: any                        | void      | Removes a sort field from the view             |
 
 ## Component Structure
 
 The dialog consists of six tabbed sections:
 
 1. **General**: Basic view properties (name and description)
-2. **Fields**: Configure visible fields and their order
+2. **Fields**: Configure visible fields and their order using drag-and-drop
 3. **Filters**: Set up filtering using either Smart Filters or standard filters
-4. **Sorting**: Define multi-field sorting with direction control
+4. **Sorting**: Define multi-field sorting with direction control (asc/desc)
 5. **Sharing**: Manage view permissions using ResourcePermissions
 6. **Advanced**: Access to SQL WHERE clauses and Smart Filter explanations
+
+### Key Features
+
+- **Drag-and-Drop Field Ordering**: Uses Kendo SortableComponent for field reordering
+- **Smart Filter Support**: Natural language filtering with view/list references
+- **Permission-Based Editing**: Respects user permissions via UserCanEdit property
+- **Keyboard Support**: Enter key saves changes (except in textareas)
+- **Auto-Navigation**: After creating a new view, automatically navigates to it
+- **Event Broadcasting**: Emits ViewUpdated events through MJGlobal event system
 
 ## Examples
 
@@ -167,3 +199,18 @@ Smart Filters allow users to describe filtering requirements in natural language
 - Permissions are automatically enforced via the `UserCanEdit` property
 - The dialog automatically adjusts for window resizing
 - Changes are not applied until the user clicks Save
+- The component uses UserViewEntityExtended for enhanced view functionality
+- Grid state and filter state are stored as JSON strings in the database
+- Sort state supports both legacy numeric (1/2) and modern string ('asc'/'desc') formats
+- The dialog is moved to document body for proper z-index stacking
+
+## Build Instructions
+
+To build this package:
+
+```bash
+cd packages/Angular/Explorer/user-view-properties
+npm run build
+```
+
+This will compile the TypeScript and generate the distribution files in the `dist` folder.

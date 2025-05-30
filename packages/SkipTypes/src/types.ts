@@ -761,11 +761,11 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
  */
 export type SkipHTMLReportOption = {
     /**
-     * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
-     * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
+     * This code is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
+     * designed to be embedded within the container application's UI in the desired location
      * as chosen by the container application.
      */
-    htmlRpeport: string;
+    reportCode: string;
 
     /**
      * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
@@ -777,7 +777,16 @@ export type SkipHTMLReportOption = {
      * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
      * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
      */
-    htmlReportObjectName: string;
+    reportObjectName: string;
+
+    /**
+     * The type of data access this report uses, static means that the data is provided to the report as static data during the initialization
+     * process described in the @interface SkipHTMLReportObject interface, dynamic means that the report will use capabilities provided by 
+     * the SkipHTMLReportObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
+     * that the report can use both static and dynamic data access methods, and 'none' means that the report does not use any data (rare, but possible for example if
+     * a report does something other than show data or if it is uses 3rd party data sources via API that are not related to the MJ instance it is running within).
+     */
+    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';
 }
 
 /**

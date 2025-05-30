@@ -113,19 +113,48 @@ The central orchestration class for all AI operations.
 
 #### Key Methods
 
-- `Config(forceRefresh?, contextUser?, provider?)`: Load AI configuration metadata
-- `SimpleLLMCompletion(userPrompt, contextUser, systemPrompt?, model?, apiKey?)`: Quick text completion
-- `GetHighestPowerModel(vendorName, modelType, contextUser?)`: Get the most powerful model of a type
-- `GetHighestPowerLLM(vendorName?, contextUser?)`: Get the most powerful LLM
-- `PrepareLLMInstance(contextUser, model?, apiKey?)`: Prepare an LLM instance for use
-- `PrepareChatMessages(userPrompt, systemPrompt?)`: Format chat messages properly
+##### Initialization
+- `Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider)`: Load AI configuration metadata from the MemberJunction system
+
+##### Simple LLM Operations
+- `SimpleLLMCompletion(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, model?: AIModelEntityExtended, apiKey?: string)`: Quick text completion for basic use cases
+- `ParallelLLMCompletions(userPrompt: string, contextUser: UserInfo, systemPrompt?: string, iterations?: number, temperatureIncrement?: number, baseTemperature?: number, model?: AIModelEntityExtended, apiKey?: string, callbacks?: ParallelChatCompletionsCallbacks)`: Execute multiple parallel completions with different parameters
+
+##### Model Management
+- `GetHighestPowerModel(vendorName: string, modelType: string, contextUser?: UserInfo)`: Get the most powerful model of a specific type from a vendor
+- `GetHighestPowerLLM(vendorName?: string, contextUser?: UserInfo)`: Get the most powerful LLM, optionally filtered by vendor
+- `PrepareLLMInstance(contextUser: UserInfo, model?: AIModelEntityExtended, apiKey?: string)`: Prepare an LLM instance with proper configuration
+- `PrepareChatMessages(userPrompt: string, systemPrompt?: string)`: Format chat messages in the standard format
+
+##### Agent Management
+- `GetAgentByName(agentName: string)`: Get a specific AI agent by name
+- `AgenteNoteTypeIDByName(agentNoteTypeName: string)`: Get the ID of an agent note type by name
 
 #### Key Properties
 
+##### Models and Databases
 - `Models`: All registered AI models with extended capabilities
-- `LanguageModels`: Just the LLM type models
-- `Agents`: Available AI agents with their capabilities
-- `VectorDatabases`: Vector database configurations
+- `LanguageModels`: Filtered list of LLM type models
+- `VectorDatabases`: Available vector database configurations
+- `ArtifactTypes`: Registered artifact types for AI outputs
+
+##### AI Agents
+- `Agents`: Available AI agents with their capabilities and configurations
+- `AgentActions`: All available agent actions
+- `AgentModels`: Model associations for agents (deprecated)
+- `AgentNoteTypes`: Types of notes agents can create
+- `AgentNotes`: All agent notes/learnings
+
+##### Prompts (Reference Only)
+- `Prompts`: All registered prompts (use @memberjunction/ai-prompts for execution)
+- `PromptModels`: Model associations for prompts
+- `PromptTypes`: Available prompt types
+- `PromptCategories`: Prompt category hierarchy
+
+##### Deprecated Properties
+- `Actions`: Legacy AI actions (deprecated)
+- `EntityAIActions`: Legacy entity AI actions (deprecated)
+- `ModelActions`: Legacy model actions (deprecated)
 
 > **Note**: `Prompts` and `PromptCategories` properties are now available in the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
@@ -142,13 +171,99 @@ Extended AI Agent entity with relationship management:
 ```typescript
 class AIAgentEntityExtended extends AIAgentEntity {
     get Actions(): AIAgentActionEntity[];  // Agent's available actions
-    get Models(): AIAgentModelEntity[];    // Associated models (deprecated)
+    get Models(): AIAgentModelEntity[];    // Associated models (deprecated - use prompts)
     get Notes(): AIAgentNoteEntity[];      // Agent's learning notes
 }
 ```
 
+#### AIPromptCategoryEntityExtended
+
+Extended prompt category with hierarchical prompt management:
+
+```typescript
+class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
+    get Prompts(): AIPromptEntity[];  // Prompts in this category
+}
+```
+
+#### AIModelEntityExtended
+
+The AI Engine automatically extends AI Model entities with additional capabilities from the AI provider system. These extended models include all driver-specific functionality and API integration.
+
 
 ## Advanced Features
+
+### Parallel Execution
+
+The AI Engine supports parallel execution of LLM calls with varying parameters:
+
+```typescript
+// Execute 5 parallel completions with increasing temperature
+const results = await AIEngine.Instance.ParallelLLMCompletions(
+    "Generate creative product names for a smart water bottle",
+    currentUser,
+    "You are a creative product naming expert",
+    5,        // iterations
+    0.15,     // temperature increment
+    0.5,      // base temperature
+    null,     // use best available model
+    null,     // use default API key
+    {
+        onProgress: (completed, total) => {
+            console.log(`Progress: ${completed}/${total}`);
+        },
+        onComplete: (results) => {
+            console.log(`All ${results.length} completions finished`);
+        }
+    }
+);
+
+// Results array contains all completion responses
+results.forEach((result, index) => {
+    if (result.success) {
+        console.log(`Result ${index + 1}:`, result.data.choices[0].message.content);
+    }
+});
+```
+
+### Model Selection Strategies
+
+The AI Engine provides intelligent model selection:
+
+```typescript
+// Get the best model regardless of vendor
+const bestModel = await AIEngine.Instance.GetHighestPowerModel(null, 'LLM', currentUser);
+
+// Get the best OpenAI model specifically
+const bestOpenAI = await AIEngine.Instance.GetHighestPowerLLM('OpenAI', currentUser);
+
+// Get the best vision model
+const bestVision = await AIEngine.Instance.GetHighestPowerModel(null, 'Vision', currentUser);
+
+// Get the best audio model
+const bestAudio = await AIEngine.Instance.GetHighestPowerModel(null, 'Audio', currentUser);
+```
+
+### Working with AI Agents
+
+AI Agents provide specialized capabilities:
+
+```typescript
+// Find a specific agent
+const codeAgent = AIEngine.Instance.GetAgentByName('Code Assistant Agent');
+
+// Access agent properties
+console.log('Agent Purpose:', codeAgent.Purpose);
+console.log('Available Actions:', codeAgent.Actions.length);
+console.log('Learning Notes:', codeAgent.Notes.length);
+
+// Use agent context in prompts
+const response = await AIEngine.Instance.SimpleLLMCompletion(
+    "Review this TypeScript code for best practices",
+    currentUser,
+    `You are ${codeAgent.Name}. ${codeAgent.Purpose}`
+);
+```
 
 For sophisticated parallel execution, template rendering, and stored prompt management, see the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
@@ -158,11 +273,26 @@ For sophisticated parallel execution, template rendering, and stored prompt mana
 - `@memberjunction/global`: MemberJunction global utilities  
 - `@memberjunction/core-entities`: MemberJunction entity definitions
 - `@memberjunction/ai`: AI abstractions and interfaces
+- `@memberjunction/templates`: Template engine integration
+- `@memberjunction/templates-base-types`: Template base type definitions
 - `rxjs`: Reactive programming support
+- `dotenv`: Environment variable management
 
 ## Related Packages
 
 - `@memberjunction/ai-prompts`: Advanced prompt management with templates, parallel execution, and stored prompts
+- `@memberjunction/ai-agents`: AI Agent implementations and specialized behaviors
+- `@memberjunction/ai`: Core AI abstractions and interfaces
+- AI Provider Packages:
+  - `@memberjunction/ai-openai`: OpenAI model provider
+  - `@memberjunction/ai-anthropic`: Anthropic (Claude) model provider
+  - `@memberjunction/ai-groq`: Groq model provider
+  - `@memberjunction/ai-mistral`: Mistral AI model provider
+  - `@memberjunction/ai-azure`: Azure AI model provider
+  - `@memberjunction/ai-bedrock`: AWS Bedrock model provider
+  - `@memberjunction/ai-vertex`: Google Vertex AI model provider
+  - `@memberjunction/ai-cerebras`: Cerebras model provider
+  - `@memberjunction/ai-bettybot`: BettyBot model provider
 
 ## Migration Guide
 
@@ -216,6 +346,69 @@ const response = await AIEngine.Instance.SimpleLLMCompletion(
 
 // For complex cases - use @memberjunction/ai-prompts package
 ```
+
+## Build and Development
+
+### Building the Package
+```bash
+# From the package directory
+npm run build
+
+# Watch mode for development
+npm run watch
+```
+
+### Running Tests
+```bash
+npm test
+```
+
+## Configuration
+
+The AI Engine uses environment variables for API keys:
+
+```bash
+# .env file
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+GROQ_API_KEY=your-groq-key
+MISTRAL_API_KEY=your-mistral-key
+# ... other provider API keys
+```
+
+Alternatively, API keys can be passed directly to methods or configured in the MemberJunction metadata system.
+
+## Error Handling
+
+The AI Engine provides comprehensive error handling:
+
+```typescript
+try {
+    const response = await AIEngine.Instance.SimpleLLMCompletion(
+        userPrompt,
+        currentUser,
+        systemPrompt
+    );
+    console.log('Success:', response);
+} catch (error) {
+    if (error.message.includes('AI Metadata not loaded')) {
+        // Metadata needs to be loaded first
+        await AIEngine.Instance.Config(false, currentUser);
+    } else if (error.message.includes('User prompt not provided')) {
+        // Handle missing prompt
+    } else {
+        // Handle other errors
+        console.error('AI Engine Error:', error);
+    }
+}
+```
+
+## Performance Considerations
+
+1. **Metadata Loading**: Call `Config()` once at application startup to load all AI metadata
+2. **Model Selection**: Use `GetHighestPowerModel()` methods to automatically select optimal models
+3. **Parallel Execution**: Use `ParallelLLMCompletions()` for improved reliability and result quality
+4. **Caching**: For advanced caching capabilities, use the @memberjunction/ai-prompts package
 
 ## License
 

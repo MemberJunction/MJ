@@ -14,6 +14,8 @@ A lightweight and flexible Angular tab strip component for MemberJunction applic
 - **Dynamic Content**: Support for dynamically changing tab content
 - **Customizable**: Configure tab appearance and behavior
 - **Lightweight**: Minimal dependencies and overhead
+- **Tab Visibility**: Hide/show tabs dynamically
+- **Fill Container**: Optional width/height fill of parent container
 
 ## Installation
 
@@ -223,13 +225,13 @@ The main component that contains and manages the tabs.
 
 #### Methods
 
-- `SelectTabByName(tabName: string)`: Selects a tab by its name
-- `GetTabByName(tabName: string)`: Gets a tab component by its name
-- `CloseTab(tabIndex: number)`: Closes a tab by its index
-- `scrollLeft()`: Scrolls the tab strip to the left
-- `scrollRight()`: Scrolls the tab strip to the right
-- `scrollIntoView(tabIndex: number)`: Scrolls to make a specific tab visible
-- `RefreshTabs()`: Refreshes the tab strip after dynamic changes
+- `SelectTabByName(tabName: string): MJTabComponent | undefined` - Selects a tab by its name and returns the tab if found
+- `GetTabByName(tabName: string): MJTabComponent | undefined` - Gets a tab component by its name
+- `CloseTab(tabIndex: number): Promise<void>` - Closes a tab by its index (async)
+- `scrollLeft(): void` - Scrolls the tab strip to the left by 150 pixels (note: currently ignores ScrollAmount input)
+- `scrollRight(): void` - Scrolls the tab strip to the right by 150 pixels (note: currently ignores ScrollAmount input)
+- `scrollIntoView(tabIndex: number): void` - Scrolls to make a specific tab visible
+- `RefreshTabs(): void` - Refreshes the tab strip after dynamic changes
 
 #### Properties
 
@@ -251,8 +253,13 @@ Represents a tab header in the tab strip.
 
 #### Methods
 
-- `selectTab()`: Selects this tab
-- `closeTab(event: MouseEvent)`: Closes this tab
+- `selectTab(): void` - Selects this tab
+- `closeTab(event: MouseEvent): void` - Closes this tab
+- `handleContextMenu(event: MouseEvent): void` - Handles context menu events
+
+#### Properties
+
+- `TabStrip`: MJTabStripComponent - Reference to the parent tab strip component
 
 ### MJTabBodyComponent
 
@@ -296,10 +303,104 @@ Event type for context menu events.
 - All properties from TabEvent
 - `mouseEvent`: MouseEvent - The original mouse event
 
+## Advanced Usage
+
+### Tab Visibility Management
+
+You can dynamically hide/show tabs while maintaining their state:
+
+```typescript
+// Hide a tab
+const tab = this.tabStrip.GetTabByName('settings');
+if (tab) {
+  tab.Visible = false; // Tab will be hidden but not removed
+}
+
+// Show it again
+tab.Visible = true;
+```
+
+Note: Hidden tabs cannot be selected. If a selected tab is hidden, the tab strip will automatically select the first visible tab.
+
+### Programmatic Tab Management
+
+```typescript
+@ViewChild('tabStrip') tabStrip!: MJTabStripComponent;
+
+// Select a specific tab
+this.tabStrip.SelectedTabIndex = 2;
+
+// Or by name
+this.tabStrip.SelectTabByName('reports');
+
+// Close a tab programmatically
+await this.tabStrip.CloseTab(1);
+
+// Ensure a tab is visible in the viewport
+this.tabStrip.scrollIntoView(5);
+```
+
+### Error Handling
+
+The component throws errors in these scenarios:
+
+- Attempting to select a non-visible tab
+- Invalid tab index in CloseTab method
+- Selecting a tab by name that doesn't exist (returns undefined)
+
+Always check for tab existence when working with dynamic tabs:
+
+```typescript
+const tab = this.tabStrip.SelectTabByName('dynamicTab');
+if (!tab) {
+  console.error('Tab not found');
+}
+```
+
 ## Styling
 
-The component includes basic CSS that can be customized to match your application's design.
+The component includes basic CSS that can be customized to match your application's design. The tab strip uses Font Awesome icons for the scroll buttons (fa-caret-left and fa-caret-right).
+
+### CSS Classes
+
+- `.tabstrip-container` - Main container element
+- `.tab-header-outer` - Outer container for tab headers
+- `.tab-header-inner` - Inner scrollable container for tabs
+- `.tab-scroll-button` - Base class for scroll buttons
+- `.tab-scroll-button-left` - Left scroll button
+- `.tab-scroll-button-right` - Right scroll button
+- `.tab-bodies` - Container for tab content
 
 ## Dependencies
 
+- `@angular/common`: ^18.0.2
+- `@angular/core`: ^18.0.2
 - `@memberjunction/ng-container-directives`: For container directives
+- `tslib`: ^2.3.0
+
+## Build and Development
+
+This package uses Angular CLI for building:
+
+```bash
+npm run build
+```
+
+The package is configured with:
+- TypeScript compilation via `ngc`
+- No side effects for better tree-shaking
+- Proper peer dependencies for Angular 18.x
+
+## Integration with MemberJunction
+
+This tab strip component is designed to work seamlessly with other MemberJunction packages and follows the same patterns and conventions used throughout the MJ ecosystem. It's particularly useful in:
+
+- MJ Explorer application
+- Dashboard interfaces
+- Multi-view forms
+- Configuration screens
+- Any interface requiring tabbed navigation
+
+## License
+
+ISC

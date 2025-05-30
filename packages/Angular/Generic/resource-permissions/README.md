@@ -9,10 +9,12 @@ A suite of Angular components for managing and displaying permissions for resour
 - **Access Requests**: Allow users to request access to resources they don't have permission for
 - **Multiple Permission Types**: Support for both user and role-based permissions
 - **Configurable Permission Levels**: Customizable permission levels (View, Edit, Owner)
-- **Transaction Support**: Changes are grouped in transactions for data integrity
+- **Transaction Support**: All permission changes are grouped in transactions for data integrity
+- **Batch Operations**: Multiple permission changes can be saved together in a single transaction
 - **Filtering Options**: Filter available resources with custom criteria
 - **Resource Type Support**: Works with all MemberJunction resource types
 - **Responsive Design**: Adapts to different screen sizes and layouts
+- **Error Handling**: Comprehensive error handling with optional user notifications
 
 ## Installation
 
@@ -269,6 +271,15 @@ Component for requesting access to a resource.
 2. **Viewing Available Resources**: Use the AvailableResourcesComponent to display resources a user has access to
 3. **Requesting Access**: Use the RequestResourceAccessComponent to allow users to request access to resources they don't have permission for
 
+### Permission Status
+
+When using the RequestResourceAccessComponent, permissions are created with a status of 'Requested'. This allows resource owners to review and approve/deny access requests. The typical workflow is:
+
+1. User requests access to a resource → Permission created with Status = 'Requested'
+2. Resource owner reviews the request in ResourcePermissionsComponent
+3. Resource owner can approve (change status) or deny (delete) the permission
+4. Once approved, the user gains access to the resource at the specified permission level
+
 ## Resource Types
 
 The resource permissions system works with any resource type defined in MemberJunction, including:
@@ -290,6 +301,74 @@ The components include basic CSS that can be customized to match your applicatio
 - `@memberjunction/global`: For global utilities
 - `@memberjunction/ng-base-types`: For Angular component base classes
 - `@memberjunction/ng-notifications`: For notification services
+- `@memberjunction/ng-container-directives`: For container directive utilities
+- `@memberjunction/ng-generic-dialog`: For dialog components
+- `@memberjunction/ng-compare-records`: For record comparison functionality
 - `@progress/kendo-angular-grid`: For grid components
 - `@progress/kendo-angular-buttons`: For UI buttons
 - `@progress/kendo-angular-dropdowns`: For dropdown selectors
+- `@progress/kendo-angular-dialog`: For dialog windows
+- `@progress/kendo-angular-indicators`: For loading indicators
+- `@progress/kendo-angular-listview`: For list view components
+- `@progress/kendo-angular-layout`: For layout components
+
+## Building
+
+This package is part of the MemberJunction monorepo. To build:
+
+```bash
+# From the package directory
+npm run build
+
+# Or from the monorepo root
+turbo build --filter="@memberjunction/ng-resource-permissions"
+```
+
+## Integration with MemberJunction
+
+This package integrates seamlessly with the MemberJunction ecosystem:
+
+- **ResourcePermissionEngine**: Leverages the core ResourcePermissionEngine for permission logic
+- **Entity Framework**: Uses MemberJunction's entity system for data access
+- **Metadata System**: Utilizes the metadata provider for entity discovery
+- **Transaction Support**: Integrates with MemberJunction's transaction management
+- **Notification System**: Sends notifications when access is requested
+
+## Advanced Usage
+
+### Custom Permission Validation
+
+You can extend the permission validation logic by implementing custom checks in your application before calling the save methods on the components.
+
+### Programmatic Permission Management
+
+```typescript
+import { ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+
+// Get the engine instance
+const engine = ResourcePermissionEngine.Instance;
+await engine.Config();
+
+// Check if a user has access to a resource
+const hasAccess = engine.UserHasPermission(
+  userID,
+  resourceTypeID,
+  resourceRecordID,
+  'View' // minimum permission level
+);
+
+// Get all permissions for a resource
+const permissions = await engine.GetResourcePermissions(
+  resourceTypeID,
+  resourceRecordID
+);
+```
+
+## Version
+
+Current version: 2.43.0
+
+## License
+
+ISC

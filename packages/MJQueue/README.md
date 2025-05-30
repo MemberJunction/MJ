@@ -1,17 +1,17 @@
-# MemberJunction Queue
+# @memberjunction/queue
 
-A library for creating and managing server-side queues in MemberJunction applications. This package provides a framework for task queuing, background processing, and asynchronous job execution.
+A flexible queue management system for MemberJunction applications that enables background task processing, job scheduling, and asynchronous execution with database persistence.
 
 ## Overview
 
-The `@memberjunction/queue` package offers a flexible architecture for implementing persistent queues in MemberJunction applications. It enables:
+The `@memberjunction/queue` package provides a robust framework for implementing persistent queues in MemberJunction applications. It offers:
 
-- Creation of background processing queues
-- Task prioritization and scheduling
-- Persistent storage of queue items in the database
-- Retrying failed tasks with configurable policies
-- Distributed queue processing across multiple server instances
-- Monitoring and management of queue status
+- Database-backed task persistence
+- Automatic queue creation and management
+- Concurrent task processing with configurable limits
+- Heartbeat monitoring for process health
+- Type-safe task definitions
+- Extensible queue implementations
 
 ## Installation
 
@@ -21,234 +21,316 @@ npm install @memberjunction/queue
 
 ## Dependencies
 
-This package relies on the following MemberJunction packages:
-- `@memberjunction/core` - Core functionality
-- `@memberjunction/global` - Global utilities
-- `@memberjunction/core-entities` - Entity definitions
+This package requires the following MemberJunction packages:
+
+- `@memberjunction/core` - Core functionality and entity management
+- `@memberjunction/global` - Global utilities and class registration
+- `@memberjunction/core-entities` - Entity type definitions
 - `@memberjunction/ai` - AI functionality (for AI-related queues)
 - `@memberjunction/aiengine` - AI Engine integration
 
-## Key Components
+Additional dependencies:
+- `uuid` - For generating unique identifiers
 
-### QueueBase
-
-The `QueueBase` class is the foundation for all queue implementations, providing:
-
-- Queue item registration and tracking
-- Processing lifecycle management
-- Error handling and retry logic
-- Status reporting and logging
-
-### QueueManager
-
-The `QueueManager` class manages multiple queues in an application:
-
-- Registers and initializes queues
-- Schedules queue processing
-- Provides centralized queue access
-- Supports prioritization across queues
+## Core Components
 
 ### TaskBase
 
-The `TaskBase` class is the parent class for all queue tasks, with:
-
-- Task metadata and parameters
-- Execution status tracking
-- Retry information
-- Result storage
-
-### Specialized Queue Implementations
-
-- `AIModelInferenceQueue`: Manages AI model inference requests
-- `EntityProcessingQueue`: Processes entity-related tasks
-- `NotificationQueue`: Handles notification delivery
-- `GenericQueue`: Multi-purpose queue for general tasks
-
-## Usage
-
-### Basic Queue Usage
+The `TaskBase` class represents an individual task in a queue:
 
 ```typescript
-import { 
-  QueueManager, 
-  QueueBase, 
-  TaskBase, 
-  TaskStatus 
-} from '@memberjunction/queue';
-
-// Initialize the queue manager (typically done at application startup)
-const queueManager = QueueManager.getInstance();
-
-// Define a simple task
-class EmailTask extends TaskBase {
-  recipient: string;
-  subject: string;
-  body: string;
-
-  constructor(recipient: string, subject: string, body: string) {
-    super();
-    this.recipient = recipient;
-    this.subject = subject;
-    this.body = body;
-  }
+export class TaskBase {
+  constructor(
+    taskRecord: QueueTaskEntity,
+    data: any,
+    options: TaskOptions
+  )
+  
+  // Properties
+  ID: string              // Unique task identifier
+  Status: TaskStatus      // Current task status
+  Data: any              // Task payload data
+  Options: TaskOptions   // Task configuration
+  TaskRecord: QueueTaskEntity // Database entity
 }
+```
 
-// Implement a custom queue
-class EmailQueue extends QueueBase {
-  constructor() {
-    super('EmailQueue', 'Handles email sending tasks');
-  }
+### TaskStatus
 
-  // Implement the processing logic
-  protected async processTask(task: EmailTask): Promise<boolean> {
+Available task statuses:
+
+```typescript
+export const TaskStatus = {
+  Pending: 'Pending',
+  InProgress: 'InProgress',
+  Complete: 'Complete',
+  Failed: 'Failed',
+  Cancelled: 'Cancelled',
+} as const;
+```
+
+### QueueBase
+
+The abstract `QueueBase` class serves as the foundation for all queue implementations:
+
+```typescript
+export abstract class QueueBase {
+  constructor(
+    QueueRecord: QueueEntity,
+    QueueTypeID: string,
+    ContextUser: UserInfo
+  )
+  
+  // Public methods
+  AddTask(task: TaskBase): boolean
+  FindTask(ID: string): TaskBase
+  
+  // Protected abstract method to implement
+  protected abstract ProcessTask(
+    task: TaskBase, 
+    contextUser: UserInfo
+  ): Promise<TaskResult>
+}
+```
+
+### QueueManager
+
+The `QueueManager` is a singleton that manages all active queues:
+
+```typescript
+export class QueueManager {
+  // Singleton access
+  static get Instance(): QueueManager
+  
+  // Static methods
+  static async Config(contextUser: UserInfo): Promise<void>
+  static async AddTask(
+    QueueType: string,
+    data: any,
+    options: any,
+    contextUser: UserInfo
+  ): Promise<TaskBase | undefined>
+  
+  // Instance methods
+  async AddTask(
+    QueueTypeID: string,
+    data: any,
+    options: any,
+    contextUser: UserInfo
+  ): Promise<TaskBase | undefined>
+}
+```
+
+### TaskResult
+
+Structure returned by task processing:
+
+```typescript
+export class TaskResult {
+  success: boolean      // Whether task completed successfully
+  userMessage: string   // User-friendly message
+  output: any          // Task output data
+  exception: any       // Exception details if failed
+}
+```
+
+## Usage Examples
+
+### Basic Queue Implementation
+
+Create a custom queue by extending `QueueBase`:
+
+```typescript
+import { QueueBase, TaskBase, TaskResult } from '@memberjunction/queue';
+import { RegisterClass } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
+
+// Register your queue with a specific queue type name
+@RegisterClass(QueueBase, 'Email Notification')
+export class EmailNotificationQueue extends QueueBase {
+  protected async ProcessTask(
+    task: TaskBase, 
+    contextUser: UserInfo
+  ): Promise<TaskResult> {
     try {
-      // Actual implementation would use an email service
-      console.log(`Sending email to ${task.recipient}`);
-      console.log(`Subject: ${task.subject}`);
-      console.log(`Body: ${task.body}`);
+      // Extract task data
+      const { recipient, subject, body } = task.Data;
       
-      // Return true if processing succeeded
-      return true;
+      // Implement your email sending logic here
+      console.log(`Sending email to ${recipient}`);
+      console.log(`Subject: ${subject}`);
+      
+      // Simulate email sending
+      await this.sendEmail(recipient, subject, body);
+      
+      // Return success result
+      return {
+        success: true,
+        userMessage: 'Email sent successfully',
+        output: { sentAt: new Date() },
+        exception: null
+      };
     } catch (error) {
-      console.error('Error sending email:', error);
-      return false;
+      // Return failure result
+      return {
+        success: false,
+        userMessage: `Failed to send email: ${error.message}`,
+        output: null,
+        exception: error
+      };
     }
   }
+  
+  private async sendEmail(to: string, subject: string, body: string) {
+    // Your email service integration here
+  }
 }
+```
 
-// Register the queue
-queueManager.registerQueue(new EmailQueue());
+### Adding Tasks to Queue
 
-// Start queue processing
-queueManager.startProcessing();
+```typescript
+import { QueueManager } from '@memberjunction/queue';
+import { UserInfo } from '@memberjunction/core';
 
-// Add a task to the queue
-async function sendEmailLater(recipient: string, subject: string, body: string) {
-  const task = new EmailTask(recipient, subject, body);
-  await queueManager.getQueue('EmailQueue').addTask(task);
-}
+// Initialize queue manager (typically done once at app startup)
+await QueueManager.Config(contextUser);
 
-// Usage
-sendEmailLater(
-  'user@example.com',
-  'Welcome to MemberJunction',
-  'Thank you for registering with MemberJunction!'
+// Add a task using queue type name
+const task = await QueueManager.AddTask(
+  'Email Notification',  // Queue type name
+  {                     // Task data
+    recipient: 'user@example.com',
+    subject: 'Welcome to MemberJunction',
+    body: 'Thank you for joining!'
+  },
+  {                     // Task options
+    priority: 1
+  },
+  contextUser
 );
-```
 
-### Creating a Custom Queue Implementation
-
-```typescript
-import { QueueBase, TaskBase, LoggingLevel } from '@memberjunction/queue';
-import { BaseEntity } from '@memberjunction/core';
-
-// Define a custom task type
-class DataSyncTask extends TaskBase {
-  entityName: string;
-  recordId: number;
-  sourceSystem: string;
-  
-  constructor(entityName: string, recordId: number, sourceSystem: string) {
-    super();
-    this.entityName = entityName;
-    this.recordId = recordId;
-    this.sourceSystem = sourceSystem;
-    
-    // Set task options
-    this.maxRetries = 3; // Allow 3 retries
-    this.priority = 2;   // Higher priority (lower number = higher priority)
-  }
-}
-
-// Implement the queue
-class DataSynchronizationQueue extends QueueBase {
-  constructor() {
-    super('DataSyncQueue', 'Synchronizes data with external systems');
-    
-    // Configure queue settings
-    this.maxConcurrentTasks = 5;
-    this.processingInterval = 60000; // Process every minute
-    this.loggingLevel = LoggingLevel.Detailed;
-  }
-  
-  protected async processTask(task: DataSyncTask): Promise<boolean> {
-    // Validate task
-    if (!task.entityName || !task.recordId || !task.sourceSystem) {
-      this.logError(`Invalid task parameters: ${JSON.stringify(task)}`);
-      return false;
-    }
-    
-    try {
-      // Get entity metadata and create instance
-      const md = BaseEntity.getEntityMetadata(task.entityName);
-      const entity = BaseEntity.createByEntityName(task.entityName);
-      
-      // Load the entity
-      const loaded = await entity.load(task.recordId);
-      if (!loaded) {
-        this.logWarning(`Entity ${task.entityName} with ID ${task.recordId} not found`);
-        return false;
-      }
-      
-      // Perform synchronization (implementation details)
-      this.logInfo(`Synchronizing ${task.entityName} #${task.recordId} with ${task.sourceSystem}`);
-      
-      // In a real implementation, you would call external APIs here
-      
-      // Update entity with synchronized data
-      await entity.save();
-      
-      return true;
-    } catch (error) {
-      this.logError(`Error synchronizing data: ${error}`);
-      
-      // If this is a retriable error, return false to trigger retry
-      return false;
-    }
-  }
+if (task) {
+  console.log(`Task created with ID: ${task.ID}`);
 }
 ```
 
-### Queue Manager Configuration
+### AI Action Queue Example
+
+The package includes built-in queues for AI operations:
 
 ```typescript
-import { QueueManager, LoggingLevel } from '@memberjunction/queue';
+import { AIActionQueue, EntityAIActionQueue } from '@memberjunction/queue';
 
-// Get the singleton instance
-const queueManager = QueueManager.getInstance();
+// These queues are automatically registered and available for use
+// Add an AI action task
+const aiTask = await QueueManager.AddTask(
+  'AI Action',
+  {
+    actionName: 'GenerateText',
+    prompt: 'Write a product description',
+    parameters: { maxTokens: 100 }
+  },
+  {},
+  contextUser
+);
 
-// Configure queue manager
-queueManager.configure({
-  globalMaxConcurrentTasks: 20,
-  defaultLoggingLevel: LoggingLevel.Normal,
-  defaultProcessingInterval: 30000,
-  databaseCleanupInterval: 86400000, // Clean up completed tasks daily
-});
-
-// Register multiple queues
-queueManager.registerQueue(new EmailQueue());
-queueManager.registerQueue(new DataSynchronizationQueue());
-queueManager.registerQueue(new NotificationQueue());
-
-// Start processing on all queues
-queueManager.startProcessing();
-
-// Or start selectively
-queueManager.startProcessing(['EmailQueue', 'NotificationQueue']);
-
-// Stop processing when needed
-queueManager.stopProcessing();
+// Add an entity-specific AI action
+const entityAITask = await QueueManager.AddTask(
+  'Entity AI Action',
+  {
+    entityName: 'Products',
+    entityID: 123,
+    actionName: 'GenerateDescription'
+  },
+  {},
+  contextUser
+);
 ```
 
 ## Database Schema
 
-This package relies on database tables to store queue and task information. The required tables are:
+The queue system requires the following database tables:
 
-- `__mj.Queue` - Stores queue definitions
-- `__mj.QueueTask` - Stores individual tasks
-- `__mj.QueueTaskExecution` - Tracks task execution history
+### Queue Types Table (`__mj.QueueType`)
+Stores definitions of different queue types (e.g., "Email Notification", "AI Action")
 
-These tables should be automatically created during MemberJunction schema installation.
+### Queues Table (`__mj.Queue`)
+Tracks active queue instances with process information:
+- Queue type reference
+- Process details (PID, platform, hostname)
+- Heartbeat timestamp
+- Network information
+
+### Queue Tasks Table (`__mj.QueueTask`)
+Stores individual tasks:
+- Queue reference
+- Task status
+- Task data (JSON)
+- Task options (JSON)
+- Output and error information
+
+## Process Management
+
+The QueueManager automatically captures process information for monitoring:
+- Process ID (PID)
+- Platform and version
+- Working directory
+- Network interfaces
+- Operating system details
+- User information
+- Heartbeat timestamps
+
+This information helps track queue health and enables failover scenarios.
+
+## Configuration
+
+Queue behavior can be configured through the implementation:
+
+```typescript
+export class CustomQueue extends QueueBase {
+  private _maxTasks = 5;        // Maximum concurrent tasks
+  private _checkInterval = 500;  // Check interval in milliseconds
+  
+  // Override these values in your constructor
+  constructor(QueueRecord: QueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
+    super(QueueRecord, QueueTypeID, ContextUser);
+    // Customize queue behavior
+    this._maxTasks = 10;
+    this._checkInterval = 1000;
+  }
+}
+```
+
+## Best Practices
+
+1. **Task Data Structure**: Keep task data serializable as JSON
+2. **Error Handling**: Always return proper TaskResult with error details
+3. **Queue Registration**: Use `@RegisterClass` decorator for automatic registration
+4. **Idempotency**: Design tasks to be safely retryable
+5. **Resource Cleanup**: Clean up resources in finally blocks
+6. **Monitoring**: Check heartbeat timestamps for queue health
+
+## Integration with MemberJunction
+
+The queue system integrates seamlessly with:
+- **Entity System**: Use entities for task data and processing
+- **User Context**: All operations respect user permissions
+- **Global Registry**: Automatic queue discovery via class registration
+- **AI Engine**: Built-in support for AI task processing
+
+## Build & Development
+
+```bash
+# Build the package
+npm run build
+
+# Development mode with auto-reload
+npm run start
+
+# TypeScript compilation only
+npm run build
+```
 
 ## License
 

@@ -1,10 +1,10 @@
 # MemberJunction Documentation Utilities
 
-A TypeScript library for dynamically retrieving, parsing, and caching MemberJunction documentation to support AI models and other documentation-driven features.
+A TypeScript library for dynamically retrieving, parsing, and caching MemberJunction library documentation from the official documentation website to support AI models and other documentation-driven features.
 
 ## Overview
 
-The `@memberjunction/doc-utils` package provides functionality for accessing the official MemberJunction documentation. It can fetch documentation from the MemberJunction object model documentation site, parse the HTML content, and cache elements in memory for improved performance. This library is particularly useful when integrating with AI models that need context about the MemberJunction system.
+The `@memberjunction/doc-utils` package provides functionality for accessing the official MemberJunction documentation. It fetches documentation from the MemberJunction documentation site (https://memberjunction.github.io/MJ/), parses the HTML content, and caches library documentation in memory for improved performance. This library is particularly useful when integrating with AI models that need context about the MemberJunction system's libraries and their components.
 
 ## Installation
 
@@ -15,9 +15,9 @@ npm install @memberjunction/doc-utils
 ## Dependencies
 
 This package depends on the following MemberJunction packages:
-- `@memberjunction/core`
-- `@memberjunction/core-entities`
-- `@memberjunction/global`
+- `@memberjunction/core` - Core functionality and base classes
+- `@memberjunction/core-entities` - Entity definitions
+- `@memberjunction/global` - Global utilities and decorators
 
 External dependencies:
 - `jsdom` - For HTML parsing
@@ -25,11 +25,12 @@ External dependencies:
 
 ## Main Features
 
-- **Documentation Retrieval**: Dynamically fetch documentation from the MemberJunction documentation site
-- **HTML Parsing**: Extract relevant content from HTML documentation pages
-- **Caching Mechanism**: Improve performance by caching documentation content in memory
-- **Extended Entity Classes**: Access documentation for entities and their properties
+- **Library Documentation Retrieval**: Dynamically fetch documentation for MemberJunction libraries and their items
+- **HTML Content Parsing**: Extract relevant content from HTML documentation pages
+- **Automatic URL Generation**: Constructs documentation URLs based on library and item metadata
+- **Extended Entity Classes**: Provides extended functionality for Library and Library Item entities
 - **Singleton Pattern**: Easy access to documentation functionality throughout your application
+- **Type-aware URL Routing**: Automatically routes to correct documentation sections based on item type (Class, Interface, Function, etc.)
 
 ## Usage
 
@@ -37,100 +38,152 @@ External dependencies:
 
 ```typescript
 import { DocumentationEngine } from '@memberjunction/doc-utils';
+import { UserInfo } from '@memberjunction/core';
 
 // Get the singleton instance
-const docEngine = DocumentationEngine.getInstance();
+const docEngine = DocumentationEngine.Instance;
 
-// Get documentation for a specific entity
-const entityDoc = await docEngine.getEntityDocumentation('User');
-console.log(entityDoc.description);
+// Configure the engine (required before using)
+const user = new UserInfo(); // Or get from your authentication context
+await docEngine.Config(false, user);
 
-// Get documentation for a specific entity field
-const fieldDoc = await docEngine.getEntityFieldDocumentation('User', 'Email');
-console.log(fieldDoc.description);
+// Access libraries and their documentation
+const libraries = docEngine.Libraries;
+console.log(`Found ${libraries.length} libraries`);
+
+// Access specific library items
+const coreLibrary = libraries.find(lib => lib.Name === '@memberjunction/core');
+if (coreLibrary) {
+    console.log(`Library: ${coreLibrary.Name}`);
+    console.log(`Items: ${coreLibrary.Items.length}`);
+    
+    // Access documentation for specific items
+    coreLibrary.Items.forEach(item => {
+        console.log(`${item.Type}: ${item.Name}`);
+        console.log(`URL: ${item.URL}`);
+        console.log(`Content Preview: ${item.HTMLContent.substring(0, 200)}...`);
+    });
+}
 ```
 
-### Working with Entity Documentation
+### Working with Library Items
 
 ```typescript
 import { DocumentationEngine } from '@memberjunction/doc-utils';
 
-async function displayEntityInfo(entityName: string) {
-  const docEngine = DocumentationEngine.getInstance();
-  const entityDoc = await docEngine.getEntityDocumentation(entityName);
-  
-  console.log(`Entity: ${entityName}`);
-  console.log(`Description: ${entityDoc.description}`);
-  console.log(`Base Table: ${entityDoc.baseTable}`);
-  console.log(`Schema: ${entityDoc.schemaName}`);
-  
-  // Get all fields for the entity
-  const fields = await docEngine.getEntityFieldsDocumentation(entityName);
-  
-  console.log('Fields:');
-  fields.forEach(field => {
-    console.log(`- ${field.name}: ${field.description}`);
-  });
+async function displayLibraryItemInfo(libraryName: string, itemName: string) {
+    const docEngine = DocumentationEngine.Instance;
+    await docEngine.Config();
+    
+    // Find all library items
+    const libraryItems = docEngine.LibraryItems;
+    
+    // Find specific item
+    const item = libraryItems.find(i => 
+        i.Library === libraryName && i.Name === itemName
+    );
+    
+    if (item) {
+        console.log(`Item: ${item.Name}`);
+        console.log(`Type: ${item.Type}`);
+        console.log(`Library: ${item.Library}`);
+        console.log(`Documentation URL: ${item.URL}`);
+        console.log(`HTML Content Available: ${item.HTMLContent ? 'Yes' : 'No'}`);
+    }
 }
 
 // Example usage
-displayEntityInfo('User');
+await displayLibraryItemInfo('@memberjunction/core', 'BaseEntity');
 ```
 
-### Customizing Caching Behavior
+### Force Refresh Documentation
 
 ```typescript
 import { DocumentationEngine } from '@memberjunction/doc-utils';
 
-// Configure the documentation engine with custom settings
-DocumentationEngine.configure({
-  cacheTimeoutMinutes: 60, // Cache documentation for 1 hour
-  baseDocumentationUrl: 'https://custom-docs.memberjunction.com'
-});
-
-// Get the configured instance
-const docEngine = DocumentationEngine.getInstance();
+// Force refresh to reload documentation from the database and website
+const docEngine = DocumentationEngine.Instance;
+await docEngine.Config(true); // true forces a refresh
 ```
 
 ## API Reference
 
 ### DocumentationEngine
 
-The main class that provides access to documentation functionality.
+The main class that provides access to documentation functionality. Extends `BaseEngine` from `@memberjunction/core`.
+
+#### Properties
+
+- `Instance` (static): Returns the singleton instance of DocumentationEngine
+- `Libraries`: Array of `LibraryEntityExtended` objects containing all loaded libraries
+- `LibraryItems`: Array of `LibraryItemEntityExtended` objects containing all library items
 
 #### Methods
 
-- `getInstance()`: Returns the singleton instance of DocumentationEngine
-- `configure(options)`: Configure the documentation engine with custom settings
-- `getEntityDocumentation(entityName: string)`: Get documentation for a specific entity
-- `getEntityFieldDocumentation(entityName: string, fieldName: string)`: Get documentation for a specific entity field
-- `getEntityFieldsDocumentation(entityName: string)`: Get documentation for all fields of an entity
-- `clearCache()`: Clear the documentation cache
+- `Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void>`
+  - Configures the documentation engine and loads metadata
+  - Parameters:
+    - `forceRefresh`: If true, forces reload of metadata from database
+    - `contextUser`: User context for server-side execution
+    - `provider`: Optional metadata provider
 
-### EntityDocumentation
+### LibraryEntityExtended
 
-Class representing documentation for an entity.
-
-#### Properties
-
-- `name`: The name of the entity
-- `description`: The description of the entity
-- `baseTable`: The base table name in the database
-- `schemaName`: The database schema name
-- `fields`: Array of field documentation objects
-
-### EntityFieldDocumentation
-
-Class representing documentation for an entity field.
+Extended entity class for libraries with documentation capabilities.
 
 #### Properties
 
-- `name`: The name of the field
-- `description`: The description of the field
-- `dataType`: The data type of the field
-- `length`: The length of the field (for string types)
-- `isPrimaryKey`: Whether the field is a primary key
-- `isNullable`: Whether the field can be null
+- All properties from `LibraryEntity`
+- `Items`: Array of `LibraryItemEntityExtended` objects belonging to this library
+
+### LibraryItemEntityExtended
+
+Extended entity class for library items with documentation capabilities.
+
+#### Properties
+
+- All properties from `LibraryItemEntity`
+- `URL`: The generated documentation URL for this item
+- `HTMLContent`: The parsed HTML content from the documentation
+- `TypeURLSegment`: Returns the URL segment based on item type (classes, interfaces, functions, etc.)
+
+#### Supported Item Types
+
+- Class → `/classes/`
+- Interface → `/interfaces/`
+- Function → `/functions/`
+- Module → `/modules/`
+- Type → `/types/`
+- Variable → `/variables/`
+
+## Integration with MemberJunction
+
+This package integrates seamlessly with the MemberJunction ecosystem:
+
+1. **Entity System**: Uses MemberJunction's entity system for Library and Library Items metadata
+2. **Base Engine Pattern**: Extends BaseEngine for consistent configuration and loading patterns
+3. **Global Registration**: Uses `@RegisterClass` decorator for proper entity registration
+4. **User Context**: Supports MemberJunction's user context for server-side execution
+
+## Build and Development
+
+```bash
+# Build the package
+npm run build
+
+# Run in development mode with hot reload
+npm start
+
+# Run tests (when implemented)
+npm test
+```
+
+## Notes
+
+- The documentation engine fetches content from https://memberjunction.github.io/MJ/
+- Documentation is cached in memory after initial load for performance
+- The engine automatically constructs URLs based on library names and item types
+- Library names with special characters (@, ., /, \) are sanitized for URL compatibility
 
 ## License
 

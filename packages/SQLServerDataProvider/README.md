@@ -17,6 +17,10 @@ The `@memberjunction/sqlserver-dataprovider` package implements MemberJunction's
 - **Entity Relationships**: Handle complex entity relationships automatically
 - **User/Role Management**: Integrated with MemberJunction's security model
 - **Type-Safe Operations**: Fully TypeScript compatible
+- **AI Integration**: Support for AI-powered features through entity actions
+- **Duplicate Detection**: Built-in support for duplicate record detection
+- **Audit Logging**: Comprehensive audit trail capabilities
+- **Row-Level Security**: Enforce data access controls at the database level
 
 ## Installation
 
@@ -30,8 +34,13 @@ This package relies on the following key dependencies:
 - `@memberjunction/core`: Core MemberJunction functionality
 - `@memberjunction/core-entities`: Entity definitions
 - `@memberjunction/global`: Shared utilities and constants
-- `mssql`: SQL Server client for Node.js
-- `typeorm`: ORM for database operations
+- `@memberjunction/actions`: Action execution framework
+- `@memberjunction/ai`: AI integration capabilities
+- `@memberjunction/ai-vector-dupe`: Duplicate detection using AI vectors
+- `@memberjunction/aiengine`: AI engine integration
+- `@memberjunction/queue`: Queue management for async operations
+- `mssql`: SQL Server client for Node.js (v11+)
+- `typeorm`: ORM for database operations (v0.3+)
 
 ## Usage
 
@@ -74,44 +83,50 @@ await dataProvider.initialize();
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { EntityInfo } from '@memberjunction/core';
+import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
+import { UserEntity } from '@memberjunction/core-entities';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
 await dataProvider.initialize();
 
-// Load an entity
-const userResult = await dataProvider.loadEntity('User', 1);
-if (userResult.success) {
-  const user = userResult.entity;
+// Get entity metadata
+const md = new Metadata();
+const userEntity = md.EntityByName('User');
+
+// Load an entity by ID
+const userKey = new CompositeKey([{ FieldName: 'ID', Value: 1 }]);
+const userResult = await dataProvider.Get(userEntity, userKey);
+
+if (userResult.Success) {
+  const user = userResult.Entity;
   console.log(`Loaded user: ${user.FirstName} ${user.LastName}`);
   
   // Update the entity
   user.Email = 'new.email@example.com';
-  const saveResult = await dataProvider.saveEntity('User', user);
+  const saveResult = await dataProvider.Save(user, contextUser);
   
-  if (saveResult.success) {
-    console.log(`User updated successfully, ID: ${saveResult.entity.ID}`);
+  if (saveResult.Success) {
+    console.log(`User updated successfully, ID: ${saveResult.Entity.ID}`);
   }
 }
 
 // Create a new entity
-const newUser = {
-  ID: 0, // 0 indicates a new entity
-  FirstName: 'John',
-  LastName: 'Doe',
-  Email: 'john.doe@example.com',
-  // other required fields...
-};
+const newUserEntity = await md.GetEntityObject<UserEntity>('User');
+newUserEntity.FirstName = 'John';
+newUserEntity.LastName = 'Doe';
+newUserEntity.Email = 'john.doe@example.com';
+// set other required fields...
 
-const createResult = await dataProvider.saveEntity('User', newUser);
-if (createResult.success) {
-  console.log(`New user created with ID: ${createResult.entity.ID}`);
+const createResult = await dataProvider.Save(newUserEntity, contextUser);
+if (createResult.Success) {
+  console.log(`New user created with ID: ${createResult.Entity.ID}`);
 }
 
 // Delete an entity
-const deleteResult = await dataProvider.deleteEntity('User', 5);
-if (deleteResult.success) {
+const deleteKey = new CompositeKey([{ FieldName: 'ID', Value: 5 }]);
+const deleteResult = await dataProvider.Delete(userEntity, deleteKey, contextUser);
+if (deleteResult.Success) {
   console.log('User deleted successfully');
 }
 ```
@@ -120,54 +135,59 @@ if (deleteResult.success) {
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { TransactionGroupBase } from '@memberjunction/core';
+import { SQLServerTransactionGroup } from '@memberjunction/sqlserver-dataprovider';
+import { Metadata } from '@memberjunction/core';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
 await dataProvider.initialize();
 
 // Create a transaction group
-class OrderTransactionGroup extends TransactionGroupBase {
-  constructor() {
-    super('CreateOrderWithItems');
-  }
-}
+const transaction = new SQLServerTransactionGroup('CreateOrderWithItems');
 
-const transaction = new OrderTransactionGroup();
+// Get entity objects
+const md = new Metadata();
+const orderEntity = await md.GetEntityObject('Order');
+const orderItemEntity1 = await md.GetEntityObject('Order Item');
+const orderItemEntity2 = await md.GetEntityObject('Order Item');
 
-// Add multiple entities to the transaction
-transaction.addEntity('Order', {
-  ID: 0,
-  CustomerID: 123,
-  OrderDate: new Date(),
-  Status: 'New'
-});
+// Set up the order
+orderEntity.CustomerID = 123;
+orderEntity.OrderDate = new Date();
+orderEntity.Status = 'New';
 
-// Reference previous entities in the same transaction
-transaction.addEntity('OrderItem', {
-  ID: 0,
-  OrderID: '@Order.1', // Reference to the first Order in this transaction
-  ProductID: 456,
-  Quantity: 2,
-  Price: 29.99
-});
+// Add to transaction - this will get ID after save
+await transaction.AddTransaction(orderEntity);
 
-transaction.addEntity('OrderItem', {
-  ID: 0,
-  OrderID: '@Order.1',
-  ProductID: 789,
-  Quantity: 1,
-  Price: 49.99
-});
+// Set up order items with references to the order
+orderItemEntity1.OrderID = '@Order.1'; // Reference to the first Order in this transaction
+orderItemEntity1.ProductID = 456;
+orderItemEntity1.Quantity = 2;
+orderItemEntity1.Price = 29.99;
+
+orderItemEntity2.OrderID = '@Order.1'; // Same order reference
+orderItemEntity2.ProductID = 789;
+orderItemEntity2.Quantity = 1;
+orderItemEntity2.Price = 49.99;
+
+// Add items to transaction
+await transaction.AddTransaction(orderItemEntity1);
+await transaction.AddTransaction(orderItemEntity2);
 
 // Execute the transaction group
-const result = await dataProvider.executeTransactionGroup(transaction);
+const results = await transaction.Submit();
 
-if (result.success) {
+// Check results
+const success = results.every(r => r.Success);
+if (success) {
   console.log('Transaction completed successfully');
-  console.log('Order ID:', result.results.find(r => r.entityName === 'Order')?.entity.ID);
+  const orderResult = results.find(r => r.Entity.EntityInfo.Name === 'Order');
+  console.log('Order ID:', orderResult?.Entity.ID);
 } else {
-  console.error('Transaction failed:', result.error);
+  console.error('Transaction failed');
+  results.filter(r => !r.Success).forEach(r => {
+    console.error(`Failed: ${r.Entity.EntityInfo.Name}`, r.Message);
+  });
 }
 ```
 
@@ -175,14 +195,14 @@ if (result.success) {
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { RunViewOptions } from '@memberjunction/core';
+import { RunViewParams, RunReportParams } from '@memberjunction/core';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
 await dataProvider.initialize();
 
 // Run a view with filtering and pagination
-const viewOptions: RunViewOptions = {
+const viewOptions: RunViewParams = {
   EntityName: 'vwActiveUsers',
   ExtraFilter: "Role = 'Administrator'",
   OrderBy: 'LastName, FirstName',
@@ -190,7 +210,7 @@ const viewOptions: RunViewOptions = {
   PageNumber: 1
 };
 
-const viewResult = await dataProvider.runView(viewOptions);
+const viewResult = await dataProvider.RunView(viewOptions);
 
 if (viewResult.success) {
   console.log(`Found ${viewResult.Results.length} users`);
@@ -202,14 +222,17 @@ if (viewResult.success) {
 }
 
 // Run a report
-const reportResult = await dataProvider.runReport('SalesReport', {
-  StartDate: '2023-01-01',
-  EndDate: '2023-12-31',
-  Format: 'JSON'
-});
+const reportParams: RunReportParams = {
+  ReportID: 'report-id-here',
+  // Other parameters as needed
+};
 
-if (reportResult.success) {
-  console.log('Report data:', reportResult.results);
+const reportResult = await dataProvider.RunReport(reportParams);
+
+if (reportResult.Success) {
+  console.log('Report data:', reportResult.Results);
+  console.log('Row count:', reportResult.RowCount);
+  console.log('Execution time:', reportResult.ExecutionTime, 'ms');
 }
 ```
 
@@ -217,13 +240,14 @@ if (reportResult.success) {
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { RunQueryParams } from '@memberjunction/core';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
 await dataProvider.initialize();
 
-// Execute a parameterized query
-const queryResult = await dataProvider.executeQuery(
+// Execute raw SQL with parameters
+const sqlResult = await dataProvider.ExecuteSQL(
   'SELECT * FROM Users WHERE Department = @dept AND HireDate > @date',
   {
     dept: 'Engineering',
@@ -231,23 +255,33 @@ const queryResult = await dataProvider.executeQuery(
   }
 );
 
-if (queryResult.success) {
-  console.log(`Query returned ${queryResult.results.length} rows`);
-  queryResult.results.forEach(row => {
-    console.log(row);
-  });
-}
+console.log(`Query returned ${sqlResult.length} rows`);
+sqlResult.forEach(row => {
+  console.log(row);
+});
 
 // Execute a stored procedure
-const spResult = await dataProvider.executeQuery(
+const spResult = await dataProvider.ExecuteSQL(
   'EXEC sp_GetUserPermissions @UserID',
   {
     UserID: 123
   }
 );
 
-if (spResult.success) {
-  console.log('User permissions:', spResult.results);
+console.log('User permissions:', spResult);
+
+// Using RunQuery for pre-defined queries
+const queryParams: RunQueryParams = {
+  QueryID: 'query-id-here', // or use QueryName
+  // CategoryID: 'optional-category-id',
+  // CategoryName: 'optional-category-name'
+};
+
+const queryResult = await dataProvider.RunQuery(queryParams);
+
+if (queryResult.Success) {
+  console.log('Query results:', queryResult.Results);
+  console.log('Execution time:', queryResult.ExecutionTime, 'ms');
 }
 ```
 
@@ -301,20 +335,168 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 class CustomSQLProvider extends SQLServerDataProvider {
   // Override to add custom logging or modifications
-  async executeQuery(sql: string, params?: any): Promise<any> {
+  async ExecuteSQL(sql: string, params?: any, maxRows?: number): Promise<any> {
     console.log(`Executing SQL: ${sql}`);
     console.log('Parameters:', params);
     
     // Add timing
     const startTime = Date.now();
-    const result = await super.executeQuery(sql, params);
+    const result = await super.ExecuteSQL(sql, params, maxRows);
     const duration = Date.now() - startTime;
     
     console.log(`Query executed in ${duration}ms`);
+    console.log(`Rows returned: ${result?.length || 0}`);
     
     return result;
   }
+  
+  // Custom error handling
+  protected async HandleExecuteSQLError(error: any, sql: string): Promise<void> {
+    console.error('SQL Error:', error);
+    console.error('Failed SQL:', sql);
+    // Add custom error handling logic here
+    await super.HandleExecuteSQLError(error, sql);
+  }
 }
+```
+
+### Error Handling
+
+The SQL Server Data Provider includes comprehensive error handling:
+
+```typescript
+try {
+  const result = await dataProvider.Save(entity, user);
+  if (!result.Success) {
+    console.error('Save failed:', result.ErrorMessage);
+    // Handle validation or business logic errors
+  }
+} catch (error) {
+  console.error('Unexpected error:', error);
+  // Handle system-level errors
+}
+```
+
+## Build & Development
+
+### Building the Package
+
+```bash
+# From the package directory
+npm run build
+
+# Or from the repository root
+turbo build --filter="@memberjunction/sqlserver-dataprovider"
+```
+
+### Development Scripts
+
+- `npm run build` - Compile TypeScript to JavaScript
+- `npm run start` - Run the package with ts-node-dev for development
+
+### TypeScript Configuration
+
+This package is configured with TypeScript strict mode enabled. The compiled output is placed in the `dist/` directory with declaration files for type support.
+
+## API Reference
+
+### SQLServerDataProvider
+
+The main class that implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces.
+
+#### Key Methods
+
+- `Config(configData: SQLServerProviderConfigData): Promise<boolean>` - Configure the provider with connection details
+- `Get(entity: EntityInfo, CompositeKey: CompositeKey, user?: UserInfo): Promise<BaseEntityResult>` - Load an entity by primary key
+- `Save(entity: BaseEntity, user: UserInfo, options?: EntitySaveOptions): Promise<BaseEntityResult>` - Save (create/update) an entity
+- `Delete(entity: EntityInfo, CompositeKey: CompositeKey, user?: UserInfo, options?: EntityDeleteOptions): Promise<BaseEntityResult>` - Delete an entity
+- `RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult>` - Execute a database view
+- `RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult>` - Execute a report
+- `RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>` - Execute a query
+- `ExecuteSQL(sql: string, params?: any, maxRows?: number): Promise<any[]>` - Execute raw SQL
+
+### SQLServerProviderConfigData
+
+Configuration class for the SQL Server provider.
+
+#### Properties
+
+- `DataSource: DataSource` - TypeORM DataSource instance
+- `CurrentUserEmail: string` - Email of the current user
+- `CheckRefreshIntervalSeconds: number` - Interval for checking metadata refresh (0 to disable)
+- `MJCoreSchemaName: string` - Schema name for MJ core tables (default: '__mj')
+- `IncludeSchemas?: string[]` - List of schemas to include
+- `ExcludeSchemas?: string[]` - List of schemas to exclude
+
+### SQLServerTransactionGroup
+
+SQL Server implementation of TransactionGroupBase for managing database transactions.
+
+#### Methods
+
+- `HandleSubmit(): Promise<TransactionResult[]>` - Execute all pending transactions in the group
+
+### UserCache
+
+Server-side cache for user and role information.
+
+#### Static Methods
+
+- `Instance: UserCache` - Get singleton instance
+- `Users: UserInfo[]` - Get all cached users
+
+#### Instance Methods
+
+- `Refresh(dataSource: DataSource, autoRefreshIntervalMS?: number): Promise<void>` - Refresh user cache
+- `UserByName(name: string, caseSensitive?: boolean): UserInfo | undefined` - Find user by name
+
+### setupSQLServerClient
+
+Helper function to initialize and configure the SQL Server data provider.
+
+```typescript
+setupSQLServerClient(config: SQLServerProviderConfigData): Promise<SQLServerDataProvider>
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Timeout Errors**
+   - Increase `connectionTimeout` and `requestTimeout` in configuration
+   - Verify network connectivity to SQL Server
+   - Check SQL Server firewall rules
+
+2. **Authentication Failures**
+   - Ensure correct username/password or Windows authentication
+   - Verify user has appropriate database permissions
+   - Check if encryption settings match server requirements
+
+3. **Schema Not Found**
+   - Verify `MJCoreSchemaName` matches your database schema (default: `__mj`)
+   - Ensure user has access to the schema
+   - Check if MemberJunction tables are properly installed
+
+4. **Transaction Rollback Issues**
+   - Check for constraint violations in related entities
+   - Verify all required fields are populated
+   - Review transaction logs for specific error details
+
+5. **Performance Issues**
+   - Adjust connection pool settings (`pool.max`, `pool.min`)
+   - Enable query logging to identify slow queries
+   - Consider adding database indexes for frequently queried fields
+
+### Debug Logging
+
+Enable detailed logging by setting environment variables:
+
+```bash
+# Enable SQL query logging
+export MJ_LOG_SQL=true
+
+# Enable detailed error logging
+export MJ_LOG_LEVEL=debug
 ```
 
 ## License

@@ -1,56 +1,205 @@
-# Recommendation-Rex Documentation
+# @memberjunction/ai-recommendations-rex
 
 ## Overview
 
-**Recommendation-Rex** is designed to integrate with the Memberjunction framework and leverage the **Rasa.io Rex recommendation service**. Rex allows you to deliver personalized and tailored content based on individual characteristics, preferences, and interests. This package facilitates seamless usage of Rex through Memberjunction's Recommendation Engine.
+The **@memberjunction/ai-recommendations-rex** package provides a recommendation provider implementation for the MemberJunction framework that integrates with the [rasa.io Rex recommendation engine](https://rasa.io). This provider enables AI-powered content recommendations based on vector similarity searches, delivering personalized content suggestions based on user preferences and behavior patterns.
+
+## Purpose and Functionality
+
+This package implements the `RecommendationProviderBase` interface to:
+- Connect to the rasa.io Rex recommendation service via REST API
+- Generate personalized content recommendations using vector similarity searches
+- Process recommendation requests in configurable batch sizes
+- Convert Rex recommendations into MemberJunction recommendation entities
+- Handle error logging and reporting through the MemberJunction list system
+
+## Installation
+
+```bash
+npm install @memberjunction/ai-recommendations-rex
+```
+
+## Configuration
+
+The package requires the following environment variables:
+
+```bash
+# Rex API Configuration
+REX_API_HOST=https://api.rex.rasa.io          # Rex API host URL
+REX_RECOMMEND_HOST=https://recommend.rex.rasa.io  # Rex recommendation endpoint
+REX_USERNAME=your_username                      # Rex account username
+REX_PASSWORD=your_password                      # Rex account password
+REX_API_KEY=your_api_key                       # Rex API key
+
+# Optional Configuration
+REX_BATCH_SIZE=200                             # Number of recommendations per batch (default: 200)
+```
+
+## Usage
+
+### Important Note
+
+This package is designed to be used through the [MemberJunction Recommendation Engine](https://github.com/MemberJunction/MJ/tree/next/packages/AI/Recommendations/Engine) and should not be instantiated directly in most cases.
+
+### Basic Example
+
+```typescript
+import { RexRecommendationsProvider } from '@memberjunction/ai-recommendations-rex';
+import { RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
+import { UserInfo } from '@memberjunction/core';
+
+// The provider is typically instantiated by the MJ framework
+const provider = new RexRecommendationsProvider();
+
+// Create a recommendation request
+const request: RecommendationRequest<RecommendContextData> = {
+    RunID: 'run-123',
+    Recommendations: recommendationEntities, // Array of RecommendationEntity objects
+    ErrorListID: 'error-list-id',
+    CurrentUser: currentUser,
+    Options: {
+        EntityDocumentID: 'doc-123',
+        TypeMap: {
+            'course': 'Contents',
+            'course_part': 'Course Parts',
+            'person': 'Contributors'
+        },
+        type: 'article',
+        filters: [
+            { type: 'course', max_results: 10 }
+        ]
+    }
+};
+
+// Generate recommendations
+const result: RecommendationResult = await provider.Recommend(request);
+
+if (result.Success) {
+    console.log('Recommendations generated successfully');
+} else {
+    console.error('Errors:', result.Errors);
+    console.warn('Warnings:', result.Warnings);
+}
+```
+
+## API Documentation
+
+### Classes
+
+#### `RexRecommendationsProvider`
+
+The main provider class that implements the Rex recommendation integration.
+
+**Methods:**
+
+- `Recommend(request: RecommendationRequest<RecommendContextData>): Promise<RecommendationResult>`
+  - Processes recommendation requests by communicating with the Rex API
+  - Handles batch processing based on configured batch size
+  - Returns a `RecommendationResult` with success status and any errors/warnings
+
+### Type Definitions
+
+#### `RecommendContextData`
+
+```typescript
+type RecommendContextData = {
+    EntityDocumentID: string;          // Required: ID of the entity document
+    TypeMap: Record<string, string>;   // Mapping of Rex types to MJ entity names
+    type: string;                      // Content type for recommendations
+    filters: {                         // Filtering options for recommendations
+        type: string;
+        max_results: number;
+    }[];
+};
+```
+
+#### `RecommendationResponse`
+
+```typescript
+type RecommendationResponse = {
+    engine: string;      // Rex engine identifier
+    version: string;     // API version
+    id: string;         // Recommendation ID
+    model: string;      // Model used for recommendation
+    score: number;      // Similarity score (0-1)
+    source: string;     // Data source
+    type: string;       // Content type
+    vector_id: string;  // Vector database ID
+};
+```
 
 ## Prerequisites
 
-To use Recommendation-Rex, ensure the following are in place:
+1. **rasa.io Rex Account**: Valid Rex credentials and API key
+2. **MemberJunction Framework**: Properly configured MJ installation
+3. **Vector Database**: Configured vector storage with indexed content
+4. **Entity Record Documents**: Source records must have associated vector embeddings
 
-1. **Rasa Rex Engine Account**: A valid account and API key.
-2. **SQL Server**: Memberjunction framework installed and configured.
-3. **Vector Database**: Setup with all relevant records vectorized and stored.
-4. **Rasa Rex Engine Configuration**: Linked to your vector database.
+## Integration with MemberJunction
 
----
+This provider integrates with several MemberJunction packages:
 
-## How It Works
+- **@memberjunction/ai-recommendations**: Base recommendation framework
+- **@memberjunction/core**: Core MJ functionality and entities
+- **@memberjunction/core-entities**: Entity definitions for recommendations
+- **@memberjunction/global**: Global utilities and class registration
 
-Recommendation-Rex operates as part of Memberjunction's Recommendation Engine. Below is a step-by-step guide:
+### Workflow
 
-### 1. **Integration via Memberjunction**
-The package should not used directly. Instead, integrate it through the **Memberjunction Recommendation Engine**:  
-[Memberjunction Recommendations Engine](https://github.com/MemberJunction/MJ/tree/next/packages/AI/Recommendations/Engine)
+1. The MJ Recommendation Engine creates recommendation requests
+2. Rex provider fetches entity record documents with vector IDs
+3. Rex API performs similarity searches in the vector database
+4. Results are converted to MemberJunction recommendation items
+5. Recommendations are saved to the database for retrieval
 
-### 2. **Prepare Your Data**
-Create a list in the database containing the records you want to generate recommendations for. The recommendation engine also supports directly fedding it the entitiy records you want recommendations for.
+## Error Handling
 
-### 3. **Invoke the Recommend Function**
-Use the Recommendation Engine's `Recommend` function and pass in:
-- **List ID**: The ID of the database list you created.
-- **Options Parameter**: Specify additional settings, such as:
-  - Entities to generate recommendations for.
-  - The desired number of recommendations.
+The provider implements comprehensive error handling:
 
-### 4. **Recommendation Process**
-The engine triggers a recommendation run:
-1. Identifies the vector associated with the source record.
-2. Performs a **similarity search** within the vector database to find similar vectors.
-3. Rex returns a list of similar vectors, which the engine converts back into database records.
+- API errors are logged with full details
+- Failed recommendations are recorded in the specified error list
+- Batch processing continues even if individual recommendations fail
+- All errors and warnings are aggregated in the result object
 
-### 5. **Storing and Using Recommendations**
-The recommended items are stored in the database as new records.  
-The developer or user retrieves and processes these records for use in their application.
+## Performance Considerations
 
-### 6. **Error Handling**
-If errors occur during the recommendation run, they are logged in a dedicated database list for troubleshooting. This ensures all issues are documented for review.
+- **Batch Processing**: Recommendations are processed in configurable batches (default: 200)
+- **Parallel Processing**: Each batch processes recommendations in parallel
+- **Token Management**: Access tokens are obtained and managed automatically
+- **Score Clamping**: Probability scores are normalized to 0-1 range
 
----
+## Build and Development
 
-## Additional Notes
+```bash
+# Build the package
+npm run build
 
-- **Flexibility**: Recommendation-Rex is designed for scalability and works with complex datasets.
-- **Responsibility**: While the recommendation engine handles the recommendation logic, it's up to the user to fetch and utilize the final recommended records.
+# Run in development mode
+npm start
 
-For more details on configuring and using Memberjunction's Recommendation Engine, visit the [documentation](https://docs.memberjunction.org/).
+# Run tests (when available)
+npm test
+```
+
+## Dependencies
+
+- **axios**: HTTP client for Rex API communication
+- **openai**: OpenAI SDK (for potential future enhancements)
+- **dotenv**: Environment variable management
+- **@memberjunction/ai**: Core AI functionality
+- **@memberjunction/ai-recommendations**: Recommendation framework
+- **@memberjunction/global**: MJ global utilities
+
+## License
+
+ISC License - See LICENSE file for details
+
+## Support
+
+For issues and questions:
+- GitHub Issues: [MemberJunction/MJ](https://github.com/MemberJunction/MJ/issues)
+- Documentation: [docs.memberjunction.org](https://docs.memberjunction.org/)
+
+## Version
+
+Current version: 2.43.0
