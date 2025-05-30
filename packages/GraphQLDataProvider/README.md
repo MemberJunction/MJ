@@ -1,12 +1,12 @@
 # MemberJunction GraphQL Data Provider
 
-A flexible GraphQL client for MemberJunction that provides a complete data access layer for connecting applications to MemberJunction APIs.
+A comprehensive GraphQL client for MemberJunction that provides a complete data access layer for connecting applications to MemberJunction APIs.
 
 ## Overview
 
 The `@memberjunction/graphql-dataprovider` package is a full-featured GraphQL client implementation for MemberJunction applications. It provides a standardized way to interact with MemberJunction's GraphQL API, handling queries, mutations, subscriptions, and complex operations like transaction groups and entity relationships.
 
-This data provider is particularly useful for frontend applications that need to communicate with a MemberJunction backend API, offering a consistent interface regardless of the underlying database technology.
+This data provider is designed for both frontend and backend applications that need to communicate with a MemberJunction API server, offering a consistent interface regardless of the underlying database technology.
 
 ## Installation
 
@@ -18,30 +18,47 @@ npm install @memberjunction/graphql-dataprovider
 
 - **Complete Entity Operations**: CRUD operations for all MemberJunction entities
 - **View and Report Execution**: Run database views and reports with parameters
+- **Query Execution**: Execute custom queries with full parameter support
 - **Transaction Support**: Execute complex operations as atomic transactions
+- **Action Execution**: Execute entity actions and general actions through GraphQL
 - **WebSocket Subscriptions**: Real-time data updates via GraphQL subscriptions
 - **Offline Caching**: IndexedDB-based caching for offline functionality
 - **Type Safety**: Full TypeScript support with generated types
 - **Authentication Integration**: Works with MemberJunction's authentication system
 - **Field Mapping**: Automatic mapping between client and server field names
+- **Session Management**: Persistent session IDs with automatic storage
+- **System User Client**: Specialized client for server-to-server communication
+- **Duplicate Detection**: Built-in support for finding and merging duplicate records
 
 ## Usage
 
 ### Setting up the GraphQL Client
 
 ```typescript
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RunViewOptions } from '@memberjunction/core';
+import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 
-// Create a data provider instance
-const dataProvider = new GraphQLDataProvider({
-  graphQLEndpoint: 'https://api.example.com/graphql',
-  subscriptionEndpoint: 'wss://api.example.com/graphql',
-  authToken: 'your-auth-token', // Optional, can be updated later
-});
+// Create configuration
+const config = new GraphQLProviderConfigData(
+  'your-jwt-token',
+  'https://api.example.com/graphql',
+  'wss://api.example.com/graphql',
+  async () => {
+    // Refresh token function - called when JWT expires
+    const newToken = await refreshAuthToken();
+    return newToken;
+  },
+  '__mj', // Optional: MJ Core schema name (defaults to '__mj')
+  ['schema1', 'schema2'], // Optional: Include only these schemas
+  ['excluded_schema'], // Optional: Exclude these schemas
+  'mj-api-key' // Optional: For server-to-server communication
+);
 
-// Set authentication token (e.g., after user login)
-dataProvider.setAuthToken('updated-auth-token');
+// Setup the client (returns configured instance)
+const dataProvider = await setupGraphQLClient(config);
+
+// Or create and configure manually
+const dataProvider = new GraphQLDataProvider();
+await dataProvider.Config(config);
 ```
 
 ### Working with Entities
@@ -61,36 +78,61 @@ async function getUserById(userId: number) {
 
 // Create a new entity
 async function createUser(userData: any) {
-  const result = await dataProvider.saveEntity('User', {
+  const entityData = {
     ID: 0, // 0 indicates a new entity
     FirstName: userData.firstName,
     LastName: userData.lastName,
     Email: userData.email,
     // other fields...
-  });
+  };
+  
+  const options = {
+    IgnoreDirtyFields: false, // Save all fields
+    SkipValidation: false // Run validation before save
+  };
+  
+  const result = await dataProvider.SaveEntity(
+    entityData,
+    'User',
+    options
+  );
   return result;
 }
 
 // Update an existing entity
 async function updateUser(userId: number, updatedData: any) {
-  const loadResult = await dataProvider.loadEntity('User', userId);
+  // Load the entity
+  const entity = await dataProvider.GetEntityObject(
+    'User',
+    { ID: userId }
+  );
   
-  if (loadResult.success) {
-    const user = loadResult.entity;
+  if (entity) {
     // Update fields
-    Object.assign(user, updatedData);
+    Object.assign(entity.GetData(), updatedData);
     
     // Save changes
-    const saveResult = await dataProvider.saveEntity('User', user);
-    return saveResult;
+    const result = await dataProvider.SaveEntity(
+      entity.GetData(),
+      'User'
+    );
+    return result;
   }
   
-  return { success: false, error: 'User not found' };
+  return { Success: false, Message: 'User not found' };
 }
 
 // Delete an entity
 async function deleteUser(userId: number) {
-  const result = await dataProvider.deleteEntity('User', userId);
+  const options = {
+    IgnoreWarnings: false // Show warnings if any
+  };
+  
+  const result = await dataProvider.DeleteEntity(
+    'User',
+    { ID: userId },
+    options
+  );
   return result;
 }
 ```
@@ -99,34 +141,58 @@ async function deleteUser(userId: number) {
 
 ```typescript
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RunViewOptions } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/core';
 
-const dataProvider = new GraphQLDataProvider({
-  graphQLEndpoint: 'https://api.example.com/graphql',
-});
+const dataProvider = new GraphQLDataProvider();
 
 // Execute a view
 async function getActiveUsers() {
-  const options: RunViewOptions = {
-    EntityName: 'vwUsers',
+  const params: RunViewParams = {
+    EntityName: 'Users',
     ExtraFilter: "Status = 'Active'",
     OrderBy: 'LastName, FirstName',
-    PageSize: 50,
-    PageNumber: 1
+    Fields: ['ID', 'FirstName', 'LastName', 'Email'], // Optional: specific fields
+    IgnoreMaxRows: false,
+    MaxRows: 50,
+    ResultType: 'entity_object', // or 'simple' for raw data
+    ForceAuditLog: true,
+    AuditLogDescription: 'Loading active users for report'
   };
   
-  const result = await dataProvider.runView(options);
-  return result.success ? result.Results : [];
+  const result = await dataProvider.RunView(params);
+  return result.Success ? result.Results : [];
+}
+
+// Execute multiple views in parallel
+async function getMultipleDatasets() {
+  const viewParams: RunViewParams[] = [
+    { EntityName: 'Users', ExtraFilter: "Status = 'Active'" },
+    { EntityName: 'Orders', ExtraFilter: "OrderDate >= '2024-01-01'" }
+  ];
+  
+  const results = await dataProvider.RunViews(viewParams);
+  return results;
 }
 
 // Execute a report
-async function getSalesReport(startDate: Date, endDate: Date) {
-  const result = await dataProvider.runReport('SalesReport', {
-    StartDate: startDate,
-    EndDate: endDate
-  });
+async function getSalesReport(reportId: string) {
+  const params = {
+    ReportID: reportId
+  };
   
-  return result.success ? result.results : [];
+  const result = await dataProvider.RunReport(params);
+  return result.Success ? result.Results : [];
+}
+
+// Execute a query
+async function runCustomQuery(queryId: string, parameters: any) {
+  const params = {
+    QueryID: queryId,
+    Parameters: parameters
+  };
+  
+  const result = await dataProvider.RunQuery(params);
+  return result;
 }
 ```
 
@@ -150,62 +216,81 @@ class OrderTransactionGroup extends TransactionGroupBase {
 // Use the transaction group
 async function createOrderWithItems(orderData: any, items: any[]) {
   // Create transaction group
-  const transaction = new OrderTransactionGroup();
+  const transaction = await dataProvider.CreateTransactionGroup();
   
-  // Add order
-  transaction.addEntity('Order', {
-    ID: 0,
-    CustomerID: orderData.customerId,
-    OrderDate: new Date(),
-    Status: 'New',
-    // other fields...
-  });
+  // Create order entity
+  const orderEntity = await dataProvider.GetEntityObject('Order');
+  orderEntity.NewRecord();
+  orderEntity.Set('CustomerID', orderData.customerId);
+  orderEntity.Set('OrderDate', new Date());
+  orderEntity.Set('Status', 'New');
   
-  // Add order items
+  // Add to transaction
+  const orderItem = transaction.AddTransaction(orderEntity, 'create');
+  
+  // Add order items with references
   for (const item of items) {
-    transaction.addEntity('OrderItem', {
-      ID: 0,
-      OrderID: '@Order.1', // Reference to the first Order entity in this transaction
-      ProductID: item.productId,
-      Quantity: item.quantity,
-      Price: item.price,
-      // other fields...
-    });
+    const itemEntity = await dataProvider.GetEntityObject('OrderItem');
+    itemEntity.NewRecord();
+    itemEntity.Set('ProductID', item.productId);
+    itemEntity.Set('Quantity', item.quantity);
+    itemEntity.Set('Price', item.price);
+    
+    // Reference the order using a variable
+    const orderTransaction = transaction.AddTransaction(itemEntity, 'create');
+    transaction.AddVariable(
+      'orderID',
+      'ID',
+      'FieldValue',
+      orderItem.BaseEntity,
+      orderTransaction.BaseEntity,
+      'OrderID'
+    );
   }
   
   // Execute transaction
-  const result = await dataProvider.executeTransactionGroup(transaction);
-  return result;
+  const results = await transaction.Submit();
+  return results;
 }
 ```
 
 ### Executing Actions
 
 ```typescript
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { GraphQLActionClient } from '@memberjunction/graphql-dataprovider';
+import { ActionParam } from '@memberjunction/actions-base';
 
-const dataProvider = new GraphQLDataProvider({
-  graphQLEndpoint: 'https://api.example.com/graphql',
-});
+const actionClient = new GraphQLActionClient(dataProvider);
 
-// Execute an entity action
-async function sendUserWelcomeEmail(userId: number) {
-  const result = await dataProvider.executeAction('User', 'SendWelcomeEmail', userId, {
-    templateId: 'welcome-template',
-    includeSurvey: true
-  });
+// Execute a standalone action
+async function runAction(actionId: string) {
+  const params: ActionParam[] = [
+    { Name: 'parameter1', Value: 'value1', Type: 'Input' },
+    { Name: 'parameter2', Value: 123, Type: 'Input' }
+  ];
   
-  return result.success;
+  const result = await actionClient.RunAction(
+    actionId,
+    params,
+    false // skipActionLog
+  );
+  
+  if (result.Success) {
+    console.log('Action result:', result.ResultCode);
+  }
+  return result;
 }
 
-// Execute a general action (not tied to a specific entity record)
-async function generateReport() {
-  const result = await dataProvider.executeAction('ReportGenerator', 'GenerateMonthlyReport', null, {
-    month: new Date().getMonth(),
-    year: new Date().getFullYear(),
-    format: 'PDF'
-  });
+// Execute an entity action
+async function runEntityAction() {
+  const params = {
+    EntityAction: entityAction, // EntityActionEntity instance
+    InvocationType: { Name: 'SingleRecord' },
+    EntityObject: userEntity, // BaseEntity instance
+    ContextUser: currentUser // UserInfo instance
+  };
   
+  const result = await actionClient.RunEntityAction(params);
   return result;
 }
 ```
@@ -213,82 +298,167 @@ async function generateReport() {
 ### Field Mapping
 
 ```typescript
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 
-const dataProvider = new GraphQLDataProvider({
-  graphQLEndpoint: 'https://api.example.com/graphql',
-  // Configure field mapping for entities
-  fieldMappings: {
-    User: {
-      // Map client field names to server field names
-      firstName: 'FirstName',
-      lastName: 'LastName',
-      emailAddress: 'Email'
-    }
-  }
+// The GraphQL provider automatically handles field mapping for system fields
+// __mj_CreatedAt <-> _mj__CreatedAt
+// __mj_UpdatedAt <-> _mj__UpdatedAt  
+// __mj_DeletedAt <-> _mj__DeletedAt
+
+// You can also use the FieldMapper directly
+const mapper = new FieldMapper();
+
+// Map fields in an object
+const mappedData = mapper.MapFields({
+  __mj_CreatedAt: '2024-01-01',
+  Name: 'John Doe'
 });
+// Result: { _mj__CreatedAt: '2024-01-01', Name: 'John Doe' }
 
-// Now you can use client field names in your code
-async function createUser(userData: any) {
-  const result = await dataProvider.saveEntity('User', {
-    ID: 0,
-    firstName: userData.firstName, // Will be mapped to FirstName
-    lastName: userData.lastName,   // Will be mapped to LastName
-    emailAddress: userData.email   // Will be mapped to Email
-  });
-  return result;
-}
+// Map individual field names
+const mappedField = mapper.MapFieldName('__mj_CreatedAt');
+// Result: '_mj__CreatedAt'
+
+// Reverse mapping
+const originalField = mapper.ReverseMapFieldName('_mj__CreatedAt');
+// Result: '__mj_CreatedAt'
 ```
 
 ### WebSocket Subscriptions
 
 ```typescript
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { Observable } from 'rxjs';
 
-const dataProvider = new GraphQLDataProvider({
-  graphQLEndpoint: 'https://api.example.com/graphql',
-  subscriptionEndpoint: 'wss://api.example.com/graphql'
-});
+const dataProvider = new GraphQLDataProvider();
 
-// Subscribe to entity changes
-function subscribeToUserChanges() {
-  const subscription = dataProvider.subscribeToEntity('User', (entity) => {
-    console.log('User entity updated:', entity);
-    // Update UI or application state
+// Subscribe to record changes
+function subscribeToRecordChanges() {
+  const observable: Observable<RecordChange[]> = 
+    await dataProvider.GetRecordChanges(
+      'User',
+      { ID: 123 },
+      ['update', 'delete'], // Watch for these operations
+      true // Return initial values
+    );
+  
+  const subscription = observable.subscribe(changes => {
+    console.log('Record changes:', changes);
+    // Handle changes
   });
   
-  // Later, unsubscribe when no longer needed
-  subscription.unsubscribe();
-}
-
-// Subscribe to specific entity record changes
-function subscribeToSpecificUser(userId: number) {
-  const subscription = dataProvider.subscribeToEntityRecord('User', userId, (entity) => {
-    console.log('Specific user updated:', entity);
-    // Update UI or application state
-  });
-  
-  // Later, unsubscribe when no longer needed
+  // Later, unsubscribe
   subscription.unsubscribe();
 }
 ```
 
-## Key Classes
+### System User Client
 
-| Class | Description |
+```typescript
+import { GraphQLSystemUserClient } from '@memberjunction/graphql-dataprovider';
+
+// Create system user client for server-to-server communication
+const systemClient = new GraphQLSystemUserClient(
+  'https://api.example.com/graphql',
+  '', // No JWT token needed
+  'session-id',
+  'mj-api-key' // Shared secret key
+);
+
+// Execute queries as system user
+const queries = [
+  'SELECT * FROM Users WHERE Active = 1',
+  'SELECT COUNT(*) as Total FROM Orders'
+];
+
+const result = await systemClient.GetData(
+  queries,
+  'access-token' // Short-lived access token
+);
+
+if (result.Success) {
+  console.log('Query results:', result.Results);
+}
+
+// Sync roles and users
+const syncResult = await systemClient.SyncRolesAndUsers({
+  Roles: [
+    { ID: '1', Name: 'Admin', Description: 'Administrator role' }
+  ],
+  Users: [
+    { 
+      ID: '1',
+      Name: 'john.doe',
+      Email: 'john@example.com',
+      Type: 'User',
+      FirstName: 'John',
+      LastName: 'Doe',
+      Roles: [{ ID: '1', Name: 'Admin', Description: 'Administrator role' }]
+    }
+  ]
+});
+```
+
+## Key Classes and Types
+
+| Class/Type | Description |
 |-------|-------------|
-| `GraphQLDataProvider` | Main class implementing the MemberJunction data provider interface |
-| `GraphQLClient` | Handles GraphQL operations (queries, mutations, subscriptions) |
-| `EntityMapper` | Maps between client-side and server-side entity structures |
-| `SubscriptionManager` | Manages WebSocket connections and GraphQL subscriptions |
-| `OfflineCache` | Provides IndexedDB-based caching for offline operations |
-| `EntitySerializer` | Serializes and deserializes entity data for GraphQL operations |
+| `GraphQLDataProvider` | Main class implementing IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces |
+| `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details |
+| `GraphQLActionClient` | Client for executing actions and entity actions through GraphQL |
+| `GraphQLSystemUserClient` | Specialized client for server-to-server communication using API keys |
+| `GraphQLTransactionGroup` | Manages complex multi-entity transactions with variable support |
+| `FieldMapper` | Handles automatic field name mapping between client and server |
+| `setupGraphQLClient` | Helper function to quickly setup and configure the GraphQL client |
+
+## API Documentation
+
+### Core Methods
+
+#### Entity Operations
+- `GetEntityObject(entityName: string, compositeKey?: CompositeKey)` - Get an entity object instance
+- `SaveEntity(entityData: any, entityName: string, options?: EntitySaveOptions)` - Save entity data
+- `DeleteEntity(entityName: string, compositeKey: CompositeKey, options?: EntityDeleteOptions)` - Delete an entity
+- `GetRecordChanges(entityName: string, compositeKey: CompositeKey, operations: string[], includeInitial: boolean)` - Subscribe to entity changes
+
+#### View and Query Operations  
+- `RunView(params: RunViewParams)` - Execute a single view
+- `RunViews(params: RunViewParams[])` - Execute multiple views in parallel
+- `RunReport(params: RunReportParams)` - Execute a report
+- `RunQuery(params: RunQueryParams)` - Execute a custom query
+
+#### Transaction Operations
+- `CreateTransactionGroup()` - Create a new transaction group
+- `ExecuteTransaction(transaction: TransactionGroupBase)` - Execute a transaction group
+
+#### Duplicate Detection
+- `GetRecordDuplicates(request: PotentialDuplicateRequest)` - Find potential duplicate records
+- `MergeRecords(request: RecordMergeRequest)` - Merge duplicate records
+
+#### Metadata Operations
+- `GetEntityRecordName(entityName: string, compositeKey: CompositeKey)` - Get display name for a record
+- `GetEntityRecordNames(info: EntityRecordNameInput[])` - Get display names for multiple records
+- `GetEntityDependencies(entityName: string, compositeKey: CompositeKey)` - Get record dependencies
+
+## Dependencies
+
+- `@memberjunction/core` - Core MemberJunction functionality
+- `@memberjunction/core-entities` - Entity definitions
+- `@memberjunction/actions-base` - Action system base classes
+- `@memberjunction/global` - Global utilities
+- `graphql` - GraphQL language and execution
+- `graphql-request` - Minimal GraphQL client
+- `graphql-ws` - GraphQL WebSocket client for subscriptions
+- `@tempfix/idb` - IndexedDB wrapper for offline storage
+- `rxjs` - Reactive extensions for subscriptions
+- `uuid` - UUID generation for session IDs
 
 ## Requirements
 
 - Node.js 16+
 - Modern browser with WebSocket support (for subscriptions)
 - MemberJunction GraphQL API endpoint
+- Valid JWT token or MJ API key for authentication
 
 ## License
 

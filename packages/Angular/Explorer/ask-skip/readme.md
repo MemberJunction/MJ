@@ -1,17 +1,19 @@
 # @memberjunction/ng-ask-skip
 
-The `@memberjunction/ng-ask-skip` library provides Angular components for integrating Skip AI assistant functionality into your MemberJunction applications. It allows users to chat with Skip about specific records, generate dynamic reports, access AI-powered insights, and work with AI-generated artifacts.
+The `@memberjunction/ng-ask-skip` library provides Angular components for integrating Skip AI assistant functionality into your MemberJunction applications. Skip is MemberJunction's AI assistant that enables natural language interaction with your data, including record analysis, report generation, and AI-powered insights.
 
 ## Features
 
 - **AI Chat with Records**: Direct chat interface with Skip AI about specific entity records
-- **Skip Button Integration**: Easy way to add Skip functionality to any view
-- **Dynamic Reports**: Generate and display AI-powered reports based on data analysis
+- **Skip Button Integration**: Easy way to add Skip functionality to any view with route or window modes
+- **Dynamic Reports**: Generate and display AI-powered reports with interactive charts and tables
 - **Inline Artifacts**: View and interact with AI-generated artifacts directly within messages
-- **Customizable Welcome Questions**: Configure suggested prompts for users
-- **Window and Inline Modes**: Display Skip as a popup or embedded in your UI
-- **Conversation History**: Automatically saves and loads conversation history
-- **Resource Sharing**: Share conversations with other users
+- **Customizable Welcome Questions**: Configure context-aware suggested prompts for users
+- **Window and Inline Modes**: Display Skip as a popup overlay or embedded in your UI
+- **Conversation History**: Automatically saves and loads conversation history with full context
+- **Resource Sharing**: Share conversations with other users through the MJ resource system
+- **Data Context Integration**: Leverages MemberJunction's data context for comprehensive record analysis
+- **Drill-Down Capabilities**: Navigate through related data with interactive drill-down functionality
 
 ## Installation
 
@@ -21,9 +23,11 @@ npm install @memberjunction/ng-ask-skip
 
 ## Requirements
 
-- Angular 18+
-- Font Awesome 5+ (used for icons)
-- MemberJunction core libraries
+- Angular 18.0.2 or higher
+- Font Awesome 5+ (used for icons throughout the UI)
+- MemberJunction core libraries (v2.43.0 or compatible)
+- Kendo UI for Angular (v16.2.0)
+- Plotly.js for chart visualization
 
 Add Font Awesome to your index.html:
 
@@ -49,7 +53,7 @@ export class YourModule { }
 
 ### Skip Button
 
-Add a button that opens Skip in a popup window:
+Add a button that opens Skip in a popup overlay window:
 
 ```html
 <mj-skip-button 
@@ -58,7 +62,7 @@ Add a button that opens Skip in a popup window:
 </mj-skip-button>
 ```
 
-Navigation to a dedicated Skip page:
+Navigation to a dedicated Skip page (routes to /askskip):
 
 ```html
 <mj-skip-button 
@@ -70,12 +74,17 @@ Navigation to a dedicated Skip page:
 Handle the button click:
 
 ```typescript
+import { SkipClickedEvent } from '@memberjunction/ng-ask-skip';
+
 handleSkipButtonClicked(event: SkipClickedEvent) {
   // Optionally cancel the default action
   // event.cancel = true;
   
   // Custom logic before/after Skip opens
   console.log('Skip button clicked');
+  
+  // The button automatically tracks open windows
+  console.log('Open Skip windows:', SkipChatComponent.SkipChatWindowsCurrentlyVisible);
 }
 ```
 
@@ -135,11 +144,33 @@ Open Skip chat for a record in a modal dialog:
 
 ### Dynamic Report Components
 
-Display AI-generated reports with tabs:
+Display AI-generated reports with interactive tabs for different views:
 
 ```html
 <mj-skip-dynamic-tabbed-report
-  [ReportID]="reportId">
+  [ReportID]="reportId"
+  [ShowDetailsTab]="true"
+  [AllowDrillDown]="true">
+</mj-skip-dynamic-tabbed-report>
+```
+
+The dynamic report component provides multiple tabs:
+- **Chart Tab**: Interactive Plotly.js visualizations
+- **HTML Tab**: Formatted HTML content
+- **Table Tab**: Tabular data view with sorting and filtering
+- **Drill-Down Tab**: Navigate to related data (when enabled)
+- **Details Tab**: Additional report metadata (when enabled)
+
+#### Working with Skip-Generated Reports
+
+```typescript
+// Handle report events
+<mj-skip-dynamic-tabbed-report
+  [SkipData]="skipReportData"
+  [ConversationID]="conversationId"
+  [ConversationName]="conversationName"
+  [ConversationDetailID]="detailId"
+  (reportCreated)="onReportCreated($event)">
 </mj-skip-dynamic-tabbed-report>
 ```
 
@@ -147,14 +178,14 @@ Display AI-generated reports with tabs:
 
 | Component | Selector | Description |
 |-----------|----------|-------------|
-| SkipButtonComponent | `mj-skip-button` | Button that opens Skip |
-| SkipWindowComponent | `mj-skip-window` | Skip chat in a popup window |
-| SkipChatWithRecordComponent | `mj-skip-chat-with-record` | Skip chat for a specific record |
-| SkipChatWithRecordWindowComponent | `mj-skip-chat-with-record-window` | Skip chat for a record in a modal dialog |
-| SkipDynamicTabbedReportComponent | `mj-skip-dynamic-tabbed-report` | Dynamic report with tabs |
-| DynamicReportDrillDownComponent | `mj-dynamic-report-drill-down` | Drill-down component for reports |
-| UserViewGridWithAnalysisComponent | `mj-user-view-grid-with-analysis` | User view grid with Skip analysis |
-| SkipChatWrapperComponent | `mj-skip-chat-wrapper` | Wrapper for Skip chat |
+| SkipButtonComponent | `mj-skip-button` | Button that opens Skip via route navigation or overlay window |
+| SkipWindowComponent | `mj-skip-window` | Skip chat displayed in a CDK overlay popup window |
+| SkipChatWithRecordComponent | `mj-skip-chat-with-record` | Skip chat interface for analyzing a specific entity record |
+| SkipChatWithRecordWindowComponent | `mj-skip-chat-with-record-window` | Skip chat for a record wrapped in a Kendo dialog window |
+| SkipDynamicTabbedReportComponent | `skip-dynamic-tabbed-report` | Dynamic AI-generated report with chart, HTML, table, and drill-down tabs |
+| DynamicReportDrillDownComponent | `mj-dynamic-report-drill-down` | Interactive drill-down component for exploring related data |
+| UserViewGridWithAnalysisComponent | `mj-user-view-grid-with-analysis` | User view grid enhanced with Skip AI analysis capabilities |
+| SkipChatWrapperComponent | `mj-skip-chat-wrapper` | Container wrapper for Skip chat with navigation and drill-down support |
 
 ## Inline Artifacts Support
 
@@ -297,19 +328,102 @@ Control artifact features with these input properties:
 - `ArtifactSelected`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is selected
 - `ArtifactViewed`: EventEmitter<SkipAPIArtifact> - Fires when an artifact is viewed
 
+## Building the Package
+
+To build this package:
+
+```bash
+# From the package directory
+npm run build
+
+# Or from the repository root using turbo
+turbo build --filter="@memberjunction/ng-ask-skip"
+```
+
+The compiled output will be in the `dist/` directory.
+
+## Module Configuration
+
+The module automatically configures Plotly.js for chart rendering:
+
+```typescript
+// Configured in module.ts
+PlotlyViaCDNModule.setPlotlyVersion('latest');
+PlotlyViaCDNModule.setPlotlyBundle(null); // Uses full bundle
+```
+
 ## Dependencies
 
-- @angular/common
-- @angular/core
-- @angular/forms
-- @angular/router
-- @angular/cdk
-- @memberjunction/core
-- @memberjunction/core-entities
-- @memberjunction/graphql-dataprovider
-- @memberjunction/ng-chat
-- @memberjunction/ng-skip-chat
-- @memberjunction/ng-shared
-- @progress/kendo-angular-* packages
-- angular-plotly.js
-- ngx-markdown
+### Angular Dependencies
+- @angular/common (18.0.2)
+- @angular/core (18.0.2)
+- @angular/forms (18.0.2)
+- @angular/router (18.0.2)
+- @angular/cdk (18.0.2)
+
+### MemberJunction Dependencies
+- @memberjunction/core (2.43.0)
+- @memberjunction/core-entities (2.43.0)
+- @memberjunction/global (2.43.0)
+- @memberjunction/graphql-dataprovider (2.43.0)
+- @memberjunction/skip-types (2.43.0)
+- @memberjunction/ng-container-directives (2.43.0)
+- @memberjunction/ng-chat (2.43.0)
+- @memberjunction/ng-skip-chat (2.43.0)
+- @memberjunction/ng-shared (2.43.0)
+- @memberjunction/ng-data-context (2.43.0)
+- @memberjunction/ng-user-view-grid (2.43.0)
+- @memberjunction/ng-tabstrip (2.43.0)
+
+### Third-Party Dependencies
+- @progress/kendo-angular-grid (16.2.0)
+- @progress/kendo-angular-listview (16.2.0)
+- @progress/kendo-angular-notification (16.2.0)
+- @progress/kendo-angular-dialog (16.2.0)
+- @progress/kendo-angular-label (16.2.0)
+- @progress/kendo-angular-layout (16.2.0)
+- @progress/kendo-angular-filter (16.2.0)
+- @progress/kendo-angular-indicators (16.2.0)
+- angular-plotly.js (^5.2.2)
+- plotly.js-dist-min (^2.3.4)
+- ngx-markdown (18.0.0)
+- tslib (^2.3.0)
+
+## TypeScript Types and Interfaces
+
+Key types used throughout the library:
+
+```typescript
+import { 
+  SkipClickedEvent,
+  // Component classes
+  SkipButtonComponent,
+  SkipWindowComponent,
+  SkipChatWithRecordComponent,
+  SkipChatWithRecordWindowComponent,
+  SkipDynamicTabbedReportComponent,
+  DynamicReportDrillDownComponent,
+  UserViewGridWithAnalysisComponent,
+  SkipChatWrapperComponent
+} from '@memberjunction/ng-ask-skip';
+
+// From related packages
+import { ChatMessage, ChatWelcomeQuestion } from '@memberjunction/ng-chat';
+import { SkipAPIChatWithRecordResponse, SkipAPIArtifact } from '@memberjunction/skip-types';
+import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
+import { CompositeKey } from '@memberjunction/core';
+```
+
+## Integration with MemberJunction
+
+This package integrates seamlessly with MemberJunction's entity system:
+
+1. **Entity Context**: Skip automatically loads data context for the linked entity
+2. **Conversation Persistence**: All conversations are saved to the Conversations and Conversation Details entities
+3. **User Integration**: Conversations are automatically linked to the current MJ user
+4. **Resource System**: Conversations can be shared as resources with other users
+5. **Report Storage**: Generated reports can be saved to the Reports entity
+
+## License
+
+This package is part of the MemberJunction ecosystem and follows the same licensing terms.

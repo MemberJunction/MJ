@@ -2,15 +2,22 @@
 
 Angular directives for container management in MemberJunction applications, providing flexible and responsive layout utilities.
 
+## Overview
+
+This package provides two essential directives for managing container layouts in Angular applications:
+- **mjContainer**: Exposes a ViewContainerRef for dynamic component loading
+- **mjFillContainer**: Automatically resizes elements to fill their parent containers with intelligent context awareness
+
 ## Features
 
-- `mjContainer` directive for view container management
+- `mjContainer` directive for view container management and dynamic component loading
 - `mjFillContainer` directive for responsive filling of parent containers
-- Automatic resizing on window resize events
-- Manual resize event handling
+- Automatic resizing on window resize events with dual debounce strategy
+- Manual resize event handling via MJGlobal event system
 - Customizable margin and dimension settings
-- Smart context detection (skips resizing in grids, hidden tabs)
-- Efficient resize event handling with debouncing
+- Smart context detection (automatically skips resizing in grids, hidden tabs, and elements with `mjSkipResize`)
+- Efficient resize event handling with configurable debouncing
+- Debug mode for troubleshooting resize behavior
 
 ## Installation
 
@@ -36,7 +43,7 @@ export class YourModule { }
 
 ### mjContainer
 
-Use the `mjContainer` directive to reference a ViewContainerRef for dynamic component loading:
+The `mjContainer` directive exposes a ViewContainerRef for dynamic component loading. This is particularly useful when you need to programmatically create and insert components into the DOM.
 
 ```html
 <div mjContainer></div>
@@ -45,15 +52,23 @@ Use the `mjContainer` directive to reference a ViewContainerRef for dynamic comp
 In your component:
 
 ```typescript
+import { Component, ViewChild, ViewContainerRef } from '@angular/core';
 import { Container } from '@memberjunction/ng-container-directives';
 
 @Component({
-  // ...
+  selector: 'app-your-component',
+  template: `<div mjContainer></div>`
 })
 export class YourComponent {
   @ViewChild(Container, { static: true }) container!: Container;
   
-  // Now you can use this.container.viewContainerRef for dynamic component creation
+  ngOnInit() {
+    // Access the ViewContainerRef for dynamic component creation
+    const viewContainerRef: ViewContainerRef = this.container.viewContainerRef;
+    
+    // Example: Create a dynamic component
+    // const componentRef = viewContainerRef.createComponent(YourDynamicComponent);
+  }
 }
 ```
 
@@ -183,26 +198,41 @@ When nesting components with `mjFillContainer`:
 </div>
 ```
 
+## Dependencies
+
+This package depends on:
+- `@memberjunction/core` - Core MemberJunction utilities and logging
+- `@memberjunction/global` - Global event system for manual resize triggers
+- `rxjs` - For event handling and debouncing
+
+Peer dependencies:
+- `@angular/common` ^18.0.2
+- `@angular/core` ^18.0.2
+- `@angular/router` ^18.0.2
+
 ## Troubleshooting
 
 ### Element not resizing properly
 
 - Check if any parent has `mjSkipResize` attribute
-- Verify the element isn't within a grid or hidden tab
-- Ensure parent elements have proper CSS display properties
+- Verify the element isn't within a grid (role="grid") or hidden tab
+- Ensure parent elements have proper CSS display properties (must be 'block')
 - Check z-index and overflow settings
+- Verify parent visibility (elements with hidden or not displayed parents are skipped)
 
 ### Flickering during resize
 
 - This is usually caused by cascading resize calculations
 - Try applying `mjFillContainer` only where necessary
 - Use CSS transitions for smoother visual changes
+- Consider the dual debounce strategy (100ms during resize, 500ms after)
 
 ### Height calculation issues
 
 - Ensure parent element has a defined height or position
 - For full window height, apply directive to a root element
 - Check for competing CSS that might override the directive's styles
+- Note that padding is accounted for in calculations
 
 ## Advanced Controls
 
@@ -214,6 +244,44 @@ import { FillContainer } from '@memberjunction/ng-container-directives';
 // Disable resize globally (for all instances)
 FillContainer.DisableResize = true;
 
-// Enable resize debugging
+// Enable resize debugging (logs to console)
 FillContainer.OutputDebugInfo = true;
 ```
+
+## API Reference
+
+### Container Directive
+
+```typescript
+@Directive({
+  selector: '[mjContainer]'
+})
+export class Container {
+  constructor(public viewContainerRef: ViewContainerRef) { }
+}
+```
+
+### FillContainer Directive
+
+```typescript
+@Directive({
+  selector: '[mjFillContainer]'
+})
+export class FillContainer {
+  @Input() fillWidth: boolean = true;
+  @Input() fillHeight: boolean = true;
+  @Input() rightMargin: number = 0;
+  @Input() bottomMargin: number = 0;
+  
+  static DisableResize: boolean = false;
+  static OutputDebugInfo: boolean = false;
+}
+```
+
+## Contributing
+
+When contributing to this package:
+1. Follow the MemberJunction development guidelines
+2. Ensure all TypeScript compiles without errors: `npm run build`
+3. Update this README if adding new features or changing behavior
+4. Add appropriate TSDoc comments to all public APIs

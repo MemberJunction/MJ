@@ -6,11 +6,13 @@ A comprehensive wrapper for Groq's LPU (Language Processing Unit) inference engi
 
 - **High-Performance Integration**: Connect to Groq's ultra-fast LPU inference API
 - **Standardized Interface**: Implements MemberJunction's BaseLLM abstract class
+- **Streaming Support**: Full support for streaming responses for real-time interactions
 - **Message Formatting**: Handles conversion between MemberJunction and Groq message formats
 - **Error Handling**: Robust error handling with detailed reporting
 - **Token Usage Tracking**: Track token consumption for monitoring
 - **Chat Completion**: Interactive chat completions with various LLMs hosted on Groq
-- **Model Support**: Compatible with LLama-2, Mixtral, and other models hosted on Groq
+- **Model Support**: Compatible with Llama, Mixtral, Gemma, and other models hosted on Groq
+- **Response Format Control**: Support for JSON, text, and model-specific response formats
 
 ## Installation
 
@@ -66,11 +68,55 @@ try {
 }
 ```
 
+### Streaming Responses
+
+```typescript
+import { ChatParams, ChatResult } from '@memberjunction/ai';
+
+// Enable streaming in the chat parameters
+const streamingParams: ChatParams = {
+  model: 'llama3-70b-8192',
+  messages: [
+    { role: 'user', content: 'Write a short story about AI.' }
+  ],
+  stream: true,
+  onStream: (content: string) => {
+    // Handle each chunk of streamed content
+    process.stdout.write(content);
+  },
+  maxOutputTokens: 2000
+};
+
+// The response will stream to the onStream callback
+const response = await groqLLM.ChatCompletion(streamingParams);
+console.log('\n\nFinal response:', response.data.choices[0].message.content);
+```
+
+### Response Format Control
+
+```typescript
+// Request JSON formatted response
+const jsonParams: ChatParams = {
+  model: 'mixtral-8x7b-32768',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant that responds in JSON format.' },
+    { role: 'user', content: 'List 3 benefits of using Groq in JSON format with keys: benefit, description' }
+  ],
+  responseFormat: 'JSON',
+  maxOutputTokens: 1000
+};
+
+const jsonResponse = await groqLLM.ChatCompletion(jsonParams);
+const benefits = JSON.parse(jsonResponse.data.choices[0].message.content);
+```
+
 ### Direct Access to Groq Client
 
 ```typescript
 // Access the underlying Groq client for advanced usage
 const groqClient = groqLLM.GroqClient;
+// or use the alias
+const client = groqLLM.client;
 
 // Use the client directly if needed
 const customResponse = await groqClient.chat.completions.create({
@@ -84,11 +130,19 @@ const customResponse = await groqClient.chat.completions.create({
 
 Groq provides access to various open models with optimized inference:
 
-- `llama2-70b-4096`
-- `mixtral-8x7b-32768`
-- `gemma-7b-it`
+- **Llama Models**:
+  - `llama3-70b-8192` - Llama 3 70B with 8K context
+  - `llama3-8b-8192` - Llama 3 8B with 8K context
+  - `llama2-70b-4096` - Llama 2 70B with 4K context
+  
+- **Mixtral Models**:
+  - `mixtral-8x7b-32768` - Mixtral 8x7B with 32K context
+  
+- **Gemma Models**:
+  - `gemma-7b-it` - Gemma 7B Instruct
+  - `gemma2-9b-it` - Gemma 2 9B Instruct
 
-Check the [Groq documentation](https://console.groq.com/docs/models) for the latest list of supported models.
+Check the [Groq documentation](https://console.groq.com/docs/models) for the latest list of supported models and their capabilities.
 
 ## API Reference
 
@@ -105,13 +159,28 @@ new GroqLLM(apiKey: string)
 #### Properties
 
 - `GroqClient`: (read-only) Returns the underlying Groq client instance
+- `client`: (read-only) Alias for GroqClient
+- `SupportsStreaming`: (read-only) Returns `true` - Groq supports streaming responses
 
 #### Methods
 
-- `ChatCompletion(params: ChatParams): Promise<ChatResult>` - Perform a chat completion
-- `SummarizeText(params: SummarizeParams): Promise<SummarizeResult>` - Summarize text
-- `ClassifyText(params: ClassifyParams): Promise<ClassifyResult>` - Classify text (not implemented)
-- `ConvertMJToGroqChatMessages(messages: ChatMessage[]): any[]` - Convert MemberJunction messages to Groq format
+##### ChatCompletion
+```typescript
+ChatCompletion(params: ChatParams): Promise<ChatResult>
+```
+Perform a chat completion with support for both streaming and non-streaming responses.
+
+##### SummarizeText
+```typescript
+SummarizeText(params: SummarizeParams): Promise<SummarizeResult>
+```
+*Note: Not yet implemented*
+
+##### ClassifyText
+```typescript
+ClassifyText(params: ClassifyParams): Promise<ClassifyResult>
+```
+*Note: Not yet implemented*
 
 ## Performance Considerations
 
@@ -138,11 +207,67 @@ try {
 }
 ```
 
+## Integration with MemberJunction
+
+This package seamlessly integrates with the MemberJunction AI framework:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { BaseLLM } from '@memberjunction/ai';
+import { GroqLLM } from '@memberjunction/ai-groq';
+
+// The GroqLLM class is automatically registered with the MemberJunction class factory
+// You can retrieve it using the class factory pattern
+const llm = RegisterClass.GetRegisteredClass(BaseLLM, 'GroqLLM', 'your-api-key');
+```
+
+## Advanced Features
+
+### Effort Level Support
+
+For models that support reasoning effort levels (experimental):
+
+```typescript
+const params: ChatParams = {
+  model: 'llama3-70b-8192',
+  messages: [{ role: 'user', content: 'Solve this complex problem...' }],
+  effortLevel: 'high', // Experimental feature
+  maxOutputTokens: 2000
+};
+```
+
+### Handling Groq-Specific Requirements
+
+The wrapper automatically handles Groq's requirement that the last message must be from a user. If your message chain ends with an assistant message, the wrapper will automatically append a dummy user message to satisfy this requirement.
+
 ## Dependencies
 
-- `groq-sdk`: Official Groq SDK
-- `@memberjunction/ai`: MemberJunction AI core framework
-- `@memberjunction/global`: MemberJunction global utilities
+- `groq-sdk` (0.21.0): Official Groq SDK
+- `@memberjunction/ai` (2.43.0): MemberJunction AI core framework
+- `@memberjunction/global` (2.43.0): MemberJunction global utilities
+
+## Development
+
+### Building
+
+```bash
+npm run build
+```
+
+### Development Mode
+
+```bash
+npm start
+```
+
+## Contributing
+
+When contributing to this package:
+
+1. Follow the MemberJunction coding standards
+2. Ensure all TypeScript types are properly defined
+3. Update tests when adding new features
+4. Document any Groq-specific behaviors or limitations
 
 ## License
 

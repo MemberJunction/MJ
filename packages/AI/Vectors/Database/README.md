@@ -11,6 +11,7 @@ The MemberJunction AI Vector Database package provides a standardized interface 
 - **Type Definitions**: Comprehensive TypeScript type definitions
 - **Provider Agnostic**: Works with any vector database that implements the interface
 - **Standardized Response Format**: Consistent response format across providers
+- **Secure API Key Management**: Protected API key handling with validation
 
 ## Installation
 
@@ -26,6 +27,9 @@ The abstract base class that all vector database providers must implement:
 
 ```typescript
 export abstract class VectorDBBase {
+  // Protected getter for API key access by subclasses
+  protected get apiKey(): string;
+  
   constructor(apiKey: string);
   
   // Index operations
@@ -55,13 +59,20 @@ export abstract class VectorDBBase {
 ```typescript
 export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
   id: string;                 // Unique identifier for the record
-  values: number[];           // Vector embedding values (e.g., from an embedding model)
-  sparseValues?: {            // Optional sparse representation for hybrid search
-    indices: number[];
-    values: number[];
-  };
+  values: RecordValues;       // Vector embedding values (array of numbers)
+  sparseValues?: RecordSparseValues; // Optional sparse representation for hybrid search
   metadata?: T;               // Optional metadata for filtering and identification
 };
+
+export type RecordValues = Array<number>;
+
+export type RecordSparseValues = {
+  indices: Array<number>;     // List of indices where non-zero values are present
+  values: Array<number>;      // The values that correspond to the positions in indices
+};
+
+export type RecordMetadataValue = string | boolean | number | Array<string>;
+export type RecordMetadata = Record<string, RecordMetadataValue>;
 ```
 
 #### Index Description
@@ -90,7 +101,7 @@ export type QueryParamsBase = {
 
 // Query by vector values
 export type QueryByVectorValues = QueryParamsBase & {
-  vector: number[];          // The query vector to find similar vectors for
+  vector: RecordValues;      // The query vector to find similar vectors for
 };
 
 // Query by record ID
@@ -112,8 +123,12 @@ export type QueryResponse<T extends RecordMetadata = RecordMetadata> = {
 };
 
 export interface ScoredRecord<T extends RecordMetadata = RecordMetadata> extends VectorRecord<T> {
-  score?: number;                  // Similarity score
+  score?: number;                  // Similarity score (interpretation depends on metric)
 }
+
+export type OperationUsage = {
+  readUnits?: number;              // Number of read units consumed by operation
+};
 ```
 
 ## Usage Examples
@@ -141,7 +156,7 @@ class MyVectorDBProvider extends VectorDBBase {
     };
   }
   
-  async createIndex(params: CreateIndexParams) {
+  async createIndex(params: CreateIndexParams): Promise<BaseResponse> {
     // Implementation for creating an index
     try {
       // Provider-specific code
@@ -179,7 +194,7 @@ async function workWithVectors() {
   const createResult = await vectorDB.createIndex({
     id: 'my-index',
     dimension: 1536,
-    metric: 'cosine'
+    metric: 'cosine' as IndexModelMetricEnum
   });
   
   if (createResult.success) {
@@ -228,10 +243,66 @@ This package integrates with the broader MemberJunction AI vector ecosystem:
 - `@memberjunction/ai-vectors-sync` - Synchronize entity data to vector databases
 - `@memberjunction/ai-vectors-dupe` - Duplicate detection using vector similarity
 
+## Error Handling
+
+The VectorDBBase constructor validates the API key and throws an error if it's empty or invalid:
+
+```typescript
+try {
+  const vectorDB = new MyVectorDBProvider('');
+} catch (error) {
+  // Error: API key cannot be empty
+}
+```
+
+All methods return a standardized `BaseResponse` format:
+
+```typescript
+export type BaseResponse = {
+  success: boolean;  // Whether the operation succeeded
+  message: string;   // Human-readable message about the operation
+  data: any;         // Operation-specific response data
+};
+```
+
+## Additional Types
+
+### Request Parameters
+
+```typescript
+export type BaseRequestParams = {
+  id: string;
+  data?: any;
+};
+
+export type CreateIndexParams = BaseRequestParams & {
+  dimension: number;
+  metric: IndexModelMetricEnum;
+  additionalParams?: any;
+};
+
+export type EditIndexParams = BaseRequestParams & {
+  // Additional fields specific to the provider
+};
+```
+
 ## Dependencies
 
-- `@memberjunction/core`: MemberJunction core library
-- `@memberjunction/global`: MemberJunction global utilities
+- `@memberjunction/core`: ^2.43.0 - MemberJunction core library
+- `@memberjunction/global`: ^2.43.0 - MemberJunction global utilities
+- `dotenv`: ^16.4.1 - Environment variable management
+
+## Development Dependencies
+
+- `@types/node`: 20.14.2
+- `ts-node-dev`: ^2.0.0
+- `typescript`: ^5.4.5
+
+## Scripts
+
+- `npm run build` - Compile TypeScript to JavaScript
+- `npm run start` - Run the development server with ts-node-dev
+- `npm test` - Run tests (currently not implemented)
 
 ## License
 

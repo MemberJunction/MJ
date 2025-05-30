@@ -1,6 +1,6 @@
 # @memberjunction/ai-cerebras
 
-A comprehensive wrapper for Cerebras Cloud, providing high-performance AI model access within the MemberJunction framework.
+A comprehensive wrapper for Cerebras Cloud, providing high-performance AI model access within the MemberJunction framework. This package implements the MemberJunction BaseLLM interface to provide standardized access to Cerebras' ultra-fast inference capabilities.
 
 ## Features
 
@@ -125,7 +125,7 @@ Cerebras provides access to various models with optimized inference:
 
 ### CerebrasLLM Class
 
-A class that extends BaseLLM to provide Cerebras-specific functionality.
+A class that extends BaseLLM to provide Cerebras-specific functionality. The class is automatically registered with MemberJunction's class system using the `@RegisterClass` decorator.
 
 #### Constructor
 
@@ -136,13 +136,18 @@ new CerebrasLLM(apiKey: string)
 #### Properties
 
 - `CerebrasClient`: (read-only) Returns the underlying Cerebras client instance
+- `client`: (read-only) Alias for CerebrasClient
 - `SupportsStreaming`: (read-only) Returns true as Cerebras supports streaming
 
 #### Methods
 
 - `ChatCompletion(params: ChatParams): Promise<ChatResult>` - Perform a chat completion
-- `SummarizeText(params: SummarizeParams): Promise<SummarizeResult>` - Summarize text (not implemented)
-- `ClassifyText(params: ClassifyParams): Promise<ClassifyResult>` - Classify text (not implemented)
+- `SummarizeText(params: SummarizeParams): Promise<SummarizeResult>` - Summarize text (currently not implemented - throws error)
+- `ClassifyText(params: ClassifyParams): Promise<ClassifyResult>` - Classify text (currently not implemented - throws error)
+
+### Helper Functions
+
+- `LoadCerebrasLLM()` - Ensures the CerebrasLLM class is registered and prevents tree-shaking
 
 ## Performance Considerations
 
@@ -151,6 +156,11 @@ Cerebras hardware is optimized for high-performance AI inference:
 - Fast response generation with low latency
 - Efficient resource utilization
 - Consider appropriate model sizes for your specific use case
+
+## Limitations
+
+- **Multimodal Content**: Currently, multimodal content (images, etc.) is not fully supported. When multimodal messages are provided, only text content blocks are extracted and processed.
+- **Text Methods**: The `SummarizeText` and `ClassifyText` methods are not yet implemented and will throw an error if called.
 
 ## Error Handling
 
@@ -169,12 +179,34 @@ try {
 }
 ```
 
+## Integration with MemberJunction
+
+This package integrates seamlessly with the MemberJunction AI framework:
+
+- Implements the `BaseLLM` abstract class for standardized AI model access
+- Automatically registers with MemberJunction's class system
+- Compatible with all MemberJunction AI utilities and patterns
+- Supports the standard ChatParams, ChatResult, and message formats
+
 ## Dependencies
 
-- `@cerebras/cerebras_cloud_sdk`: Official Cerebras Cloud SDK
+- `@cerebras/cerebras_cloud_sdk`: ^1.29.0 - Official Cerebras Cloud SDK
 - `@memberjunction/ai`: MemberJunction AI core framework
 - `@memberjunction/global`: MemberJunction global utilities
 
+## Development
+
+```bash
+# Build the package
+npm run build
+
+# Run in development mode
+npm run start
+
+# Run tests (not currently implemented)
+npm run test
+```
+
 ## License
 
-ISC
+ISC - See LICENSE file for details

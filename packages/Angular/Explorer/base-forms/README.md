@@ -1,10 +1,11 @@
 # @memberjunction/ng-base-forms
 
-Base classes for creating entity forms in MemberJunction Angular applications, providing core functionality for form management, validation, and data handling.
+Base classes and components for creating entity forms in MemberJunction Angular applications, providing core functionality for form management, validation, and data handling.
 
 ## Features
 
 - Abstract base classes for forms, form sections, and record components
+- Automatic field rendering components with type detection
 - Support for edit mode and validation
 - Transaction management for saving related records
 - Integration with MemberJunction metadata and entity framework
@@ -12,6 +13,8 @@ Base classes for creating entity forms in MemberJunction Angular applications, p
 - Permission checking and user authorization
 - Support for favorites and record dependencies
 - Form event handling and coordination
+- Dynamic form section loading
+- Linked record field components with search and dropdown capabilities
 
 ## Installation
 
@@ -19,13 +22,89 @@ Base classes for creating entity forms in MemberJunction Angular applications, p
 npm install @memberjunction/ng-base-forms
 ```
 
-## Usage
+## Core Components
 
-This package provides several base classes that form the foundation for MemberJunction entity forms:
+### MJFormField
+
+A powerful component that automatically generates UI for any field in a BaseEntity object:
+
+```typescript
+import { Component } from '@angular/core';
+import { BaseEntity } from '@memberjunction/core';
+
+@Component({
+  template: `
+    <mj-form-field
+      [record]="myRecord"
+      [EditMode]="isEditing"
+      FieldName="FirstName"
+      Type="textbox"
+      [ShowLabel]="true"
+      (ValueChange)="onValueChange($event)"
+    ></mj-form-field>
+  `
+})
+export class MyComponent {
+  myRecord: BaseEntity;
+  isEditing: boolean = false;
+  
+  onValueChange(newValue: any) {
+    console.log('Field value changed:', newValue);
+  }
+}
+```
+
+#### MJFormField Input Properties
+
+- `record` (BaseEntity, required): The entity record containing the field
+- `EditMode` (boolean): Whether the field is editable
+- `FieldName` (string, required): Name of the field to render
+- `Type` (string): Control type - 'textbox' | 'textarea' | 'numerictextbox' | 'datepicker' | 'checkbox' | 'dropdownlist' | 'combobox' | 'code'
+- `LinkType` (string): For linked fields - 'Email' | 'URL' | 'Record' | 'None'
+- `LinkComponentType` (string): For record links - 'Search' | 'Dropdown'
+- `ShowLabel` (boolean): Whether to show the field label (default: true)
+- `DisplayName` (string): Override the default display name
+- `PossibleValues` (string[]): Custom values for dropdown/combobox fields
+
+### MJLinkField
+
+Specialized component for fields that link to other entity records:
+
+```typescript
+<mj-link-field
+  [record]="myRecord"
+  FieldName="CustomerID"
+  [RecordName]="customerName"
+  LinkComponentType="Search"
+></mj-link-field>
+```
+
+#### MJLinkField Input Properties
+
+- `record` (BaseEntity, required): The entity record
+- `FieldName` (string, required): The foreign key field name
+- `RecordName` (string): Pre-populate with the linked record's name
+- `LinkComponentType` ('Search' | 'Dropdown'): UI type for selecting records
+
+### SectionLoaderComponent
+
+Dynamically loads form sections registered with the MemberJunction class factory:
+
+```typescript
+<mj-form-section
+  Entity="Customer"
+  Section="Details"
+  [record]="customerRecord"
+  [EditMode]="isEditing"
+  (LoadComplete)="onSectionLoaded()"
+></mj-form-section>
+```
+
+## Base Classes
 
 ### BaseRecordComponent
 
-The most basic component for working with entity records:
+The foundational class for all components that work with entity records:
 
 ```typescript
 import { BaseRecordComponent } from '@memberjunction/ng-base-forms';
@@ -34,160 +113,296 @@ import { BaseRecordComponent } from '@memberjunction/ng-base-forms';
   // ...
 })
 export class YourComponent extends BaseRecordComponent {
-  // Your record component implementation
+  // Inherited properties:
+  // - record: BaseEntity
+  // - EditMode: boolean
+  // - UserCanEdit: boolean
+  // - UserCanDelete: boolean
+  // - IsFavorite: boolean
 }
 ```
 
 ### BaseFormSectionComponent
 
-For creating form sections that can be used with entity forms:
+For creating reusable form sections that can be dynamically loaded:
 
 ```typescript
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 
 @Component({
-  // ...
+  template: `
+    <div class="form-section">
+      <!-- Your section UI here -->
+    </div>
+  `
 })
-@RegisterClass(BaseFormSectionComponent, 'YourEntity.SectionName')
-export class YourFormSectionComponent extends BaseFormSectionComponent {
-  // Your form section implementation
+@RegisterClass(BaseFormSectionComponent, 'Customer.Details')
+export class CustomerDetailsSection extends BaseFormSectionComponent {
+  // Custom section logic
 }
 ```
 
 ### BaseFormComponent
 
-For creating complete entity forms:
+For creating complete entity forms with full lifecycle management:
 
 ```typescript
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 
 @Component({
-  // ...
+  template: `
+    <form>
+      <mj-tab-strip>
+        <mj-tab title="Details">
+          <mj-form-section Entity="Customer" Section="Details" 
+                          [record]="record" [EditMode]="EditMode">
+          </mj-form-section>
+        </mj-tab>
+      </mj-tab-strip>
+    </form>
+  `
 })
-@RegisterClass(BaseFormComponent, 'YourEntity')
-export class YourFormComponent extends BaseFormComponent {
-  // Your form implementation
+@RegisterClass(BaseFormComponent, 'Customer')
+export class CustomerFormComponent extends BaseFormComponent {
+  // Form-specific logic
 }
 ```
 
 ## Core Features
 
-### Edit Mode
-
-Manage form edit states:
+### Edit Mode Management
 
 ```typescript
 // Start editing
 this.StartEditMode();
 
-// Save changes
-await this.SaveRecord(true); // true to stop edit mode after save
+// Save changes (true = stop edit mode after save)
+await this.SaveRecord(true);
 
-// Cancel editing
+// Cancel editing and revert changes
 this.CancelEdit();
+
+// Check if in edit mode
+if (this.EditMode) {
+  // Show save/cancel buttons
+}
 ```
 
 ### Validation
 
-Validate forms and handle validation errors:
-
 ```typescript
+// Validate the entire form
 const validationResult = this.Validate();
 if (!validationResult.Success) {
-  // Handle validation errors
-  console.log(validationResult.Errors);
+  console.log('Validation errors:', validationResult.Errors);
 }
+
+// Validate pending records
+const pendingResults = this.ValidatePendingRecords();
 ```
 
 ### Permission Checking
 
-Check user permissions for operations:
-
 ```typescript
+// Check user permissions
 if (this.UserCanEdit) {
-  // Show edit controls
+  this.StartEditMode();
 }
 
 if (this.UserCanDelete) {
-  // Show delete controls
+  // Show delete button
 }
+
+// Check field-level permissions
+const canEditField = this.UserCanEditField('FieldName');
 ```
 
-### Related Records
-
-Work with related entities:
+### Working with Related Records
 
 ```typescript
-// Get view parameters for a related entity
-const viewParams = this.BuildRelationshipViewParamsByEntityName('RelatedEntity');
+// Get view parameters for related entity
+const viewParams = this.BuildRelationshipViewParamsByEntityName('Orders');
 
-// Create new related records with pre-filled values
-const newValues = this.NewRecordValues('RelatedEntity');
+// Create new related record with pre-filled values
+const newOrderValues = this.NewRecordValues('Orders');
+newOrderValues.CustomerID = this.record.ID;
+
+// Access pending records for transaction
+const pendingOrders = this.PendingRecords.filter(r => r.Entity === 'Orders');
 ```
 
-### Tabbed Interface
-
-Manage tabs in forms:
+### Tab Management
 
 ```typescript
-// Check if a tab is active
+// Check active tab
 if (this.IsCurrentTab('details')) {
-  // Perform tab-specific actions
+  // Load tab-specific data
 }
 
-// Respond to tab selection
+// Handle tab selection
 public onTabSelect(e: TabEvent) {
-  // Handle tab selection
+  this.LoadTabData(e.title);
 }
+
+// Tab configuration
+tabs = [
+  { title: 'Details', selected: true },
+  { title: 'Orders', selected: false },
+  { title: 'History', selected: false }
+];
 ```
 
-## Advanced Features
-
-### Pending Records
-
-Manage related records in a transaction:
+### Favorites Management
 
 ```typescript
-// Access pending records
-const pendingRecords = this.PendingRecords;
-
-// Process records before save
-this.PopulatePendingRecords();
-
-// Validate all pending records
-const validationResults = this.ValidatePendingRecords();
-```
-
-### Favorites
-
-Manage record favorites:
-
-```typescript
-// Check if record is a favorite
+// Check if record is favorited
 if (this.IsFavorite) {
-  // Show "Remove from favorites" option
+  // Show filled star icon
 }
 
-// Add/remove from favorites
-await this.MakeFavorite();
-await this.RemoveFavorite();
+// Toggle favorite status
+if (this.IsFavorite) {
+  await this.RemoveFavorite();
+} else {
+  await this.MakeFavorite();
+}
 ```
 
 ### Record Dependencies
 
-View record dependencies:
-
 ```typescript
-// Show dependencies
+// Check for dependencies before delete
 const dependencies = await this.GetRecordDependencies();
+if (dependencies.length > 0) {
+  // Show warning about dependent records
+  console.log(`Cannot delete: ${dependencies.length} dependent records found`);
+}
 ```
 
-## Integration
+## Advanced Usage
 
-This package integrates with other MemberJunction components:
-- Uses `@memberjunction/ng-base-types` for event handling
-- Uses `@memberjunction/ng-shared` for shared services
-- Uses `@memberjunction/ng-tabstrip` for tab management
-- Works with `@memberjunction/core` entities and metadata
+### Custom Field Rendering
+
+Override default field rendering by creating custom components:
+
+```typescript
+@Component({
+  selector: 'custom-field',
+  template: `
+    <div class="custom-field">
+      <label>{{ field.DisplayName }}</label>
+      <custom-control [value]="value" (change)="onChange($event)">
+      </custom-control>
+    </div>
+  `
+})
+export class CustomFieldComponent {
+  @Input() field: EntityFieldInfo;
+  @Input() value: any;
+  @Output() valueChange = new EventEmitter<any>();
+}
+```
+
+### Dynamic Form Section Registration
+
+Register form sections to be dynamically loaded:
+
+```typescript
+// In your module or component
+import { RegisterClass } from '@memberjunction/global';
+
+@RegisterClass(BaseFormSectionComponent, 'Product.Inventory')
+export class ProductInventorySection extends BaseFormSectionComponent {
+  // Section implementation
+}
+
+// Usage in template
+<mj-form-section Entity="Product" Section="Inventory" 
+                [record]="productRecord" [EditMode]="EditMode">
+</mj-form-section>
+```
+
+### Transaction Management
+
+Handle multiple related records in a single transaction:
+
+```typescript
+// Add records to pending transaction
+this.AddPendingRecord(newOrderRecord, 'Orders');
+this.AddPendingRecord(newOrderItemRecord, 'Order Items');
+
+// Validate all pending records
+const validationResults = this.ValidatePendingRecords();
+if (validationResults.every(r => r.Success)) {
+  // Save all records in transaction
+  await this.SaveRecord(true);
+}
+```
+
+## Module Configuration
+
+The BaseFormsModule includes all necessary imports:
+
+```typescript
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+
+@NgModule({
+  imports: [
+    BaseFormsModule,
+    // Other imports...
+  ]
+})
+export class YourModule { }
+```
+
+## Dependencies
+
+- **Angular Core**: v18.0.2+
+- **@memberjunction/core**: Core MJ functionality
+- **@memberjunction/global**: Global utilities and class factory
+- **@memberjunction/ng-shared**: Shared Angular services
+- **@memberjunction/ng-tabstrip**: Tab management
+- **@memberjunction/ng-link-directives**: Link handling
+- **@memberjunction/ng-container-directives**: Container utilities
+- **@memberjunction/ng-record-changes**: Change tracking
+- **@memberjunction/ng-code-editor**: Code editing support
+- **@progress/kendo-angular-\***: UI components
+- **ngx-markdown**: Markdown rendering
+- **rxjs**: Reactive programming
+
+## Integration with MemberJunction
+
+This package is designed to work seamlessly with the MemberJunction ecosystem:
+
+- **Entity Metadata**: Automatically reads field definitions, relationships, and permissions
+- **Class Factory**: Uses MJ's class factory for dynamic component loading
+- **Validation**: Integrates with entity-level validation rules
+- **Permissions**: Respects entity and field-level permissions
+- **Transactions**: Supports MJ's transaction management for related records
+
+## Best Practices
+
+1. **Always use the class factory** for registering custom form components
+2. **Leverage MJFormField** for automatic field rendering when possible
+3. **Handle validation** at both field and form levels
+4. **Check permissions** before allowing user actions
+5. **Use transactions** when saving multiple related records
+6. **Implement proper error handling** for save operations
+7. **Follow Angular lifecycle** hooks for initialization and cleanup
+
+## Building
+
+This package uses Angular CLI for building:
+
+```bash
+# Build the package
+npm run build
+
+# The built package will be in the dist/ directory
+```
+
+## License
+
+ISC

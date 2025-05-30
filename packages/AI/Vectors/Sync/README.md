@@ -1,68 +1,262 @@
-# Entity Vectorizer Overview
+# @memberjunction/ai-vector-sync
 
-The Entity Vectorizer is a robust software tool designed for transforming entities into vector representations and storing them in a vector database. Built upon the powerful [MemberJunction framework](https://docs.memberjunction.org/), the Entity Vectorizer ensures efficient handling and processing of large batches of data. This overview provides insights into its core functionalities, architecture, and usage.
+A robust MemberJunction package for synchronizing entities with vector databases by transforming entity records into vector representations using embedding models.
 
-# Prerequisites
+## Overview
 
-Before you can vectorize an entity, ensure the following setup is complete:  
+The `@memberjunction/ai-vector-sync` package provides a comprehensive solution for:
+- Converting MemberJunction entities into vector embeddings
+- Storing embeddings in vector databases (currently supports Pinecone)
+- Managing the synchronization lifecycle between entities and their vector representations
+- Supporting batch processing for large datasets
+- Providing template-based document generation for vectorization
 
-1. **SQL Database with Memberjunction Framework**  
-   A SQL database must be configured with the Memberjunction framework installed. This serves as the foundation for managing entity records and templates needed for the vectorization process.
+## Installation
 
-2. **API Key for the Embedding Model**  
-   Obtain an API key for the embedding model of your choice. Memberjunction supports a variety of popular embedding models, such as OpenAI and Mistral. This key is necessary for accessing the model during the vectorization process.
+```bash
+npm install @memberjunction/ai-vector-sync
+```
 
-3. **API Key for the Vector Database**  
-   Acquire an API key for the vector database you plan to use. Currently, Memberjunction supports Pinecone as the vector storage solution, which integrates seamlessly with this package.
+## Prerequisites
 
-4. **Entity Document Record and Template**  
-   Ensure you have an Entity document record defined, along with an associated template. The template specifies the properties of the entity that will be included in the vectorization process, guiding the transformation of data into its vector representation.
+Before using this package, ensure you have:
 
-## Process Overview
+1. **SQL Database with MemberJunction Framework**  
+   A properly configured SQL database with the MemberJunction framework installed.
 
-The Entity Vectorizer operates via a systematic process to ensure efficient vectorization and storage of entity data. Below is a detailed breakdown of each step involved:
+2. **API Keys**  
+   - Embedding model API key (supports OpenAI, Mistral, etc.)
+   - Vector database API key (currently supports Pinecone)
 
-1. **Entity Document Retrieval**:
-   - The process begins by taking an **Entity Document ID** as input.
-   - Using this ID, the system retrieves the corresponding **Entity Document record**. This record contains essential information and metadata about the entity, which is crucial for the subsequent steps.
+3. **Entity Configuration**  
+   - Entity Document record defined in MemberJunction
+   - Associated template for specifying which entity properties to vectorize
 
-2. **Model and Database Configuration**:
-   - Once the Entity Document record is obtained, the system identifies the appropriate **embedding model**. This model is critical as it determines how the entity data will be transformed into vector representations.
-   - Additionally, the system fetches details regarding the **vector database** where the resulting vectors will be stored. This includes information about the specific database or configuration settings necessary for data insertion.
+## Core Features
 
-3. **Data Fetching and Vectorization**:
-   - With the embedding model and database information in place, the system fetches all records under the specified **Entity**. If a **list ID** is provided, it fetches all records associated with that list.
-   - The retrieved records are then vectorized using the selected embedding model. This step involves transforming each record into a high-dimensional vector, which captures the nuances and characteristics of the data.
+### Entity Vectorization
+Transform entity records into high-dimensional vectors that capture the semantic meaning of the data.
 
-4. **Vector Upsertion**:
-   - The vectorized data is then **upserted** into the vector database.
+### Batch Processing
+Efficiently handle large datasets with configurable batch sizes for:
+- Record fetching
+- Vectorization
+- Database upsertion
 
-5. **EntityRecordDocument Creation**:
-   - For each vector upserted, a corresponding **EntityRecordDocument record** is generated. This record serves as a link between the vector stored in the database and the original record in MemberJunction.
-   - The EntityRecordDocument ensures traceability and provides a means to reference back to the original data, enabling users to maintain a clear mapping between vectors and their source records.
-   - 
-# How to Vectorize Records
+### Template-Based Processing
+Use MemberJunction templates to define which entity fields and relationships to include in vectorization.
 
-Follow these steps to use the package:
+### Vector Database Integration
+Seamlessly integrate with vector databases through the MemberJunction AI infrastructure.
 
-1. **Add the Package**  
-   Add the `Entity Vectorizer` package to your existing project. Alternatively, you can use the `test-vectorization` package available in the Memberjunction repository:  
-   [Memberjunction Test Vectorization](https://github.com/MemberJunction/MJ/tree/next/test-vectorization)
+## Usage
 
-2. **Include Embedding Model and Vector Database Packages**  
-   Ensure that the packages for the embedding model and vector database you plan to use are added to your existing project. These packages must not be tree-shaken out during the build process, as they are required for vectorization to work properly.
+### Basic Entity Vectorization
 
-3. **Instantiate the `EntityVectorSyncer` Class**  
-   Create an instance of the `EntityVectorSyncer` class and call its `config` method. This ensures all necessary engines (e.g., embedding and vector databases) are set up properly.
+```typescript
+import { EntityVectorSyncer } from '@memberjunction/ai-vector-sync';
+import { UserInfo } from '@memberjunction/core';
 
-4. **Call the `VectorizeEntity` Function**  
-   Use the `VectorizeEntity` function, passing in the required parameters. At a minimum, you must provide:  
+// Initialize the syncer
+const syncer = new EntityVectorSyncer();
 
-   - **`EntityID`**: The name of the entity you want to vectorize.  
-   - **`EntityDocumentID`**: The ID of the Entity Document to use.  
-   - **`listBatchCount`** *(optional but recommended)*: Determines the size of the batch of records to fetch from the database at a time.  
-   - **`listID`** *(optional but recommended)*: If specified, only the records within this list will be vectorized. If omitted, all records within the specified entity will be vectorized.
-   - 
-5. **Note on Long Running Processes**  
-   The process of vectorizing records may take a significant amount of time (1+ hour(s)) depending on the size of the dataset and the performance of the configured systems. Although the `VectorizeEntity` function returns a promise, it is often best not to `await` it. Instead, let it run in the background to avoid blocking your application’s main workflow.
+// Configure the syncer (required before first use)
+await syncer.Config(false, contextUser);
 
+// Vectorize an entity
+const params = {
+  entityID: 'your-entity-id',
+  entityDocumentID: 'your-entity-document-id',
+  listBatchCount: 50,        // Optional: records per batch (default: 50)
+  VectorizeBatchCount: 50,   // Optional: vectorization batch size (default: 50)
+  UpsertBatchCount: 50,      // Optional: upsert batch size (default: 50)
+  StartingOffset: 0          // Optional: skip records for resuming
+};
+
+// Start vectorization (runs asynchronously)
+syncer.VectorizeEntity(params, contextUser);
+```
+
+### Vectorizing a Specific List
+
+```typescript
+// Vectorize only records within a specific list
+const params = {
+  entityID: 'your-entity-id',
+  entityDocumentID: 'your-entity-document-id',
+  listID: 'your-list-id',    // Only vectorize records in this list
+  listBatchCount: 100
+};
+
+await syncer.VectorizeEntity(params, contextUser);
+```
+
+### Working with Entity Documents
+
+```typescript
+// Get entity document by ID
+const entityDoc = await syncer.GetEntityDocument('document-id');
+
+// Get entity document by name
+const entityDoc = await syncer.GetEntityDocumentByName('Document Name', contextUser);
+
+// Get all active entity documents
+const activeDocs = await syncer.GetActiveEntityDocuments();
+
+// Get active documents for specific entities
+const specificDocs = await syncer.GetActiveEntityDocuments(['Entity1', 'Entity2']);
+```
+
+### Creating Default Entity Documents
+
+```typescript
+import { VectorDatabaseEntity, AIModelEntity } from '@memberjunction/core-entities';
+
+// Create a default entity document when one doesn't exist
+const entityDoc = await syncer.CreateDefaultEntityDocument(
+  entityID,
+  vectorDatabase,  // VectorDatabaseEntity instance
+  aiModel         // AIModelEntity instance
+);
+```
+
+## API Reference
+
+### EntityVectorSyncer
+
+The main class for entity vectorization operations.
+
+#### Methods
+
+##### `Config(forceRefresh: boolean, contextUser?: UserInfo): Promise<void>`
+Configures the syncer and initializes required engines.
+- `forceRefresh`: Force refresh of caches and engines
+- `contextUser`: User context for operations
+
+##### `VectorizeEntity(params: VectorizeEntityParams, contextUser?: UserInfo): Promise<VectorizeEntityResponse>`
+Vectorizes entities based on provided parameters.
+- `params`: Configuration for vectorization
+- `contextUser`: Required user context
+
+##### `GetEntityDocument(entityDocumentID: string): Promise<EntityDocumentEntity | null>`
+Retrieves an entity document by ID.
+
+##### `GetEntityDocumentByName(entityDocumentName: string, contextUser?: UserInfo): Promise<EntityDocumentEntity | null>`
+Retrieves an entity document by name.
+
+##### `GetActiveEntityDocuments(entityNames?: string[]): Promise<EntityDocumentEntity[]>`
+Gets all active entity documents, optionally filtered by entity names.
+
+##### `CreateDefaultEntityDocument(entityID: string, vectorDatabase: VectorDatabaseEntity, aiModel: AIModelEntity): Promise<EntityDocumentEntity>`
+Creates a default entity document for the specified entity.
+
+### Types
+
+#### VectorizeEntityParams
+```typescript
+type VectorizeEntityParams = {
+  entityID: string;              // Required: Entity to vectorize
+  entityDocumentID?: string;     // Entity document configuration
+  listID?: string;               // Optional: Specific list to vectorize
+  listBatchCount?: number;       // Records per fetch batch (default: 50)
+  VectorizeBatchCount?: number;  // Vectorization batch size (default: 50)
+  UpsertBatchCount?: number;     // Database upsert batch size (default: 50)
+  StartingOffset?: number;       // Skip records for resuming
+  CurrentUser?: UserInfo;        // User context
+  options?: any;                 // Additional options
+}
+```
+
+#### EntitySyncConfig
+```typescript
+type EntitySyncConfig = {
+  EntityDocumentID: string;      // Entity document to use
+  Interval: number;              // Sync interval in seconds
+  RunViewParams: RunViewParams;  // View parameters for fetching records
+  IncludeInSync: boolean;        // Include in sync process
+  LastRunDate: string;           // Last sync timestamp
+  VectorIndexID: number;         // Vector index ID
+  VectorID: number;              // Vector database ID
+}
+```
+
+## Architecture
+
+### Process Flow
+
+1. **Entity Document Retrieval**: Fetches configuration from Entity Document record
+2. **Model and Database Configuration**: Sets up embedding model and vector database
+3. **Data Fetching**: Retrieves entity records in batches
+4. **Vectorization**: Transforms records using embedding model
+5. **Vector Upsertion**: Stores vectors in database
+6. **EntityRecordDocument Creation**: Creates tracking records
+
+### Worker Architecture
+
+The package uses a multi-worker architecture for efficient processing:
+- **VectorizeTemplates Worker**: Handles template-based text generation and embedding
+- **UpsertVectors Worker**: Manages vector database operations
+- **EntityRecordDocument Worker**: Tracks vector-entity relationships
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file with:
+
+```env
+# Database Configuration
+DB_HOST=your-database-host
+DB_PORT=1433
+DB_USERNAME=your-username
+DB_PASSWORD=your-password
+DB_DATABASE=your-database
+
+# API Keys
+OPENAI_API_KEY=your-openai-key
+MISTRAL_API_KEY=your-mistral-key
+PINECONE_API_KEY=your-pinecone-key
+PINECONE_HOST=your-pinecone-host
+PINECONE_DEFAULT_INDEX=your-default-index
+
+# User Configuration
+CURRENT_USER_EMAIL=user@example.com
+```
+
+## Performance Considerations
+
+- **Long-Running Processes**: Vectorization can take hours for large datasets
+- **Batch Sizes**: Adjust batch sizes based on your system resources
+- **Asynchronous Processing**: Consider running vectorization in background processes
+- **Memory Usage**: Monitor memory usage for large batch sizes
+
+## Integration with MemberJunction
+
+This package integrates seamlessly with:
+- `@memberjunction/core`: Core entity and metadata functionality
+- `@memberjunction/ai`: AI model abstractions
+- `@memberjunction/ai-vectordb`: Vector database abstractions
+- `@memberjunction/templates`: Template processing engine
+
+## Error Handling
+
+The package includes comprehensive error handling:
+- Validation of entity documents and templates
+- Graceful handling of API failures
+- Detailed logging through MemberJunction's logging system
+
+## Best Practices
+
+1. **Start with Small Batches**: Test with small batch sizes before processing large datasets
+2. **Monitor Progress**: Use MemberJunction's logging to track vectorization progress
+3. **Handle Interruptions**: Use `StartingOffset` to resume interrupted processes
+4. **Template Design**: Design templates to include relevant fields for semantic search
+5. **Resource Management**: Consider database and API rate limits when setting batch sizes
+
+## License
+
+ISC - See LICENSE file for details
+
+## Author
+
+MemberJunction.com

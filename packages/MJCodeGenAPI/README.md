@@ -1,19 +1,17 @@
 # MemberJunction CodeGen API
 
-A specialized API server for handling MemberJunction code generation operations, particularly focused on entity permissions and metadata generation.
+A specialized API server for handling MemberJunction code generation operations, specifically focused on generating SQL code for entity permissions.
 
 ## Overview
 
-The `mj_codegen_api` package provides a lightweight Express-based API server that exposes endpoints for generating TypeScript code based on MemberJunction database metadata. It serves as a crucial component in the MemberJunction ecosystem by automating the creation of entity classes, permission structures, and related code artifacts.
+The `mj_codegen_api` package provides a lightweight Express-based API server that exposes endpoints for generating SQL code based on MemberJunction entity metadata. It serves as a crucial component in the MemberJunction ecosystem by automating the generation of SQL stored procedures and permission structures for entities.
 
 ## Key Features
 
-- **Permission Code Generation**: Automatically generate TypeScript code for entity permissions
-- **Entity Class Generation**: Generate TypeScript classes for database entities
-- **Metadata Management**: API endpoints for working with entity metadata
-- **Code Synchronization**: Keep generated code in sync with database schema changes
-- **REST API**: Simple REST interface for integration with development workflows
-- **Integration with MJ Core**: Deep integration with MemberJunction core components
+- **Entity Permission SQL Generation**: Automatically generate SQL stored procedures for entity CRUD operations with proper permissions
+- **Metadata Refresh**: Force metadata refresh before generating SQL to ensure up-to-date entity information
+- **Selective Entity Processing**: Generate SQL for specific entities based on their IDs
+- **Integration with MJ Core**: Deep integration with MemberJunction core components and SQL code generation library
 
 ## Installation
 
@@ -25,32 +23,40 @@ The `mj_codegen_api` package provides a lightweight Express-based API server tha
 
 ### Setup
 
-1. Install the package:
+1. Clone the repository and navigate to the package directory:
 
 ```bash
-npm install mj_codegen_api
+cd packages/MJCodeGenAPI
 ```
 
-2. Configure environment variables (create a `.env` file):
+2. Configure environment variables (create a `.env` file in the package directory):
 
 ```
-MJ_DBDRIVER=SQLServerDataProvider
-MJ_HOST=your_db_host
-MJ_PORT=1433
-MJ_USER=your_db_user
-MJ_PASSWORD=your_db_password
-MJ_DATABASE=your_db_name
-MJ_APIPORT=3001
-MJ_CODEGEN_OUTPUT_DIR=./generated
+# Server Configuration
+PORT=3999
+
+# Database Configuration (inherited from MemberJunction configuration)
+# These should match your MemberJunction database setup
+MJ_CORE_DATASOURCE_HOST=your_db_host
+MJ_CORE_DATASOURCE_PORT=1433
+MJ_CORE_DATASOURCE_USERNAME=your_db_user
+MJ_CORE_DATASOURCE_PASSWORD=your_db_password
+MJ_CORE_DATASOURCE_DATABASE=your_db_name
 ```
 
-3. Build the project:
+3. Install dependencies (from the repository root):
+
+```bash
+npm install
+```
+
+4. Build the project:
 
 ```bash
 npm run build
 ```
 
-4. Start the API server:
+5. Start the API server:
 
 ```bash
 npm start
@@ -58,158 +64,71 @@ npm start
 
 ## Configuration
 
-The API server can be configured through environment variables or a configuration file:
+The API server uses the following environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MJ_DBDRIVER` | Database provider | SQLServerDataProvider |
-| `MJ_HOST` | Database host | localhost |
-| `MJ_PORT` | Database port | 1433 |
-| `MJ_USER` | Database username | - |
-| `MJ_PASSWORD` | Database password | - |
-| `MJ_DATABASE` | Database name | - |
-| `MJ_APIPORT` | API server port | 3001 |
-| `MJ_CODEGEN_OUTPUT_DIR` | Output directory for generated code | ./generated |
-| `MJ_CODEGEN_TEMPLATES_DIR` | Templates directory | ./templates |
+| `PORT` | API server port | 3999 |
+
+The database configuration is inherited from the MemberJunction codegen library configuration. The server will use the standard MemberJunction database connection settings.
 
 ## API Endpoints
 
-### Permissions Generation
+### Entity Permissions SQL Generation
 
-#### `POST /api/codegen/permissions`
+#### `POST /api/entity-permissions`
 
-Generate TypeScript code for entity permissions.
-
-**Request Body:**
-```json
-{
-  "entities": ["User", "Role", "UserRole"],
-  "outputPath": "./src/generated/permissions"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Permissions generated successfully",
-  "files": [
-    "UserPermissions.ts",
-    "RolePermissions.ts",
-    "UserRolePermissions.ts"
-  ]
-}
-```
-
-### Entity Generation
-
-#### `POST /api/codegen/entities`
-
-Generate TypeScript entity classes for database tables.
+Generate SQL stored procedures for entity permissions. This endpoint refreshes metadata and generates SQL code for the specified entities.
 
 **Request Body:**
 ```json
 {
-  "entities": ["User", "Role"],
-  "outputPath": "./src/generated/entities",
-  "includeValidation": true
+  "entityIDArray": [1, 2, 3]
 }
 ```
 
-**Response:**
+**Parameters:**
+- `entityIDArray` (required): Array of entity IDs to generate SQL permissions for
+
+**Response (Success):**
 ```json
 {
-  "success": true,
-  "message": "Entity classes generated successfully",
-  "files": [
-    "User.entity.ts",
-    "Role.entity.ts"
-  ]
+  "status": "ok"
 }
 ```
 
-### Metadata Operations
-
-#### `GET /api/metadata/entities`
-
-Get all available entity metadata.
-
-**Response:**
+**Response (Error):**
 ```json
 {
-  "success": true,
-  "entities": [
-    {
-      "ID": 1,
-      "Name": "User",
-      "SchemaName": "dbo",
-      "BaseTable": "Users",
-      "Description": "System user information"
-    },
-    // ...more entities
-  ]
+  "status": "error",
+  "errorMessage": "Error message details"
 }
 ```
 
-#### `GET /api/metadata/entity/:name`
+**Example Usage:**
+```typescript
+import axios from 'axios';
 
-Get metadata for a specific entity.
+const response = await axios.post('http://localhost:3999/api/entity-permissions', {
+  entityIDArray: [1, 2, 3] // Entity IDs for User, Role, UserRole
+});
 
-**Response:**
-```json
-{
-  "success": true,
-  "entity": {
-    "ID": 1,
-    "Name": "User",
-    "SchemaName": "dbo",
-    "BaseTable": "Users",
-    "Description": "System user information",
-    "Fields": [
-      {
-        "ID": 1,
-        "Name": "ID",
-        "DataType": "int",
-        "IsPrimaryKey": true
-      },
-      // ...more fields
-    ]
-  }
+if (response.data.status === 'ok') {
+  console.log('Entity permissions updated successfully');
 }
 ```
 
-### Code Generation Operations
+**What it does:**
+1. Validates the request contains a valid `entityIDArray`
+2. Forces a metadata refresh to ensure entity information is up-to-date
+3. Filters entities based on the provided IDs
+4. Generates SQL stored procedures for CRUD operations with proper permissions
+5. Executes the generated SQL directly in the database (does not write files to disk)
 
-#### `POST /api/codegen/run`
-
-Run a complete code generation process.
-
-**Request Body:**
-```json
-{
-  "outputDirectory": "./src/generated",
-  "includeEntities": true,
-  "includePermissions": true,
-  "includeActions": true,
-  "entities": ["User", "Role"] // Optional, if omitted all entities will be included
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Code generation completed successfully",
-  "generatedFiles": [
-    "./src/generated/entities/User.entity.ts",
-    "./src/generated/entities/Role.entity.ts",
-    "./src/generated/permissions/UserPermissions.ts",
-    "./src/generated/permissions/RolePermissions.ts",
-    "./src/generated/actions/UserActions.ts",
-    "./src/generated/actions/RoleActions.ts"
-  ]
-}
-```
+**Note**: The current implementation has `writeFiles: false` and `skipExecution: false`, which means:
+- SQL is generated and executed directly in the database
+- No SQL files are written to the filesystem
+- Only permission-related SQL is generated (`onlyPermissions: true`)
 
 ## Development
 
@@ -247,12 +166,38 @@ This API server is designed to work closely with other MemberJunction packages:
 - `@memberjunction/codegen-lib`: Code generation library
 - `@memberjunction/sqlserver-dataprovider`: SQL Server data access
 
+## Architecture
+
+The API server is built on top of several key MemberJunction components:
+
+- **Express Server**: Simple HTTP server handling POST requests
+- **MJGlobal ClassFactory**: Dynamic instantiation of code generation classes
+- **SQLCodeGenBase**: Core SQL code generation functionality
+- **Metadata Management**: Automatic refresh before code generation
+- **TypeORM Integration**: Database connectivity through MemberJunction's data layer
+
 ## Use Cases
 
-1. **Development Workflow Integration**: Automate code generation during development
-2. **CI/CD Pipelines**: Generate type-safe code during builds
-3. **Database Schema Updates**: Update generated code when database schema changes
-4. **Permission Management**: Maintain entity permissions in sync with business rules
+1. **Database Schema Updates**: Regenerate SQL procedures when entity schemas change
+2. **Permission Management**: Update entity-level CRUD permissions through SQL generation
+3. **CI/CD Integration**: Automate SQL code generation in deployment pipelines
+4. **Development Workflow**: Quick regeneration of SQL procedures during development
+
+## Error Handling
+
+The API implements comprehensive error handling:
+- **400 Bad Request**: Invalid request body or missing `entityIDArray`
+- **500 Internal Server Error**: Failed to create code generation instance or SQL generation errors
+- All errors include descriptive messages in the response body
+
+## Notes
+
+- This API generates and executes SQL permission procedures directly in the database
+- It specifically generates permission-related SQL only (`onlyPermissions: true`)
+- No SQL files are written to disk in the current implementation
+- Metadata is always refreshed before generation to ensure accuracy
+- The API runs on port 3999 by default (configurable via PORT environment variable)
+- To modify the behavior (e.g., write files, generate full SQL), adjust the parameters in the `generateAndExecuteEntitySQLToSeparateFiles` call
 
 ## License
 

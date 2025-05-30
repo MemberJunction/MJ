@@ -6,9 +6,12 @@ A comprehensive wrapper for Google's Gemini AI models that seamlessly integrates
 
 - **Google Gemini Integration**: Connect to Google's state-of-the-art Gemini models using the official @google/genai SDK
 - **Standardized Interface**: Implements MemberJunction's BaseLLM abstract class
-- **Message Formatting**: Handles conversion between MemberJunction and Gemini message formats
+- **Streaming Support**: Full support for streaming responses with real-time token generation
+- **Multimodal Support**: Handle text, images, audio, video, and file content
+- **Message Formatting**: Automatic conversion between MemberJunction and Gemini message formats
+- **Effort Level Support**: Leverage Gemini's reasoning mode for higher-quality responses
 - **Error Handling**: Robust error handling with detailed reporting
-- **Chat Support**: Full support for chat-based interactions with Gemini models
+- **Chat Support**: Full support for chat-based interactions with conversation history
 - **Temperature Control**: Fine-tune generation creativity
 - **Response Format Control**: Request specific response MIME types
 
@@ -42,7 +45,7 @@ import { ChatParams } from '@memberjunction/ai';
 
 // Create chat parameters
 const chatParams: ChatParams = {
-  model: 'gemini-pro',  // or 'gemini-pro-vision' for images, 'gemini-ultra' for more advanced capabilities
+  model: 'gemini-pro',  // or 'gemini-pro-vision' for multimodal
   messages: [
     { role: 'system', content: 'You are a helpful assistant.' },
     { role: 'user', content: 'What are the key features of the Gemini AI model?' }
@@ -65,18 +68,84 @@ try {
 }
 ```
 
+### Streaming Chat Completion
+
+```typescript
+import { StreamingChatCallbacks } from '@memberjunction/ai';
+
+// Define streaming callbacks
+const streamCallbacks: StreamingChatCallbacks = {
+  onToken: (token: string) => {
+    process.stdout.write(token); // Print each token as it arrives
+  },
+  onComplete: (fullResponse: string) => {
+    console.log('\n\nComplete response received');
+  },
+  onError: (error: Error) => {
+    console.error('Streaming error:', error);
+  }
+};
+
+// Use streaming
+const streamParams: ChatParams = {
+  model: 'gemini-pro',
+  messages: [
+    { role: 'user', content: 'Write a short story about a robot.' }
+  ],
+  streaming: true,
+  streamingCallbacks: streamCallbacks
+};
+
+await geminiLLM.ChatCompletion(streamParams);
+```
+
+### Multimodal Content
+
+```typescript
+import { ChatMessageContent } from '@memberjunction/ai';
+
+// Create multimodal content
+const multimodalContent: ChatMessageContent = [
+  { type: 'text', content: 'What do you see in this image?' },
+  { type: 'image_url', content: 'base64_encoded_image_data_here' }
+];
+
+const multimodalParams: ChatParams = {
+  model: 'gemini-pro-vision',
+  messages: [
+    { role: 'user', content: multimodalContent }
+  ]
+};
+
+const response = await geminiLLM.ChatCompletion(multimodalParams);
+```
+
+### Enhanced Reasoning with Effort Level
+
+```typescript
+// Use effort level to enable Gemini's full reasoning mode
+const reasoningParams: ChatParams = {
+  model: 'gemini-pro',
+  messages: [
+    { role: 'user', content: 'Solve this complex logic puzzle...' }
+  ],
+  effortLevel: 'high' // Enables full reasoning mode
+};
+
+const response = await geminiLLM.ChatCompletion(reasoningParams);
+```
+
 ### Direct Access to Gemini Client
 
 ```typescript
 // Access the underlying GoogleGenAI client for advanced usage
 const geminiClient = geminiLLM.GeminiClient;
 
-// Use the client directly if needed
-const result = await geminiClient.models.generateContent({
+// Use the client directly if needed for custom operations
+const chat = geminiClient.chats.create({
   model: 'gemini-pro',
-  contents: 'Tell me a short joke about programming'
+  history: []
 });
-console.log(result.candidates[0].content.parts[0].text);
 ```
 
 ## Supported Models
@@ -85,7 +154,7 @@ Google Gemini provides several models with different capabilities:
 
 - `gemini-pro`: General-purpose text model
 - `gemini-pro-vision`: Multimodal model that can process images and text
-- `gemini-ultra`: Google's most advanced model (if available)
+- `gemini-ultra`: Google's most advanced model (when available)
 
 Check the [Google AI documentation](https://ai.google.dev/models/gemini) for the latest list of supported models.
 
@@ -101,19 +170,57 @@ A class that extends BaseLLM to provide Google Gemini-specific functionality.
 new GeminiLLM(apiKey: string)
 ```
 
+Creates a new instance of the Gemini LLM wrapper.
+
+**Parameters:**
+- `apiKey`: Your Google AI Studio API key
+
 #### Properties
 
 - `GeminiClient`: (read-only) Returns the underlying GoogleGenAI client instance
+- `SupportsStreaming`: (read-only) Returns `true` - Gemini supports streaming responses
 
 #### Methods
 
-- `ChatCompletion(params: ChatParams): Promise<ChatResult>` - Perform a chat completion
-- `SummarizeText(params: SummarizeParams): Promise<SummarizeResult>` - Not implemented yet
-- `ClassifyText(params: ClassifyParams): Promise<ClassifyResult>` - Not implemented yet
+##### ChatCompletion(params: ChatParams): Promise<ChatResult>
+
+Perform a chat completion with Gemini models.
+
+**Parameters:**
+- `params`: Chat parameters including model, messages, temperature, etc.
+
+**Returns:**
+- Promise resolving to a `ChatResult` with the model's response
+
+##### SummarizeText(params: SummarizeParams): Promise<SummarizeResult>
+
+Not implemented yet - will throw an error if called.
+
+##### ClassifyText(params: ClassifyParams): Promise<ClassifyResult>
+
+Not implemented yet - will throw an error if called.
 
 #### Static Methods
 
-- `MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content` - Converts MemberJunction messages to Gemini format
+##### MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content
+
+Converts a MemberJunction ChatMessage to Gemini's Content format.
+
+**Parameters:**
+- `message`: MemberJunction ChatMessage object
+
+**Returns:**
+- Gemini Content object with proper role mapping
+
+##### MapMJContentToGeminiParts(content: ChatMessageContent): Array<Part>
+
+Converts MemberJunction message content to Gemini Parts array.
+
+**Parameters:**
+- `content`: String or array of content parts
+
+**Returns:**
+- Array of Gemini Part objects
 
 ## Response Format Control
 
@@ -155,26 +262,82 @@ The wrapper handles proper message formatting and role conversion between Member
 
 - MemberJunction's `system` and `user` roles are converted to Gemini's `user` role
 - MemberJunction's `assistant` role is converted to Gemini's `model` role
-- Messages are properly spaced to ensure alternating roles as required by Gemini
+- Messages are automatically spaced to ensure alternating roles as required by Gemini
+- Multimodal content is properly converted with appropriate MIME types
+
+## Content Type Support
+
+The wrapper supports various content types with automatic MIME type mapping:
+
+- **Text**: Standard text messages
+- **Images**: `image_url` type → `image/jpeg` MIME type
+- **Audio**: `audio_url` type → `audio/mpeg` MIME type
+- **Video**: `video_url` type → `video/mp4` MIME type
+- **Files**: `file_url` type → `application/octet-stream` MIME type
+
+## Integration with MemberJunction
+
+This package is designed to work seamlessly with the MemberJunction AI framework:
+
+```typescript
+import { AIEngine } from '@memberjunction/ai';
+import { GeminiLLM } from '@memberjunction/ai-gemini';
+
+// Register the Gemini provider with the AI engine
+const aiEngine = new AIEngine();
+const geminiProvider = new GeminiLLM('your-api-key');
+
+// Use through the AI engine's unified interface
+const result = await aiEngine.ChatCompletion({
+  provider: 'GeminiLLM',
+  model: 'gemini-pro',
+  messages: [/* ... */]
+});
+```
+
+## Performance Considerations
+
+- **Streaming**: Use streaming for long responses to improve perceived performance
+- **Effort Level**: Use the `effortLevel` parameter judiciously as it increases latency and cost
+- **Model Selection**: Choose the appropriate model based on your needs (text-only vs multimodal)
+- **Message Spacing**: The wrapper automatically handles message spacing, adding minimal overhead
 
 ## Limitations
 
 Currently, the wrapper implements:
-- Chat completion functionality
-
-Future implementations may include:
-- `SummarizeText` functionality
-- `ClassifyText` functionality
-- Token counting and usage reporting
-- Image processing with `gemini-pro-vision`
-- Function calling
+- ✅ Chat completion functionality (streaming and non-streaming)
+- ✅ Multimodal content support
+- ✅ Effort level configuration for enhanced reasoning
+- ❌ `SummarizeText` functionality (not implemented)
+- ❌ `ClassifyText` functionality (not implemented)
+- ❌ Detailed token usage reporting (Gemini doesn't provide this)
 
 ## Dependencies
 
-- `@google/genai`: Official Google GenAI SDK (replaces the deprecated @google/generative-ai)
-- `@memberjunction/ai`: MemberJunction AI core framework
-- `@memberjunction/global`: MemberJunction global utilities
+- `@google/genai` (v0.14.0): Official Google GenAI SDK
+- `@memberjunction/ai` (v2.43.0): MemberJunction AI core framework
+- `@memberjunction/global` (v2.43.0): MemberJunction global utilities
+
+## Development
+
+### Building
+
+```bash
+npm run build
+```
+
+### Testing
+
+Tests are not currently implemented. To add tests:
+
+```bash
+npm test
+```
 
 ## License
 
 ISC
+
+## Contributing
+
+For bug reports, feature requests, or contributions, please visit the [MemberJunction repository](https://github.com/MemberJunction/MJ).
