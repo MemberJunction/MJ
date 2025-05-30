@@ -1,6 +1,7 @@
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
 import { ExecutionTask, ParallelizationStrategy } from "./ParallelExecution";
+import { ChatMessage } from "@memberjunction/ai";
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -34,7 +35,9 @@ export class ExecutionPlanner {
         allModels: AIModelEntityExtended[],
         renderedPrompt: string,
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): ExecutionTask[] {
         LogStatus(`Creating execution plan for prompt "${prompt.Name}" with parallelization mode: ${prompt.ParallelizationMode}`);
 
@@ -42,20 +45,20 @@ export class ExecutionPlanner {
 
         switch (strategy) {
             case 'None':
-                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
 
             case 'StaticCount':
-                return this.createStaticCountPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+                return this.createStaticCountPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
 
             case 'ConfigParam':
-                return this.createConfigParamPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+                return this.createConfigParamPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
 
             case 'ModelSpecific':
-                return this.createModelSpecificPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+                return this.createModelSpecificPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
 
             default:
                 LogError(`Unknown parallelization strategy: ${strategy}, falling back to single execution`);
-                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId);
+                return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
         }
     }
 
@@ -78,7 +81,9 @@ export class ExecutionPlanner {
         allModels: AIModelEntityExtended[],
         renderedPrompt: string,
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): ExecutionTask[] {
         const selectedModel = this.selectBestModel(prompt, promptModels, allModels, configurationId);
         
@@ -99,7 +104,9 @@ export class ExecutionPlanner {
             renderedPrompt,
             contextUser,
             configurationId,
-            modelParameters: this.parseModelParameters(promptModel?.ModelParameters)
+            modelParameters: this.parseModelParameters(promptModel?.ModelParameters),
+            conversationMessages,
+            templateMessageRole
         };
 
         LogStatus(`Created single execution plan with model: ${selectedModel.Name}`);
@@ -125,7 +132,9 @@ export class ExecutionPlanner {
         allModels: AIModelEntityExtended[],
         renderedPrompt: string,
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): ExecutionTask[] {
         const parallelCount = prompt.ParallelCount || 1;
         
@@ -187,7 +196,9 @@ export class ExecutionPlanner {
         allModels: AIModelEntityExtended[],
         renderedPrompt: string,
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): ExecutionTask[] {
         const configParamName = prompt.ParallelConfigParam;
         
@@ -260,7 +271,9 @@ export class ExecutionPlanner {
         allModels: AIModelEntityExtended[],
         renderedPrompt: string,
         contextUser?: UserInfo,
-        configurationId?: string
+        configurationId?: string,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): ExecutionTask[] {
         const tasks: ExecutionTask[] = [];
         const activePromptModels = promptModels.filter(pm => 

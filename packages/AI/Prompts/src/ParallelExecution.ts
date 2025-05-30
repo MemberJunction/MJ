@@ -1,6 +1,6 @@
 import { AIPromptEntity, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntity } from "@memberjunction/core-entities";
 import { UserInfo, ValidationResult } from "@memberjunction/core";
-import { ChatResult } from "@memberjunction/ai";
+import { ChatResult, ChatMessage } from "@memberjunction/ai";
 
 /**
  * Represents a single execution task in a parallel processing scenario.
@@ -36,6 +36,12 @@ export interface ExecutionTask {
     
     /** Model-specific parameters (temperature, max tokens, etc.) */
     modelParameters?: Record<string, any>;
+    
+    /** Optional conversation messages for multi-turn conversations */
+    conversationMessages?: ChatMessage[];
+    
+    /** How to use the rendered template in conversation messages */
+    templateMessageRole?: 'system' | 'user' | 'none';
 }
 
 /**
@@ -78,6 +84,19 @@ export interface ExecutionTaskResult {
     
     /** End time of execution */
     endTime: Date;
+    
+    /** Ranking assigned by judge (1 = best, 2 = second best, etc.) */
+    ranking?: number;
+    
+    /** Judge's rationale for this ranking */
+    judgeRationale?: string;
+    
+    /** Judge metadata (execution time, tokens used) */
+    judgeMetadata?: {
+        judgePromptId: string;
+        judgeExecutionTimeMS: number;
+        judgeTokensUsed?: number;
+    };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { BaseLLM, BaseResult, ChatParams, ChatResult, ChatMessageRole, GetAIAPIKey } from "@memberjunction/ai";
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from "@memberjunction/ai";
 import { LogError, Metadata, UserInfo, ValidationResult, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntityExtended, AIPromptEntity, AIPromptRunEntity } from "@memberjunction/core-entities";
@@ -53,6 +53,21 @@ export class AIPromptParams {
      * Optional custom template data that augments the main data context
      */
     templateData?: any;
+    
+    /**
+     * Optional conversation messages for multi-turn conversations
+     * When provided, these messages will be combined with the rendered template
+     * for direct conversation-style prompting
+     */
+    conversationMessages?: ChatMessage[];
+    
+    /**
+     * Determines how the rendered template should be used in conversation messages
+     * 'system' - Add rendered template as system message (default)
+     * 'user' - Add rendered template as user message
+     * 'none' - Don't add rendered template to conversation
+     */
+    templateMessageRole?: 'system' | 'user' | 'none';
 }
 
 /**
@@ -98,6 +113,42 @@ export class AIPromptRunResult {
      * Validation result if output validation was performed
      */
     validationResult?: ValidationResult;
+    
+    /**
+     * Additional results from parallel execution, ranked by judge
+     * Index 0 = second best, Index 1 = third best, etc.
+     * (The best result is the main result object itself)
+     */
+    additionalResults?: AIPromptRunResult[];
+    
+    /**
+     * Ranking assigned by judge (1 = best, 2 = second best, etc.)
+     */
+    ranking?: number;
+    
+    /**
+     * Judge's rationale for this ranking
+     */
+    judgeRationale?: string;
+    
+    /**
+     * Model information for this result
+     */
+    modelInfo?: {
+        modelId: string;
+        modelName: string;
+        vendorId?: string;
+        vendorName?: string;
+    };
+    
+    /**
+     * Metadata about the judging process (only present on the main result)
+     */
+    judgeMetadata?: {
+        judgePromptId: string;
+        judgeExecutionTimeMS: number;
+        judgeTokensUsed?: number;
+    };
 }
 
 /**
@@ -146,19 +197,26 @@ export class AIPromptRunner {
                 throw new Error(`Prompt ${prompt.Name} is not active (Status: ${prompt.Status})`);
             }
 
-            // Initialize template engine
-            await this._templateEngine.Config(false, params.contextUser);
+            let renderedPromptText: string = "";
+            
+            // Always render the template (needed for system prompt or user message)
+            if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
+                // Initialize template engine
+                await this._templateEngine.Config(false, params.contextUser);
 
-            // Load the template for the prompt
-            const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
-            if (!template) {
-                throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
-            }
+                // Load the template for the prompt
+                const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
+                if (!template) {
+                    throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
+                }
 
-            // Render the template with provided data
-            const renderedPrompt = await this.renderPromptTemplate(template, params.data, params.templateData);
-            if (!renderedPrompt.Success) {
-                throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
+                // Render the template with provided data
+                const renderedPrompt = await this.renderPromptTemplate(template, params.data, params.templateData);
+                if (!renderedPrompt.Success) {
+                    throw new Error(`Failed to render template for prompt ${prompt.Name}: ${renderedPrompt.Message}`);
+                }
+                
+                renderedPromptText = renderedPrompt.Output;
             }
 
             // Check if we need parallel execution based on ParallelizationMode
@@ -166,10 +224,10 @@ export class AIPromptRunner {
             
             if (shouldUseParallelExecution) {
                 // Use parallel execution path
-                return await this.executePromptInParallel(prompt, renderedPrompt.Output, params, startTime);
+                return await this.executePromptInParallel(prompt, renderedPromptText, params, startTime);
             } else {
                 // Use traditional single execution path
-                return await this.executeSinglePrompt(prompt, renderedPrompt.Output, params, startTime);
+                return await this.executeSinglePrompt(prompt, renderedPromptText, params, startTime);
             }
 
         } catch (error) {
@@ -223,7 +281,14 @@ export class AIPromptRunner {
         const promptRun = await this.createPromptRun(prompt, selectedModel, params, startTime, params.vendorId);
 
         // Execute the AI model
-        const modelResult = await this.executeModel(selectedModel, renderedPromptText, prompt, params.contextUser);
+        const modelResult = await this.executeModel(
+            selectedModel, 
+            renderedPromptText, 
+            prompt, 
+            params.contextUser, 
+            params.conversationMessages,
+            params.templateMessageRole || 'system'
+        );
         
         // Parse and validate the result
         const parsedResult = await this.parseAndValidateResult(
@@ -283,7 +348,9 @@ export class AIPromptRunner {
             AIEngine.Instance.Models,
             renderedPromptText,
             params.contextUser,
-            params.configurationId
+            params.configurationId,
+            params.conversationMessages,
+            params.templateMessageRole || 'system'
         );
 
         if (executionTasks.length === 0) {
@@ -357,14 +424,70 @@ export class AIPromptRunner {
             LogError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.Message || 'Unknown error'}`);
         }
 
+        // Create additional results from all other successful results (excluding the best one)
+        const additionalResults: AIPromptRunResult[] = [];
+        
+        // Sort successful results by ranking (if available) or keep original order
+        const sortedResults = successfulResults.sort((a, b) => {
+            if (a.ranking && b.ranking) {
+                return a.ranking - b.ranking;
+            }
+            return 0;
+        });
+        
+        for (const result of sortedResults) {
+            if (result.task.taskId !== selectedResult.task.taskId) {
+                // Parse and validate this result
+                const parsedResult = await this.parseAndValidateResult(
+                    result.modelResult!,
+                    prompt,
+                    params.skipValidation
+                );
+                
+                additionalResults.push({
+                    success: result.success,
+                    rawResult: result.rawResult,
+                    result: parsedResult.result,
+                    executionTimeMS: result.executionTimeMS,
+                    tokensUsed: result.tokensUsed,
+                    validationResult: parsedResult.validationResult,
+                    ranking: result.ranking,
+                    judgeRationale: result.judgeRationale,
+                    modelInfo: {
+                        modelId: result.task.model.ID,
+                        modelName: result.task.model.Name,
+                        vendorId: undefined, // VendorID not directly available on AIModel
+                        vendorName: result.task.model.Vendor
+                    }
+                });
+            }
+        }
+        
+        // Parse and validate the selected result
+        const selectedParsedResult = await this.parseAndValidateResult(
+            selectedResult.modelResult!,
+            prompt,
+            params.skipValidation
+        );
+        
         return {
             success: true,
             rawResult: selectedResult.rawResult,
-            result: selectedResult.parsedResult,
+            result: selectedParsedResult.result,
             promptRun: consolidatedPromptRun,
             executionTimeMS: parallelResult.totalExecutionTimeMS,
             tokensUsed: parallelResult.totalTokensUsed,
-            validationResult: selectedResult.validationResult
+            validationResult: selectedParsedResult.validationResult,
+            additionalResults: additionalResults.length > 0 ? additionalResults : undefined,
+            ranking: selectedResult.ranking || 1,
+            judgeRationale: selectedResult.judgeRationale,
+            modelInfo: {
+                modelId: selectedResult.task.model.ID,
+                modelName: selectedResult.task.model.Name,
+                vendorId: undefined, // VendorID not directly available on AIModel
+                vendorName: selectedResult.task.model.Vendor
+            },
+            judgeMetadata: selectedResult.judgeMetadata
         };
     }
 
@@ -590,7 +713,9 @@ export class AIPromptRunner {
         model: AIModelEntityExtended,
         renderedPrompt: string,
         prompt: AIPromptEntity,
-        _contextUser?: UserInfo
+        _contextUser?: UserInfo,
+        conversationMessages?: ChatMessage[],
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
     ): Promise<ChatResult> {
         try {
             // Create LLM instance
@@ -600,12 +725,9 @@ export class AIPromptRunner {
             // Prepare chat parameters
             const params = new ChatParams();
             params.model = model.APIName;
-            params.messages = [
-                {
-                    role: ChatMessageRole.user,
-                    content: renderedPrompt
-                }
-            ];
+            
+            // Build message array with rendered prompt and conversation messages
+            params.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
             // Apply response format constraints if specified
             if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
@@ -620,6 +742,51 @@ export class AIPromptRunner {
             LogError(`Error executing model ${model.Name}: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * Builds the message array combining rendered prompt with conversation messages
+     */
+    private buildMessageArray(
+        renderedPrompt: string, 
+        conversationMessages?: ChatMessage[], 
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
+    ): ChatMessage[] {
+        const messages: ChatMessage[] = [];
+        
+        // Add rendered template as system or user message if not 'none'
+        if (renderedPrompt && templateMessageRole !== 'none') {
+            messages.push({
+                role: templateMessageRole === 'system' ? ChatMessageRole.system : ChatMessageRole.user,
+                content: renderedPrompt
+            });
+        }
+        
+        // Add conversation messages if provided
+        if (conversationMessages && conversationMessages.length > 0) {
+            messages.push(...conversationMessages);
+        }
+        
+        // If no conversation messages and no rendered prompt as user message, 
+        // add a default user message to ensure we have at least one user message
+        if ((!conversationMessages || conversationMessages.length === 0) && 
+            templateMessageRole !== 'user' && renderedPrompt) {
+            // If we only have a system message, we need a user message too
+            if (templateMessageRole === 'system') {
+                messages.push({
+                    role: ChatMessageRole.user,
+                    content: "Please proceed with the above instructions."
+                });
+            }
+        } else if ((!conversationMessages || conversationMessages.length === 0) && !renderedPrompt) {
+            // Fallback: if no conversation and no rendered prompt, add a basic user message
+            messages.push({
+                role: ChatMessageRole.user,
+                content: "Hello"
+            });
+        }
+        
+        return messages;
     }
 
     /**

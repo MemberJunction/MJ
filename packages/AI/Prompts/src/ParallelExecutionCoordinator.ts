@@ -1,6 +1,6 @@
 import { LogError, LogStatus, UserInfo, ValidationResult } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, GetAIAPIKey } from "@memberjunction/ai";
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from "@memberjunction/ai";
 import { AIPromptEntity, AIPromptRunEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
 import { 
     ExecutionTask, 
@@ -12,6 +12,7 @@ import {
     ResultSelectionConfig,
     ResultSelectionMethod
 } from "./ParallelExecution";
+import { AIEngine } from "@memberjunction/aiengine";
 
 /**
  * Coordinates parallel execution of AI prompt tasks across multiple models and execution groups.
@@ -317,12 +318,13 @@ export class ParallelExecutionCoordinator {
             // Prepare chat parameters
             const params = new ChatParams();
             params.model = task.model.APIName;
-            params.messages = [
-                {
-                    role: ChatMessageRole.user,
-                    content: task.renderedPrompt
-                }
-            ];
+            
+            // Build message array with rendered prompt and conversation messages
+            params.messages = this.buildMessageArray(
+                task.renderedPrompt, 
+                task.conversationMessages, 
+                task.templateMessageRole || 'system'
+            );
 
             // Apply model-specific parameters if available
             if (task.modelParameters) {
@@ -433,22 +435,163 @@ export class ParallelExecutionCoordinator {
      * 
      * @param results - Array of successful results to choose from
      * @param selectorPromptId - ID of the prompt to use for selection
-     * @returns Promise<ExecutionTaskResult> - The AI-selected best result
+     * @returns Promise<ExecutionTaskResult> - The AI-selected best result with all results ranked
      */
     private async selectResultWithPrompt(
         results: ExecutionTaskResult[], 
         selectorPromptId: string
     ): Promise<ExecutionTaskResult> {
-        // TODO: Implement AI-based result selection
-        // This would involve:
-        // 1. Loading the selector prompt
-        // 2. Formatting the multiple results as input
-        // 3. Executing the selector prompt
-        // 4. Parsing the selection decision
-        // 5. Returning the selected result
-        
-        LogStatus(`AI-based result selection not yet implemented, returning first result`);
-        return results[0];
+        try {
+            // Import AIPromptRunner here to avoid circular dependency
+            const { AIPromptRunner } = await import('./AIPromptRunner');
+            
+            // Load the judge prompt from AIEngine
+            await AIEngine.Instance.Config(false);
+            const judgePrompt = AIEngine.Instance.Prompts.find(p => p.ID === selectorPromptId);
+            
+            if (!judgePrompt) {
+                LogError(`Judge prompt with ID ${selectorPromptId} not found`);
+                return results[0]; // Fallback to first result
+            }
+            
+            // Prepare the data for the judge prompt
+            const judgeData = this.formatResultsForJudge(results);
+            
+            // Create conversation messages for the judge
+            const conversationMessages: ChatMessage[] = [
+                {
+                    role: ChatMessageRole.system,
+                    content: "You are an expert AI judge tasked with ranking multiple AI responses to determine the best one. Analyze each response for quality, accuracy, completeness, and relevance to the original prompt."
+                },
+                {
+                    role: ChatMessageRole.user,
+                    content: JSON.stringify(judgeData, null, 2)
+                }
+            ];
+            
+            // Execute the judge prompt
+            const judgeRunner = new AIPromptRunner();
+            const judgeStartTime = Date.now();
+            
+            const judgeResult = await judgeRunner.ExecutePrompt({
+                prompt: judgePrompt,
+                data: judgeData,
+                conversationMessages: conversationMessages
+            });
+            
+            const judgeEndTime = Date.now();
+            const judgeExecutionTimeMS = judgeEndTime - judgeStartTime;
+            
+            if (!judgeResult.success || !judgeResult.rawResult) {
+                LogError(`Judge prompt execution failed: ${judgeResult.errorMessage}`);
+                return results[0]; // Fallback to first result
+            }
+            
+            // Parse the judge's decision
+            const rankings = this.parseJudgeResult(judgeResult.rawResult);
+            
+            if (!rankings || rankings.length === 0) {
+                LogError('Failed to parse judge rankings');
+                return results[0]; // Fallback to first result
+            }
+            
+            // Apply rankings to results
+            this.applyRankingsToResults(results, rankings);
+            
+            // Store judge metadata for later use
+            const bestCandidateId = rankings.find(r => r.rank === 1)?.candidateId;
+            const bestResultIndex = results.findIndex(r => r.task.taskId === bestCandidateId);
+            const bestResult = bestResultIndex >= 0 ? results[bestResultIndex] : results[0];
+            
+            // Add judge metadata to the best result
+            bestResult.judgeMetadata = {
+                judgePromptId: selectorPromptId,
+                judgeExecutionTimeMS,
+                judgeTokensUsed: judgeResult.tokensUsed
+            };
+            
+            LogStatus(`Judge selected candidate ${bestCandidateId} as the best result`);
+            return bestResult;
+            
+        } catch (error) {
+            LogError(`Error in AI judge selection: ${error.message}`);
+            return results[0]; // Fallback to first result
+        }
+    }
+
+    /**
+     * Formats execution results for the judge prompt.
+     * 
+     * @param results - Array of execution results to format
+     * @returns Structured data for judge evaluation
+     */
+    private formatResultsForJudge(results: ExecutionTaskResult[]): any {
+        return {
+            originalPrompt: results[0]?.task.renderedPrompt || "Original prompt not available",
+            candidates: results.map((result, index) => ({
+                candidateId: result.task.taskId,
+                modelName: result.task.model.Name,
+                vendorName: result.task.model.Vendor || "Unknown",
+                response: result.rawResult || "",
+                executionTimeMS: result.executionTimeMS,
+                tokensUsed: result.tokensUsed || 0
+            })),
+            instructions: {
+                task: "Rank these AI responses from best to worst (1 = best)",
+                format: "Return valid JSON with 'rankings' array containing objects with 'candidateId', 'rank', and 'rationale' fields",
+                criteria: ["Quality", "Accuracy", "Completeness", "Relevance", "Clarity"]
+            }
+        };
+    }
+
+    /**
+     * Parses the judge's result to extract rankings.
+     * 
+     * @param judgeResult - Raw result from the judge prompt
+     * @returns Array of ranking objects or null if parsing fails
+     */
+    private parseJudgeResult(judgeResult: string): Array<{candidateId: string, rank: number, rationale: string}> | null {
+        try {
+            // Try to extract JSON from the result (in case there's extra text)
+            const jsonMatch = judgeResult.match(/\{[\s\S]*\}/);
+            const jsonString = jsonMatch ? jsonMatch[0] : judgeResult;
+            
+            const parsed = JSON.parse(jsonString);
+            
+            if (parsed.rankings && Array.isArray(parsed.rankings)) {
+                return parsed.rankings.map((ranking: any) => ({
+                    candidateId: ranking.candidateId,
+                    rank: ranking.rank,
+                    rationale: ranking.rationale || "No rationale provided"
+                }));
+            }
+            
+            LogError('Judge result does not contain valid rankings array');
+            return null;
+            
+        } catch (error) {
+            LogError(`Failed to parse judge result: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Applies rankings to execution task results.
+     * 
+     * @param results - Array of execution results to rank
+     * @param rankings - Rankings from the judge
+     */
+    private applyRankingsToResults(
+        results: ExecutionTaskResult[], 
+        rankings: Array<{candidateId: string, rank: number, rationale: string}>
+    ): void {
+        for (const result of results) {
+            const ranking = rankings.find(r => r.candidateId === result.task.taskId);
+            if (ranking) {
+                result.ranking = ranking.rank;
+                result.judgeRationale = ranking.rationale;
+            }
+        }
     }
 
     /**
@@ -479,6 +622,51 @@ export class ParallelExecutionCoordinator {
 
         // Return the first result from the largest group
         return largestGroup[0];
+    }
+
+    /**
+     * Builds the message array combining rendered prompt with conversation messages
+     */
+    private buildMessageArray(
+        renderedPrompt: string, 
+        conversationMessages?: ChatMessage[], 
+        templateMessageRole: 'system' | 'user' | 'none' = 'system'
+    ): ChatMessage[] {
+        const messages: ChatMessage[] = [];
+        
+        // Add rendered template as system or user message if not 'none'
+        if (renderedPrompt && templateMessageRole !== 'none') {
+            messages.push({
+                role: templateMessageRole === 'system' ? ChatMessageRole.system : ChatMessageRole.user,
+                content: renderedPrompt
+            });
+        }
+        
+        // Add conversation messages if provided
+        if (conversationMessages && conversationMessages.length > 0) {
+            messages.push(...conversationMessages);
+        }
+        
+        // If no conversation messages and no rendered prompt as user message, 
+        // add a default user message to ensure we have at least one user message
+        if ((!conversationMessages || conversationMessages.length === 0) && 
+            templateMessageRole !== 'user' && renderedPrompt) {
+            // If we only have a system message, we need a user message too
+            if (templateMessageRole === 'system') {
+                messages.push({
+                    role: ChatMessageRole.user,
+                    content: "Please proceed with the above instructions."
+                });
+            }
+        } else if ((!conversationMessages || conversationMessages.length === 0) && !renderedPrompt) {
+            // Fallback: if no conversation and no rendered prompt, add a basic user message
+            messages.push({
+                role: ChatMessageRole.user,
+                content: "Hello"
+            });
+        }
+        
+        return messages;
     }
 
     /**
