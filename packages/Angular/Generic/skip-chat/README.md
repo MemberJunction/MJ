@@ -74,7 +74,6 @@ export class YourModule { }
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CompositeKey } from '@memberjunction/core';
-import { ChatWelcomeQuestion } from '@memberjunction/ng-skip-chat';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
@@ -284,6 +283,7 @@ The main component for the Skip chat interface.
 - `SharingExcludeRoleNames`: string[] - Role names to exclude from sharing
 - `SharingExcludeEmails`: string[] - User emails to exclude from sharing
 - `WelcomeQuestions`: ChatWelcomeQuestion[] - Array of welcome questions/prompts
+  - Each ChatWelcomeQuestion has: `topLine` (main title), `bottomLine` (subtitle), `prompt` (actual message sent)
 - `AutoLoad`: boolean - Whether to automatically load data (default: true)
 - `VerboseLogging`: boolean - Whether to enable verbose logging (default: false)
 - `EnableArtifactSplitView`: boolean - Whether to enable split-panel viewing for artifacts (default: true)
@@ -356,10 +356,52 @@ Component for managing the split-panel layout.
 The package includes several components for rendering dynamic reports:
 
 - `SkipDynamicReportWrapperComponent`: Main wrapper for reports
-- `LinearReportComponent`: For linear report layouts
-- `DynamicChartComponent`: For chart visualizations
-- `DynamicGridComponent`: For data grid displays
-- `DynamicHtmlReportComponent`: For HTML formatted reports
+- `SkipDynamicLinearReportComponent`: For linear report layouts
+- `SkipDynamicChartComponent`: For chart visualizations
+- `SkipDynamicGridComponent`: For data grid displays
+- `SkipDynamicHTMLReportComponent`: For HTML formatted reports
+- `SkipArtifactsCounterComponent`: For displaying artifact count badges
+
+### Utility Classes
+
+#### DrillDownInfo
+
+A utility class for managing drill-down operations within reports.
+
+```typescript
+import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
+
+const drillDown = new DrillDownInfo('Customers', 'Country = "USA"');
+drillDown.BaseFilter = 'Active = 1'; // Optional base filter
+
+// Get parameters for UserViewGrid
+const gridParams = drillDown.UserViewGridParams;
+// Returns: { EntityName: 'Customers', ExtraFilter: '(Country = "USA") AND (Active = 1)' }
+```
+
+#### SkipConversationReportCache
+
+A singleton cache manager for conversation reports to minimize network requests.
+
+```typescript
+import { SkipConversationReportCache } from '@memberjunction/ng-skip-chat';
+
+// Get reports for a conversation (cached after first load)
+const reports = await SkipConversationReportCache.Instance.GetConversationReports(
+  conversationId,
+  provider, // optional IRunViewProvider
+  forceRefresh // optional boolean to force reload
+);
+
+// Add a new report to cache
+SkipConversationReportCache.Instance.AddConversationReport(conversationId, reportEntity);
+
+// Update existing report in cache
+SkipConversationReportCache.Instance.UpdateConversationReport(conversationId, reportEntity);
+
+// Remove report from cache
+SkipConversationReportCache.Instance.RemoveConversationReport(conversationId, reportId);
+```
 
 ## Conversation Flow
 
@@ -373,7 +415,45 @@ The package includes several components for rendering dynamic reports:
 
 ## Styling
 
-The component includes extensive CSS styling that can be customized to match your application's design.
+The component includes extensive CSS styling that can be customized to match your application's design. Key CSS classes include:
+
+- `.skip-chat-container`: Main container for the entire component
+- `.conversation-list`: Styles for the conversation list panel
+- `.chat-messages`: Container for message display
+- `.skip-message`: Individual message styling
+- `.artifact-indicator`: Styling for artifact indicators in messages
+- `.split-panel`: Split panel container styling
+- `.welcome-screen`: Welcome screen with suggested prompts
+
+## Module Configuration
+
+When importing the SkipChatModule, ensure your application includes:
+
+1. **Font Awesome**: Required for icons throughout the component
+2. **Angular CDK**: Required for overlay functionality
+3. **Kendo UI Theme**: Required for Kendo components (grid, dialogs, etc.)
+
+```typescript
+// In your app.module.ts or feature module
+import { SkipChatModule } from '@memberjunction/ng-skip-chat';
+import { MarkdownModule } from 'ngx-markdown';
+
+@NgModule({
+  imports: [
+    SkipChatModule,
+    MarkdownModule.forRoot(), // Already included in SkipChatModule but needed at app level
+    // ... other imports
+  ]
+})
+export class AppModule { }
+```
+
+## Build and Deployment Notes
+
+- This package is built using Angular's ng-packagr
+- Ensure all peer dependencies are installed at the correct versions
+- The package uses TypeScript strict mode
+- All Kendo UI components must have a valid license for production use
 
 ## Dependencies
 
@@ -389,3 +469,15 @@ The component includes extensive CSS styling that can be customized to match you
 - `@progress/kendo-angular-dialog`: For dialog components
 - `ngx-markdown`: For markdown rendering
 - `plotly.js-dist-min`: For chart rendering
+- `@angular/cdk`: For overlay functionality
+
+## Version Compatibility
+
+This package requires:
+- Angular 18.0.2 or compatible version
+- TypeScript 4.9 or higher
+- Node.js 16 or higher
+
+## License
+
+This package is part of the MemberJunction framework. See the main repository for license information.

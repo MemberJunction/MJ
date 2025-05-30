@@ -28,6 +28,7 @@
     "@memberjunction/ai-openai": "2.43.0",
     "@memberjunction/ai-vectors-pinecone": "2.43.0",
     "@memberjunction/aiengine": "2.43.0",
+    "@memberjunction/ai-prompts": "2.43.0",
     "@memberjunction/core": "2.43.0",
     "@memberjunction/core-actions": "2.43.0",
     "@memberjunction/core-entities": "2.43.0",

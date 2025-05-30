@@ -1,5 +1,5 @@
 import { LogError, UserInfo } from "@memberjunction/core";
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
 import { AIEngine } from "@memberjunction/aiengine";
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
@@ -54,26 +54,58 @@ export class AIPromptExtension extends TemplateExtensionBase {
         // const errorBody = '';
 
         // See above for notes about CallExtension
-        return new nodes.CallExtensionAsync(this, 'run', params, [body, errorBody, params]);    
+        return new nodes.CallExtensionAsync(this, 'run', params, [body]);    
     }
 
-    public run(context: Context, body: any, errorBody: any, params, callBack: NunjucksCallback, a, b, c) {
+    /**
+     * Executes AI prompt processing using the configured language model.
+     * 
+     * **Parameter Mapping from CallExtensionAsync:**
+     * - In parse(): `new nodes.CallExtensionAsync(this, 'run', params, [body])`
+     * - Results in: `run(context, params, body, callBack)`
+     * 
+     * The key difference from TemplateEmbed is that we pass `[body]` as the 4th parameter
+     * to CallExtensionAsync, which shifts the parameter order to include both params and body
+     * as separate arguments. The body contains the prompt text between the opening and closing tags.
+     * 
+     * @param context - Nunjucks template rendering context containing variables and data
+     * @param params - Parsed parameters from the opening tag (AIModel, AllowFormatting, etc.)
+     * @param body - Function that returns the rendered prompt content between {% AIPrompt %} and {% endAIPrompt %}
+     * @param callBack - Async callback function to return the AI-generated response or errors
+     * 
+     * @example
+     * ```nunjucks
+     * {% AIPrompt AIModel="gpt-4", AllowFormatting=true %}
+     * Generate a personalized greeting for {{ user.name }} who works as {{ user.jobTitle }}.
+     * Make it professional but warm.
+     * {% endAIPrompt %}
+     * ```
+     */
+    public run(context: Context, params: any, body: any, callBack: NunjucksCallback) {
         const prompt = body();
-        let config: AIPromptConfig = {};
-
-        if(prompt.includes("<!--!!") && prompt.includes("!!-->")) {
-            // we have a config block in the prompt
-            const configBlock = prompt.substring(prompt.indexOf("<!--!!") + 6, prompt.indexOf("!!-->"));
-            try{
-                config = JSON.parse(configBlock);
-            }
-            catch (e) {
-                // try-catch because we don't want to crash if the JSON is invalid
-                LogError(`Unable to parse JSON: ${configBlock}`);
-                LogError(e);
+        const config: AIPromptConfig = {};
+        // now map each value from params to the config object, and be case INsensitive
+        for (const key in params) {
+            if (params.hasOwnProperty(key)) {
+                const value = params[key];
+                // convert the key to lower case and remove any spaces
+                const lowerKey = key.toLowerCase().replace(/\s+/g, '');
+                // now set the value in the config object
+                if (lowerKey === 'aimodel') {
+                    config.AIModel = value;
+                } else if (lowerKey === 'allowformatting') {
+                    // convert the value to a boolean
+                    if (typeof value === 'string') {
+                        config.AllowFormatting = value.toLowerCase() === 'true' || value.toLowerCase() === 'yes';
+                    } else if (typeof value === 'boolean') {
+                        config.AllowFormatting = value;
+                    } else {
+                        // if the value is not a string or boolean, we will just set it to false
+                        config.AllowFormatting = false;
+                    }
+                }
             }
         }
-
 
         // we now have the LLM prompt in the prompt variable
         // we can't use async/await here because this is a synchronous function
@@ -84,10 +116,19 @@ export class AIPromptExtension extends TemplateExtensionBase {
             try {
                 let model: AIModelEntityExtended = null;
                 if(config.AIModel) {
-                    model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() == config.AIModel.toLowerCase());
+                    model = AIEngine.Instance.Models.find(m => 
+                        m.Name.toLowerCase() === config.AIModel.toLowerCase() ||
+                        m.APIName?.toLowerCase() === config.AIModel.toLowerCase() 
+                    );
+                    if (!model) {
+                        throw new Error(`AI model '${config.AIModel}' not found.`);
+                    }
                 }
                 else{
                     model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
+                    if (!model) {
+                        throw new Error(`No AI model found for the vendor 'Groq' and type 'llm'.`);
+                    }
                 }
                 
                 const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
@@ -115,6 +156,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
             }
             catch (e) {
                 LogError(e);
+                callBack(null, e);
             }
         });        
     }
@@ -251,3 +293,8 @@ export type AIPromptConfig = {
 //     models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
 //     return models[0];
 // }
+
+
+export function LoadAIPromptExtension() {
+    // does nothing just to ensure the extension class isn't tree-shaken
+}

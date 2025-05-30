@@ -727,6 +727,7 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
      * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
      * as chosen by the container application.
+     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
      */
     htmlReport: string | null;
     /**
@@ -738,15 +739,14 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * Generally speaking, this object name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
      * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
      * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
+     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
      */
     htmlReportObjectName: string | null;
 
     /**
-     * For HTML reports, it is possible the AI will generate more than one option. If more than one option was generated
-     * this array will contain the additional options that the AI generated that can be provided to the user as alternatives 
-     * to the primary HTML report that is provided in the htmlReport property.
+     * Contains a list of all the possible HTML reports that were generated (1 or more) for the given request.
      */
-    additionalHTMLReportOptions?: SkipHTMLReportOption[];
+    htmlReportOptions?: SkipHTMLReportOption[];
 
     /**
      * If the AI Agent decides it would be best to display the result in an artifact, this information can be used by the calling application to properly
@@ -761,11 +761,11 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
  */
 export type SkipHTMLReportOption = {
     /**
-     * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
-     * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
+     * This code is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
+     * designed to be embedded within the container application's UI in the desired location
      * as chosen by the container application.
      */
-    htmlRpeport: string;
+    reportCode: string;
 
     /**
      * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
@@ -777,7 +777,38 @@ export type SkipHTMLReportOption = {
      * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
      * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
      */
-    htmlReportObjectName: string;
+    reportObjectName: string;
+
+    /**
+     * The type of data access this report uses, static means that the data is provided to the report as static data during the initialization
+     * process described in the @interface SkipHTMLReportObject interface, dynamic means that the report will use capabilities provided by 
+     * the SkipHTMLReportObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
+     * that the report can use both static and dynamic data access methods, and 'none' means that the report does not use any data (rare, but possible for example if
+     * a report does something other than show data or if it is uses 3rd party data sources via API that are not related to the MJ instance it is running within).
+     */
+    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';
+
+    /**
+     * If multiple report options are provided for a given @interface SkipAPIAnalysisCompleteResponse, a "judge" AI will evaluate all the functional
+     * responses and will rank order them with an explanation of why they were each ranked that way. Rankings are not absolute, they are relative to the
+     * # of reports contained within an array of SkipHTMLReportOption types.  
+     */
+    AIRank: number | undefined;
+    /**
+     * The AI's explanation of why it ranked the report the way it did. This is useful for understanding the AI's reasoning and can be used to improve future reports 
+     * as well as provide context to the user about why a particular report was chosen as the best option.
+     */
+    AIRankExplanation: string | undefined;
+    /**
+     * The user's provided feedback on the report option. Unlike the AIRank, this is a subjective rating provided by the user and is 
+     * a number between 1 and 10, where 1 is the lowest rating and 10 is the highest rating.
+     */
+    UserRank: number | undefined;
+    /**
+     * If the host application provides a way for the user to provide feedback on the report option, 
+     * this is the explanation of why the user rated the report the way they did if they provided feedback.
+     */
+    UserRankExplanation: string | undefined;
 }
 
 /**

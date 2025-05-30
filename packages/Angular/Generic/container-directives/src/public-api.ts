@@ -1,5 +1,5 @@
 /*
- * Public API Surface of ng-link-directives
+ * Public API Surface of ng-container-directives
  */
 
 export * from './lib/ng-container-directives.module';

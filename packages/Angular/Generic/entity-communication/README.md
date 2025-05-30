@@ -1,16 +1,17 @@
-# Entity Communications Component
+# @memberjunction/ng-entity-communications
 
-This Angular component package provides a UI for selecting message templates, previewing communications, and sending messages to entity recipients within the MemberJunction framework.
+This Angular component package provides a user interface for selecting message templates, previewing communications, and sending messages to entity recipients within the MemberJunction framework. It enables users to preview how templates will look when applied to real data before sending communications.
 
 ## Features
 
-- **Template Selection**: Browse and select from available message templates
-- **Message Preview**: Preview messages with actual data before sending
-- **Multi-recipient Support**: Preview communications for multiple recipients
-- **Dialog Integration**: Includes a dialog component for easy integration
-- **Navigation Controls**: Browse through multiple preview messages
-- **Template Filtering**: Filter templates based on specific criteria
-- **Customizable**: Extensive configuration options for the component
+- **Template Selection**: Browse and select from available active message templates
+- **Message Preview**: Preview messages with actual entity data before sending
+- **Multi-recipient Support**: Preview communications for multiple recipients with navigation controls
+- **Dialog Integration**: Includes a dialog wrapper component for easy modal integration
+- **Navigation Controls**: VCR-style controls to browse through multiple preview messages
+- **Template Filtering**: Filter templates based on SQL expressions
+- **Real-time Template Processing**: Integrates with MemberJunction's template engine for dynamic content
+- **Provider Integration**: Works with communication providers like SendGrid
 
 ## Installation
 
@@ -69,7 +70,7 @@ export class YourModule { }
 
 ```typescript
 import { Component } from '@angular/core';
-import { EntityInfo, RunViewParams } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunViewParams } from '@memberjunction/core';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
 @Component({
@@ -94,11 +95,12 @@ export class CustomerCommunicationComponent {
   customerEntityInfo: EntityInfo;
   customerViewParams: RunViewParams;
   
-  constructor(private metadataService: YourMetadataService) {
-    // Initialize entity info
-    this.customerEntityInfo = metadataService.getEntityInfo('Customers');
+  constructor() {
+    // Initialize metadata and entity info
+    const md = new Metadata();
+    this.customerEntityInfo = md.Entities.find(e => e.Name === 'Customers')!;
     
-    // Set up view parameters to get active customers
+    // Set up view parameters to get active customers who haven't been contacted recently
     this.customerViewParams = {
       EntityName: 'Customers',
       ExtraFilter: 'IsActive = 1 AND LastContactDate < DATEADD(month, -3, GETDATE())',
@@ -162,25 +164,96 @@ This component wraps the preview component in a Kendo dialog window.
 
 - `DialogClosed`: EventEmitter<boolean> - Emitted when the dialog is closed (true if confirmed, false if canceled)
 
+## Component Features
+
+### Template Loading
+- Templates are loaded with their content from the database
+- Only active templates are shown (based on `IsActive` flag and `ActiveAt` date)
+- Additional filtering can be applied via the `templateFilter` input
+- Template content entities are loaded and associated with each template
+
+### Message Preview Generation
+- Uses the EntityCommunicationsEngineClient to generate previews
+- Integrates with communication providers (e.g., SendGrid)
+- Processes templates against entity data to show real previews
+- Supports both HTML body and subject line templates
+- Runs in preview-only mode without actually sending messages
+
+### Navigation Controls
+- VCR-style navigation buttons (first, previous, next, last)
+- Current position indicator showing "X of Y" messages
+- Buttons are automatically disabled at boundaries
+- Font Awesome icons for navigation buttons
+
 ## Process Flow
 
-1. The component displays a list of available templates based on the provided filter
-2. User selects a template to preview
-3. The component fetches data using the provided entity and view parameters
-4. The template is applied to each record in the dataset to generate preview messages
-5. User can navigate through the preview messages to see how the communication will appear for each recipient
-6. In a dialog context, user can confirm or cancel the operation
+1. **Template Selection Phase**:
+   - Component loads all active templates filtered by the `templateFilter` expression
+   - User sees a list of available templates
+   - Clicking a template moves to the preview phase
+
+2. **Preview Generation Phase**:
+   - Selected template is processed against the entity data from `runViewParams`
+   - EntityCommunicationsEngineClient generates preview messages for each record
+   - Loading indicator shows during processing
+
+3. **Preview Navigation Phase**:
+   - User can navigate through all generated preview messages
+   - Each preview shows the processed subject and HTML body
+   - Back button returns to template selection
+
+4. **Dialog Interaction** (when using window component):
+   - OK/Cancel buttons control the dialog
+   - DialogClosed event indicates user's choice
 
 ## Styling
 
-The component includes basic CSS styling that can be customized or overridden in your application.
+The component includes CSS styling with the following key classes:
+- `.step-1`: Template selection view styling
+- `.step-2`: Preview display view styling  
+- `.vcr-controls`: Navigation button container
+- `.template-preview`: Preview content container
+- `.subject-line`: Email subject preview styling
+- `.preview-body`: Email body preview styling
+
+These styles can be customized or overridden in your application.
 
 ## Dependencies
 
-- `@memberjunction/core`: For metadata and entity access
-- `@memberjunction/core-entities`: For entity types
-- `@memberjunction/global`: For global utilities
-- `@memberjunction/communication-types`: For message types and interfaces
-- `@memberjunction/entity-communications-base`: For base communication classes
-- `@memberjunction/entity-communications-client`: For client-side communication engine
-- `@memberjunction/templates-base-types`: For template-related interfaces
+### Core Dependencies
+- `@memberjunction/core`: Metadata, entity framework, and view execution
+- `@memberjunction/core-entities`: Entity type definitions including TemplateContentEntity
+- `@memberjunction/global`: Global utilities and event system
+- `@memberjunction/communication-types`: Message types, communication engines, and providers
+- `@memberjunction/entity-communications-base`: EntityCommunicationParams interface
+- `@memberjunction/entity-communications-client`: Client-side communication processing engine
+- `@memberjunction/templates-base-types`: Template engine and extended template types
+- `@memberjunction/ng-container-directives`: Container directive utilities
+- `@memberjunction/ng-shared`: Shared Angular utilities
+
+### Angular Dependencies
+- `@angular/common`: Angular common module (v18.0.2)
+- `@angular/core`: Angular core framework (v18.0.2)
+- `@angular/forms`: Form support (v18.0.2)
+- `@angular/router`: Routing support (v18.0.2)
+
+### Kendo UI Dependencies
+- `@progress/kendo-angular-buttons`: Button components (v16.2.0)
+- `@progress/kendo-angular-dialog`: Dialog/window components (v16.2.0)
+- `@progress/kendo-angular-listbox`: Listbox component (v16.2.0)
+- `@progress/kendo-angular-indicators`: Loading indicators (v16.2.0)
+
+## Important Notes
+
+### Current Limitations
+- The component currently hardcodes the SendGrid provider and Email message type
+- Subject template is hardcoded to 'Test Subject Template'
+- From address is hardcoded in the preview generation
+
+### Future Enhancements
+Consider making the following configurable:
+- Communication provider selection
+- Message type selection
+- From address configuration
+- Subject template selection
+- Support for text body templates in addition to HTML

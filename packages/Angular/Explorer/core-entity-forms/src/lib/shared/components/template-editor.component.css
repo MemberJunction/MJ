@@ -1,0 +1,50 @@
+.template-editor {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.section-header h6 {
+    font-size: 0.9em;
+}
+
+.param-row:hover {
+    background-color: #f8f9fa !important;
+}
+
+.content-item {
+    transition: box-shadow 0.2s ease;
+}
+
+.content-item:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.badge {
+    display: inline-block;
+    font-size: 0.7em;
+    line-height: 1;
+}
+
+/* Kendo UI overrides for better integration */
+.template-editor kendo-textbox,
+.template-editor kendo-textarea,
+.template-editor kendo-dropdownlist {
+    width: 100%;
+}
+
+.template-editor kendo-button {
+    min-width: auto;
+}

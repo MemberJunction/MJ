@@ -1,14 +1,35 @@
 # @memberjunction/server
 
-The `@memberjunction/server` library provides a simple way to run the MemberJunction API server. It includes all the functions required to start up the GraphQL server, manage authentication, and connect to the common data store.
+The `@memberjunction/server` library provides a comprehensive API server for MemberJunction, featuring both GraphQL and REST APIs. It includes all the functions required to start up the server, manage authentication, handle database connections, and provide a robust interface for accessing and managing metadata within MemberJunction.
 
-The server provides a comprehensive interface for accessing and managing metadata within MemberJunction, along with facilities for working with entities, applications, and various other aspects central to the MemberJunction ecosystem.
+## Key Features
+
+- **Dual API Support**: Both GraphQL and REST APIs with consistent authentication
+- **Multi-Database Support**: Read-write and optional read-only database connections
+- **Advanced Authentication**: Support for MSAL (Azure AD) and Auth0 authentication providers
+- **Transaction Management**: Automatic transaction wrapper for GraphQL mutations
+- **Type-Safe Resolvers**: Full TypeScript support with type-graphql integration
+- **Entity Management**: Comprehensive CRUD operations with change tracking
+- **Real-time Support**: WebSocket subscriptions for GraphQL
+- **Compression**: Built-in response compression for better performance
+- **Extensible Architecture**: Support for custom resolvers and entity subclasses
+- **AI Integration**: Built-in support for AI operations and learning cycle scheduling
+- **Security Features**: Entity-level and schema-level access control for REST API
 
 ## Installation
 
 ```shell
 npm install @memberjunction/server
 ```
+
+## Dependencies
+
+This package depends on several core MemberJunction packages:
+- `@memberjunction/core`: Core functionality and metadata management
+- `@memberjunction/sqlserver-dataprovider`: SQL Server data provider
+- `@memberjunction/graphql-dataprovider`: GraphQL data provider
+- `@memberjunction/ai`: AI engine integration
+- Various other MJ packages for specific functionality
 
 ## Configuration
 
@@ -32,6 +53,8 @@ The server uses configuration from its environment
 | AUTH0_CLIENT_SECRET      | The Auth0 Client secret                                      |
 | MJ_CORE_SCHEMA           | The core schema to use for the data provider                 |
 | CONFIG_FILE              | An absolute path to the config file json                     |
+| DB_READ_ONLY_USERNAME    | Username for read-only database connection (optional)        |
+| DB_READ_ONLY_PASSWORD    | Password for read-only database connection (optional)        |
 
 ### REST API
 
@@ -50,6 +73,8 @@ The REST API supports:
 
 ## Usage
 
+### Basic Server Setup
+
 Import the `serve` function from the package and run it as part of the server's main function. The function accepts an array of absolute paths to the resolver code.
 
 ```ts
@@ -65,6 +90,46 @@ const resolverPaths = [
 ]
 
 serve(resolverPaths.map(localPath));
+```
+
+### Advanced Server Options
+
+The `serve` function accepts an optional `MJServerOptions` object:
+
+```typescript
+import { serve, MJServerOptions } from '@memberjunction/server';
+
+const options: MJServerOptions = {
+  onBeforeServe: async () => {
+    // Custom initialization logic
+    console.log('Server is about to start...');
+  },
+  restApiOptions: {
+    enabled: true,
+    includeEntities: ['User*', 'Entity*'],
+    excludeEntities: ['Password', 'APIKey*'],
+    includeSchemas: ['public'],
+    excludeSchemas: ['internal']
+  }
+};
+
+serve(resolverPaths.map(localPath), createApp(), options);
+```
+
+### Transaction Management
+
+The server automatically wraps GraphQL mutations in database transactions. This ensures data consistency when multiple operations are performed:
+
+```typescript
+mutation {
+  CreateUser(input: { FirstName: "John", LastName: "Doe" }) {
+    ID
+  }
+  CreateUserRole(input: { UserID: "...", RoleID: "..." }) {
+    ID
+  }
+}
+// Both operations will be committed together or rolled back on error
 ```
 
 ### Custom New User Behavior
@@ -153,3 +218,164 @@ export class ExampleNewUserSubClass extends NewUserBase {
     }
 }
 ```
+
+## API Documentation
+
+### Core Exports
+
+The package exports numerous utilities and types:
+
+#### Server Functions
+- `serve(resolverPaths: string[], app?: Express, options?: MJServerOptions)`: Main server initialization
+- `createApp()`: Creates an Express application instance
+
+#### Authentication
+- `NewUserBase`: Base class for custom new user handling
+- `TokenExpiredError`: Token expiration error class
+- `getSystemUser(dataSource?: DataSource)`: Get system user for operations
+
+#### Resolvers and Base Classes
+- `ResolverBase`: Base class for custom resolvers
+- `RunViewResolver`: Base resolver for view operations
+- `PushStatusResolver`: Status update resolver base
+
+#### Type Definitions
+- `AppContext`: GraphQL context type
+- `DataSourceInfo`: Database connection information
+- `KeyValuePairInput`: Generic key-value input type
+- `DeleteOptionsInput`: Delete operation options
+
+#### Utility Functions
+- `GetReadOnlyDataSource(dataSources: DataSourceInfo[])`: Get read-only data source
+- `GetReadWriteDataSource(dataSources: DataSourceInfo[])`: Get read-write data source
+
+### Entity Subclasses
+
+The server includes specialized entity subclasses:
+- `UserViewEntityServer`: Server-side user view handling
+- `EntityPermissionsEntityServer`: Entity permission management
+- `DuplicateRunEntityServer`: Duplicate detection operations
+- `ReportEntityServer`: Report generation and management
+
+## AI Integration
+
+The server includes built-in AI capabilities:
+
+### Learning Cycle Scheduler
+
+The server can automatically run AI learning cycles:
+
+```typescript
+import { LearningCycleScheduler } from '@memberjunction/server/scheduler';
+
+// In your server initialization
+const scheduler = LearningCycleScheduler.Instance;
+scheduler.setDataSources(dataSources);
+scheduler.start(60); // Run every 60 minutes
+```
+
+### AI Resolvers
+
+- `RunAIPromptResolver`: Execute AI prompts
+- `AskSkipResolver`: Handle Skip AI queries
+
+## Security Configuration
+
+### Authentication Providers
+
+The server supports multiple authentication providers:
+
+1. **Azure AD (MSAL)**:
+   - Set `TENANT_ID` and `WEB_CLIENT_ID` environment variables
+   - Supports Microsoft identity platform
+
+2. **Auth0**:
+   - Set `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, and `AUTH0_CLIENT_SECRET`
+   - Supports Auth0 authentication
+
+### API Key Authentication
+
+The server also supports API key authentication via the `x-mj-api-key` header.
+
+### Access Control
+
+For REST API access control, see the comprehensive documentation in [REST_API.md](./REST_API.md).
+
+## Performance Optimization
+
+### Compression
+
+The server includes built-in compression middleware:
+- Responses larger than 1KB are compressed
+- Binary files are excluded from compression
+- Uses compression level 6 for optimal balance
+
+### Connection Pooling
+
+Database connections are managed with TypeORM's connection pooling. Configure pool size in your TypeORM configuration.
+
+### Caching
+
+The server uses LRU caching for frequently accessed data. Configure cache settings in your `mj.config.cjs`:
+
+```javascript
+databaseSettings: {
+  metadataCacheRefreshInterval: 300000 // 5 minutes
+}
+```
+
+## Advanced Configuration
+
+### Custom Directives
+
+The server includes custom GraphQL directives:
+- `@RequireSystemUser`: Requires system user permissions
+- `@Public`: Makes endpoints publicly accessible
+
+### WebSocket Configuration
+
+For real-time subscriptions:
+
+```typescript
+const webSocketServer = new WebSocketServer({ 
+  server: httpServer, 
+  path: graphqlRootPath 
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Errors**: Ensure all required environment variables are set
+2. **Database Connection**: Verify connection string and credentials
+3. **Module Loading**: Check resolver paths are correct and accessible
+4. **Transaction Errors**: Review mutation logic for proper error handling
+
+### Debug Mode
+
+Enable detailed logging by setting environment variables:
+```shell
+DEBUG=mj:*
+NODE_ENV=development
+```
+
+## Best Practices
+
+1. **Use Read-Only Connections**: Configure read-only database connections for query operations
+2. **Implement Custom User Handling**: Extend `NewUserBase` for organization-specific user creation
+3. **Monitor Performance**: Use the built-in timing logs for transaction monitoring
+4. **Secure Your REST API**: Always configure entity and schema filters for production
+5. **Handle Errors Gracefully**: Implement proper error handling in custom resolvers
+
+## Contributing
+
+When contributing to this package:
+1. Follow the existing code style and patterns
+2. Add appropriate TypeScript types
+3. Include tests for new functionality
+4. Update documentation as needed
+
+## License
+
+ISC

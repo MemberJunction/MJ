@@ -1,16 +1,22 @@
-# Find Record Component
+# @memberjunction/ng-find-record
 
-An Angular component for searching and selecting records from any MemberJunction entity. This package provides both a standalone search component and a dialog wrapper component for easy integration into applications.
+An Angular component library for searching and selecting records from any MemberJunction entity. This package provides both a standalone search component and a dialog wrapper component for easy integration into Angular applications.
+
+## Purpose and Overview
+
+The `@memberjunction/ng-find-record` package simplifies the process of implementing entity record search functionality in MemberJunction-based Angular applications. It provides a reusable component that can search any entity using the MemberJunction metadata system and RunView API, displaying results in a Kendo UI grid for easy selection.
 
 ## Features
 
-- **Entity-Agnostic**: Works with any MemberJunction entity
-- **Debounced Search**: Real-time search with configurable debounce time
-- **Grid Display**: Results displayed in a searchable, sortable grid
-- **Customizable Fields**: Configure which fields to display in the results
-- **Dialog Integration**: Optional dialog wrapper for modal usage
+- **Entity-Agnostic**: Works with any MemberJunction entity without modification
+- **Debounced Search**: Real-time search with configurable debounce time (default: 300ms)
+- **Grid Display**: Results displayed in a searchable, sortable Kendo UI grid
+- **Customizable Fields**: Configure which fields to display in the results grid
+- **Dialog Integration**: Optional dialog wrapper for modal usage scenarios
 - **Event Handling**: Events for record selection and dialog closure
 - **Loading States**: Visual feedback during search operations
+- **TypeScript Support**: Full TypeScript support with proper typing
+- **MemberJunction Integration**: Seamlessly integrates with MemberJunction's metadata and entity systems
 
 ## Installation
 
@@ -67,7 +73,7 @@ export class YourModule { }
 ### TypeScript Component Example
 
 ```typescript
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { BaseEntity, EntityFieldInfo, Metadata } from '@memberjunction/core';
 
 @Component({
@@ -141,57 +147,200 @@ export class UserFinderComponent implements OnInit {
 
 ### FindRecordComponent
 
-Standalone component for searching and selecting records.
+Standalone component for searching and selecting records. This component provides a search input with a grid display of results.
+
+#### Selector
+`mj-find-record`
 
 #### Inputs
 
-- `EntityName`: string - The name of the entity to search
-- `DisplayFields`: EntityFieldInfo[] - Fields to display in the results grid (optional)
-- `SearchDebounceTime`: number - Debounce time in milliseconds for search (default: 300)
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EntityName` | `string` | `''` | **Required.** The name of the MemberJunction entity to search |
+| `DisplayFields` | `EntityFieldInfo[]` | `[]` | Optional. Fields to display in the results grid. If not specified, defaults to fields marked as `DefaultInView`, `IsPrimaryKey`, `IsNameField`, or `IncludeInUserSearchAPI` |
+| `SearchDebounceTime` | `number` | `300` | Optional. Debounce time in milliseconds for search input |
 
 #### Outputs
 
-- `OnRecordSelected`: EventEmitter<BaseEntity> - Emitted when a record is selected
+| Event | Type | Description |
+|-------|------|-------------|
+| `OnRecordSelected` | `EventEmitter<BaseEntity>` | Emitted when a user selects a record from the search results grid |
 
 ### FindRecordDialogComponent
 
-Dialog wrapper for the FindRecordComponent.
+Dialog wrapper for the FindRecordComponent. Provides a modal dialog containing the search functionality.
+
+#### Selector
+`mj-find-record-dialog`
 
 #### Inputs
 
-- `EntityName`: string - The name of the entity to search
-- `DisplayFields`: EntityFieldInfo[] - Fields to display in the results grid (optional)
-- `DialogTitle`: string - Title of the dialog (default: 'Find Record')
-- `DialogWidth`: string - Width of the dialog (default: '700px')
-- `DialogHeight`: string - Height of the dialog (default: '450px')
-- `DialogVisible`: boolean - Controls the visibility of the dialog
-- `SelectedRecord`: BaseEntity | null - Currently selected record (optional)
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EntityName` | `string` | `''` | **Required.** The name of the MemberJunction entity to search |
+| `DisplayFields` | `EntityFieldInfo[]` | `[]` | Optional. Fields to display in the results grid |
+| `DialogTitle` | `string` | `'Find Record'` | Optional. Title displayed in the dialog header |
+| `DialogWidth` | `string` | `'700px'` | Optional. Width of the dialog |
+| `DialogHeight` | `string` | `'450px'` | Optional. Height of the dialog |
+| `DialogVisible` | `boolean` | `false` | **Required.** Controls the visibility of the dialog |
+| `SelectedRecord` | `BaseEntity \| null` | `null` | Optional. Currently selected record. Can be set to pre-select a record |
 
 #### Outputs
 
-- `DialogClosed`: EventEmitter<boolean> - Emitted when the dialog is closed (true if confirmed, false if canceled)
-- `OnRecordSelected`: EventEmitter<BaseEntity> - Emitted when a record is selected
+| Event | Type | Description |
+|-------|------|-------------|
+| `DialogClosed` | `EventEmitter<boolean>` | Emitted when the dialog is closed. `true` if OK was clicked, `false` if cancelled |
+| `OnRecordSelected` | `EventEmitter<BaseEntity>` | Emitted when a user selects a record from the search results |
 
 ## Search Behavior
 
 The component uses the MemberJunction RunView functionality with the following behavior:
 
-1. As the user types, the search input is debounced (default 300ms)
-2. After debounce, a search is executed against the specified entity
-3. Results are displayed in a grid with the specified fields
-4. User can select a record from the grid
-5. The selected record is emitted via the OnRecordSelected event
+1. As the user types in the search input, the input is debounced (default 300ms) to prevent excessive API calls
+2. After the debounce period, a search is executed using `RunView` with the `UserSearchString` parameter
+3. The search leverages MemberJunction's entity metadata to search across appropriate fields
+4. Results are displayed in a Kendo UI grid with the specified or default fields
+5. Users can select a record by clicking on a row in the grid
+6. The selected record (as a `BaseEntity` instance) is emitted via the `OnRecordSelected` event
+
+### Search Implementation Details
+
+The component uses the following RunView configuration:
+```typescript
+{
+  EntityName: this.EntityName,
+  UserSearchString: searchTerm,
+  ResultType: 'entity_object'  // Returns BaseEntity instances
+}
+```
 
 ## Styling
 
-The component includes basic CSS styling that can be overridden in your application.
+The component includes basic CSS styling with the following classes:
+- `.find-textbox` - Styles the search input field
+- `.find-button` - Styles the Find button
+
+You can override these styles in your application's global styles or component-specific stylesheets.
 
 ## Dependencies
 
-- `@memberjunction/core`: For metadata and entity access
-- `@memberjunction/core-entities`: For entity types
-- `@memberjunction/global`: For global utilities
-- `@progress/kendo-angular-grid`: For displaying search results
-- `@progress/kendo-angular-buttons`: For UI buttons
-- `@progress/kendo-angular-inputs`: For search input
-- `@progress/kendo-angular-dialog`: For dialog wrapper
+### Production Dependencies
+- `@memberjunction/core`: ^2.43.0 - Core MemberJunction functionality including metadata, RunView, and BaseEntity
+- `@memberjunction/core-entities`: ^2.43.0 - Entity type definitions
+- `@memberjunction/global`: ^2.43.0 - Global utilities and helpers
+- `@memberjunction/ng-container-directives`: ^2.43.0 - Angular container directives
+- `@memberjunction/ng-shared`: ^2.43.0 - Shared Angular utilities
+- `rxjs`: ^7.8.1 - Reactive programming support for debouncing and search handling
+- `tslib`: ^2.3.0 - TypeScript runtime library
+
+### Peer Dependencies (must be installed in your application)
+- `@angular/common`: 18.0.2
+- `@angular/core`: 18.0.2
+- `@angular/forms`: 18.0.2
+- `@angular/router`: 18.0.2
+- `@progress/kendo-angular-grid`: 16.2.0
+- `@progress/kendo-angular-buttons`: 16.2.0
+- `@progress/kendo-angular-inputs`: 16.2.0
+- `@progress/kendo-angular-dialog`: 16.2.0
+- `@progress/kendo-angular-listbox`: 16.2.0
+
+## Integration with MemberJunction
+
+This package is designed to work seamlessly with the MemberJunction ecosystem:
+
+1. **Metadata Integration**: Uses MemberJunction's Metadata class to retrieve entity information and field definitions
+2. **Entity System**: Works with any entity registered in the MemberJunction metadata system
+3. **RunView API**: Leverages the powerful RunView API for searching, which respects entity permissions and field-level security
+4. **BaseEntity**: Returns actual BaseEntity instances, allowing full access to entity methods and properties
+
+## Build and Development
+
+This package is part of the MemberJunction monorepo. To build:
+
+```bash
+# From the package directory
+npm run build
+
+# Or from the monorepo root
+turbo build --filter="@memberjunction/ng-find-record"
+```
+
+The package uses Angular's `ngc` compiler for building Angular libraries.
+
+## Module Configuration
+
+The package exports a `FindRecordModule` that includes both components. Import this module in your Angular application:
+
+```typescript
+import { FindRecordModule } from '@memberjunction/ng-find-record';
+
+@NgModule({
+  imports: [
+    FindRecordModule,
+    // ... other imports
+  ]
+})
+export class YourFeatureModule { }
+```
+
+## Advanced Usage
+
+### Custom Field Selection
+
+You can programmatically select which fields to display based on your requirements:
+
+```typescript
+// Display only specific fields
+const entity = this.metadata.EntityByName('Products');
+this.displayFields = entity.Fields.filter(f => 
+  ['Name', 'SKU', 'Price', 'Category'].includes(f.Name)
+);
+```
+
+### Pre-selecting Records
+
+You can pre-select a record in the dialog component:
+
+```typescript
+// Load a record and pre-select it
+const md = new Metadata();
+const user = await md.GetEntityObject<UserEntity>('Users');
+await user.Load(userId);
+this.selectedRecord = user;
+```
+
+### Handling Selection Events
+
+Process selected records with full type safety:
+
+```typescript
+onRecordSelected(record: BaseEntity) {
+  // Cast to specific entity type if needed
+  if (record.EntityInfo.Name === 'Users') {
+    const user = record as UserEntity;
+    console.log('Selected user email:', user.Email);
+  }
+  
+  // Or use generic BaseEntity methods
+  console.log('Selected record ID:', record.Get('ID'));
+  console.log('Selected record name:', record.Get(record.EntityInfo.NameField));
+}
+```
+
+## Error Handling
+
+The component includes built-in error handling:
+
+- Failed searches will log errors using MemberJunction's `LogError` function
+- Loading states provide visual feedback during searches
+- Empty search results display a user-friendly message
+
+## Performance Considerations
+
+- **Debouncing**: The default 300ms debounce prevents excessive API calls during typing
+- **Entity Objects**: Using `ResultType: 'entity_object'` in RunView ensures efficient object creation
+- **Grid Virtualization**: The Kendo Grid component provides built-in virtualization for large result sets
+
+## License
+
+This package is part of the MemberJunction open-source project. See the root repository for license information.

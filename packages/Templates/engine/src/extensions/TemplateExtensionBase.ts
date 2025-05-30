@@ -36,6 +36,21 @@ export abstract class TemplateExtensionBase {
     public abstract parse(parser: Parser, nodes: Nodes, lexer: Lexer): any
     /**
      * Required, must implement this method to run the extension.
+     * 
+     * **IMPORTANT**: The actual signature of this method depends on what you pass to 
+     * `nodes.CallExtensionAsync()` in your `parse()` method. The parameters listed here
+     * are just placeholders - your actual implementation will have different parameters.
+     * 
+     * **Common Patterns:**
+     * - `CallExtensionAsync(this, 'run', params)` → `run(context, body, callBack)`
+     * - `CallExtensionAsync(this, 'run', params, [body])` → `run(context, params, body, callBack)`
+     * - `CallExtensionAsync(this, 'run', params, [body, error])` → `run(context, params, body, error, callBack)`
+     * 
+     * @param context - Always the first parameter: Nunjucks rendering context
+     * @param callBack - Always the last parameter: Async callback for results/errors
+     * @param ...rest - Middle parameters determined by CallExtensionAsync array argument
+     * 
+     * @see README.md in this directory for detailed documentation on parameter mapping
      */
-    public abstract run(context: Context, body: any, errorBody: any, params, callBack: NunjucksCallback, a, b, c);
+    public abstract run(context: Context, ...args: any[]);
 }

@@ -4,13 +4,15 @@ The `@memberjunction/ng-link-directives` package provides a set of Angular direc
 
 ## Features
 
-- Email link directive for fields with "email" extended type
-- Web link directive for fields with "url" extended type
-- Field link directive for related entity fields that navigates to the related record
-- Automatic value resolution for field links (displays the related entity's name)
-- Target control for web links (opens in new tab)
-- Styling options for all link types
-- Leverages MemberJunction's metadata system
+- **Email link directive** (`mjEmailLink`) - Converts fields with "email" extended type to mailto: links
+- **Web link directive** (`mjWebLink`) - Converts fields with "url" extended type to external links
+- **Field link directive** (`mjFieldLink`) - Creates navigable links to related entity records
+- **Automatic value resolution** - Field links can display the related entity's name instead of ID
+- **Smart navigation** - Field links use Angular Router for seamless in-app navigation
+- **Target control** - Web and email links open in new tabs by default
+- **CSS styling** - All links use the `link-text` class for consistent styling
+- **Type safety** - Full TypeScript support with strict typing
+- **Metadata integration** - Leverages MemberJunction's metadata system for field information
 
 ## Installation
 
@@ -20,16 +22,18 @@ npm install @memberjunction/ng-link-directives
 
 ## Requirements
 
-- Angular 18+
-- @memberjunction/core
+- Angular 18.0.2 or higher
+- @memberjunction/core 2.43.0 or higher
+- TypeScript 4.0 or higher
 
 ## Usage
 
 ### Basic Setup
 
-First, import the LinkDirectivesModule in your module:
+Import the LinkDirectivesModule in your Angular module:
 
 ```typescript
+import { NgModule } from '@angular/core';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 @NgModule({
@@ -49,7 +53,16 @@ The email link directive converts text into a mailto: link when the field has an
 <span [mjEmailLink]="field">{{ field.Value }}</span>
 ```
 
-Where `field` is an EntityField object from a MemberJunction entity with ExtendedType of "email".
+```typescript
+// In your component
+import { EntityField } from '@memberjunction/core';
+
+export class YourComponent {
+  field: EntityField; // EntityField with ExtendedType = "email"
+}
+```
+
+**Note**: The directive will log an error if the field's ExtendedType is not "email". There is a known issue where the error message incorrectly references "mjWebLink" instead of "mjEmailLink".
 
 ### Web Link Directive
 
@@ -59,74 +72,134 @@ The web link directive converts text into an external URL link when the field ha
 <span [mjWebLink]="field">{{ field.Value }}</span>
 ```
 
-Where `field` is an EntityField object from a MemberJunction entity with ExtendedType of "url".
+```typescript
+// In your component
+import { EntityField } from '@memberjunction/core';
+
+export class YourComponent {
+  field: EntityField; // EntityField with ExtendedType = "url"
+}
+```
+
+**Note**: The directive will log an error if the field's ExtendedType is not "url". Links open in a new tab by default.
 
 ### Field Link Directive
 
 The field link directive creates a link to another entity record when the field is a foreign key to another entity.
 
 ```html
+<!-- Basic usage -->
 <span [mjFieldLink]="true" [record]="customerRecord" [fieldName]="'AssignedUserID'">
+  {{ customerRecord.Get('AssignedUserID') }}
+</span>
+
+<!-- With text replacement disabled -->
+<span [mjFieldLink]="true" [record]="customerRecord" [fieldName]="'AssignedUserID'" [replaceText]="false">
   {{ customerRecord.Get('AssignedUserID') }}
 </span>
 ```
 
-This will display the AssignedUserID field value but link to the User entity record. The directive will attempt to replace the ID with the related entity's name when [replaceText]="true" is set.
+```typescript
+// In your component
+import { BaseEntity } from '@memberjunction/core';
+
+export class YourComponent {
+  customerRecord: BaseEntity; // Entity record containing the foreign key field
+}
+```
+
+The directive:
+- Navigates to `/resource/record/{primaryKey}?Entity={EntityName}` when clicked
+- Automatically replaces the ID with the related entity's name (when `replaceText=true`)
+- Uses `RelatedEntityNameFieldMap` metadata for efficient name resolution
+- Falls back to server lookup if name mapping is not available
 
 ## API Reference
 
 ### EmailLink Directive
 
-| Input | Type | Description |
-|-------|------|-------------|
-| `field` | `EntityField` | The entity field object containing email data |
+**Selector**: `[mjEmailLink]`
+
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `field` | `EntityField` | Yes | The entity field object containing email data. Must have ExtendedType = "email" |
 
 ### WebLink Directive
 
-| Input | Type | Description |
-|-------|------|-------------|
-| `field` | `EntityField` | The entity field object containing URL data |
+**Selector**: `[mjWebLink]`
+
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `field` | `EntityField` | Yes | The entity field object containing URL data. Must have ExtendedType = "url" |
 
 ### FieldLink Directive
 
-| Input | Type | Default | Description |
-|-------|------|---------|-------------|
-| `record` | `BaseEntity` | (required) | The entity record object |
-| `fieldName` | `string` | (required) | The name of the field that contains the foreign key |
-| `replaceText` | `boolean` | `true` | Whether to replace the field value with the related entity's name |
+**Selector**: `[mjFieldLink]`
 
-## How It Works
+| Input | Type | Default | Required | Description |
+|-------|------|---------|----------|-------------|
+| `mjFieldLink` | `boolean` | - | Yes | Enable the directive (must be set to true) |
+| `record` | `BaseEntity` | - | Yes | The entity record object containing the field |
+| `fieldName` | `string` | - | Yes | The name of the field that contains the foreign key |
+| `replaceText` | `boolean` | `true` | No | Whether to replace the field value with the related entity's name |
+
+**Events**: The directive handles click events internally to navigate using Angular Router.
+
+## Implementation Details
 
 ### Base Link Class
 
-All directives extend the BaseLink abstract class, which provides a common CreateLink method:
+All directives extend the `BaseLink` abstract class, which provides a common `CreateLink` method:
 
 ```typescript
-protected CreateLink(el: ElementRef, field: EntityField, renderer: Renderer2, href: string, newTab: boolean = false) {
-  // Creates an <a> element and wraps the original element
-}
+protected CreateLink(
+  el: ElementRef, 
+  field: EntityField, 
+  renderer: Renderer2, 
+  href: string, 
+  newTab: boolean = false
+): void
 ```
+
+This method:
+- Creates an `<a>` element using Angular's Renderer2
+- Wraps the original element with the link
+- Adds the `link-text` CSS class
+- Sets `target="_blank"` for new tab behavior
 
 ### Email Links
 
-The EmailLink directive prepends "mailto:" to the field value and creates a link that opens the user's email client when clicked.
+The `EmailLink` directive:
+1. Validates that the field has ExtendedType = "email"
+2. Prepends "mailto:" to the field value
+3. Creates a link that opens the user's default email client
+4. Always opens in a new tab
 
 ### Web Links
 
-The WebLink directive uses the field value as the URL and creates a link that opens in a new tab when clicked.
+The `WebLink` directive:
+1. Validates that the field has ExtendedType = "url"
+2. Uses the field value directly as the href
+3. Creates an external link that opens in a new tab
+4. Logs an error if the ExtendedType validation fails
 
 ### Field Links
 
-The FieldLink directive:
-1. Identifies the related entity from the field metadata
-2. Gets the primary key of the related record
-3. Creates a link to navigate to that record in the application
-4. Optionally replaces the ID with the related record's name
-5. Intercepts click events to handle navigation within the Angular app
+The `FieldLink` directive provides the most complex functionality:
+
+1. **Metadata Resolution**: Uses MemberJunction's metadata to find the related entity
+2. **Navigation Setup**: Constructs the route as `/resource/record/{primaryKey}?Entity={EntityName}`
+3. **Name Resolution**: 
+   - First checks `RelatedEntityNameFieldMap` for local field mapping
+   - Falls back to `GetEntityRecordName()` API call if needed
+4. **Click Handling**: Intercepts clicks and uses Angular Router for navigation
+5. **Error Handling**: Includes navigation event monitoring for debugging
+
+**Note**: Currently supports only single-value primary keys for foreign key relationships.
 
 ## Styling
 
-All links use the CSS class `link-text`, which you can style in your application:
+All generated links include the CSS class `link-text` for consistent styling across your application:
 
 ```css
 .link-text {
@@ -134,11 +207,124 @@ All links use the CSS class `link-text`, which you can style in your application
   text-decoration: underline;
   cursor: pointer;
 }
+
+.link-text:hover {
+  color: #0052a3;
+  text-decoration: none;
+}
+
+.link-text:visited {
+  color: #551a8b;
+}
 ```
+
+## Complete Example
+
+Here's a complete example showing all three directives in action:
+
+```typescript
+// component.ts
+import { Component, OnInit } from '@angular/core';
+import { BaseEntity, Metadata } from '@memberjunction/core';
+
+@Component({
+  selector: 'app-contact-details',
+  template: `
+    <div class="contact-info">
+      <!-- Email link -->
+      <div>
+        Email: <span [mjEmailLink]="emailField">{{ contact.Get('Email') }}</span>
+      </div>
+      
+      <!-- Web link -->
+      <div>
+        Website: <span [mjWebLink]="websiteField">{{ contact.Get('Website') }}</span>
+      </div>
+      
+      <!-- Field link with name replacement -->
+      <div>
+        Account Manager: 
+        <span [mjFieldLink]="true" [record]="contact" [fieldName]="'AccountManagerID'">
+          {{ contact.Get('AccountManagerID') }}
+        </span>
+      </div>
+    </div>
+  `
+})
+export class ContactDetailsComponent implements OnInit {
+  contact: BaseEntity;
+  
+  get emailField() {
+    return this.contact.Fields.find(f => f.Name === 'Email');
+  }
+  
+  get websiteField() {
+    return this.contact.Fields.find(f => f.Name === 'Website');
+  }
+  
+  async ngOnInit() {
+    const md = new Metadata();
+    this.contact = await md.GetEntityObject('Contacts');
+    await this.contact.Load(123); // Load specific contact
+  }
+}
+```
+
+## Build and Development
+
+This package uses the Angular CLI compiler (`ngc`) for building:
+
+```bash
+# Build the package
+npm run build
+
+# The compiled output will be in the ./dist directory
+```
+
+The package is configured with:
+- TypeScript strict mode
+- ES2015 target with ES2020 modules
+- Source maps and declaration files
+- Angular compiler optimizations
+
+## Integration with MemberJunction
+
+This package is designed to work seamlessly with the MemberJunction framework:
+
+- **Metadata Integration**: Leverages EntityField metadata for field type detection
+- **Navigation**: Integrates with MJ's standard routing patterns (`/resource/record/...`)
+- **Entity System**: Works with BaseEntity and EntityField objects
+- **Name Resolution**: Uses MJ's entity relationship mapping for efficient data display
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Entity Field must have ExtendedType of URL"** - Ensure your entity field metadata has the correct ExtendedType set
+2. **Links not appearing** - Verify the directive is properly applied and the field has a value
+3. **Navigation errors** - Check that the related entity exists in metadata and the route is configured
+
+### Debugging Tips
+
+- The FieldLink directive logs navigation events to the console
+- Use browser DevTools to inspect the generated link structure
+- Check that RelatedEntity metadata is properly configured for field links
+
+## License
+
+ISC
 
 ## Dependencies
 
-- @angular/common
-- @angular/core
-- @angular/router
-- @memberjunction/core
+- **Runtime Dependencies:**
+  - @memberjunction/core: ^2.43.0
+  - tslib: ^2.3.0
+
+- **Peer Dependencies:**
+  - @angular/common: ^18.0.2
+  - @angular/core: ^18.0.2
+  - @angular/router: ^18.0.2
+
+- **Development Dependencies:**
+  - @angular/compiler: ^18.0.2
+  - @angular/compiler-cli: ^18.0.2
