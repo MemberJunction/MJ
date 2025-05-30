@@ -2,7 +2,7 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { AIPromptEntity } from '@memberjunction/core-entities';
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/aiengine';
+import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 @ObjectType()
