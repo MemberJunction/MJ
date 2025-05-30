@@ -787,6 +787,28 @@ export type SkipHTMLReportOption = {
      * a report does something other than show data or if it is uses 3rd party data sources via API that are not related to the MJ instance it is running within).
      */
     dataAccessType: 'static' | 'dynamic' | 'both' | 'none';
+
+    /**
+     * If multiple report options are provided for a given @interface SkipAPIAnalysisCompleteResponse, a "judge" AI will evaluate all the functional
+     * responses and will rank order them with an explanation of why they were each ranked that way. Rankings are not absolute, they are relative to the
+     * # of reports contained within an array of SkipHTMLReportOption types.  
+     */
+    AIRank: number | undefined;
+    /**
+     * The AI's explanation of why it ranked the report the way it did. This is useful for understanding the AI's reasoning and can be used to improve future reports 
+     * as well as provide context to the user about why a particular report was chosen as the best option.
+     */
+    AIRankExplanation: string | undefined;
+    /**
+     * The user's provided feedback on the report option. Unlike the AIRank, this is a subjective rating provided by the user and is 
+     * a number between 1 and 10, where 1 is the lowest rating and 10 is the highest rating.
+     */
+    UserRank: number | undefined;
+    /**
+     * If the host application provides a way for the user to provide feedback on the report option, 
+     * this is the explanation of why the user rated the report the way they did if they provided feedback.
+     */
+    UserRankExplanation: string | undefined;
 }
 
 /**
