@@ -1,17 +1,16 @@
 # @memberjunction/aiengine
 
-The MemberJunction AI Engine package provides a comprehensive framework for AI-powered operations within the MemberJunction ecosystem. It serves as the central orchestration layer for AI model management, prompt execution, agent coordination, and intelligent caching with advanced parallel processing capabilities.
+The MemberJunction AI Engine package provides a comprehensive framework for AI-powered operations within the MemberJunction ecosystem. It serves as the central orchestration layer for AI model management, agent coordination, and basic prompt execution capabilities.
 
 ## Features
 
 - **🤖 AI Agents**: Intelligent agents with specialized capabilities and context management
-- **📝 AI Prompts**: Advanced prompt system with template rendering and parallel execution
-- **⚡ Parallel Processing**: Sophisticated parallel execution with multiple models and result selection
 - **🧠 Model Management**: Registry of AI models with automatic selection and load balancing
-- **💾 Result Caching**: Intelligent caching with vector similarity matching and TTL management
-- **🔄 Template Integration**: Dynamic prompt generation with MemberJunction template system
-- **📊 Performance Monitoring**: Comprehensive metrics, token usage tracking, and execution analytics
+- **📊 Performance Monitoring**: Basic tracking and analytics for AI operations
 - **🔗 Entity Integration**: Seamless integration with MemberJunction entity system
+- **⚡ Simple Prompt Execution**: Basic prompt execution for quick AI tasks
+
+> **📝 Advanced Prompt Management**: For sophisticated stored prompt management, template rendering, and parallel execution capabilities, see the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
 ## Installation
 
@@ -53,141 +52,9 @@ console.log(`Purpose: ${dataAnalysisAgent.Purpose}`);
 console.log(`Available Actions: ${dataAnalysisAgent.Actions.length}`);
 ```
 
-### AI Prompts & Parallel Execution
-
-**AI Prompts** provide sophisticated prompt management with parallel execution capabilities:
-
-#### Basic Prompt Execution
-
-```typescript
-import { AIPromptRunner, AIPromptParams } from '@memberjunction/aiengine';
-
-// Get a prompt from the system
-const prompts = AIEngine.Instance.Prompts;
-const summaryPrompt = prompts.find(p => p.Name === 'Document Summarization');
-
-// Execute the prompt
-const params: AIPromptParams = {
-    prompt: summaryPrompt,
-    data: { 
-        documentText: "Long document content here...",
-        targetLength: "2 paragraphs" 
-    },
-    contextUser: currentUser
-};
-
-const runner = new AIPromptRunner();
-const result = await runner.RunPrompt(params);
-
-if (result.success) {
-    console.log("Summary:", result.result);
-} else {
-    console.error("Error:", result.error);
-}
-```
-
-#### Advanced Parallel Execution
-
-The AI Engine supports sophisticated parallel execution strategies:
-
-```typescript
-// Prompts can be configured for parallel execution:
-// - ParallelizationMode: 'None', 'StaticCount', 'ConfigParam', 'ModelSpecific'
-// - ParallelCount: Number of parallel executions
-// - ExecutionGroups: Sequential group execution with parallel tasks within groups
-
-// Example: Execute the same prompt across multiple models in parallel
-const multiModelPrompt = prompts.find(p => p.ParallelizationMode === 'ModelSpecific');
-
-const result = await runner.RunPrompt({
-    prompt: multiModelPrompt,
-    data: { query: "Analyze this data pattern" },
-    contextUser: currentUser
-});
-
-// Result contains aggregated outputs from all models
-console.log(`Executed across ${result.executionResults?.length} models`);
-console.log(`Selected result: ${result.result}`);
-console.log(`All results available: ${result.allResults?.length}`);
-```
-
-#### Result Selection Strategies
-
-```typescript
-// The engine supports multiple result selection methods:
-// - 'First': Use the first successful result
-// - 'Random': Randomly select from successful results  
-// - 'PromptSelector': Use AI to select the best result
-// - 'Consensus': Select result with highest agreement
-
-// Result selector prompts can be configured to intelligently choose
-// the best result from parallel executions
-```
-
-### Template Integration
-
-Prompts integrate with the MemberJunction template system for dynamic content:
-
-```typescript
-// Prompt templates support dynamic data substitution
-const templatePrompt = {
-    UserMessage: `Analyze the {{entity.EntityType}} record for {{entity.Name}}. 
-                 Focus on {{analysisType}} and provide insights about {{entity.Description}}.`
-};
-
-// Data context provides template variables
-const result = await runner.RunPrompt({
-    prompt: templatePrompt,
-    data: {
-        entity: {
-            EntityType: "Customer",
-            Name: "Acme Corp",
-            Description: "Enterprise software company"
-        },
-        analysisType: "growth opportunities"
-    },
-    contextUser: currentUser
-});
-```
-
-### Intelligent Caching
-
-The engine provides sophisticated caching with vector similarity matching:
-
-```typescript
-// Caching is automatically handled based on prompt configuration:
-// - EnableCaching: Whether to use caching for this prompt
-// - CacheMatchType: 'Exact' or 'Vector' similarity matching
-// - CacheTTLSeconds: Time-to-live for cached results
-// - CacheMustMatchModel/Vendor/Agent: Cache constraint options
-
-// Vector similarity allows reusing results for semantically similar prompts
-// even if the exact text differs
-```
-
-### Model Management
-
-The engine maintains a comprehensive registry of AI models:
-
-```typescript
-// Get all available models
-const allModels = AIEngine.Instance.Models;
-const llmModels = AIEngine.Instance.LanguageModels;
-
-// Get the most powerful model for a specific vendor
-const bestOpenAI = await AIEngine.Instance.GetHighestPowerLLM('OpenAI', currentUser);
-const bestModel = await AIEngine.Instance.GetHighestPowerModel(null, 'LLM', currentUser);
-
-// Models are automatically selected based on:
-// - PowerRank: Relative capability ranking
-// - ModelType: LLM, Vision, Audio, etc.
-// - Vendor: OpenAI, Anthropic, Google, etc.
-// - Cost and performance characteristics
-```
-
 ### Simple LLM Completions
 
-For quick AI tasks without the full prompt system:
+For quick AI tasks without complex prompt management:
 
 ```typescript
 // Simple completion with automatic model selection
@@ -209,29 +76,34 @@ const response2 = await AIEngine.Instance.SimpleLLMCompletion(
 );
 ```
 
-### Performance Monitoring & Analytics
+> **Note**: For advanced prompt management with templates, parallel execution, and stored prompts, use the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
-The engine provides comprehensive tracking and analytics:
+
+
+### Model Management
+
+The engine maintains a comprehensive registry of AI models:
 
 ```typescript
-// Execution results include detailed metrics
-const result = await runner.RunPrompt(params);
+// Get all available models
+const allModels = AIEngine.Instance.Models;
+const llmModels = AIEngine.Instance.LanguageModels;
 
-console.log(`Execution time: ${result.executionTimeMS}ms`);
-console.log(`Tokens used: ${result.totalTokensUsed}`);
-console.log(`Cost estimate: $${result.estimatedCost}`);
-console.log(`Cache hit: ${result.cacheHit}`);
+// Get the most powerful model for a specific vendor
+const bestOpenAI = await AIEngine.Instance.GetHighestPowerLLM('OpenAI', currentUser);
+const bestModel = await AIEngine.Instance.GetHighestPowerModel(null, 'LLM', currentUser);
 
-// For parallel executions
-if (result.executionResults) {
-    result.executionResults.forEach((execResult, index) => {
-        console.log(`Model ${index}: ${execResult.model.Name}`);
-        console.log(`  Tokens: ${execResult.totalTokensUsed}`);
-        console.log(`  Time: ${execResult.executionTimeMS}ms`);
-        console.log(`  Success: ${execResult.success}`);
-    });
-}
+// Models are automatically selected based on:
+// - PowerRank: Relative capability ranking
+// - ModelType: LLM, Vision, Audio, etc.
+// - Vendor: OpenAI, Anthropic, Google, etc.
+// - Cost and performance characteristics
 ```
+
+
+### Performance Monitoring & Analytics
+
+The engine provides basic tracking and analytics for AI operations. Advanced execution metrics, caching analytics, and parallel execution analytics are available in the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
 ## API Reference
 
@@ -252,33 +124,14 @@ The central orchestration class for all AI operations.
 
 - `Models`: All registered AI models with extended capabilities
 - `LanguageModels`: Just the LLM type models
-- `Prompts`: All registered AI prompts with template support
-- `PromptCategories`: Organized prompt categories with associated prompts
 - `Agents`: Available AI agents with their capabilities
 - `VectorDatabases`: Vector database configurations
 
-### AIPromptRunner Class
+> **Note**: `Prompts` and `PromptCategories` properties are now available in the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
-Handles execution of AI prompts with advanced parallel processing.
+### Advanced Prompt Execution
 
-#### Methods
-
-- `RunPrompt(params: AIPromptParams)`: Execute a prompt with full feature support
-- `ValidatePromptOutput(prompt, result, data?)`: Validate AI output against criteria
-
-#### AIPromptParams Interface
-
-```typescript
-interface AIPromptParams {
-    prompt: AIPromptEntity;           // The prompt to execute
-    data?: any;                       // Template and context data
-    modelId?: string;                 // Override model selection
-    vendorId?: string;                // Override vendor selection
-    configurationId?: string;         // Environment-specific config
-    contextUser?: UserInfo;           // User context
-    skipValidation?: boolean;         // Skip output validation
-}
-```
+For sophisticated prompt management with templates, parallel execution, and stored prompts, see the [@memberjunction/ai-prompts](../Prompts/README.md) package which provides the `AIPromptRunner` class and related functionality.
 
 ### Extended Entity Classes
 
@@ -294,43 +147,10 @@ class AIAgentEntityExtended extends AIAgentEntity {
 }
 ```
 
-#### AIPromptCategoryEntityExtended
 
-Extended prompt category with prompt collection:
+## Advanced Features
 
-```typescript
-class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
-    get Prompts(): AIPromptEntity[];       // Prompts in this category
-}
-```
-
-## Parallel Execution System
-
-The engine includes a sophisticated parallel execution system with the following components:
-
-### ExecutionPlanner
-
-Plans and organizes execution tasks based on prompt configuration:
-
-- Analyzes parallelization modes and model configurations
-- Creates execution groups for coordinated processing
-- Determines optimal task distribution and priority
-
-### ParallelExecutionCoordinator  
-
-Orchestrates parallel execution across multiple models:
-
-- Manages concurrency limits and resource utilization
-- Handles error recovery and retry logic
-- Aggregates results and applies selection strategies
-- Provides comprehensive execution metrics
-
-### Supported Parallelization Modes
-
-- **None**: Traditional single execution
-- **StaticCount**: Fixed number of parallel executions
-- **ConfigParam**: Dynamic parallel count from configuration
-- **ModelSpecific**: Individual model configurations with execution groups
+For sophisticated parallel execution, template rendering, and stored prompt management, see the [@memberjunction/ai-prompts](../Prompts/README.md) package.
 
 ## Dependencies
 
@@ -338,15 +158,19 @@ Orchestrates parallel execution across multiple models:
 - `@memberjunction/global`: MemberJunction global utilities  
 - `@memberjunction/core-entities`: MemberJunction entity definitions
 - `@memberjunction/ai`: AI abstractions and interfaces
-- `@memberjunction/templates`: Template rendering system
 - `rxjs`: Reactive programming support
+
+## Related Packages
+
+- `@memberjunction/ai-prompts`: Advanced prompt management with templates, parallel execution, and stored prompts
 
 ## Migration Guide
 
 ### From AI Actions to AI Prompts
 
-If you're migrating from the deprecated AI Actions system:
+If you're migrating from the deprecated AI Actions system, you can either:
 
+1. **Use Simple LLM Completions** (basic use cases):
 ```typescript
 // Old AI Actions approach (deprecated)
 const actionParams: AIActionParams = {
@@ -357,16 +181,15 @@ const actionParams: AIActionParams = {
 };
 const result = await AIEngine.Instance.ExecuteAIAction(actionParams);
 
-// New AI Prompts approach (recommended)
-const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Your Prompt Name');
-const promptParams: AIPromptParams = {
-    prompt: prompt,
-    data: { /* your template data */ },
-    contextUser: currentUser
-};
-const runner = new AIPromptRunner();
-const result = await runner.RunPrompt(promptParams);
+// New Simple LLM approach (basic cases)
+const response = await AIEngine.Instance.SimpleLLMCompletion(
+    "User message",
+    currentUser,
+    "System message"
+);
 ```
+
+2. **Use Advanced Prompts** (complex use cases): See the [@memberjunction/ai-prompts](../Prompts/README.md) package for sophisticated prompt management with templates and parallel execution.
 
 ### From Entity AI Actions to AI Agents
 
@@ -380,16 +203,18 @@ const entityParams: EntityAIActionParams = {
 };
 const result = await AIEngine.Instance.ExecuteEntityAIAction(entityParams);
 
-// New AI Agents approach (recommended)
+// New approach: Use AI Agents with either simple completions or advanced prompts
 const agent = AIEngine.Instance.Agents.find(a => a.Name === 'Your Agent Name');
-const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Entity Analysis');
-const promptParams: AIPromptParams = {
-    prompt: prompt,
-    data: { entity: entity.GetAll() },
-    contextUser: currentUser
-};
-const runner = new AIPromptRunner();
-const result = await runner.RunPrompt(promptParams);
+
+// For simple cases - use SimpleLLMCompletion
+const entityData = JSON.stringify(entity.GetAll());
+const response = await AIEngine.Instance.SimpleLLMCompletion(
+    `Analyze this ${entity.EntityType} entity: ${entityData}`,
+    currentUser,
+    `You are an expert ${agent.Purpose}`
+);
+
+// For complex cases - use @memberjunction/ai-prompts package
 ```
 
 ## License
