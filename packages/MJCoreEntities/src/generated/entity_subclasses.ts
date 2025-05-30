@@ -1565,6 +1565,28 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
+    PromptRole: z.union([z.literal('System'), z.literal('User'), z.literal('Assistant'), z.literal('SystemOrUser')]).describe(`
+        * * Field Name: PromptRole
+        * * Display Name: Prompt Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System
+    *   * User
+    *   * Assistant
+    *   * SystemOrUser
+    * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)`),
+    PromptPosition: z.union([z.literal('First'), z.literal('Last')]).describe(`
+        * * Field Name: PromptPosition
+        * * Display Name: Prompt Position
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: First
+    * * Value List Type: List
+    * * Possible Values 
+    *   * First
+    *   * Last
+    * * Description: Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -15550,6 +15572,44 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set CacheMustMatchConfig(value: boolean) {
         this.Set('CacheMustMatchConfig', value);
+    }
+
+    /**
+    * * Field Name: PromptRole
+    * * Display Name: Prompt Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System
+    *   * User
+    *   * Assistant
+    *   * SystemOrUser
+    * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)
+    */
+    get PromptRole(): 'System' | 'User' | 'Assistant' | 'SystemOrUser' {
+        return this.Get('PromptRole');
+    }
+    set PromptRole(value: 'System' | 'User' | 'Assistant' | 'SystemOrUser') {
+        this.Set('PromptRole', value);
+    }
+
+    /**
+    * * Field Name: PromptPosition
+    * * Display Name: Prompt Position
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: First
+    * * Value List Type: List
+    * * Possible Values 
+    *   * First
+    *   * Last
+    * * Description: Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first
+    */
+    get PromptPosition(): 'First' | 'Last' {
+        return this.Get('PromptPosition');
+    }
+    set PromptPosition(value: 'First' | 'Last') {
+        this.Set('PromptPosition', value);
     }
 
     /**

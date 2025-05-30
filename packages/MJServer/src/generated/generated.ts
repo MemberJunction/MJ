@@ -2688,6 +2688,14 @@ export class AIPrompt_ {
     @Field(() => Boolean, {description: `When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`}) 
     CacheMustMatchConfig: boolean;
         
+    @Field({description: `Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)`}) 
+    @MaxLength(40)
+    PromptRole: string;
+        
+    @Field({description: `Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first`}) 
+    @MaxLength(40)
+    PromptPosition: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -2828,6 +2836,12 @@ export class CreateAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheMustMatchConfig?: boolean;
+
+    @Field({ nullable: true })
+    PromptRole?: string;
+
+    @Field({ nullable: true })
+    PromptPosition?: string;
 }
     
 
@@ -2928,6 +2942,12 @@ export class UpdateAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheMustMatchConfig?: boolean;
+
+    @Field({ nullable: true })
+    PromptRole?: string;
+
+    @Field({ nullable: true })
+    PromptPosition?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
