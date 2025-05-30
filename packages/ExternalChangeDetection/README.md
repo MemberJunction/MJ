@@ -8,13 +8,14 @@ The `@memberjunction/external-change-detection` package provides functionality t
 
 ## Key Features
 
-- Detect external changes to entity records
-- Compare current state with previous snapshots
-- Generate detailed change reports
-- Support for field-level change detection
-- Configurable change detection criteria
-- Ability to replay/apply detected changes
-- Built-in optimization for large datasets
+- Detect external changes to entity records (creates, updates, and deletes)
+- Compare current state with previous snapshots stored in RecordChanges
+- Generate detailed change reports with field-level differences
+- Support for composite primary keys
+- Configurable change detection with parallel processing
+- Ability to replay/apply detected changes through MemberJunction
+- Built-in optimization for batch loading records
+- Track change replay runs for audit purposes
 
 ## Installation
 
@@ -25,218 +26,288 @@ npm install @memberjunction/external-change-detection
 ## Dependencies
 
 This package relies on the following MemberJunction packages:
-- `@memberjunction/core`
-- `@memberjunction/core-entities`
-- `@memberjunction/global`
-- `@memberjunction/sqlserver-dataprovider`
+- `@memberjunction/core` - Core MemberJunction functionality
+- `@memberjunction/core-entities` - Entity definitions
+- `@memberjunction/global` - Global utilities
+- `@memberjunction/sqlserver-dataprovider` - SQL Server data provider
 
 ## Basic Usage
 
 ```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
-import { User } from '@memberjunction/core-entities';
+import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { Metadata } from '@memberjunction/core';
 
-async function detectChanges() {
-  // Create change detector instance
-  const detector = new ExternalChangeDetector();
+async function detectAndReplayChanges() {
+  // Get the engine instance
+  const detector = ExternalChangeDetectorEngine.Instance;
   
-  // Run detection for the User entity
-  const changes = await detector.detectChanges({
-    entityName: 'User',
-    captureTimeLimit: 30, // minutes
-  });
+  // Configure the engine (loads eligible entities)
+  await detector.Config();
   
-  // Process detected changes
-  console.log(`Detected ${changes.length} changes in User entity`);
+  // Get a specific entity
+  const md = new Metadata();
+  const entityInfo = md.Entities.find(e => e.Name === 'Customer');
   
-  // Replay changes if needed
-  if (changes.length > 0) {
-    await detector.replayChanges(changes);
+  // Detect changes for the entity
+  const result = await detector.DetectChangesForEntity(entityInfo);
+  
+  if (result.Success) {
+    console.log(`Detected ${result.Changes.length} changes`);
+    
+    // Replay the changes if any were found
+    if (result.Changes.length > 0) {
+      const replaySuccess = await detector.ReplayChanges(result.Changes);
+      console.log(`Replay ${replaySuccess ? 'succeeded' : 'failed'}`);
+    }
   }
 }
+```
 
-detectChanges();
+## API Documentation
+
+### ExternalChangeDetectorEngine
+
+The main class for detecting and replaying external changes. This is a singleton that extends BaseEngine.
+
+#### Configuration
+
+```typescript
+// Configure the engine - this loads eligible entities
+await ExternalChangeDetectorEngine.Instance.Config();
+```
+
+#### Properties
+
+- `EligibleEntities`: EntityInfo[] - List of entities eligible for change detection
+- `IneligibleEntities`: string[] - List of entity names to exclude from detection
+
+#### Methods
+
+##### DetectChangesForEntity
+
+Detects changes for a single entity.
+
+```typescript
+const result = await detector.DetectChangesForEntity(entityInfo);
+```
+
+Returns a `ChangeDetectionResult` with:
+- `Success`: boolean
+- `ErrorMessage`: string (if failed)
+- `Changes`: ChangeDetectionItem[]
+
+##### DetectChangesForEntities
+
+Detects changes for multiple entities in parallel.
+
+```typescript
+const entities = [entity1, entity2, entity3];
+const result = await detector.DetectChangesForEntities(entities);
+```
+
+##### DetectChangesForAllEligibleEntities
+
+Detects changes for all eligible entities.
+
+```typescript
+const result = await detector.DetectChangesForAllEligibleEntities();
+```
+
+##### ReplayChanges
+
+Replays detected changes through MemberJunction to trigger all business logic.
+
+```typescript
+const success = await detector.ReplayChanges(changes, batchSize);
+```
+
+Parameters:
+- `changes`: ChangeDetectionItem[] - Changes to replay
+- `batchSize`: number (optional, default: 20) - Number of concurrent replays
+
+### Data Types
+
+#### ChangeDetectionItem
+
+Represents a single detected change:
+
+```typescript
+class ChangeDetectionItem {
+  Entity: EntityInfo;              // The entity that changed
+  PrimaryKey: CompositeKey;        // Primary key of the record
+  Type: 'Create' | 'Update' | 'Delete';  // Type of change
+  ChangedAt: Date;                 // When the change occurred
+  Changes: FieldChange[];          // Field-level changes (for updates)
+  LatestRecord?: BaseEntity;       // Current record data (for creates/updates)
+  LegacyKey?: boolean;             // For backward compatibility
+  LegacyKeyValue?: string;         // Legacy single-value key
+}
+```
+
+#### FieldChange
+
+Represents a change to a single field:
+
+```typescript
+class FieldChange {
+  FieldName: string;
+  OldValue: any;
+  NewValue: any;
+}
+```
+
+#### ChangeDetectionResult
+
+Result of a change detection operation:
+
+```typescript
+class ChangeDetectionResult {
+  Success: boolean;
+  ErrorMessage?: string;
+  Changes: ChangeDetectionItem[];
+}
 ```
 
 ## Eligible Entities
 
-Not all entities support external change detection. For an entity to be eligible for change detection:
+For an entity to be eligible for external change detection:
 
-1. The entity must have a TrackChanges property set to true in the metadata
-2. The entity must have a LastUpdated or LastModifiedDate field
-3. The entity must have the required fields for tracking history
+1. The entity must have `TrackRecordChanges` property set to 1
+2. The entity must have the special `__mj_UpdatedAt` and `__mj_CreatedAt` fields (automatically added by CodeGen)
+3. The entity must not be in the `IneligibleEntities` list
 
-You can check if an entity is eligible using:
+The eligible entities are determined by the database view `vwEntitiesWithExternalChangeTracking`.
+
+## How It Works
+
+### Change Detection Process
+
+1. **Create Detection**: Finds records in the entity table that don't have a corresponding 'Create' entry in RecordChanges
+2. **Update Detection**: Compares `__mj_UpdatedAt` timestamps between entity records and their latest RecordChanges entry
+3. **Delete Detection**: Finds RecordChanges entries where the corresponding entity record no longer exists
+
+### Change Replay Process
+
+1. Creates a new RecordChangeReplayRun to track the replay session
+2. For each change:
+   - Creates a new RecordChange record with status 'Pending'
+   - Loads the entity using MemberJunction's entity system
+   - Calls Save() or Delete() with the `ReplayOnly` option
+   - Updates the RecordChange status to 'Complete' or 'Error'
+3. Updates the RecordChangeReplayRun status when finished
+
+## Examples
+
+### Detect Changes for Specific Entities
 
 ```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
+const detector = ExternalChangeDetectorEngine.Instance;
+await detector.Config();
 
-const detector = new ExternalChangeDetector();
-const isEligible = await detector.isEntityEligibleForChangeDetection('User');
+// Get specific entities
+const md = new Metadata();
+const customerEntity = md.Entities.find(e => e.Name === 'Customer');
+const orderEntity = md.Entities.find(e => e.Name === 'Order');
 
-console.log(`User entity is eligible for change detection: ${isEligible}`);
+// Detect changes for both entities
+const result = await detector.DetectChangesForEntities([customerEntity, orderEntity]);
+
+console.log(`Found ${result.Changes.length} total changes`);
 ```
 
-## Detecting Changes
-
-### Simple Detection
+### Process Changes with Error Handling
 
 ```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
+const detector = ExternalChangeDetectorEngine.Instance;
+await detector.Config();
 
-const detector = new ExternalChangeDetector();
-const changes = await detector.detectChanges({
-  entityName: 'Customer',
-  captureTimeLimit: 60 // Look back 60 minutes
-});
-```
+const result = await detector.DetectChangesForAllEligibleEntities();
 
-### Filtering by Record IDs
-
-```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
-
-const detector = new ExternalChangeDetector();
-const changes = await detector.detectChanges({
-  entityName: 'Product',
-  recordIDs: [1001, 1002, 1003], // Only check these specific records
-  captureTimeLimit: 24 * 60 // Look back 24 hours
-});
-```
-
-### Setting Change Criteria
-
-```typescript
-import { ExternalChangeDetector, ExternalChangeDetectorCriteria } from '@memberjunction/external-change-detection';
-
-const criteria: ExternalChangeDetectorCriteria = {
-  entityName: 'Order',
-  captureTimeLimit: 120, // 2 hours
-  includeFieldNames: ['Status', 'TotalAmount', 'CustomerID'], // Only check these fields
-  excludeFieldNames: ['UpdatedBy', 'InternalNotes'] // Ignore changes to these fields
-};
-
-const detector = new ExternalChangeDetector();
-const changes = await detector.detectChanges(criteria);
-```
-
-## Replaying Changes
-
-Once changes are detected, you can replay or apply them through the MemberJunction application to ensure that all business logic is properly executed:
-
-```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
-
-async function syncChanges() {
-  const detector = new ExternalChangeDetector();
+if (result.Success && result.Changes.length > 0) {
+  console.log(`Processing ${result.Changes.length} changes...`);
   
-  // Detect changes
-  const changes = await detector.detectChanges({
-    entityName: 'Invoice',
-    captureTimeLimit: 720 // 12 hours
+  // Group changes by entity for reporting
+  const changesByEntity = result.Changes.reduce((acc, change) => {
+    const entityName = change.Entity.Name;
+    if (!acc[entityName]) acc[entityName] = [];
+    acc[entityName].push(change);
+    return acc;
+  }, {});
+  
+  // Log summary
+  Object.entries(changesByEntity).forEach(([entityName, changes]) => {
+    console.log(`${entityName}: ${changes.length} changes`);
   });
   
-  if (changes.length > 0) {
-    // Apply the detected changes through MemberJunction
-    const results = await detector.replayChanges(changes);
-    
-    // Log results
-    console.log(`Applied ${results.successCount} changes successfully`);
-    console.log(`Failed to apply ${results.failureCount} changes`);
-    
-    if (results.failureCount > 0) {
-      console.error('Failures:', results.failures);
-    }
+  // Replay with smaller batch size for critical entities
+  const success = await detector.ReplayChanges(result.Changes, 10);
+  
+  if (!success) {
+    console.error('Some changes failed to replay');
   }
 }
 ```
 
-## Return Types
-
-### ExternalChangeResult
+### Scheduled Change Detection Job
 
 ```typescript
-interface ExternalChangeResult {
-  entityName: string;
-  recordID: number;
-  fieldChanges: ExternalFieldChange[];
-  errorMessage?: string;
-}
-```
+import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { UserInfo } from '@memberjunction/core';
 
-### ExternalFieldChange
-
-```typescript
-interface ExternalFieldChange {
-  fieldName: string;
-  oldValue: any;
-  newValue: any;
-}
-```
-
-### ReplayChangesResult
-
-```typescript
-interface ReplayChangesResult {
-  successCount: number;
-  failureCount: number;
-  successes: ReplayChangeSuccess[];
-  failures: ReplayChangeFailure[];
-}
-```
-
-## Server-Side Usage
-
-This library is primarily intended for server-side applications, often running as scheduled jobs or services that periodically check for external changes and reconcile them.
-
-Example of setting up a scheduled check:
-
-```typescript
-import { ExternalChangeDetector } from '@memberjunction/external-change-detection';
-import { EntityInfo } from '@memberjunction/core';
-
-async function scheduleChangeDetection() {
-  const detector = new ExternalChangeDetector();
+async function runScheduledChangeDetection(contextUser: UserInfo) {
+  const detector = ExternalChangeDetectorEngine.Instance;
   
-  // Get all entities that support change detection
-  const metadata = new EntityInfo();
-  const entities = await metadata.getEntitiesWithTrackChanges();
-  
-  // Check each eligible entity
-  for (const entity of entities) {
-    try {
-      const isEligible = await detector.isEntityEligibleForChangeDetection(entity.Name);
-      
-      if (isEligible) {
-        console.log(`Checking ${entity.Name} for external changes...`);
-        
-        const changes = await detector.detectChanges({
-          entityName: entity.Name,
-          captureTimeLimit: 24 * 60 // Daily check
-        });
-        
-        if (changes.length > 0) {
-          await detector.replayChanges(changes);
-          console.log(`Applied ${changes.length} changes to ${entity.Name}`);
-        }
-      }
-    } catch (error) {
-      console.error(`Error processing ${entity.Name}:`, error);
+  try {
+    // Configure with specific user context
+    await detector.Config(false, contextUser);
+    
+    // Detect all changes
+    const detectResult = await detector.DetectChangesForAllEligibleEntities();
+    
+    if (!detectResult.Success) {
+      throw new Error(`Detection failed: ${detectResult.ErrorMessage}`);
     }
+    
+    console.log(`Detection complete: ${detectResult.Changes.length} changes found`);
+    
+    // Replay changes if any were found
+    if (detectResult.Changes.length > 0) {
+      const replaySuccess = await detector.ReplayChanges(detectResult.Changes);
+      
+      if (!replaySuccess) {
+        console.error('Some changes failed during replay');
+        // Could implement retry logic or notifications here
+      }
+    }
+  } catch (error) {
+    console.error('Change detection job failed:', error);
+    // Implement alerting/logging as needed
   }
 }
 ```
 
 ## Performance Considerations
 
-For large entities with many records, change detection can be resource-intensive. Consider using these optimization strategies:
+1. **Batch Processing**: The engine processes multiple entities in parallel and loads records in batches
+2. **Efficient Queries**: Uses optimized SQL queries with proper joins and filters
+3. **Composite Key Support**: Handles both simple and composite primary keys efficiently
+4. **Configurable Batch Size**: Adjust the replay batch size based on your system's capacity
 
-1. Use smaller `captureTimeLimit` values
-2. Filter by specific `recordIDs` when possible
-3. Use `includeFieldNames` to limit which fields are checked
-4. Schedule detection jobs during off-peak hours
-5. Process entities in batches
-6. Implement error handling and retry logic
+### Best Practices
+
+- Run change detection during off-peak hours
+- Monitor the RecordChangeReplayRuns table for failed runs
+- Set appropriate batch sizes for replay based on your data volume
+- Consider entity-specific scheduling for high-volume entities
+- Implement proper error handling and alerting
+
+## Database Requirements
+
+This package requires the following database objects:
+- `__mj.vwEntitiesWithExternalChangeTracking` - View listing eligible entities
+- `__mj.vwRecordChanges` - View of record change history
+- `__mj.RecordChange` - Table storing change records
+- `__mj.RecordChangeReplayRun` - Table tracking replay runs
 
 ## License
 

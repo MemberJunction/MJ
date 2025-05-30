@@ -1,6 +1,8 @@
 # @memberjunction/ng-treelist
 
-The `@memberjunction/ng-treelist` package provides a calendar-like visualization component using Kendo UI's Scheduler for displaying MemberJunction entity data in a timeline format. This component allows for chronological display of entity records with time-based properties.
+The `@memberjunction/ng-treelist` package provides a timeline visualization component using Kendo UI's Scheduler for displaying MemberJunction entity data in a chronological format. Despite its name suggesting tree-list functionality, this package currently contains a timeline component that displays entity records with time-based properties in a calendar view.
+
+> **Note**: The package name `ng-treelist` is a historical artifact. The package contains timeline functionality, not tree-list functionality.
 
 ## Features
 
@@ -11,6 +13,8 @@ The `@memberjunction/ng-treelist` package provides a calendar-like visualization
 - Event styling with custom colors and icons
 - Auto-refresh when data sources change
 - Optional custom summary generation with configurable functions
+- All-day event display format
+- Automatic date-based positioning of events
 
 ## Installation
 
@@ -190,7 +194,7 @@ export class YourComponent implements OnInit {
 | `DisplayIcon` | `string` | (optional) | Custom icon class for events |
 | `DisplayColorMode` | `'auto' \| 'manual'` | `'auto'` | Color selection mode |
 | `DisplayColor` | `string` | (optional) | Manual color for events |
-| `SummaryMode` | `'field' \| 'custom' \| 'none'` | `'field'` | Mode for summary display |
+| `SummaryMode` | `'field' \| 'custom' \| 'none'` | `'field'` | Mode for summary display. Note: 'field' mode currently uses TitleFieldName |
 | `SummaryFunction` | `(record: BaseEntity) => string` | (optional) | Function for custom summary generation |
 
 #### Static Methods
@@ -202,6 +206,25 @@ export class YourComponent implements OnInit {
 ## Styling
 
 The component uses Kendo UI's styling for the scheduler display. You can customize the appearance by targeting the Kendo UI scheduler elements in your CSS.
+
+### CSS Classes
+
+The component wrapper has the class `wrapper` and uses the `mjFillContainer` directive for responsive sizing.
+
+## Known Limitations
+
+1. The component currently only supports week view display mode
+2. Events are displayed as all-day events regardless of time information
+3. When using `SummaryMode: 'field'`, the component uses the same field as `TitleFieldName` instead of a separate summary field
+4. Multiple groups are loaded but only the last group's data is displayed (earlier groups are overwritten)
+5. The component name suggests tree-list functionality but provides timeline functionality
+
+## Best Practices
+
+1. **Performance**: For large datasets, use pagination in your RunView queries to limit the number of records loaded
+2. **Date Fields**: Ensure your date fields contain valid JavaScript date values or date strings
+3. **Custom Summaries**: Use the `SummaryFunction` for rich HTML content display
+4. **Icons**: Use Font Awesome icons for consistency with the MemberJunction UI
 
 ## Dependencies
 
@@ -219,3 +242,15 @@ The component uses Kendo UI's styling for the scheduler display. You can customi
 - @progress/kendo-angular-layout
 - @progress/kendo-angular-indicators
 - @progress/kendo-angular-scheduler
+
+## Migration Notes
+
+If you're looking for tree-list functionality (hierarchical data display), this package does not provide that feature despite its name. For tree-list functionality in MemberJunction applications, consider:
+
+1. Using Kendo UI's TreeList component directly
+2. Creating a custom component with hierarchical data support
+3. Checking other MemberJunction packages for tree/hierarchical display components
+
+## Version History
+
+See [CHANGELOG.md](./CHANGELOG.md) for version history and release notes.

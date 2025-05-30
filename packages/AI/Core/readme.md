@@ -2,6 +2,10 @@
 
 The MemberJunction AI Core package provides a comprehensive abstraction layer for working with various AI models (LLMs, Video and Audio Generation, Text-To-Speech (TTS), embedding models, etc.) in a provider-agnostic way, allowing your application to easily switch between different AI providers without refactoring your code.
 
+## Overview
+
+This package serves as the foundation for all AI capabilities in the MemberJunction ecosystem. It defines abstract base classes and interfaces that are implemented by provider-specific packages, enabling seamless integration with various AI services while maintaining a consistent API.
+
 ## Standalone Usage
 
 **IMPORTANT**: This package can be used completely independently from the rest of the MemberJunction framework:
@@ -17,12 +21,16 @@ The `@memberjunction/ai` package and all provider packages in `@memberjunction/a
 
 - **Provider Abstraction**: Work with AI models without tightly coupling to specific vendor APIs
 - **Runtime Optionality**: Switch between AI providers at runtime based on configuration
-- **Base Classes**: Abstract base classes for different AI model types (LLMs, embedding models, etc.)
+- **Base Classes**: Abstract base classes for different AI model types (LLMs, embedding models, audio, video, etc.)
 - **Standard Interfaces**: Consistent interfaces for common AI operations like chat, summarization, and classification
 - **Streaming Support**: Stream responses from supported LLM providers for real-time UIs
+- **Parallel Processing**: Execute multiple chat completions in parallel with progress callbacks
+- **Multi-modal Support**: Handle text, images, videos, audio, and files in chat messages
 - **Type Definitions**: Comprehensive TypeScript type definitions for all AI operations
 - **Error Handling**: Standardized error handling and reporting across all providers
 - **Token Usage Tracking**: Consistent tracking of token usage across providers
+- **Response Format Control**: Specify output formats (Text, Markdown, JSON, or provider-specific)
+- **Additional Settings**: Provider-specific configuration through a flexible settings system
 
 ## Installation
 
@@ -124,12 +132,45 @@ console.log(result.data.choices[0].message.content);
 
 ### Base Models
 
-- `BaseModel`: The foundational abstract class for all AI models
-- `BaseLLM`: Abstract class for text generation models like GPT, Claude, etc.
-- `BaseEmbedding`: Abstract class for text embedding models
-- `BaseDiffusion`: Abstract class for image generation models
-- `BaseAudio`: Abstract class for speech and audio processing models
-- `BaseVideo`: Abstract class for video generation models
+#### BaseModel
+The foundational abstract class for all AI models. Provides:
+- Protected API key management
+- Base parameter and result types
+- Model usage tracking
+
+#### BaseLLM
+Abstract class for text generation models. Features:
+- Standard and streaming chat completions
+- Parallel chat completions with callbacks
+- Text summarization
+- Text classification
+- Additional provider-specific settings management
+- Response format control (Any, Text, Markdown, JSON, ModelSpecific)
+- Support for reasoning budget tokens (for reasoning models)
+
+#### BaseEmbeddings
+Abstract class for text embedding models. Provides:
+- Single text embedding generation
+- Batch text embedding generation
+- Model listing capabilities
+- Additional settings management
+
+#### BaseAudioGenerator  
+Abstract class for audio processing models. Supports:
+- Text-to-speech generation
+- Speech-to-text transcription
+- Voice listing and management
+- Model and pronunciation dictionary queries
+- Configurable voice settings (stability, similarity, speed, etc.)
+
+#### BaseVideoGenerator
+Abstract class for video generation models. Enables:
+- Avatar-based video creation
+- Video translation capabilities
+- Avatar management and listing
+
+#### BaseDiffusion
+Abstract class for image generation models (placeholder for future implementation)
 
 ## LLM Operations
 
@@ -321,5 +362,166 @@ This architecture allows for a clean separation between common streaming logic a
 - `@memberjunction/global` - MemberJunction global utilities including class factory
 - `rxjs` - Reactive extensions for JavaScript
 
+## API Reference
+
+### Result Types
+
+#### BaseResult
+All operations return results extending `BaseResult`:
+```typescript
+class BaseResult {
+    success: boolean;
+    startTime: Date;
+    endTime: Date;
+    errorMessage: string;
+    exception: any;
+    timeElapsed: number; // Computed getter
+}
+```
+
+#### ChatResult
+Extends `BaseResult` with chat-specific data:
+```typescript
+class ChatResult extends BaseResult {
+    data: {
+        choices: Array<{
+            message: ChatCompletionMessage;
+            index: number;
+            finishReason?: string;
+        }>;
+        usage: ModelUsage;
+    };
+    statusText?: string;
+}
+```
+
+### Chat Message Types
+
+#### ChatMessage
+Supports multi-modal content:
+```typescript
+type ChatMessage = {
+    role: 'system' | 'user' | 'assistant';
+    content: string | ChatMessageContentBlock[];
+}
+
+type ChatMessageContentBlock = {
+    type: 'text' | 'image_url' | 'video_url' | 'audio_url' | 'file_url';
+    content: string; // URL or base64 encoded content
+}
+```
+
+### Streaming Callbacks
+
+```typescript
+interface StreamingChatCallbacks {
+    OnContent?: (chunk: string, isComplete: boolean) => void;
+    OnComplete?: (finalResponse: ChatResult) => void;
+    OnError?: (error: any) => void;
+}
+
+interface ParallelChatCompletionsCallbacks {
+    OnCompletion?: (response: ChatResult, index: number) => void;
+    OnError?: (error: any, index: number) => void;
+    OnAllCompleted?: (responses: ChatResult[]) => void;
+}
+```
+
+## Configuration
+
+### API Key Management
+
+The package includes a flexible API key management system through the `AIAPIKeys` class:
+
+```typescript
+import { GetAIAPIKey } from '@memberjunction/ai';
+
+// Get API key for a specific provider
+const apiKey = GetAIAPIKey('OpenAI');
+```
+
+By default, it looks for environment variables with the pattern: `AI_VENDOR_API_KEY__[PROVIDER_NAME]`
+
+Example:
+```bash
+AI_VENDOR_API_KEY__OPENAI=your-api-key
+AI_VENDOR_API_KEY__ANTHROPIC=your-api-key
+AI_VENDOR_API_KEY__MISTRAL=your-api-key
+```
+
+You can extend the `AIAPIKeys` class to implement custom API key retrieval logic.
+
+### Provider-Specific Settings
+
+Many providers support additional configuration beyond the API key:
+
+```typescript
+const llm = new SomeLLM('api-key');
+llm.SetAdditionalSettings({
+    baseURL: 'https://custom-endpoint.com',
+    organization: 'my-org',
+    // Provider-specific settings
+});
+```
+
+## Integration with MemberJunction
+
+While this package can be used standalone, it integrates seamlessly with the MemberJunction framework:
+
+- Uses `@memberjunction/global` for class factory pattern and registration
+- Compatible with MemberJunction's metadata system
+- Can leverage MemberJunction's configuration management when available
+
+## Dependencies
+
+- `@memberjunction/global` (^2.43.0) - MemberJunction global utilities including class factory
+- `rxjs` (^7.8.1) - Reactive extensions for JavaScript (used in streaming implementations)
+- `dotenv` (^16.4.1) - Environment variable management
+- `typeorm` (^0.3.20) - ORM functionality (optional, only if using with full MemberJunction)
+
+## Development
+
+### Building
+
+```bash
+cd packages/AI/Core
+npm run build
+```
+
+### TypeScript Configuration
+
+The package is configured with TypeScript strict mode and targets ES2022. See `tsconfig.json` for full compiler options.
+
+## Best Practices
+
+1. **Always use the class factory pattern** for maximum flexibility
+2. **Handle errors gracefully** - check `result.success` before accessing data
+3. **Monitor token usage** to manage costs and stay within limits
+4. **Use streaming for long responses** to improve user experience
+5. **Leverage parallel completions** for comparison or reliability
+6. **Cache API keys** using the built-in caching mechanism
+7. **Specify response formats** when you need structured output
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"API key cannot be empty" error**
+   - Ensure you're passing a valid API key to the constructor
+   - Check environment variables are properly set
+
+2. **Provider not found when using class factory**
+   - Make sure to import and call the provider's Load function
+   - Verify the provider class name matches exactly
+
+3. **Streaming not working**
+   - Check if the provider supports streaming (`llm.SupportsStreaming`)
+   - Ensure streaming callbacks are properly defined
+
+4. **Type errors with content blocks**
+   - Use the provided type guards and interfaces
+   - Ensure content format matches the expected structure
+
 ## License
+
 See the [repository root](../../../LICENSE) for license information.

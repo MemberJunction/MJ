@@ -1,6 +1,6 @@
-# MemberJunction Angular Elements Demo
+# @memberjunction/angular-elements-demo
 
-This project demonstrates how to leverage Angular Elements to create reusable web components that can be embedded in any web application, regardless of the framework used. By converting Angular components into standard Web Components (Custom Elements), this demo shows how powerful Angular functionality can be used in non-Angular environments.
+This package demonstrates how to leverage Angular Elements to create reusable web components from MemberJunction Angular components that can be embedded in any web application, regardless of the framework used. By converting Angular components into standard Web Components (Custom Elements), this demo shows how powerful MemberJunction functionality can be used in non-Angular environments.
 
 ## Overview
 
@@ -44,57 +44,120 @@ For implementing design systems:
 - Ensure consistent behavior and appearance across applications
 - Simplify maintenance by centralizing component logic
 
-## What This Demo Contains
+## Components Included
 
-This demo converts several MemberJunction components into web components:
+This package exports the following MemberJunction components as web components:
 
-- `<mj-hello-world>`: A simple demonstration component
-- `<mj-entity-list-demo>`: Shows a list of entities from MemberJunction
-- `<mj-entity-detail-demo>`: Displays details for a selected entity
-- `<mj-listener-demo>`: Demonstrates event communication between components
+### 1. `<mj-hello-world>`
+A simple demonstration component that:
+- Connects to MemberJunction's metadata system
+- Displays the total count of entities
+- Emits events with entity information
+- Shows basic MemberJunction integration
 
-Each component is built in Angular but exported as a standard web component that can be used in any HTML page.
+**Properties:** None
+**Events:** `display` - Emits entity list data
 
-## Getting Started
+### 2. `<mj-entity-list-demo>`
+Displays a list of MemberJunction entities in a table format:
+- Loads entity metadata automatically when user is logged in
+- Handles row selection with visual feedback
+- Emits events when rows are clicked
+- Manages Angular change detection for web component usage
+
+**Properties:** None
+**Events:** `rowClicked` - Emits selected EntityInfo object
+
+### 3. `<mj-entity-detail-demo>`
+Shows detailed information about a selected entity:
+- Accepts an EntityInfo object as input
+- Displays entity properties in a grid layout
+- Updates automatically when input changes
+
+**Properties:** `entity` (EntityInfo) - The entity to display
+**Events:** None
+
+### 4. `<mj-listener-demo>`
+Demonstrates event listening capabilities:
+- Subscribes to MemberJunction global events
+- Logs event information to console
+- Shows how components can communicate via event system
+
+**Properties:** `displayString` (string) - Text to display
+**Events:** None
+
+### 5. `<mj-user-view-grid-wrapper>`
+A wrapper component for the MemberJunction user view grid (implementation pending).
+
+## Installation
 
 ### Prerequisites
 
 - Node.js (LTS version recommended)
 - npm or yarn
+- Angular CLI (`npm install -g @angular/cli`)
+- MemberJunction backend API running (for data functionality)
 
-### Installation
+### Package Installation
 
-1. Clone the repository
-2. Navigate to the project directory
-3. Install dependencies:
-   ```
+This package is part of the MemberJunction monorepo. To work with it:
+
+1. Clone the MemberJunction repository
+2. Navigate to the root directory
+3. Install all dependencies (from the monorepo root):
+   ```bash
    npm install
    ```
+4. Navigate to this package:
+   ```bash
+   cd packages/AngularElements/mj-angular-elements-demo
+   ```
 
-### Building the Web Components
+## Building the Web Components
+
+### Development Build
+
+```bash
+# Build in development mode
+ng build
+# or
+npm run build
+```
+
+### Production Build with Bundling
 
 Run the build script to create the bundled web components:
 
-```
+```bash
+# Make the script executable (first time only)
+chmod +x build_angular_elements.sh
+
+# Run the build script
 ./build_angular_elements.sh
 ```
 
 This script:
-1. Builds the Angular application
-2. Concatenates the resulting JavaScript files
+1. Builds the Angular application with production optimizations
+2. Concatenates the resulting JavaScript files (runtime, polyfills, scripts, main)
 3. Creates a single bundle (`dist/mj-angular-elements-demo-complete.js`) that can be included in any web page
 
-The build script ([build_angular_elements.sh](./build_angular_elements.sh)) is extensively documented and shows how to:
-- Build the Angular application
-- Find all generated JavaScript files (runtime, polyfills, scripts, main)
-- Concatenate them into a single bundled file
-- Output information about the build process
+### Build Output
 
-After building, you can use the generated JavaScript file in any HTML page, as demonstrated in the included demo files:
-- [demo_mj_hello_angular_elements.html](./demo_mj_hello_angular_elements.html): Simple hello world component demo
-- [demo_mj_entity_list_angular_elements.html](./demo_mj_entity_list_angular_elements.html): More complex demo showing component interaction
+- `dist/mj-angular-elements-demo/`: Standard Angular build output
+- `dist/mj-angular-elements-demo-complete.js`: Bundled file containing all components
 
-## Using the Web Components
+### Available NPM Scripts
+
+```bash
+npm run build    # Build the project
+npm run watch    # Build and watch for changes
+npm run start    # Start development server
+npm run test     # Run unit tests
+```
+
+## Usage Examples
+
+### Basic Usage
 
 Include the generated bundle in any HTML page:
 
@@ -112,25 +175,95 @@ Include the generated bundle in any HTML page:
 </html>
 ```
 
+### Complete Example with MemberJunction Integration
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="dist/mj-angular-elements-demo-complete.js"></script>
+  <script src="path/to/MemberJunctionGraphQLDataProvider.js"></script>
+</head>
+<body>
+  <div style="display: flex; gap: 20px;">
+    <mj-entity-list-demo></mj-entity-list-demo>
+    <mj-entity-detail-demo></mj-entity-detail-demo>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async function() {
+      // Set up component communication
+      const entityList = document.querySelector('mj-entity-list-demo');
+      const entityDetail = document.querySelector('mj-entity-detail-demo');
+      
+      entityList.addEventListener('rowClicked', event => {
+        entityDetail.entity = event.detail;
+      });
+
+      // Initialize MemberJunction
+      const { GraphQLProviderConfigData, setupGraphQLClient } = MemberJunctionGraphQLDataProvider;
+      const config = new GraphQLProviderConfigData(
+        'YOUR_JWT_TOKEN',
+        'http://localhost:4000',
+        'ws://localhost:4000/',
+        '__mj'
+      );
+      await setupGraphQLClient(config);
+    });
+  </script>
+</body>
+</html>
+```
+
 ### Demo Pages
 
-Check out the included demo pages for working examples:
+This package includes working demo pages:
 
-- `demo_mj_hello_angular_elements.html`: Simple demo of the hello world component
-- `demo_mj_entity_list_angular_elements.html`: Demo showing entity list and detail components working together
+- `demo_mj_hello_angular_elements.html`: Simple hello world component demo
+- `demo_mj_entity_list_angular_elements.html`: Advanced demo showing entity list and detail components working together with event communication
 
-## Component Communication
+## API Documentation
 
-These web components can communicate with each other through standard DOM events:
+### Component Communication
+
+Components communicate through standard DOM events and properties:
 
 ```javascript
 // Listen for events from a component
-document.querySelector('mj-entity-list-demo').addEventListener('rowClicked', event => {
+const entityList = document.querySelector('mj-entity-list-demo');
+entityList.addEventListener('rowClicked', event => {
   // Access the data passed with the event
-  const entityData = event.detail;
+  const entityData = event.detail; // EntityInfo object
   
-  // Use the data with another component
-  document.querySelector('mj-entity-detail-demo').entity = entityData;
+  // Pass data to another component via property
+  const entityDetail = document.querySelector('mj-entity-detail-demo');
+  entityDetail.entity = entityData;
+});
+
+// Set properties directly
+const listener = document.querySelector('mj-listener-demo');
+listener.displayString = 'Hello from JavaScript!';
+```
+
+### TypeScript Support
+
+When using these components in a TypeScript project:
+
+```typescript
+import { EntityInfo } from '@memberjunction/core';
+
+// Type the elements
+const entityList = document.querySelector('mj-entity-list-demo') as HTMLElement & {
+  addEventListener(type: 'rowClicked', listener: (event: CustomEvent<EntityInfo>) => void): void;
+};
+
+const entityDetail = document.querySelector('mj-entity-detail-demo') as HTMLElement & {
+  entity: EntityInfo;
+};
+
+// Use with full type safety
+entityList.addEventListener('rowClicked', (event) => {
+  entityDetail.entity = event.detail; // TypeScript knows this is EntityInfo
 });
 ```
 
@@ -258,20 +391,124 @@ For systems that load components at runtime:
 - Integrate Angular components into any JavaScript framework (React, Vue, etc.)
 - Enhance static websites with dynamic Angular functionality
 
-## Development Server
+## Dependencies
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`.
+### Production Dependencies
+- `@angular/core`: ^18.0.2 - Angular framework core
+- `@angular/elements`: ^18.0.2 - Angular Elements for web component creation
+- `@angular/common`, `@angular/forms`, `@angular/platform-browser`: Angular framework modules
+- `@memberjunction/core`: ^2.43.0 - MemberJunction core functionality
+- `@memberjunction/global`: ^2.43.0 - Global MemberJunction utilities and events
+- `@memberjunction/graphql-dataprovider`: ^2.43.0 - GraphQL data provider for MemberJunction
+- `@memberjunction/ng-user-view-grid`: ^2.43.0 - Angular grid component for user views
+- `rxjs`: ^7.8.1 - Reactive programming library
+- `zone.js`: ^0.14.0 - Angular's change detection mechanism
 
-## Building
+### Development Dependencies
+- `@angular-devkit/build-angular`: ^18.0.3 - Angular build tools
+- `@angular/cli`: ^18.0.3 - Angular command line interface
+- TypeScript, Karma, Jasmine for development and testing
 
-Run `ng build` to build the project. For production builds, use `ng build --configuration production`.
+## Integration with MemberJunction
 
-## Testing
+These components are designed to work with the MemberJunction framework:
 
-Run `ng test` to execute unit tests via [Karma](https://karma-runner.github.io).
+1. **Authentication**: Components wait for the MemberJunction `LoggedIn` event before loading data
+2. **Metadata System**: Components use MemberJunction's metadata system to access entity information
+3. **GraphQL Integration**: Requires a configured GraphQL data provider for backend communication
+4. **Event System**: Components use MemberJunction's global event system for internal communication
+
+### Setting Up MemberJunction Connection
+
+```javascript
+import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
+
+// Configure and initialize the GraphQL client
+const config = new GraphQLProviderConfigData(
+  jwtToken,        // Your authentication token
+  apiUrl,          // e.g., 'http://localhost:4000'
+  websocketUrl,    // e.g., 'ws://localhost:4000/'
+  schemaName       // e.g., '__mj'
+);
+
+await setupGraphQLClient(config);
+// Components will now automatically load data when ready
+```
+
+## Configuration Options
+
+### Angular Build Configuration
+
+The `angular.json` file is configured with:
+- **Output Hashing**: Disabled for consistent file names in bundles
+- **Budget Limits**: 20MB maximum for initial bundle (accommodates Angular framework)
+- **Polyfills**: Includes Zone.js for change detection
+
+### Build Script Options
+
+The `build_angular_elements.sh` script supports:
+- Development builds: Faster builds with source maps
+- Production builds: Optimized and minified output
+- Custom configurations via Angular CLI flags
+
+## Development
+
+### Development Server
+
+```bash
+ng serve
+# or
+npm run start
+```
+
+Navigate to `http://localhost:4200/`. The app will automatically reload if you change any source files.
+
+### Testing
+
+```bash
+# Run unit tests
+ng test
+# or
+npm run test
+```
+
+Tests are executed via [Karma](https://karma-runner.github.io) with Jasmine.
+
+### Adding New Components
+
+1. Create your Angular component as normal
+2. Add it to the declarations in `app.module.ts`
+3. Convert it to a custom element in the module constructor:
+   ```typescript
+   const element = createCustomElement(YourComponent, {injector});
+   customElements.define('your-element-name', element);
+   ```
+4. Rebuild the bundle using `./build_angular_elements.sh`
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Components not rendering**: Ensure the bundle script is loaded before using the components
+2. **No data loading**: Verify MemberJunction GraphQL client is properly initialized
+3. **Events not firing**: Check that event listeners are attached after DOM is loaded
+4. **Style conflicts**: Angular Elements uses Shadow DOM by default for style isolation
+
+### Browser Compatibility
+
+- Modern browsers (Chrome, Firefox, Safari, Edge) have native support
+- For older browsers, include polyfills:
+  ```html
+  <script src="https://unpkg.com/@webcomponents/custom-elements"></script>
+  ```
+
+## License
+
+This package is part of the MemberJunction project. See the root LICENSE file for details.
 
 ## Learn More
 
 - [Angular Elements Documentation](https://angular.io/guide/elements)
-- [Web Components](https://developer.mozilla.org/en-US/docs/Web/Web_Components)
-- [Custom Elements](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements)
+- [Web Components MDN](https://developer.mozilla.org/en-US/docs/Web/Web_Components)
+- [Custom Elements Specification](https://html.spec.whatwg.org/multipage/custom-elements.html)
+- [MemberJunction Documentation](https://docs.memberjunction.org)

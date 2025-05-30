@@ -6,7 +6,7 @@ import { ___runObject, handleServerInit } from './util';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLCodeGenBase } from '@memberjunction/codegen-lib';
 import { Metadata } from '@memberjunction/core';
-import AppDataSource from '@memberjunction/codegen-lib/dist/db';
+import AppDataSource from '@memberjunction/codegen-lib/dist/Config/db-connection';
 
 const app = express();
 
@@ -52,7 +52,14 @@ async function handleEntityPermissions(req: any, res: any) {
         console.log('Refreshing metadata...');
         await md.Refresh()
         const entities = md.Entities.filter(e => entityIDArray.includes(e.ID));
-        await sqlCodeGenObject.generateAndExecuteEntitySQLToSeparateFiles(AppDataSource, entities, '', true, false)
+        await sqlCodeGenObject.generateAndExecuteEntitySQLToSeparateFiles({
+          ds: AppDataSource, 
+          entities: entities, 
+          directory: '', 
+          onlyPermissions: true, 
+          writeFiles: false,
+          skipExecution: false
+        })
         res.status(200).send({ status: 'ok' });
         console.log('Entity permissions updated successfully');
       } catch (err: any) {

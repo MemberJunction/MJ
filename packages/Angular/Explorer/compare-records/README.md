@@ -13,6 +13,9 @@ The `@memberjunction/ng-compare-records` package provides a powerful Angular com
 - Support for composite primary keys
 - Responsive grid with virtual scrolling
 - Field formatting according to entity metadata
+- Automatic data loading for incomplete records
+- Read-only field indication with italic styling
+- Header click to select base record in selection mode
 
 ## Installation
 
@@ -26,6 +29,8 @@ npm install @memberjunction/ng-compare-records
 - @memberjunction/core
 - @memberjunction/core-entities
 - @progress/kendo-angular-grid
+- @progress/kendo-angular-inputs
+- @progress/kendo-angular-label
 
 ## Usage
 
@@ -125,7 +130,7 @@ export class AdvancedCompareComponent implements OnInit {
     // ... Load your records
   }
 
-  createCompositeRecord() {
+  async createCompositeRecord() {
     // Get the base record (selected record)
     const baseRecord = this.recordsToCompare.find(r => 
       r.PrimaryKey.Equals(this.compareComponent.selectedRecordCompositeKey)
@@ -133,7 +138,12 @@ export class AdvancedCompareComponent implements OnInit {
     
     if (baseRecord) {
       // Create a new entity object
-      const newRecord = baseRecord.Clone();
+      const newRecord = await this.metadata.GetEntityObject(this.entityName);
+      
+      // Copy all values from the base record
+      for (const field of baseRecord.Fields) {
+        newRecord.Set(field.Name, baseRecord.Get(field.Name));
+      }
       
       // Apply all overrides from the field map
       for (const field of this.compareComponent.fieldMap) {
@@ -150,9 +160,30 @@ export class AdvancedCompareComponent implements OnInit {
       
       // Use the new record
       console.log('Composite record created:', newRecord);
+      // Save the record if needed
+      // await newRecord.Save();
     }
   }
 }
+```
+
+### Working with Raw Data
+
+The component can also work with raw data objects (not BaseEntity instances). It will automatically:
+- Detect if records need additional fields from the database
+- Load missing data efficiently using RunView
+- Convert raw objects to BaseEntity instances
+
+```typescript
+// You can pass raw objects with primary key values
+const rawRecords = [
+  { CustomerID: 1 },
+  { CustomerID: 2 },
+  { CustomerID: 3 }
+];
+
+// The component will automatically load full records
+this.recordsToCompare = rawRecords;
 ```
 
 ## API Reference
@@ -197,13 +228,69 @@ The component uses the following CSS classes that can be customized:
 - `.cell-selected-override`: Applied to cells selected from non-selected records
 - `.cell-readonly`: Applied to read-only fields
 
+## Building the Package
+
+This package uses the Angular compiler (ngc) for building:
+
+```bash
+# From the package directory
+npm run build
+
+# From the repository root using turbo
+turbo build --filter="@memberjunction/ng-compare-records"
+```
+
 ## Dependencies
 
-- @angular/common
-- @angular/core
-- @angular/forms
-- @memberjunction/core
-- @memberjunction/core-entities
-- @progress/kendo-angular-grid
-- @progress/kendo-angular-inputs
-- @progress/kendo-angular-label
+### Peer Dependencies
+- @angular/common: 18.0.2
+- @angular/core: 18.0.2
+- @angular/forms: 18.0.2
+
+### Runtime Dependencies
+- @memberjunction/core: 2.43.0
+- @memberjunction/core-entities: 2.43.0
+- @progress/kendo-angular-grid: 16.2.0
+- tslib: ^2.3.0
+
+### Dev Dependencies
+- @angular/compiler: 18.0.2
+- @angular/compiler-cli: 18.0.2
+
+## Integration with MemberJunction
+
+This component is designed to work seamlessly with the MemberJunction framework:
+
+- **Entity Metadata**: Uses MJ's metadata system to understand entity structure, field types, and relationships
+- **Field Formatting**: Leverages EntityField.FormatValue() for consistent display of values
+- **Primary Key Support**: Works with both single and composite primary keys using CompositeKey class
+- **Dependency Detection**: Uses MJ's GetRecordDependencies() to determine the default selected record
+- **Data Access**: Utilizes RunView for efficient batch loading of incomplete records
+
+## Advanced Features
+
+### Selection Mode Behavior
+
+In selection mode:
+- The record with the most dependencies is automatically selected as the base record
+- Click on any cell to select that field's value from that record
+- Click on column headers to change the base record
+- Selected record header shows "✓✓✓" prefix
+- Field values from the base record have a yellowgreen background
+- Override values (from other records) have a lightpink background
+- Read-only fields cannot be selected and appear in italic
+
+### Performance Optimizations
+
+- **Virtual Scrolling**: Handles large datasets efficiently
+- **Batch Loading**: Loads multiple incomplete records in a single database query
+- **Debounced Resizing**: Window resize events are debounced to prevent excessive recalculation
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Records not displaying**: Ensure entity name matches exactly (case-insensitive)
+2. **Missing fields**: Check that visibleColumns includes all desired fields
+3. **Selection not working**: Verify selectionMode is set to true
+4. **Styling issues**: Ensure Kendo UI theme is properly loaded in your application

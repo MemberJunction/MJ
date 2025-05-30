@@ -2,6 +2,9 @@
 
 The MemberJunction AI Prompts package provides sophisticated prompt management, execution, and optimization capabilities within the MemberJunction ecosystem. This package handles advanced prompt features including template rendering, parallel execution, intelligent caching, and result selection strategies.
 
+[![npm version](https://badge.fury.io/js/%40memberjunction%2Fai-prompts.svg)](https://www.npmjs.com/package/@memberjunction/ai-prompts)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+
 ## Features
 
 - **📝 Advanced Prompt System**: Sophisticated prompt management with template rendering and validation
@@ -18,6 +21,8 @@ The MemberJunction AI Prompts package provides sophisticated prompt management, 
 ```bash
 npm install @memberjunction/ai-prompts
 ```
+
+> **Note**: This package uses MemberJunction's class registration system. The package automatically registers its classes on import to ensure proper functionality within the MJ ecosystem.
 
 ## Requirements
 
@@ -50,7 +55,7 @@ const params: AIPromptParams = {
 };
 
 const runner = new AIPromptRunner();
-const result = await runner.RunPrompt(params);
+const result = await runner.ExecutePrompt(params);
 
 if (result.success) {
     console.log("Summary:", result.result);
@@ -77,7 +82,7 @@ const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Text Analysis');
 
 // Execute with data
 const runner = new AIPromptRunner();
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: prompt,
     data: { 
         text: "Analyze this sample text for sentiment and key themes.",
@@ -99,7 +104,7 @@ const templatePrompt = {
 };
 
 // Data context provides template variables
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: templatePrompt,
     data: {
         entity: {
@@ -119,25 +124,25 @@ const result = await runner.RunPrompt({
 // Execute the same prompt across multiple models in parallel
 const multiModelPrompt = prompts.find(p => p.ParallelizationMode === 'ModelSpecific');
 
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: multiModelPrompt,
     data: { query: "Analyze this data pattern" },
     contextUser: currentUser
 });
 
-// Result contains aggregated outputs from all models
-console.log(`Executed across ${result.executionResults?.length} models`);
-console.log(`Selected result: ${result.result}`);
-console.log(`All results available: ${result.allResults?.length}`);
+// When using parallel execution, the system automatically selects the best result
+console.log(`Final result: ${result.result}`);
+console.log(`Execution time: ${result.executionTimeMS}ms`);
+console.log(`Total tokens used: ${result.tokensUsed}`);
 
-// Examine individual model results
-if (result.executionResults) {
-    result.executionResults.forEach((execResult, index) => {
-        console.log(`Model ${index}: ${execResult.model.Name}`);
-        console.log(`  Tokens: ${execResult.totalTokensUsed}`);
-        console.log(`  Time: ${execResult.executionTimeMS}ms`);
-        console.log(`  Success: ${execResult.success}`);
-    });
+// The promptRun entity contains metadata about parallel execution in its Messages field
+if (result.promptRun?.Messages) {
+    const metadata = JSON.parse(result.promptRun.Messages);
+    if (metadata.parallelExecution) {
+        console.log(`Parallelization mode: ${metadata.parallelExecution.parallelizationMode}`);
+        console.log(`Total tasks: ${metadata.parallelExecution.totalTasks}`);
+        console.log(`Successful tasks: ${metadata.parallelExecution.successfulTasks}`);
+    }
 }
 ```
 
@@ -255,7 +260,7 @@ const validatedPrompt = {
 };
 
 // Validation is automatically applied
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: validatedPrompt,
     data: { text: "Content to analyze" },
     contextUser: currentUser,
@@ -292,7 +297,7 @@ const advancedTemplate = {
     `
 };
 
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: advancedTemplate,
     data: {
         entityType: "Customer",
@@ -306,24 +311,44 @@ const result = await runner.RunPrompt({
 
 ## Parallel Execution System
 
-The package includes sophisticated parallel execution capabilities:
+The package includes sophisticated parallel execution capabilities through specialized classes that work together to manage complex multi-model executions.
 
-### ExecutionPlanner
+> **Note**: The ExecutionPlanner and ParallelExecutionCoordinator are internal components used by AIPromptRunner. They are not directly exposed in the public API but understanding their operation helps in configuring prompts effectively.
 
-Plans and organizes execution tasks based on prompt configuration:
+### ExecutionPlanner (Internal)
 
-- Analyzes parallelization modes and model configurations
+The `ExecutionPlanner` class analyzes prompt configuration and creates optimal execution strategies:
+
+**Key Responsibilities:**
+- Analyzes parallelization modes (None, StaticCount, ConfigParam, ModelSpecific)
 - Creates execution groups for coordinated processing
-- Determines optimal task distribution and priority
+- Determines optimal task distribution based on model availability
+- Assigns priorities and manages execution order
+- Handles model selection based on power rankings and configuration
 
-### ParallelExecutionCoordinator  
+**Execution Plan Creation:**
+- For `StaticCount`: Creates N parallel tasks using available models
+- For `ConfigParam`: Uses configuration parameters to determine parallel count
+- For `ModelSpecific`: Uses AIPromptModel entries to define exact model usage
+- Supports execution groups for sequential/parallel hybrid execution
 
-Orchestrates parallel execution across multiple models:
+### ParallelExecutionCoordinator (Internal)
 
-- Manages concurrency limits and resource utilization
-- Handles error recovery and retry logic
-- Aggregates results and applies selection strategies
-- Provides comprehensive execution metrics
+The `ParallelExecutionCoordinator` orchestrates the actual execution of tasks created by the ExecutionPlanner:
+
+**Core Features:**
+- Manages concurrency limits (default: 5 concurrent executions)
+- Implements retry logic with exponential backoff
+- Handles partial result collection when some tasks fail
+- Provides comprehensive execution metrics and timing
+- Supports fail-fast mode for critical operations
+
+**Execution Flow:**
+1. Groups tasks by execution group number
+2. Executes groups sequentially (group 0, then 1, then 2, etc.)
+3. Within each group, executes tasks in parallel up to concurrency limit
+4. Collects and aggregates results from all executions
+5. Applies result selection strategy if multiple results available
 
 ### Supported Parallelization Modes
 
@@ -345,7 +370,7 @@ const modelSpecificExecution = {
 // 2. Group executions by ExecutionGroup
 // 3. Execute groups sequentially, models within groups in parallel
 // 4. Apply result selection strategy
-const result = await runner.RunPrompt(modelSpecificExecution);
+const result = await runner.ExecutePrompt(modelSpecificExecution);
 ```
 
 ## Performance Monitoring & Analytics
@@ -354,40 +379,37 @@ Comprehensive tracking and analytics for prompt executions:
 
 ```typescript
 // Execution results include detailed metrics
-const result = await runner.RunPrompt(params);
+const result = await runner.ExecutePrompt(params);
 
 console.log(`Execution time: ${result.executionTimeMS}ms`);
-console.log(`Tokens used: ${result.totalTokensUsed}`);
-console.log(`Cost estimate: $${result.estimatedCost}`);
-console.log(`Cache hit: ${result.cacheHit}`);
+console.log(`Tokens used: ${result.tokensUsed}`);
 
-// For parallel executions
-if (result.executionResults) {
-    result.executionResults.forEach((execResult, index) => {
-        console.log(`Model ${index}: ${execResult.model.Name}`);
-        console.log(`  Tokens: ${execResult.totalTokensUsed}`);
-        console.log(`  Time: ${execResult.executionTimeMS}ms`);
-        console.log(`  Success: ${execResult.success}`);
-        console.log(`  Cache hit: ${execResult.cacheHit}`);
-    });
+// The AIPromptRunResult includes execution tracking
+if (result.promptRun) {
+    console.log(`Prompt Run ID: ${result.promptRun.ID}`);
+    console.log(`Model used: ${result.promptRun.ModelID}`);
+    console.log(`Configuration: ${result.promptRun.ConfigurationID}`);
 }
-
-// Aggregate analytics
-console.log(`Total models used: ${result.modelsUsed}`);
-console.log(`Success rate: ${result.successRate}%`);
-console.log(`Cache efficiency: ${result.cacheEfficiency}%`);
 ```
 
 ## API Reference
 
+### Exported Classes and Types
+
+The package exports the following public API:
+
+```typescript
+export { AIPromptCategoryEntityExtended } from './AIPromptCategoryExtended';
+export { AIPromptRunner, AIPromptParams, AIPromptRunResult } from './AIPromptRunner';
+```
+
 ### AIPromptRunner Class
 
-Handles execution of AI prompts with advanced parallel processing.
+Handles execution of AI prompts with advanced parallel processing, template rendering, and result validation.
 
 #### Methods
 
-- `RunPrompt(params: AIPromptParams)`: Execute a prompt with full feature support
-- `ValidatePromptOutput(prompt, result, data?)`: Validate AI output against criteria
+- `ExecutePrompt(params: AIPromptParams): Promise<AIPromptRunResult>`: Execute a prompt with full feature support including template rendering, model selection, parallel execution, and output validation
 
 #### AIPromptParams Interface
 
@@ -400,6 +422,7 @@ interface AIPromptParams {
     configurationId?: string;         // Environment-specific config
     contextUser?: UserInfo;           // User context
     skipValidation?: boolean;         // Skip output validation
+    templateData?: any;               // Additional template data that augments the main data context
 }
 ```
 
@@ -415,33 +438,25 @@ class AIPromptCategoryEntityExtended extends AIPromptCategoryEntity {
 }
 ```
 
-### Key Interfaces
+### Key Interfaces and Types
 
 ```typescript
-interface AIPromptResult {
-    success: boolean;                       // Execution success
-    result?: any;                          // Primary result
-    error?: string;                        // Error message
-    executionTimeMS?: number;              // Execution duration
-    totalTokensUsed?: number;              // Total tokens consumed
-    estimatedCost?: number;                // Estimated cost
-    cacheHit?: boolean;                    // Whether result was cached
-    executionResults?: ModelExecutionResult[]; // Individual model results
-    allResults?: any[];                    // All results before selection
-    selectedResultIndex?: number;          // Index of selected result
+interface AIPromptRunResult {
+    success: boolean;                       // Whether the execution was successful
+    rawResult?: string;                     // The raw result from the AI model
+    result?: any;                          // The parsed/validated result based on OutputType
+    errorMessage?: string;                  // Error message if execution failed
+    promptRun?: AIPromptRunEntity;          // The AIPromptRun entity that was created for tracking
+    executionTimeMS?: number;              // Total execution time in milliseconds
+    tokensUsed?: number;                   // Tokens used in the execution
+    validationResult?: ValidationResult;    // Validation result if output validation was performed
 }
 
-interface ModelExecutionResult {
-    model: AIModelEntity;                  // Model used
-    vendor: AIVendorEntity;                // Vendor used
-    success: boolean;                      // Execution success
-    result?: any;                          // Model result
-    executionTimeMS: number;               // Execution time
-    totalTokensUsed: number;               // Tokens used
-    estimatedCost: number;                 // Cost estimate
-    cacheHit: boolean;                     // Cache hit status
-    error?: string;                        // Error if failed
-}
+// Parallelization strategies supported by the system
+type ParallelizationStrategy = 'None' | 'StaticCount' | 'ConfigParam' | 'ModelSpecific';
+
+// Result selection methods for choosing best result from parallel executions
+type ResultSelectionMethod = 'First' | 'Random' | 'PromptSelector' | 'Consensus';
 ```
 
 ## Integration with Other Packages
@@ -464,7 +479,7 @@ const prompt = prompts.find(p => p.Name === 'Your Prompt');
 
 // Use Prompts package for advanced execution
 const runner = new AIPromptRunner();
-const result = await runner.RunPrompt({ prompt, data, contextUser });
+const result = await runner.ExecutePrompt({ prompt, data, contextUser });
 ```
 
 ### With AI Agents
@@ -482,7 +497,7 @@ class IntelligentAgent extends BaseAgent {
     async execute(context: AgentContext): Promise<AgentResult> {
         const prompt = this.getPromptForContext(context);
         
-        const result = await this.promptRunner.RunPrompt({
+        const result = await this.promptRunner.ExecutePrompt({
             prompt: prompt,
             data: context.data,
             contextUser: context.user
@@ -495,13 +510,14 @@ class IntelligentAgent extends BaseAgent {
 
 ## Dependencies
 
-- `@memberjunction/core`: MemberJunction core library
-- `@memberjunction/global`: MemberJunction global utilities  
-- `@memberjunction/core-entities`: MemberJunction entity definitions
-- `@memberjunction/ai`: AI abstractions and interfaces
-- `@memberjunction/aiengine`: AI model management and basic operations
-- `@memberjunction/templates`: Template rendering system
-- `rxjs`: Reactive programming support
+- `@memberjunction/core` (v2.43.0): MemberJunction core library
+- `@memberjunction/global` (v2.43.0): MemberJunction global utilities  
+- `@memberjunction/core-entities` (v2.43.0): MemberJunction entity definitions
+- `@memberjunction/ai` (v2.43.0): AI abstractions and interfaces
+- `@memberjunction/aiengine` (v2.43.0): AI model management and basic operations
+- `@memberjunction/templates` (v2.43.0): Template rendering system
+- `dotenv` (^16.4.1): Environment variable management
+- `rxjs` (^7.8.1): Reactive programming support
 
 ## Related Packages
 
@@ -535,7 +551,7 @@ const prompt = {
 };
 
 const runner = new AIPromptRunner();
-const result = await runner.RunPrompt({
+const result = await runner.ExecutePrompt({
     prompt: prompt,
     data: { data: "your data here" },
     contextUser: currentUser
@@ -550,6 +566,30 @@ const result = await runner.RunPrompt({
 4. **Monitor Performance**: Track token usage and execution times
 5. **Parallel Wisely**: Use parallel execution for independent tasks, not dependent ones
 6. **Handle Errors**: Implement proper retry logic and error handling
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"No suitable model found" Error**
+   - Ensure AIEngine.Instance.Config() is called before using prompts
+   - Verify prompt has active AIPromptModel associations or proper model selection configuration
+   - Check that models meet MinPowerRank requirements
+
+2. **Template Rendering Failures**
+   - Verify template exists and is associated with the prompt
+   - Ensure template data contains all required variables
+   - Check template syntax for Handlebars errors
+
+3. **Parallel Execution Not Working**
+   - Confirm ParallelizationMode is set to a value other than 'None'
+   - For ModelSpecific mode, ensure AIPromptModel entries exist
+   - Check that multiple suitable models are available
+
+4. **Output Validation Errors**
+   - Ensure OutputType matches the expected result format
+   - Provide a valid OutputExample for structured data
+   - Consider increasing MaxRetries for complex outputs
 
 ## License
 
