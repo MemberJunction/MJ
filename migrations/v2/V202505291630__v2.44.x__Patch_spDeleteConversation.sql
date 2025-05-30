@@ -1,19 +1,19 @@
 -- Fix spDeleteConversation by fixing the order of deletion and ensuring all related records are properly handled
-ALTER PROCEDURE [__mj].[spDeleteConversation]
+ALTER PROCEDURE [${flyway:defaultSchema}].[spDeleteConversation]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
     -- Cascade update on Report - set FK to null before deleting rows in Conversation
     UPDATE
-        [__mj].[Report]
+        [${flyway:defaultSchema}].[Report]
     SET
         [ConversationID] = NULL
     WHERE
         [ConversationID] = @ID
 
 	UPDATE
-        [__mj].[Report]
+        [${flyway:defaultSchema}].[Report]
     SET
         [ConversationDetailID] = NULL
     WHERE
@@ -21,13 +21,13 @@ BEGIN
 
 	-- Cascade delete from ConversationDetail
     DELETE FROM
-        [__mj].[ConversationDetail]
+        [${flyway:defaultSchema}].[ConversationDetail]
     WHERE
         [ConversationID] = @ID
 
     -- Cascade delete from ArtifactVersion
     DELETE FROM
-        [__mj].[ConversationArtifactVersion]
+        [${flyway:defaultSchema}].[ConversationArtifactVersion]
     WHERE
         [ConversationArtifactID] IN (SELECT ID FROM __mj.ConversationArtifact WHERE ConversationID = @ID)
 
@@ -44,7 +44,7 @@ BEGIN
 		ConversationID = @ID
 
     DELETE FROM
-        [__mj].[Conversation]
+        [${flyway:defaultSchema}].[Conversation]
     WHERE
         [ID] = @ID
     SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
