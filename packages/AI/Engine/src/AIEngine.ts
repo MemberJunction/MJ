@@ -4,7 +4,7 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEngine, BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, ArtifactTypeEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentTypeEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIPromptCategoryEntityExtended } from "./AIPromptCategoryExtended";
 import { AIAgentEntityExtended } from "./AIAgentExtended";
 
@@ -46,6 +46,7 @@ export class AIEngine extends BaseEngine<AIEngine> {
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
+    private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -108,6 +109,10 @@ export class AIEngine extends BaseEngine<AIEngine> {
             {
                 PropertyName: '_artifactTypes',
                 EntityName: 'MJ: Artifact Types'
+            },
+            {
+                PropertyName: '_vendorTypeDefinitions',
+                EntityName: 'MJ: AI Vendor Type Definitions'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -368,6 +373,11 @@ export class AIEngine extends BaseEngine<AIEngine> {
     public get AgentNotes(): AIAgentNoteEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._agentNotes;
+    }
+
+    public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._vendorTypeDefinitions;
     }
 
     public get Prompts(): AIPromptEntity[] {
