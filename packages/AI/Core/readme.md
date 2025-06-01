@@ -241,6 +241,187 @@ const params: ChatParams = {
 await llm.ChatCompletion(params);
 ```
 
+### Cancellable Operations with AbortSignal
+
+The MemberJunction AI Core package supports cancellation of long-running operations using the standard JavaScript `AbortSignal` pattern. This provides a clean, standardized way to cancel AI operations when needed.
+
+#### Understanding the AbortSignal Pattern
+
+The `AbortSignal` pattern uses a **separation of concerns** approach:
+
+- **Controller (Caller)**: Creates the `AbortController` and decides **when** to cancel
+- **Worker (AI Operations)**: Receives the `AbortSignal` token and handles **how** to cancel
+
+#### Basic Cancellation Example
+
+```typescript
+import { ChatParams, BaseLLM } from '@memberjunction/ai';
+
+async function cancellableAIChat() {
+  // Create the cancellation controller (the "boss")
+  const controller = new AbortController();
+  
+  // Set up automatic timeout cancellation
+  const timeout = setTimeout(() => {
+    controller.abort(); // Cancel after 30 seconds
+  }, 30000);
+
+  try {
+    const params: ChatParams = {
+      model: 'gpt-4',
+      messages: [
+        { role: 'user', content: 'Write a very long story...' }
+      ],
+      cancellationToken: controller.signal // Pass the signal token
+    };
+
+    const result = await llm.ChatCompletion(params);
+    clearTimeout(timeout); // Clear timeout if completed successfully
+    return result;
+    
+  } catch (error) {
+    if (error.message.includes('cancelled')) {
+      console.log('Operation was cancelled');
+    } else {
+      console.error('Operation failed:', error);
+    }
+  }
+}
+```
+
+#### User-Initiated Cancellation
+
+Perfect for UI applications where users can cancel operations:
+
+```typescript
+class AIInterface {
+  private currentController: AbortController | null = null;
+
+  async startAIConversation() {
+    // Create new controller for this conversation
+    this.currentController = new AbortController();
+    
+    try {
+      const result = await llm.ChatCompletion({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: 'Generate a detailed report...' }],
+        cancellationToken: this.currentController.signal
+      });
+      
+      console.log('AI Response:', result.data.choices[0].message.content);
+    } catch (error) {
+      if (error.message.includes('cancelled')) {
+        console.log('User cancelled the conversation');
+      }
+    } finally {
+      this.currentController = null;
+    }
+  }
+
+  // Called when user clicks "Cancel" button
+  cancelConversation() {
+    if (this.currentController) {
+      this.currentController.abort(); // Instant cancellation
+    }
+  }
+}
+```
+
+#### Multiple Cancellation Sources
+
+One signal can be cancelled from multiple sources:
+
+```typescript
+async function smartAIExecution() {
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  // 1. User cancel button
+  document.getElementById('cancel')?.addEventListener('click', () => {
+    controller.abort(); // User cancellation
+  });
+
+  // 2. Resource limit cancellation  
+  if (await checkMemoryUsage() > MAX_MEMORY) {
+    controller.abort(); // Resource limit cancellation
+  }
+
+  // 3. Window unload cancellation
+  window.addEventListener('beforeunload', () => {
+    controller.abort(); // Page closing cancellation
+  });
+
+  // 4. Timeout cancellation
+  setTimeout(() => controller.abort(), 60000); // 1 minute timeout
+
+  try {
+    const result = await llm.ChatCompletion({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: 'Complex analysis task...' }],
+      cancellationToken: signal // One token, many cancel sources!
+    });
+    
+    return result;
+  } catch (error) {
+    // The AI operation doesn't know WHY it was cancelled - just that it should stop
+    console.log('AI operation was cancelled:', error.message);
+  }
+}
+```
+
+#### How It Works Internally
+
+The AI Core package implements cancellation at multiple levels:
+
+1. **BaseLLM Level**: Checks cancellation token before and during operations
+2. **Provider Level**: Native cancellation support where available (e.g., fetch API)
+3. **Fallback Pattern**: Promise.race for providers without native cancellation
+
+```typescript
+// Internal implementation example (simplified)
+async ChatCompletion(params: ChatParams): Promise<ChatResult> {
+  // Check if already cancelled before starting
+  if (params.cancellationToken?.aborted) {
+    throw new Error('Operation was cancelled');
+  }
+
+  // For providers with native cancellation support
+  if (this.hasNativeCancellation) {
+    return await this.callProviderAPI({
+      ...params,
+      signal: params.cancellationToken // Native fetch cancellation
+    });
+  }
+
+  // Fallback: Promise.race pattern for other providers
+  const promises = [
+    this.callProviderAPI(params) // The actual AI call
+  ];
+
+  if (params.cancellationToken) {
+    promises.push(
+      new Promise<never>((_, reject) => {
+        params.cancellationToken!.addEventListener('abort', () => {
+          reject(new Error('Operation was cancelled'));
+        });
+      })
+    );
+  }
+
+  return await Promise.race(promises);
+}
+```
+
+#### Key Benefits
+
+1. **🎯 Responsive UX**: Users can cancel long-running AI operations instantly
+2. **💾 Resource Management**: Prevent runaway operations from consuming resources  
+3. **🔄 Composable**: Easy to combine user actions, timeouts, and resource limits
+4. **📱 Standard API**: Uses native JavaScript AbortSignal - no custom patterns
+5. **🧹 Clean Cleanup**: Automatic resource cleanup when operations are cancelled
+
+The cancellation token pattern provides a **robust, standardized way** to make AI operations responsive and resource-efficient!
+
 ### Text Summarization
 
 For summarizing longer text content:

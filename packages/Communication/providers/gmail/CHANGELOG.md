@@ -1,5 +1,14 @@
 # @memberjunction/communication-gmail
 
+## 2.44.0
+
+### Patch Changes
+
+- Updated dependencies [fbc30dc]
+  - @memberjunction/core@2.44.0
+  - @memberjunction/communication-types@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes

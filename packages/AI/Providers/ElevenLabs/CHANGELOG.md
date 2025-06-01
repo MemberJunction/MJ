@@ -1,5 +1,13 @@
 # @memberjunction/ai-elevenlabs
 
+## 2.44.0
+
+### Patch Changes
+
+- Updated dependencies [fbc30dc]
+  - @memberjunction/ai@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes

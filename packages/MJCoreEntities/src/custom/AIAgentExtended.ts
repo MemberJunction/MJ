@@ -1,4 +1,4 @@
-import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "@memberjunction/core-entities";
+import { AIAgentActionEntity, AIAgentEntity, AIAgentModelEntity, AIAgentNoteEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity } from "typeorm";
 

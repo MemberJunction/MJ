@@ -109,3 +109,98 @@ for (const result of results.Results) {
 // ❌ Type casting approach (unnecessary with proper generics)
 const entities = results.Results as SomeEntity[];
 ```
+
+## MemberJunction CodeGen System
+
+MemberJunction includes a powerful code generation system that automatically creates TypeScript classes, SQL objects, and Angular UI components based on database schema and metadata. Understanding CodeGen is crucial for MJ development.
+
+### What CodeGen Does
+
+**CodeGen automatically generates and maintains:**
+
+1. **Entity Classes** (`packages/MJCoreEntities/src/generated/entity_subclasses.ts`)
+   - TypeScript classes for all database entities
+   - Zod schema definitions with validation rules
+   - Strongly-typed getters/setters for all fields
+   - Foreign key relationships and computed fields
+   - Value list enums from database constraints
+
+2. **Database Objects** (`migrations/v2/CodeGen_Run_*.sql`)
+   - Stored procedures (spCreate, spUpdate, spDelete) 
+   - Database views with proper joins and computed fields
+   - Foreign key indexes for performance
+   - Database permissions and security grants
+   - Entity field metadata synchronization
+
+3. **Angular UI Components** (`packages/Angular/Explorer/core-entity-forms/src/lib/generated/`)
+   - Complete CRUD forms for each entity
+   - Form field components with proper types
+   - Dropdown lists populated from foreign key relationships
+   - Validation based on database constraints
+
+### When CodeGen Runs
+
+CodeGen runs automatically when:
+- Database schema changes are detected (new tables, columns, constraints)
+- Entity metadata is updated in the MJ metadata tables
+- Field descriptions or validation rules change
+- Foreign key relationships are added/modified
+
+### CodeGen Triggers
+
+Common actions that trigger CodeGen:
+- Adding new columns with `ALTER TABLE` statements
+- Adding CHECK constraints or foreign keys
+- Updating `sp_addextendedproperty` descriptions
+- Modifying value lists in EntityFieldValue table
+- Adding new entities to the EntityField metadata
+
+### Example: Adding New Fields
+
+When you add fields like `PromptRole` and `PromptPosition`:
+
+1. **Database Migration** creates the columns with constraints
+2. **CodeGen Detects** the schema changes automatically  
+3. **Generated Code** includes:
+   ```typescript
+   // In entity_subclasses.ts
+   PromptRole: z.union([z.literal('System'), z.literal('User'), z.literal('Assistant'), z.literal('SystemOrUser')])
+   
+   // Getter/setter methods
+   get PromptRole(): 'System' | 'User' | 'Assistant' | 'SystemOrUser'
+   set PromptRole(value: 'System' | 'User' | 'Assistant' | 'SystemOrUser')
+   ```
+   
+   ```sql
+   -- In CodeGen migration file
+   INSERT INTO EntityField (Name, Type, Description, ...)
+   INSERT INTO EntityFieldValue (Value, Code, ...)  -- For dropdown options
+   ```
+   
+   ```html
+   <!-- In Angular form component -->
+   <mj-form-field FieldName="PromptRole" Type="dropdownlist" />
+   ```
+
+### Key CodeGen Files
+
+- **Entity Classes**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
+- **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
+- **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
+- **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+
+### Working with CodeGen
+
+**✅ Best Practices:**
+- Never manually edit generated files (they'll be overwritten)
+- Always run CodeGen after schema changes
+- Review generated migration files before applying
+- Use entity field descriptions for automatic documentation
+
+**❌ Don't:**
+- Modify files in `/generated/` directories
+- Skip CodeGen after database changes  
+- Assume TypeScript types are up-to-date without running CodeGen
+- Manually create CRUD operations (let CodeGen handle it)
+
+CodeGen ensures that your database schema, TypeScript types, and UI components stay perfectly synchronized, eliminating many common development errors and maintaining consistency across the entire stack.

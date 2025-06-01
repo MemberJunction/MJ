@@ -1,4 +1,4 @@
-import { AIPromptCategoryEntity, AIPromptEntity } from "@memberjunction/core-entities";
+import { AIPromptCategoryEntity, AIPromptEntity } from "../generated/entity_subclasses";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseEntity } from "typeorm";
 

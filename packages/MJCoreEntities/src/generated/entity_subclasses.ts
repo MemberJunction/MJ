@@ -1383,7 +1383,7 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
         * * Field Name: ResponseFormat
         * * Display Name: Response Format
         * * SQL Data Type: nvarchar(20)
@@ -1393,7 +1393,6 @@ export const AIPromptSchema = z.object({
     *   * Any
     *   * Text
     *   * Markdown
-    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
@@ -1566,6 +1565,28 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
+    PromptRole: z.union([z.literal('System'), z.literal('User'), z.literal('Assistant'), z.literal('SystemOrUser')]).describe(`
+        * * Field Name: PromptRole
+        * * Display Name: Prompt Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System
+    *   * User
+    *   * Assistant
+    *   * SystemOrUser
+    * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)`),
+    PromptPosition: z.union([z.literal('First'), z.literal('Last')]).describe(`
+        * * Field Name: PromptPosition
+        * * Display Name: Prompt Position
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: First
+    * * Value List Type: List
+    * * Possible Values 
+    *   * First
+    *   * Last
+    * * Description: Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template
@@ -3605,16 +3626,16 @@ export const DashboardSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     * * Description: Associated Application ID if Scope is App, otherwise NULL`),
-    DriverClass: z.string().nullable().describe(`
-        * * Field Name: DriverClass
-        * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(255)
-    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
         * * Display Name: Code
         * * SQL Data Type: nvarchar(255)
     * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -7282,6 +7303,12 @@ export const AIModelVendorSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    TypeID: z.string().nullable().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
+    * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model
@@ -7289,6 +7316,10 @@ export const AIModelVendorSchema = z.object({
     Vendor: z.string().describe(`
         * * Field Name: Vendor
         * * Display Name: Vendor
+        * * SQL Data Type: nvarchar(50)`),
+    Type: z.string().nullable().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -7514,6 +7545,29 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`),
+    RunType: z.union([z.literal('Single'), z.literal('ParallelParent'), z.literal('ParallelChild'), z.literal('ResultSelector')]).describe(`
+        * * Field Name: RunType
+        * * Display Name: Run Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Single
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Single
+    *   * ParallelParent
+    *   * ParallelChild
+    *   * ResultSelector
+    * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)`),
+    ExecutionOrder: z.number().nullable().describe(`
+        * * Field Name: ExecutionOrder
+        * * Display Name: Execution Order
+        * * SQL Data Type: int
+    * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -14950,11 +15004,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
     * @public
     * @method
     * @override
@@ -14963,11 +15017,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
-        this.ValidateResultSelectorPromptIDNotEqualID(result);
 
         return result;
     }
@@ -14993,6 +15047,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -15041,18 +15107,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -15179,15 +15233,14 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Any
     *   * Text
     *   * Markdown
-    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
-    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON' {
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON' {
         return this.Get('ResponseFormat');
     }
-    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON') {
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON') {
         this.Set('ResponseFormat', value);
     }
 
@@ -15542,6 +15595,44 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
     set CacheMustMatchConfig(value: boolean) {
         this.Set('CacheMustMatchConfig', value);
+    }
+
+    /**
+    * * Field Name: PromptRole
+    * * Display Name: Prompt Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: System
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System
+    *   * User
+    *   * Assistant
+    *   * SystemOrUser
+    * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)
+    */
+    get PromptRole(): 'System' | 'User' | 'Assistant' | 'SystemOrUser' {
+        return this.Get('PromptRole');
+    }
+    set PromptRole(value: 'System' | 'User' | 'Assistant' | 'SystemOrUser') {
+        this.Set('PromptRole', value);
+    }
+
+    /**
+    * * Field Name: PromptPosition
+    * * Display Name: Prompt Position
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: First
+    * * Value List Type: List
+    * * Possible Values 
+    *   * First
+    *   * Last
+    * * Description: Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first
+    */
+    get PromptPosition(): 'First' | 'Last' {
+        return this.Get('PromptPosition');
+    }
+    set PromptPosition(value: 'First' | 'Last') {
+        this.Set('PromptPosition', value);
     }
 
     /**
@@ -21036,19 +21127,6 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
-    * * Field Name: DriverClass
-    * * Display Name: Driver Class
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.
-    */
-    get DriverClass(): string | null {
-        return this.Get('DriverClass');
-    }
-    set DriverClass(value: string | null) {
-        this.Set('DriverClass', value);
-    }
-
-    /**
     * * Field Name: Code
     * * Display Name: Code
     * * SQL Data Type: nvarchar(255)
@@ -21059,6 +21137,19 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
     set Code(value: string | null) {
         this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**
@@ -30512,6 +30603,20 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     }
 
     /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
+    * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
+    */
+    get TypeID(): string | null {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string | null) {
+        this.Set('TypeID', value);
+    }
+
+    /**
     * * Field Name: Model
     * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
@@ -30527,6 +30632,15 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     */
     get Vendor(): string {
         return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Type(): string | null {
+        return this.Get('Type');
     }
 }
 
@@ -31194,6 +31308,53 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: RunType
+    * * Display Name: Run Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Single
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Single
+    *   * ParallelParent
+    *   * ParallelChild
+    *   * ResultSelector
+    * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)
+    */
+    get RunType(): 'Single' | 'ParallelParent' | 'ParallelChild' | 'ResultSelector' {
+        return this.Get('RunType');
+    }
+    set RunType(value: 'Single' | 'ParallelParent' | 'ParallelChild' | 'ResultSelector') {
+        this.Set('RunType', value);
+    }
+
+    /**
+    * * Field Name: ExecutionOrder
+    * * Display Name: Execution Order
+    * * SQL Data Type: int
+    * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.
+    */
+    get ExecutionOrder(): number | null {
+        return this.Get('ExecutionOrder');
+    }
+    set ExecutionOrder(value: number | null) {
+        this.Set('ExecutionOrder', value);
     }
 
     /**

@@ -2688,6 +2688,14 @@ export class AIPrompt_ {
     @Field(() => Boolean, {description: `When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`}) 
     CacheMustMatchConfig: boolean;
         
+    @Field({description: `Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)`}) 
+    @MaxLength(40)
+    PromptRole: string;
+        
+    @Field({description: `Controls message placement for User and Assistant role prompts: First (beginning of conversation) or Last (end of conversation). Not used for System role prompts which are always first`}) 
+    @MaxLength(40)
+    PromptPosition: string;
+        
     @Field() 
     @MaxLength(510)
     Template: string;
@@ -2828,6 +2836,12 @@ export class CreateAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheMustMatchConfig?: boolean;
+
+    @Field({ nullable: true })
+    PromptRole?: string;
+
+    @Field({ nullable: true })
+    PromptPosition?: string;
 }
     
 
@@ -2928,6 +2942,12 @@ export class UpdateAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     CacheMustMatchConfig?: boolean;
+
+    @Field({ nullable: true })
+    PromptRole?: string;
+
+    @Field({ nullable: true })
+    PromptPosition?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -7489,14 +7509,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
+    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
-    
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -7944,6 +7964,15 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -7959,15 +7988,6 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
@@ -15086,13 +15106,13 @@ export class Dashboard_ {
     @MaxLength(16)
     ApplicationID?: string;
         
-    @Field({nullable: true, description: `Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`}) 
-    @MaxLength(510)
-    DriverClass?: string;
-        
     @Field({nullable: true, description: `Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`}) 
     @MaxLength(510)
     Code?: string;
+        
+    @Field({nullable: true, description: `Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
         
     @Field() 
     @MaxLength(200)
@@ -15147,10 +15167,10 @@ export class CreateDashboardInput {
     ApplicationID: string | null;
 
     @Field({ nullable: true })
-    DriverClass: string | null;
+    Code: string | null;
 
     @Field({ nullable: true })
-    Code: string | null;
+    DriverClass: string | null;
 }
     
 
@@ -15190,10 +15210,10 @@ export class UpdateDashboardInput {
     ApplicationID?: string | null;
 
     @Field({ nullable: true })
-    DriverClass?: string | null;
+    Code?: string | null;
 
     @Field({ nullable: true })
-    Code?: string | null;
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31258,6 +31278,10 @@ export class AIModelVendor_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `References the type/role of the vendor for this model (e.g., model developer, inference provider)`}) 
+    @MaxLength(16)
+    TypeID?: string;
+        
     @Field() 
     @MaxLength(100)
     Model: string;
@@ -31265,6 +31289,10 @@ export class AIModelVendor_ {
     @Field() 
     @MaxLength(100)
     Vendor: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Type?: string;
         
 }
 
@@ -31308,6 +31336,9 @@ export class CreateAIModelVendorInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsStreaming?: boolean;
+
+    @Field({ nullable: true })
+    TypeID: string | null;
 }
     
 
@@ -31354,6 +31385,9 @@ export class UpdateAIModelVendorInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsStreaming?: boolean;
+
+    @Field({ nullable: true })
+    TypeID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -31468,6 +31502,9 @@ export class AIVendorTypeDefinition_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => [AIModelVendor_])
+    MJ_AIModelVendors_TypeIDArray: AIModelVendor_[]; // Link to MJ_AIModelVendors
+    
     @Field(() => [AIVendorType_])
     MJ_AIVendorTypes_TypeIDArray: AIVendorType_[]; // Link to MJ_AIVendorTypes
     
@@ -31560,6 +31597,15 @@ export class AIVendorTypeDefinitionResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [AIModelVendor_])
+    async MJ_AIModelVendors_TypeIDArray(@Root() aivendortypedefinition_: AIVendorTypeDefinition_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [TypeID]='${aivendortypedefinition_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [AIVendorType_])
     async MJ_AIVendorTypes_TypeIDArray(@Root() aivendortypedefinition_: AIVendorTypeDefinition_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Vendor Types', userPayload);
@@ -35314,6 +35360,17 @@ export class AIPromptRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({description: `Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)`}) 
+    @MaxLength(40)
+    RunType: string;
+        
+    @Field(() => Int, {nullable: true, description: `Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`}) 
+    ExecutionOrder?: number;
+        
     @Field() 
     @MaxLength(510)
     Prompt: string;
@@ -35334,6 +35391,9 @@ export class AIPromptRun_ {
     @MaxLength(200)
     Configuration?: string;
         
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    
     @Field(() => [AIResultCache_])
     AIResultCache_PromptRunIDArray: AIResultCache_[]; // Link to AIResultCache
     
@@ -35391,6 +35451,15 @@ export class CreateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionOrder: number | null;
 }
     
 
@@ -35449,6 +35518,15 @@ export class UpdateAIPromptRunInput {
 
     @Field({ nullable: true })
     ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    RunType?: string;
+
+    @Field(() => Int, { nullable: true })
+    ExecutionOrder?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35510,6 +35588,15 @@ export class AIPromptRunResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_ParentIDArray(@Root() aipromptrun_: AIPromptRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ParentID]='${aipromptrun_.ID}' ` + this.getRowLevelSecurityWhereClause('MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [AIResultCache_])
     async AIResultCache_PromptRunIDArray(@Root() aipromptrun_: AIPromptRun_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Result Cache', userPayload);

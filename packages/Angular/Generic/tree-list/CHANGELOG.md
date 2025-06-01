@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-treelist
 
+## 2.44.0
+
+### Patch Changes
+
+- Updated dependencies [fbc30dc]
+- Updated dependencies [99b27c5]
+- Updated dependencies [091c5f6]
+  - @memberjunction/core@2.44.0
+  - @memberjunction/core-entities@2.44.0
+  - @memberjunction/ng-entity-form-dialog@2.44.0
+  - @memberjunction/ng-shared@2.44.0
+  - @memberjunction/ng-container-directives@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes

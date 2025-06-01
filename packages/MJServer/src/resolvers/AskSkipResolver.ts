@@ -51,6 +51,7 @@ import {
   DataContextEntity,
   DataContextItemEntity,
   UserNotificationEntity,
+  AIAgentEntityExtended
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
 import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
@@ -60,7 +61,7 @@ import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
-import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
 

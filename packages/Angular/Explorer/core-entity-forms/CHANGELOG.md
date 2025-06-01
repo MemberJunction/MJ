@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.44.0
+
+### Patch Changes
+
+- fbc30dc: Documentation
+- 9f02cd8: Various improvements
+- 99b27c5: various updates
+- Updated dependencies [fbc30dc]
+- Updated dependencies [99b27c5]
+- Updated dependencies [091c5f6]
+  - @memberjunction/ng-explorer-core@2.44.0
+  - @memberjunction/core@2.44.0
+  - @memberjunction/core-entities@2.44.0
+  - @memberjunction/ng-base-forms@2.44.0
+  - @memberjunction/ng-form-toolbar@2.44.0
+  - @memberjunction/ng-code-editor@2.44.0
+  - @memberjunction/ng-container-directives@2.44.0
+  - @memberjunction/ng-join-grid@2.44.0
+  - @memberjunction/ng-timeline@2.44.0
+  - @memberjunction/ng-tabstrip@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes

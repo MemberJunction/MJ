@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.44.0
+
+### Minor Changes
+
+- 091c5f6: Align Entity Field sequence ordering with base views for core entities.
+
+### Patch Changes
+
+- fbc30dc: Documentation
+- 99b27c5: various updates
+- Updated dependencies [fbc30dc]
+  - @memberjunction/core@2.44.0
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Patch Changes
