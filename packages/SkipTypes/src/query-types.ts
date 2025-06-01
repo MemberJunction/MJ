@@ -1,0 +1,111 @@
+/**
+ * @fileoverview Query and data request types for Skip API
+ * 
+ * This file contains types related to database queries, stored queries, and data requests
+ * within the Skip API system. These types define the structure for:
+ * 
+ * - Stored query metadata (SkipQueryInfo, SkipQueryFieldInfo)
+ * - Data request specifications (SkipDataRequest, SkipDataRequestType)
+ * - Learning cycle query change tracking (SkipLearningCycleQueryChange)
+ * 
+ * These types enable Skip to understand and work with pre-defined queries stored in the
+ * MemberJunction metadata system, as well as handle dynamic data requests that Skip
+ * generates during analysis. The query metadata includes information about query
+ * parameters, field definitions, quality rankings, and approval status.
+ * 
+ * Data requests allow Skip to ask for additional data beyond what was initially provided,
+ * either through custom SQL statements or by referencing stored queries. This capability
+ * enables Skip to iteratively refine its analysis by gathering the exact data it needs.
+ * 
+ * @author MemberJunction
+ * @since 2.0.0
+ */
+
+/**
+ * Describes the different types of data requests the Skip API server can make for additional data.
+ * * sql: The Skip API server is asking for additional data to be gathered using a fully executable SQL statement
+ * * stored_query: The Skip API server is asking for additional data to be gathered using a stored query that is defined in the system within the Queries entity.
+ */
+export const SkipDataRequestType = {
+    sql: "sql",
+    stored_query: "stored_query"
+} as const;
+export type SkipDataRequestType = typeof SkipDataRequestType[keyof typeof SkipDataRequestType];
+
+/**
+ * This type is used to define the requested data whenever the Skip API server asks for additional data to be gathered
+ */
+export class SkipDataRequest {
+    /**
+     * The type of request, as defined in the `SkipDataRequestType` type
+     */
+    type!: SkipDataRequestType;
+    /**
+     * The text of the request - either a fully executable SQL statement or the name of a stored query
+     */
+    text!: string;
+    /**
+     * A description of the request, why it was requested, and what it is expected to provide
+     */
+    description?: string;
+}
+
+/**
+ * Metadata about individual fields within a stored query, including their data types,
+ * source entity mappings, and computed field information. This helps Skip understand
+ * the structure and meaning of query results.
+ */
+export class SkipQueryFieldInfo {
+    name: string;
+    queryID: string;
+    description: string;
+    sequence: number;
+    /**
+     * The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+     */
+    sqlBaseType: string;
+    /**
+     * The full SQL type for the field, for example datetime or nvarchar(10) etc.
+     */
+    sqlFullType: string;
+    sourceEntityID: string;
+    sourceFieldName: string;
+    isComputed: boolean;
+    computationDescription: string;
+    isSummary: boolean;
+    summaryDescription: string;
+    createdAt: Date;
+    updatedAt: Date;
+    sourceEntity: string;
+}
+
+/**
+ * Complete metadata about a stored query, including its SQL, approval status, quality ranking,
+ * and field definitions. This information allows Skip to understand and utilize pre-built
+ * queries for analysis and reporting.
+ */
+export class SkipQueryInfo {
+    id: string;
+    name: string;
+    description: string;
+    categoryID: string;
+    sql: string;
+    originalSQL: string;
+    feedback: string;
+    status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    qualityRank: number;
+    createdAt: Date;
+    updatedAt: Date;
+    category: string;
+    fields: SkipQueryFieldInfo[];
+}
+
+/**
+ * Represents a change to a query during the learning cycle process, allowing Skip
+ * to add new queries, update existing ones, or mark queries for deletion based on
+ * its analysis of conversation patterns and user needs.
+ */
+export class SkipLearningCycleQueryChange {
+    query: SkipQueryInfo;
+    changeType: 'add' | 'update' | 'delete';
+}
