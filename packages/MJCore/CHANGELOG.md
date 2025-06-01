@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.44.0
+
+### Patch Changes
+
+- fbc30dc: Documentation
+  - @memberjunction/global@2.44.0
+
 ## 2.43.0
 
 ### Minor Changes

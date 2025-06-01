@@ -109,60 +109,171 @@ The API server is configured through a configuration file (searched for using [c
 - `.mjrc.yml`
 - `package.json` (in `"mj"` field)
 
+### MJ Server Configuration (mjServerConfig Section)
+
+The MJAPI server uses the `mjServerConfig` section from the unified configuration file (`mj.config.cjs`) in the repository root. This section contains all settings specific to the MemberJunction server functionality.
+
+#### Database Configuration
+
+##### Core Database Settings
+- **`dbHost`** (string, default: 'localhost'): Database server hostname
+- **`dbPort`** (number, default: 1433): Database server port
+- **`dbDatabase`** (string): Database name to connect to
+- **`dbUsername`** (string): Primary database username for read-write operations
+- **`dbPassword`** (string): Primary database password
+- **`dbReadOnlyUsername`** (string, optional): Username for read-only database connections. When provided with `dbReadOnlyPassword`, creates a separate read-only DataSource for query operations
+- **`dbReadOnlyPassword`** (string, optional): Password for read-only database connections
+- **`dbTrustServerCertificate`** (boolean, default: false): Whether to trust SQL Server certificates without validation
+- **`dbInstanceName`** (string, optional): SQL Server instance name for named instances
+- **`mjCoreSchema`** (string, default: '__mj'): Name of the MemberJunction core schema
+
+##### Database Performance Settings
+- **`databaseSettings.connectionTimeout`** (number): Milliseconds to wait for initial database connection. Used in TypeORM configuration
+- **`databaseSettings.requestTimeout`** (number): Milliseconds to wait for individual database queries to complete
+- **`databaseSettings.metadataCacheRefreshInterval`** (number): Milliseconds between automatic metadata cache refreshes. Controls how often the system refreshes entity metadata from the database
+
+#### Server Configuration
+
+- **`graphqlPort`** (number, default: 4000): Port for the GraphQL server to listen on
+- **`graphqlRootPath`** (string, default: '/'): Root path for GraphQL endpoint
+- **`enableIntrospection`** (boolean, default: false): Whether to enable GraphQL introspection in Apollo Server. Should be disabled in production for security
+- **`apiKey`** (string, optional): Master API key for server-to-server authentication
+
+#### User Management
+
+##### User Creation and Registration
+- **`userHandling.autoCreateNewUsers`** (boolean, default: false): When true, automatically creates new user records in the database when a valid JWT token is received for a user that doesn't exist locally
+- **`userHandling.newUserLimitedToAuthorizedDomains`** (boolean, default: false): When true, restricts auto-creation of new users to specific domains defined in `newUserAuthorizedDomains`
+- **`userHandling.newUserAuthorizedDomains`** (string[], default: []): Array of domain patterns (supports wildcards like "*.company.com") that are allowed for auto-creating new users
+- **`userHandling.newUserRoles`** (string[], default: []): Array of role names to automatically assign to newly created users. Creates UserRole records linking the new user to these roles
+- **`userHandling.contextUserForNewUserCreation`** (string, default: ''): Email/username of an existing user to use as the context for creating new users. Falls back to any user with 'Owner' role if not found
+
+##### User Application Access
+- **`userHandling.CreateUserApplicationRecords`** (boolean, default: false): When true, automatically creates UserApplication records for new users, giving them access to specified applications
+- **`userHandling.UserApplications`** (string[], default: []): Array of application names to grant access to for newly created users when `CreateUserApplicationRecords` is true
+
+##### Cache Management
+- **`userHandling.updateCacheWhenNotFound`** (boolean, default: false): When true, refreshes the UserCache when a user is not found, potentially loading recently created users from the database
+- **`userHandling.updateCacheWhenNotFoundDelay`** (number, default: 30000): Milliseconds to wait during cache refresh operations. Maximum enforced limit of 30 seconds
+
+#### REST API Configuration
+
+- **`restApiOptions.enabled`** (boolean, default: true): Whether to enable REST API endpoints at all. When false, no REST endpoints are created
+- **`restApiOptions.basePath`** (string, default: '/rest'): Base path for REST API endpoints
+
+##### Entity and Schema Filtering
+- **`restApiOptions.includeEntities`** (string[], optional): Whitelist of entity names to expose via REST API. Supports wildcards (e.g., "User*"). Only these entities will be accessible
+- **`restApiOptions.excludeEntities`** (string[], optional): Blacklist of entity names to exclude from REST API. Supports wildcards. Takes precedence over includeEntities
+- **`restApiOptions.includeSchemas`** (string[], optional): Whitelist of database schema names to expose via REST API. Only entities in these schemas will be accessible
+- **`restApiOptions.excludeSchemas`** (string[], optional): Blacklist of schema names to exclude from REST API. Takes precedence over includeSchemas
+
+#### UI and Data Viewing
+
+- **`viewingSystem.enableSmartFilters`** (boolean, optional): Enables advanced filtering capabilities in the viewing system
+
+#### Authentication Providers
+
+##### Auth0 Integration
+- **`auth0Domain`** (string, optional): Auth0 domain for authentication
+- **`auth0WebClientID`** (string, optional): Auth0 web client ID
+- **`auth0ClientSecret`** (string, optional): Auth0 client secret
+
+##### Azure AD Integration
+- **`webClientID`** (string, optional): Azure AD web client ID for authentication
+- **`tenantID`** (string, optional): Azure AD tenant ID for authentication
+
+#### AI Integration (Ask Skip System)
+
+##### Core AI Settings
+- **`askSkip.apiKey`** (string, optional): API key for authenticating with Skip AI services
+- **`askSkip.orgID`** (string, optional): Organization ID for Skip AI integration
+- **`askSkip.organizationInfo`** (string, optional): Additional organization information sent to Skip AI
+- **`askSkip.chatURL`** (string, optional): URL endpoint for Skip AI chat interactions
+
+##### Learning Cycle Configuration
+- **`askSkip.learningCycleEnabled`** (boolean, default: false): Whether learning cycles are enabled at all
+- **`askSkip.learningCycleRunUponStartup`** (boolean, default: false): Whether to start a learning cycle immediately when the server starts
+- **`askSkip.learningCycleURL`** (string, optional): URL endpoint for Skip AI learning cycle operations
+- **`askSkip.learningCycleIntervalInMinutes`** (number, optional): Minutes between automatic learning cycle runs
+
+##### Entity Data Sharing
+- **`askSkip.entitiesToSend.excludeSchemas`** (string[], optional): Schema names to exclude when sending entity metadata to Skip AI
+- **`askSkip.entitiesToSend.includeEntitiesFromExcludedSchemas`** (string[], optional): Specific entities to include even if their schema is excluded
+
+#### CodeGen Integration (Internal Use)
+
+- **`___codeGenAPIURL`** (string, optional): URL for CodeGen API submissions (internal use)
+- **`___codeGenAPIPort`** (number, default: 3999): Port for CodeGen API (internal use)
+- **`___codeGenAPISubmissionDelay`** (number, default: 5000): Delay in milliseconds for CodeGen API submissions
+
+#### Development and Debugging
+
+- **`websiteRunFromPackage`** (number, optional): Controls whether to emit schema files during build
+- **`userEmailMap`** (object, optional): JSON object mapping external email addresses to internal ones for development/testing
+
 ### Configuration Schema
 
 ```typescript
-interface ConfigInfo {
+interface MJServerConfig {
   // Database Configuration
-  dbHost: string;              // Database host (default: 'localhost')
-  dbPort: number;              // Database port (default: 1433)
-  dbDatabase: string;          // Database name
-  dbUsername: string;          // Database username
-  dbPassword: string;          // Database password
-  dbReadOnlyUsername?: string; // Optional read-only user
-  dbReadOnlyPassword?: string; // Optional read-only password
-  dbTrustServerCertificate?: boolean; // Trust server certificate
-  dbInstanceName?: string;     // SQL Server instance name
-  mjCoreSchema: string;        // MJ core schema name (default: '__mj')
+  dbHost: string;
+  dbPort: number;
+  dbDatabase: string;
+  dbUsername: string;
+  dbPassword: string;
+  dbReadOnlyUsername?: string;
+  dbReadOnlyPassword?: string;
+  dbTrustServerCertificate?: boolean;
+  dbInstanceName?: string;
+  mjCoreSchema: string;
   
   // Server Configuration
-  graphqlPort: number;         // GraphQL server port (default: 4000)
-  graphqlRootPath?: string;    // GraphQL endpoint path (default: '/')
-  enableIntrospection?: boolean; // Enable GraphQL introspection
+  graphqlPort: number;
+  graphqlRootPath?: string;
+  enableIntrospection?: boolean;
+  apiKey?: string;
   
   // Database Settings
   databaseSettings: {
-    connectionTimeout: number;        // Connection timeout in ms
-    requestTimeout: number;           // Request timeout in ms
-    metadataCacheRefreshInterval: number; // Cache refresh interval in ms
+    connectionTimeout: number;
+    requestTimeout: number;
+    metadataCacheRefreshInterval: number;
   };
   
   // User Handling
   userHandling: {
-    autoCreateNewUsers?: boolean;     // Auto-create new users
+    autoCreateNewUsers?: boolean;
     newUserLimitedToAuthorizedDomains?: boolean;
     newUserAuthorizedDomains?: string[];
-    newUserRoles?: string[];          // Default roles for new users
+    newUserRoles?: string[];
     updateCacheWhenNotFound?: boolean;
     updateCacheWhenNotFoundDelay?: number;
-    contextUserForNewUserCreation?: string; // Context user email
+    contextUserForNewUserCreation?: string;
     CreateUserApplicationRecords?: boolean;
     UserApplications?: string[];
   };
   
+  // Viewing System
+  viewingSystem?: {
+    enableSmartFilters?: boolean;
+  };
+  
   // REST API Options
   restApiOptions?: {
-    enabled: boolean;           // Enable REST API (default: true)
-    includeEntities?: string[]; // Entities to include
-    excludeEntities?: string[]; // Entities to exclude
-    includeSchemas?: string[];  // Schemas to include
-    excludeSchemas?: string[];  // Schemas to exclude
+    enabled: boolean;
+    basePath?: string;
+    includeEntities?: string[];
+    excludeEntities?: string[];
+    includeSchemas?: string[];
+    excludeSchemas?: string[];
   };
   
   // Authentication
-  auth0Domain?: string;        // Auth0 domain
-  auth0WebClientID?: string;   // Auth0 client ID
-  auth0ClientSecret?: string;  // Auth0 client secret
+  auth0Domain?: string;
+  auth0WebClientID?: string;
+  auth0ClientSecret?: string;
+  webClientID?: string;
+  tenantID?: string;
   
   // AI Integration (Ask Skip)
   askSkip?: {
@@ -179,6 +290,15 @@ interface ConfigInfo {
       includeEntitiesFromExcludedSchemas?: string[];
     };
   };
+  
+  // CodeGen Integration
+  ___codeGenAPIURL?: string;
+  ___codeGenAPIPort?: number;
+  ___codeGenAPISubmissionDelay?: number;
+  
+  // Development
+  websiteRunFromPackage?: number;
+  userEmailMap?: object;
 }
 ```
 
