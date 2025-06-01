@@ -32,3 +32,4 @@ export * from './agent-types';
 export * from './artifact-types';
 export * from './report-types';
 export * from './auth-types';
+export * from './html-report-types';
