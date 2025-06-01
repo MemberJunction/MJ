@@ -9,6 +9,5 @@ export * from './artifact-types';
 export * from './report-types';
 export * from './auth-types';
 export * from './html-report-types';
-
-// Keep legacy export for backward compatibility
-export * from './types';
+ 
+export * from './util';
