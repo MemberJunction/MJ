@@ -1,6 +1,6 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { CompositeKey, GetEntityNameFromSchemaAndViewString, KeyValuePair, LogError, Metadata, RunView } from '@memberjunction/core';
-import { SkipAPIAnalysisCompleteResponse, SkipHTMLReportInitFunction, SkipHTMLReportObject, SkipHTMLReportOption } from '@memberjunction/skip-types';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipHTMLReportBaseStyles, SkipHTMLReportCallbacks, SkipHTMLReportInitParams, SkipHTMLReportObject, SkipHTMLReportOption, SkipHTMLReportUtilities } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
@@ -258,42 +258,14 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                     flattenedDataContext["data_item_" + i] = loadedItems[i]._Data;
                 }
     
-                castedObject.init(flattenedDataContext, userState, {
-                    RefreshData: () => {
-                        // this is a callback function that can be called from the HTML report to refresh data
-                        console.log('HTML Report requested data refresh');
-                        // need to implement this
-                    },
-                    OpenEntityRecord: (entityName: string, key: CompositeKey) => {
-                        // this is a callback function that can be called from the HTML report to open an entity record
-                        if (entityName) {
-                            // bubble this up to our parent component as we don't directly open records in this component
-                            const md = new Metadata();
-                            const entityMatch = md.EntityByName(entityName);
-                            if (!entityMatch) {
-                                // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
-                                const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                       e.BaseView.toLowerCase() === entityName.toLowerCase() || 
-                                                                       e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
-                                                                       e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
-                                if (altMatch && altMatch.length === 1) { 
-                                    entityName = altMatch[0].Name;
-                                }
-                            }
-                            const cKey = new CompositeKey(key as any as KeyValuePair[])
-                            this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
-                        }
-                    },
-                    UpdateUserState: (userState: any) => {
-                        // this is a callback function that can be called from the HTML report to update user state
-                        console.log('HTML Report updated user state:', userState);
-                        // need to implement this
-                    },
-                    NotifyEvent: (eventName: string, eventData: any) => {
-                        // this is a callback function that can be called from the HTML report to notify an event
-                        console.log(`HTML Report raised event: ${eventName} notified with data:`, eventData);
-                    }
-                });
+
+                const params: SkipHTMLReportInitParams = {
+                    data: flattenedDataContext,
+                    userState: userState,
+                    utilities: this.SetupUtilities(md),
+                    styles: this.SetupStyles(),
+                    callbacks: this.SetupCallbacks(),
+                };
             }
             else {
                 console.warn(`HTML Report object ${this.HTMLReportObjectName} not found or invalid data context`);
@@ -302,5 +274,140 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         catch (e) {
             LogError(e);
         }         
+    }
+
+    protected SetupUtilities(md: Metadata): SkipHTMLReportUtilities {
+        const rv = new RunView();
+        const rq = new RunQuery();
+        const u: SkipHTMLReportUtilities = {
+            md: this.CreateSimpleMetadata(md),
+            rv: this.CreateSimpleRunView(rv),
+            rq: this.CreateSimpleRunQuery(rq)
+        };            
+        return u;
+    }
+
+    protected CreateSimpleMetadata(md: Metadata): SimpleMetadata {
+        return {
+            entities: md.Entities.map(e => MapEntityInfoToSkipEntityInfo(e))
+        }
+    }
+
+    protected SetupStyles(): SkipHTMLReportBaseStyles{
+        // This is a placeholder for any styles that the HTML report might need
+        // For now, we just return an empty object
+        return {
+            colors: {
+                primary: '#2196f3',
+                primaryHover:  '#1976d2',
+                secondary: '#757575',
+                success: '#4caf50',
+                background: '#ffffff',
+                surface: '#f8f9fa',
+                text: '#333333',
+                textSecondary: '#656565',
+                border: '#e2e8f0',
+            },
+            spacing: {
+                xs: '4px',
+                sm: '8px',
+                md: '16px',
+                lg: '24px',
+                xl: '32px',
+            },
+            typography: {
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                fontSize: {
+                sm:  '14px',
+                md:  '16px',
+                lg:  '18px',
+                xl:  '24px'
+                },
+            },
+            borders: {
+                radius: '4px',
+                width: '1px'
+            },
+            overflow: 'auto' // Default overflow style        
+        }
+    }
+    
+    protected CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
+        return {
+            runQuery: async (params: RunQueryParams) => {
+                // Run a single query and return the results
+                try {
+                    const result = await rq.RunQuery(params);
+                    return result;
+                } catch (error) {
+                    LogError(error);
+                    throw error; // Re-throw to handle it in the caller
+                }
+            }
+        }
+    }
+    protected CreateSimpleRunView(rv: RunView): SimpleRunView {
+        return {
+            runView: async (params: RunViewParams) => {
+                // Run a single view and return the results
+                try {
+                    const result = await rv.RunView(params);
+                    return result;
+                } catch (error) {
+                    LogError(error);
+                    throw error; // Re-throw to handle it in the caller
+                }
+            },
+            runViews: async (params: RunViewParams[]) => {
+                // Runs multiple views and returns the results
+                try {
+                    const results = await rv.RunViews(params);
+                    return results;
+                } catch (error) {
+                    LogError(error);
+                    throw error; // Re-throw to handle it in the caller
+                }
+            }
+        }
+    }
+
+    protected SetupCallbacks(): SkipHTMLReportCallbacks {
+        const cb: SkipHTMLReportCallbacks = {
+            RefreshData: () => {
+                // this is a callback function that can be called from the HTML report to refresh data
+                console.log('HTML Report requested data refresh');
+                // need to implement this
+            },
+            OpenEntityRecord: (entityName: string, key: CompositeKey) => {
+                // this is a callback function that can be called from the HTML report to open an entity record
+                if (entityName) {
+                    // bubble this up to our parent component as we don't directly open records in this component
+                    const md = new Metadata();
+                    const entityMatch = md.EntityByName(entityName);
+                    if (!entityMatch) {
+                        // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
+                        const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                                e.BaseView.toLowerCase() === entityName.toLowerCase() || 
+                                                                e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                                e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
+                        if (altMatch && altMatch.length === 1) { 
+                            entityName = altMatch[0].Name;
+                        }
+                    }
+                    const cKey = new CompositeKey(key as any as KeyValuePair[])
+                    this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
+                }
+            },
+            UpdateUserState: (userState: any) => {
+                // this is a callback function that can be called from the HTML report to update user state
+                console.log('HTML Report updated user state:', userState);
+                // need to implement this
+            },
+            NotifyEvent: (eventName: string, eventData: any) => {
+                // this is a callback function that can be called from the HTML report to notify an event
+                console.log(`HTML Report raised event: ${eventName} notified with data:`, eventData);
+            }
+        };
+        return cb;
     }
 }
