@@ -92,18 +92,18 @@ export interface SkipHTMLReportInitParams {
     utilities?: SkipHTMLReportUtilities;
     userState?: any;
     callbacks?: SkipHTMLReportCallbacks;
-    styles?: SkipHTMLReportBaseStyles;
+    styles?: SkipHTMLReportStyles;
 }
 
 /**
- * This interface defines the base styles that can be applied to the HTML report. The container can provide
- * styles to the top level report component. The top level report component can alter these base styles based on
+ * This interface defines styles that can be applied to the HTML report. The container can provide
+ * styles to the top level report component. The top level report component can alter these styles based on
  * the prompting of the user, learned notes, etc, and adjust the styles of the report accordingly. In addition
- * the top level report will pass in its computed base styles to each sub-component so that the sub-components
+ * the top level report will pass in its computed styles to each sub-component so that the sub-components
  * can do the same recursively down to any level of depth. This allows sub-components to inherit styles but
  * also make adjustments as required based on functional needs and user input.
  */
-export interface SkipHTMLReportBaseStyles {
+export interface SkipHTMLReportStyles {
     colors: {
         primary: string// '#2196f3',
         primaryHover: string // '#1976d2',
@@ -143,10 +143,11 @@ export interface SkipHTMLReportBaseStyles {
  * The HTML report will create this object and it will include the members defined in this interface.
  */
 export interface SkipHTMLReportObject {
-    /**
-     * The required init function that is called when the HTML report is loaded. This function is passed the data context and a set of callbacks that can be used to interact with the parent component.
-     */
-    init: SkipHTMLReportInitFunction;
+   /**
+    * The React component that Angular will render directly using ReactDOM.
+    * This component receives props including data, userState, callbacks, utilities, and baseStyles.
+    */
+   component: any; // really a React.ComponentType<RootComponentProps>;
 
     /**
      * The optional print function that is called when the user clicks on the print button in the parent of the HTML report. This function will never be called by the parent before the init function so the print function
