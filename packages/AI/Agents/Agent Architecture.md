@@ -129,7 +129,10 @@ Represents a specific AI model (e.g., GPT-4, Claude 3.5 Sonnet).
 | Description | nvarchar(max) | Detailed description of the model |
 | AIModelTypeID | uniqueidentifier | References the model type |
 | PowerRank | int | Relative capability ranking |
+| SpeedRank | int | Relative speed ranking |
+| CostRank | int | Relative cost ranking |
 | IsActive | bit | Whether the model is available for use |
+| ModelSelectionInsights | nvarchar(max) | Guidance for model selection |
 
 #### 3.1.3 AIVendorTypeDefinition
 
@@ -138,7 +141,7 @@ Defines the types of vendors in the system.
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(50) | Type name (e.g., "Model Developer", "Inference Provider") |
+| Name | nvarchar(50) | Type name (e.g., "Model Developer", "Inference Provider") - unique |
 | Description | nvarchar(max) | Detailed description of the vendor type |
 
 #### 3.1.4 AIVendor
@@ -148,7 +151,7 @@ Represents an AI provider (e.g., OpenAI, Anthropic).
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(50) | Vendor name (e.g., "OpenAI") |
+| Name | nvarchar(50) | Vendor name (e.g., "OpenAI") - unique |
 | Description | nvarchar(max) | Detailed description of the vendor |
 
 #### 3.1.5 AIVendorType
@@ -162,6 +165,8 @@ Associates vendors with their types and establishes priorities.
 | TypeID | uniqueidentifier | References the vendor type |
 | Rank | int | Priority ranking within this type |
 | Status | nvarchar(20) | Status of this vendor-type association |
+
+**Unique Constraints:** VendorID + TypeID
 
 #### 3.1.6 AIModelVendor
 
@@ -182,9 +187,9 @@ Links models with vendors and includes implementation details.
 | SupportedResponseFormats | nvarchar(100) | Formats the model can output |
 | SupportsEffortLevel | bit | Whether effort level can be specified |
 | SupportsStreaming | bit | Whether streaming responses are supported |
-| ParallelizationMode | nvarchar(20) | How this model handles parallelization |
-| ParallelCount | int | Number of parallel executions |
-| ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
+| TypeID | uniqueidentifier | References vendor type definition |
+
+**Unique Constraints:** ModelID + VendorID + TypeID
 
 ### 3.2 Configuration Management
 
@@ -195,7 +200,7 @@ Stores configurations for AI operations.
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Configuration name |
+| Name | nvarchar(100) | Configuration name - unique |
 | Description | nvarchar(max) | Detailed description |
 | IsDefault | bit | Whether this is the default configuration |
 | Status | nvarchar(20) | Status of this configuration |
@@ -215,19 +220,46 @@ Stores parameter values for configurations.
 | Value | nvarchar(max) | Parameter value |
 | Description | nvarchar(max) | Detailed description |
 
+**Unique Constraints:** ConfigurationID + Name
+
 ### 3.3 Prompt Management
 
-#### 3.3.1 AIPrompt
+#### 3.3.1 AIPromptType
 
-Defines prompts used by agents.
+Defines types/categories of AI prompts.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Prompt name |
+| Name | nvarchar(255) | Type name |
 | Description | nvarchar(max) | Detailed description |
-| PromptText | nvarchar(max) | The actual prompt template |
-| TemplateType | nvarchar(50) | Format of the template |
+
+#### 3.3.2 AIPromptCategory
+
+Hierarchical categorization of AI prompts.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Category name |
+| ParentID | uniqueidentifier | References parent category (self-referencing) |
+| Description | nvarchar(max) | Detailed description |
+
+#### 3.3.3 AIPrompt
+
+Defines prompts used by agents with advanced configuration options.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Prompt name |
+| Description | nvarchar(max) | Detailed description |
+| TemplateID | uniqueidentifier | References the template containing prompt text |
+| CategoryID | uniqueidentifier | References the prompt category |
+| TypeID | uniqueidentifier | References the prompt type |
+| Status | nvarchar(50) | Status of the prompt |
+| ResponseFormat | nvarchar(20) | Expected response format |
+| ModelSpecificResponseFormat | nvarchar(max) | Model-specific format details |
 | AIModelTypeID | uniqueidentifier | References the model type |
 | MinPowerRank | int | Minimum power rank required |
 | SelectionStrategy | nvarchar(20) | How models are selected |
@@ -235,13 +267,13 @@ Defines prompts used by agents.
 | ParallelizationMode | nvarchar(20) | How parallelization is handled |
 | ParallelCount | int | Number of parallel executions |
 | ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
-| ResultSelectorPromptID | uniqueidentifier | References a prompt that selects the best result |
 | OutputType | nvarchar(50) | Expected output type |
 | OutputExample | nvarchar(max) | Example of expected output |
 | ValidationBehavior | nvarchar(50) | How validation failures are handled |
 | MaxRetries | int | Maximum retry attempts |
 | RetryDelayMS | int | Delay between retries |
 | RetryStrategy | nvarchar(20) | Strategy for retry delays |
+| ResultSelectorPromptID | uniqueidentifier | References a prompt that selects the best result |
 | EnableCaching | bit | Whether to cache results |
 | CacheTTLSeconds | int | Time-to-live for cached results |
 | CacheMatchType | nvarchar(20) | How cache matches are determined |
@@ -250,8 +282,10 @@ Defines prompts used by agents.
 | CacheMustMatchVendor | bit | Whether vendor must match for cache hit |
 | CacheMustMatchAgent | bit | Whether agent must match for cache hit |
 | CacheMustMatchConfig | bit | Whether config must match for cache hit |
+| PromptRole | nvarchar(20) | Role of the prompt (System, User, Assistant, SystemOrUser) |
+| PromptPosition | nvarchar(20) | Position of the prompt in conversation |
 
-#### 3.3.2 AIPromptModel
+#### 3.3.4 AIPromptModel
 
 Associates prompts with specific models and configurations.
 
@@ -266,19 +300,25 @@ Associates prompts with specific models and configurations.
 | ExecutionGroup | int | Group for parallel execution |
 | ModelParameters | nvarchar(max) | JSON-formatted model-specific parameters |
 | Status | nvarchar(20) | Status of this prompt-model association |
+| ParallelizationMode | nvarchar(20) | How this specific model handles parallelization |
+| ParallelCount | int | Number of parallel executions for this model |
+| ParallelConfigParam | nvarchar(100) | Config parameter for parallel count |
+
+**Unique Constraints:** PromptID + ModelID + VendorID + ConfigurationID
 
 ### 3.4 Agent Framework
 
 #### 3.4.1 AIAgent
 
-Defines AI agents in the system.
+Defines AI agents in the system with hierarchical structure.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | ID | uniqueidentifier | Primary key |
-| Name | nvarchar(100) | Agent name |
+| Name | nvarchar(255) | Agent name |
 | Description | nvarchar(max) | Detailed description |
-| ParentID | uniqueidentifier | References parent agent |
+| LogoURL | nvarchar(255) | URL to agent logo/avatar |
+| ParentID | uniqueidentifier | References parent agent (self-referencing) |
 | ExposeAsAction | bit | Whether to expose as an action |
 | ExecutionOrder | int | Order among siblings |
 | ExecutionMode | nvarchar(20) | How child agents are executed |
@@ -303,11 +343,89 @@ Associates prompts with agents.
 | ContextBehavior | nvarchar(50) | How conversation context is filtered |
 | ContextMessageCount | int | Number of messages to include |
 
+**Unique Constraints:** AgentID + PromptID + ConfigurationID
+
+#### 3.4.3 AIAgentModel
+
+Associates agents with specific AI models.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| ModelID | uniqueidentifier | References the model |
+| Active | bit | Whether this model association is active |
+| Priority | int | Priority ranking for model selection |
+
+#### 3.4.4 AIAgentAction
+
+Links AI agents to actions they can perform.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| ActionID | uniqueidentifier | References the action |
+| Status | nvarchar(15) | Status of this agent-action association |
+
+#### 3.4.5 AIAgentRequest
+
+Tracks requests made to AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| RequestedAt | datetime | When the request was made |
+| RequestForUserID | uniqueidentifier | User who made the request |
+| Status | nvarchar(20) | Status of the request |
+| Request | nvarchar(max) | The actual request text |
+| Response | nvarchar(max) | The agent's response |
+| ResponseByUserID | uniqueidentifier | User who provided the response |
+| RespondedAt | datetime | When the response was provided |
+| Comments | nvarchar(max) | Additional comments |
+
+#### 3.4.6 AIAgentLearningCycle
+
+Tracks learning cycles for AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| StartedAt | datetimeoffset(7) | When the learning cycle started |
+| EndedAt | datetimeoffset(7) | When the learning cycle ended |
+| Status | nvarchar(20) | Status of the learning cycle |
+| AgentSummary | nvarchar(max) | Summary of what the agent learned |
+
+#### 3.4.7 AIAgentNote
+
+Notes and annotations for AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the agent |
+| AgentNoteTypeID | uniqueidentifier | References the note type |
+| Note | nvarchar(max) | The note content |
+| Type | nvarchar(20) | Type of note |
+| UserID | uniqueidentifier | User who created the note |
+
+#### 3.4.8 AIAgentNoteType
+
+Categorizes different types of agent notes.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(255) | Note type name |
+| Description | nvarchar(max) | Detailed description |
+
 ### 3.5 Execution and Caching
 
 #### 3.5.1 AIPromptRun
 
-Tracks the execution of prompts.
+Tracks the execution of prompts with comprehensive metrics.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -328,10 +446,13 @@ Tracks the execution of prompts.
 | TotalCost | decimal(18,6) | Estimated cost |
 | Success | bit | Whether execution succeeded |
 | ErrorMessage | nvarchar(max) | Error message if failed |
+| ParentID | uniqueidentifier | References parent run (self-referencing) |
+| RunType | nvarchar(20) | Type of run (single, parallel, etc.) |
+| ExecutionOrder | int | Order within a batch execution |
 
 #### 3.5.2 AIResultCache
 
-Caches results for reuse.
+Caches results for reuse with vector similarity matching.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -348,6 +469,19 @@ Caches results for reuse.
 | ExpiredOn | datetimeoffset(7) | When the entry expired |
 | PromptEmbedding | varbinary(max) | Vector representation of prompt |
 | PromptRunID | uniqueidentifier | References the execution that created this cache |
+
+### 3.6 Model Actions and Capabilities
+
+#### 3.6.1 AIModelAction
+
+Links AI models to actions they support.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AIModelID | uniqueidentifier | References the AI model |
+| AIActionID | uniqueidentifier | References the AI action |
+| IsActive | bit | Whether this model-action link is active |
 
 ---
 
