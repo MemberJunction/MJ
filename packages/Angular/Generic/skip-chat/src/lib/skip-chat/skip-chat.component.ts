@@ -567,6 +567,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           if (aiDetail) {
             this.AddMessageToCurrentConversation(aiDetail, true, true);
             this.scrollToBottom();
+            
+            // Automatically show artifact if the new AI message has one
+            this.autoShowArtifactIfPresent(aiDetail);
           }
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
@@ -1332,6 +1335,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
           this.scrollToBottom();
+          
+          // Automatically show artifact if the new AI message has one
+          this.autoShowArtifactIfPresent(aiDetail);
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
@@ -1924,5 +1930,66 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public closeArtifactPanel(): void {
     this.selectedArtifact = null;
+  }
+
+  /**
+   * Automatically shows an artifact if the provided AI message has one
+   * This is called when new AI messages are received to automatically display artifacts
+   * @param aiMessage The AI message to check for artifacts
+   */
+  private autoShowArtifactIfPresent(aiMessage: ConversationDetailEntity): void {
+    if (!this.EnableArtifactSplitView || !aiMessage) {
+      return;
+    }
+    
+    // Check if this AI message has an artifact
+    const hasArtifact = aiMessage.ArtifactID && aiMessage.ArtifactID.length > 0;
+    
+    if (hasArtifact) {
+      // Check if this is a new artifact or a new version of an existing artifact
+      const isNewArtifactOrVersion = this.isNewArtifactOrVersion(aiMessage);
+      
+      if (isNewArtifactOrVersion) {
+        // Automatically show the artifact
+        setTimeout(() => {
+          this.onArtifactSelected({
+            artifactId: aiMessage.ArtifactID,
+            artifactVersionId: aiMessage.ArtifactVersionID,
+            messageId: aiMessage.ID,
+            name: null, // Will be loaded by the artifact viewer
+            description: null // Will be loaded by the artifact viewer
+          });
+        }, 100); // Small delay to ensure the UI is ready
+      }
+    }
+  }
+
+  /**
+   * Determines if the given AI message contains a new artifact or a new version of an existing artifact
+   * @param aiMessage The AI message to check
+   * @returns true if this is a new artifact or version, false otherwise
+   */
+  private isNewArtifactOrVersion(aiMessage: ConversationDetailEntity): boolean {
+    if (!aiMessage.ArtifactID) {
+      return false;
+    }
+    
+    // If no artifact is currently selected, this is definitely new
+    if (!this.selectedArtifact) {
+      return true;
+    }
+    
+    // If the artifact ID is different, this is a new artifact
+    if (this.selectedArtifact.artifactId !== aiMessage.ArtifactID) {
+      return true;
+    }
+    
+    // If the artifact ID is the same but version ID is different, this is a new version
+    if (this.selectedArtifact.artifactVersionId !== aiMessage.ArtifactVersionID) {
+      return true;
+    }
+    
+    // Same artifact and version, not new
+    return false;
   }
 }
