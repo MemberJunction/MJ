@@ -5,7 +5,6 @@
         [class.maximized]="isMaximized"
         [width]="dialogWidth"
         [height]="dialogHeight"
-        [centered]="true"
         [minHeight]="400"
         [minWidth]="600"
         [resizable]="!isMaximized"
@@ -19,22 +18,10 @@
             </div>
             <div class="window-actions">
                 <button 
-                    kendoWindowMinimizeAction 
-                    title="Minimize"
-                    class="window-action-btn">
-                    <i class="fa-solid fa-minus"></i>
-                </button>
-                <button 
                     (click)="toggleMaximize()"
                     title="{{ isMaximized ? 'Restore' : 'Maximize' }}"
                     class="window-action-btn">
                     <i class="fa-solid" [class.fa-maximize]="!isMaximized" [class.fa-compress]="isMaximized"></i>
-                </button>
-                <button 
-                    kendoWindowCloseAction 
-                    title="Close"
-                    class="window-action-btn">
-                    <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
         </kendo-window-titlebar>

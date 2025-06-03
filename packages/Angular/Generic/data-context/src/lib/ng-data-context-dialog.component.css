@@ -8,6 +8,13 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
+/* Position the window properly */
+:host ::ng-deep .k-window {
+    margin: 0 auto;
+    top: 10% !important;
+    position: fixed !important;
+}
+
 
 .data-context-window.maximized {
     position: fixed !important;
@@ -60,7 +67,10 @@
 /* Dialog Content */
 .dialog-content {
     height: 100%;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Override Kendo Window Styles */
@@ -78,12 +88,13 @@
 }
 
 :host ::ng-deep .k-window-actions {
-    display: contents;
+    display: none; /* Hide default Kendo window actions since we have custom ones */
 }
 
 :host ::ng-deep .k-window-content {
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    height: 100%;
 }
 
 :host ::ng-deep .k-window {

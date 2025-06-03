@@ -1,8 +1,6 @@
-import { Component, Input, OnInit, ViewChild } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
-import { GridComponent, GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
-import { SortDescriptor } from '@progress/kendo-data-query';
 
 @Component({
   selector: 'mj-data-context',
@@ -12,25 +10,18 @@ import { SortDescriptor } from '@progress/kendo-data-query';
 export class DataContextComponent implements OnInit {
   @Input() dataContextId!: string;
   @Input() Provider: IMetadataProvider | null = null;
-  @ViewChild('grid') grid!: GridComponent;
  
   public dataContextRecord?: DataContextEntity;
   public dataContextItems: DataContextItemEntity[] = [];
-  public gridData: GridDataResult = { data: [], total: 0 };
   public showLoader: boolean = false;
   public errorMessage: string = '';
   public searchTerm: string = '';
-  public selectedItem?: DataContextItemEntity;
-  
-  // Grid configuration
-  public pageSize: number = 20;
-  public skip: number = 0;
-  public sort: SortDescriptor[] = [{ field: '__mj_CreatedAt', dir: 'desc' }];
   
   // UI state
   public showSQLPreview: boolean = false;
   public previewSQL: string = '';
   public copiedField: string = '';
+  public expandedItems: { [key: string]: boolean } = {};
 
   public get ProviderToUse(): IMetadataProvider {
     return this.Provider || Metadata.Provider;
@@ -79,7 +70,6 @@ export class DataContextComponent implements OnInit {
           
         if(response.Success){
           this.dataContextItems = response.Results;
-          this.updateGridData();
           this.showLoader = false;
         } else {
           this.errorMessage = response.ErrorMessage || 'Failed to load data context items';
@@ -146,28 +136,13 @@ export class DataContextComponent implements OnInit {
     }
   }
 
-  public updateGridData(): void {
-    const items = this.filteredItems;
-    this.gridData = {
-      data: items.slice(this.skip, this.skip + this.pageSize),
-      total: items.length
-    };
-  }
-
-  public pageChange(event: PageChangeEvent): void {
-    this.skip = event.skip;
-    this.pageSize = event.take;
-    this.updateGridData();
-  }
-
-  public sortChange(sort: SortDescriptor[]): void {
-    this.sort = sort;
-    this.updateGridData();
-  }
-
   public onSearchChange(): void {
-    this.skip = 0; // Reset to first page
-    this.updateGridData();
+    // Reset expanded items when searching
+    this.expandedItems = {};
+  }
+
+  public toggleItemExpansion(itemId: string): void {
+    this.expandedItems[itemId] = !this.expandedItems[itemId];
   }
 
   public async copyToClipboard(text: string, fieldName: string): Promise<void> {
