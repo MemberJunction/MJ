@@ -219,3 +219,101 @@ export type SkipComponentOption = {
      */
     UserRankExplanation: string | undefined;
 }
+
+/**
+ * Represents a complete specification for a generated Skip component, including its structure,
+ * requirements, code, and nested component hierarchy
+ */
+export type SkipComponentRootSpec = {
+    /**
+     * A description of what the component should do from a functional perspective
+     */
+    functionalRequirements: string;
+    
+    /**
+     * A technical description of how the component is designed and implemented
+     */
+    technicalDesign: string;
+    
+    /**
+     * The actual code for the main component, typically wrapped in an IIFE that returns
+     * the component object with component, print, and refresh properties
+     */
+    componentCode: string;
+    
+    /**
+     * The name of the main component
+     */
+    componentName: string;
+    
+    /**
+     * The type of component (e.g., "report", "dashboard", "form", etc.)
+     */
+    componentType: string;
+    
+    /**
+     * A description of what this component does
+     */
+    description: string;
+    
+    /**
+     * The callback strategy used by this component (e.g., "hybrid", "direct", "none")
+     */
+    callbackStrategy: string;
+    
+    /**
+     * Describes the state structure managed by this component
+     */
+    stateStructure: Record<string, string>;
+    
+    /**
+     * An array of child component specifications
+     */
+    childComponents: SkipComponentChildSpec[];
+    
+    /**
+     * The title of the component
+     */
+    title: string;
+    
+    /**
+     * A user-friendly explanation of what the component does
+     */
+    userExplanation: string;
+    
+    /**
+     * A technical explanation of how the component works
+     */
+    techExplanation: string;
+};
+ 
+
+/**
+ * Represents a child component within a component hierarchy
+ */
+export interface SkipComponentChildSpec {
+    /**
+     * The placeholder text used to identify where this component should be inserted
+     */
+    placeholder: string;
+    
+    /**
+     * The programmatic name of the component
+     */
+    programmaticName: string;
+    
+    /**
+     * A detailed description of what this child component does
+     */
+    description: string;
+    
+    /**
+     * The path in the state tree where this component's state is stored
+     */
+    statePath: string;
+    
+    /**
+     * An array of sub-components (recursive structure)
+     */
+    components: SkipComponentChildSpec[];
+}
