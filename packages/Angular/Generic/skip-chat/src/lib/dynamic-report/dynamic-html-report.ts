@@ -1,6 +1,7 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { CompositeKey, GetEntityNameFromSchemaAndViewString, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipEntityFieldInfo, SkipEntityInfo, SkipEntityRelationshipInfo, SkipComponentStyles, SkipComponentCallbacks, SkipComponentInitFunction, SkipComponentInitParams, SkipComponentObject, SkipComponentUtilities, SkipComponentOption } from '@memberjunction/skip-types';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, SimpleChanges } from '@angular/core';
+import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
+import { SkipReactComponentHost } from './skip-react-component-host';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
@@ -35,7 +36,7 @@ import { DrillDownInfo } from '../drill-down-info';
     button { margin-top: 5px; margin-bottom: 5px;}
   `] 
 })
-export class SkipDynamicHTMLReportComponent implements AfterViewInit {
+export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy {
     @Input() HTMLReport: string | null = null;
     @Input() ComponentObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
@@ -48,6 +49,14 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public reportOptionLabels: { text: string; value: number }[] = [];
+    
+    private reactHost: SkipReactComponentHost | null = null;
+    private callbacks: SkipComponentCallbacks = {
+        RefreshData: () => this.handleRefreshData(),
+        OpenEntityRecord: (entityName: string, key: CompositeKey) => this.handleOpenEntityRecord(entityName, key),
+        UpdateUserState: (userState: any) => this.handleUpdateUserState(userState),
+        NotifyEvent: (eventName: string, eventData: any) => this.handleNotifyEvent(eventName, eventData)
+    };
 
     constructor(private cdr: ChangeDetectorRef) { }
 
@@ -90,7 +99,11 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     }
   
     public async PrintReport() {
-        // Implement printing of the HTML element only here
+        if (this.reactHost) {
+            this.reactHost.print();
+        } else {
+            window.print();
+        }
     }
 
     ngAfterViewInit() {
@@ -104,6 +117,17 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                     this.invokeHTMLInitFunction();
                 }
             }
+        }
+    }
+    
+    ngOnDestroy(): void {
+        this.cleanupReactComponent();
+    }
+    
+    ngOnChanges(changes: SimpleChanges): void {
+        if (this.reactHost && changes['SkipData'] && !changes['SkipData'].firstChange) {
+            // Update React component state when Angular data changes
+            this.reactHost.updateState('data', this.getFlattenedDataContext());
         }
     }
   
@@ -164,129 +188,88 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     private async invokeHTMLInitFunction() {
         try {
             const container = this.htmlContainer?.nativeElement;
-            if (container && this.ComponentObjectName) {
-                // First set the HTML as is, with script tags
-                container.innerHTML = this.HTMLReport; 
+            if (container && this.ComponentObjectName && this.HTMLReport) {
+                this.cleanupReactComponent();
                 
-                // Force Angular to detect changes
-                this.cdr.detectChanges();
+                const md = new Metadata();
+                const data = this.getFlattenedDataContext();
                 
-                // Now find and manually execute all scripts in the container
-                const scriptElements = container.querySelectorAll('script');
-                await this.loadScriptsSequentially(scriptElements);
-                // scriptElements.forEach((script: HTMLScriptElement) => {
-                //     // For external scripts
-                //     if (script.src) {
-                //         // Create a new script element
-                //         const newScript = document.createElement('script');
-                //         newScript.src = script.src;
-                //         document.head.appendChild(newScript);
-                //     } 
-                //     // For inline scripts
-                //     else if (script.textContent) {
-                //         // Execute the script content directly
-                //         try {
-                //             // This will execute the script in global context
-                //             eval(script.textContent);
-                //         } catch (error) {
-                //             console.error('Error executing script:', error);
-                //         }
-                //     }
-                // });
-                this.finishHTMLInitialization();
-            }
-            else {
-                console.warn('HTML Report container not found or init function name not provided');
-            }
-        }
-        catch (e) {
-            LogError(e);
-        }
-    }
-
-    protected async loadScriptsSequentially(scriptElements: HTMLScriptElement[]) {
-        for (let i = 0; i < scriptElements.length; i++) {
-            const script = scriptElements[i];
-            
-            // For external scripts
-            if (script.src) {
-                // we use the promise to ensure we are awaiting for the script to load before moving on to the next one
-                await new Promise<void>((resolve, reject) => {
-                    const newScript = document.createElement('script');
-                    newScript.src = script.src;
-                    
-                    // Set up handlers
-                    newScript.onload = () => resolve();
-                    newScript.onerror = (error) => {
-                        console.error('Error loading script:', script.src, error);
-                        resolve(); // Resolve anyway to continue loading other scripts
-                    };
-                    
-                    document.head.appendChild(newScript);
-                });
-            } 
-            // For inline scripts
-            else if (script.textContent) {
-                try {
-                    // Execute inline script
-                    eval(script.textContent);
-                } catch (error) {
-                    console.error('Error executing inline script:', error);
-                    // Continue to next script even if this one failed
-                }
-            }
-        }
-        
-        console.log('All scripts loaded');
-    }
-
-    protected finishHTMLInitialization() {
-        // TODO: The new Skip component architecture uses a completely different approach
-        // for bootstrapping generated code. The old init function approach is deprecated.
-        // This needs to be reimplemented to support the new React-based component architecture.
-        
-        throw new Error('Skip component initialization not yet implemented for new component architecture. This functionality needs to be updated to support the new React-based approach.');
-        
-        /* Commented out old implementation for reference:
-        try {
-            if (!this.ComponentObjectName) {
-                console.warn('Component object name not provided');
-                return;
-            }
-    
-            const componentObject = (window as any)[this.ComponentObjectName];
-            const md = new Metadata();
-            if (componentObject && this.SkipData?.dataContext) {
-                const castedObject = componentObject as SkipComponentObject;
-                const userState = {};
-    
-                const flattenedDataContext: Record<string, any> = {};
-                // Flatten the data context to make it easier to work with
-
-                const loadedItems = this.SkipData.dataContext.Items.filter((i: any) => i.DataLoaded && i._Data?.length > 0);
-                for (let i = 0; i < loadedItems.length; i++) {
-                    flattenedDataContext["data_item_" + i] = loadedItems[i]._Data;
-                }
-    
-
-                const params: SkipComponentInitParams = {
-                    data: flattenedDataContext,
-                    userState: userState,
+                // Create the React component host
+                this.reactHost = new SkipReactComponentHost({
+                    componentCode: this.HTMLReport,
+                    container: container,
+                    callbacks: this.callbacks,
+                    initialState: data,
                     utilities: this.SetupUtilities(md),
-                    styles: this.SetupStyles(),
-                    callbacks: this.SetupCallbacks(),
-                };
+                    styles: this.SetupStyles()
+                });
                 
-                // Old approach with init function no longer applies
+                // Initialize and render the React component
+                this.reactHost.initialize();
             }
             else {
-                console.warn(`Component object ${this.ComponentObjectName} not found or invalid data context`);
+                console.warn('HTML Report container not found or component code not provided');
             }
         }
         catch (e) {
             LogError(e);
         }
-        */
+    }
+
+    private cleanupReactComponent(): void {
+        if (this.reactHost) {
+            this.reactHost.destroy();
+            this.reactHost = null;
+        }
+    }
+    
+    private getFlattenedDataContext(): Record<string, any> {
+        const flattenedDataContext: Record<string, any> = {};
+        
+        if (this.SkipData?.dataContext) {
+            const loadedItems = this.SkipData.dataContext.Items.filter((i: any) => i.DataLoaded && i._Data?.length > 0);
+            for (let i = 0; i < loadedItems.length; i++) {
+                flattenedDataContext["data_item_" + i] = loadedItems[i]._Data;
+            }
+        }
+        
+        return flattenedDataContext;
+    }
+
+    // Event handler implementations
+    private handleRefreshData(): void {
+        console.log('Component requested data refresh');
+        // Emit an event or call parent component method to refresh data
+    }
+    
+    private handleOpenEntityRecord(entityName: string, key: CompositeKey): void {
+        if (entityName) {
+            // bubble this up to our parent component as we don't directly open records in this component
+            const md = new Metadata();
+            const entityMatch = md.EntityByName(entityName);
+            if (!entityMatch) {
+                // couldn't find it, but sometimes the AI uses a table name or a view name, let's check for that
+                const altMatch = md.Entities.filter(e => e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                        e.BaseView.toLowerCase() === entityName.toLowerCase() || 
+                                                        e.SchemaName.toLowerCase() + '.' + e.BaseTable.toLowerCase() === entityName.toLowerCase() ||
+                                                        e.SchemaName.toLowerCase() + '.' + e.BaseView.toLowerCase() === entityName.toLowerCase());
+                if (altMatch && altMatch.length === 1) { 
+                    entityName = altMatch[0].Name;
+                }
+            }
+            const cKey = new CompositeKey(key as any as KeyValuePair[])
+            this.DrillDownEvent.emit(new DrillDownInfo(entityName, cKey.ToWhereClause()));
+        }
+    }
+    
+    private handleUpdateUserState(userState: any): void {
+        console.log('Component updated user state:', userState);
+        // TODO: Implement user state persistence if needed
+    }
+    
+    private handleNotifyEvent(eventName: string, eventData: any): void {
+        console.log(`Component raised event: ${eventName} notified with data:`, eventData);
+        // TODO: Handle custom events as needed
     }
 
     protected SetupUtilities(md: Metadata): SkipComponentUtilities {
@@ -422,5 +405,14 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
             }
         };
         return cb;
+    }
+
+    public async refreshReport(data?: any): Promise<void> {
+        if (this.reactHost) {
+            this.reactHost.refresh(data);
+        } else {
+            // If no React host is available, re-render the report
+            this.invokeHTMLInitFunction();
+        }
     }
 }
