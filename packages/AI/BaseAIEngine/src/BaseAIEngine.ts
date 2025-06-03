@@ -3,7 +3,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIModelActionEntity, AIModelEntity, AIModelEntityExtended, AIPromptCategoryEntity, AIPromptEntity, 
          AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIPromptCategoryEntityExtended, AIAgentEntityExtended } from "@memberjunction/core-entities";
+         AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
+         AIAgentPromptEntity} from "@memberjunction/core-entities";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -17,6 +18,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _promptTypes: AIPromptTypeEntity[] = [];
     private _promptCategories: AIPromptCategoryEntityExtended[] = [];
     private _agentActions: AIAgentActionEntity[] = [];
+    private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentModels: AIAgentModelEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
@@ -89,6 +91,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_vendorTypeDefinitions',
                 EntityName: 'MJ: AI Vendor Type Definitions'
+            }, 
+            {
+                PropertyName: '_agentPrompts',
+                EntityName: 'MJ: AI Agent Prompts'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -171,6 +177,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentActions(): AIAgentActionEntity[] {
         return this._agentActions;
+    }
+
+    public get AgentPrompts(): AIAgentPromptEntity[] {
+        AIEngineBase.checkMetadataLoaded();
+        return AIEngineBase.Instance._agentPrompts;
     }
 
     public get AgentModels(): AIAgentModelEntity[] {
