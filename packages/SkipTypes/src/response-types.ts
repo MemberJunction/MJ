@@ -8,14 +8,14 @@
  * - Clarifying question responses (SkipAPIClarifyingQuestionResponse)  
  * - Data request responses (SkipAPIDataRequestResponse)
  * - Chat with record responses (SkipAPIChatWithRecordResponse)
- * - Drill-down functionality for reports (SkipAPIAnalysisDrillDown, SkipAPIAnalysisDrillDownFilter)
+ * - Drill-down functionality for components (SkipAPIAnalysisDrillDown, SkipAPIAnalysisDrillDownFilter)
  * 
  * Each response type corresponds to a specific responsePhase value and contains additional
  * properties relevant to that particular type of response. These specialized response types
  * allow clients to access type-safe, context-specific data based on the response phase.
  * 
- * The analysis complete response is particularly comprehensive, containing report data,
- * explanations, column metadata, drill-down information, and HTML report options.
+ * The analysis complete response is particularly comprehensive, containing component data,
+ * explanations, column metadata, drill-down information, and component options.
  * 
  * @author MemberJunction
  * @since 2.0.0
@@ -26,26 +26,27 @@ import type { SkipSubProcessResponse } from './conversation-types';
 import type { SkipColumnInfo } from './entity-metadata-types';
 import type { SkipDataRequest } from './query-types';
 import type { SkipAPIArtifactRequest } from './artifact-types';
-import type { SimpleDataContext, SkipHTMLReportOption } from './report-types';
+import { SimpleDataContext } from './shared';
+import { SkipComponentOption } from './component-types';
 
 /**
  * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down
  */
 export class SkipAPIAnalysisDrillDownFilter {
-    reportFieldName: string
+    componentFieldName: string
     viewFieldName: string
 }
 
 /**
- * Defines the filtering information necessary for a reporting UI to enable behavior to drill down when a user clicks on a portion of a report like an element of a chart or a row in a table
+ * Defines the filtering information necessary for a component UI to enable behavior to drill down when a user clicks on a portion of a component like an element of a chart or a row in a table
  */
 export class SkipAPIAnalysisDrillDown {
     /**
-     * The name of the view in the database that we should drill into whenever a user clicks on an element in the report
+     * The name of the view in the database that we should drill into whenever a user clicks on an element in the component
      */
     viewName: string;
     /**
-     * If the data context that was provided to Skip for generating a report had filtered data related to the drill down view noted in viewName property, then this
+     * If the data context that was provided to Skip for generating a component had filtered data related to the drill down view noted in viewName property, then this
      * baseFilter value will be populated with a SQL filter that can be added to a WHERE clause with an AND statement to ensure that the filtering is inclusive of the 
      * data context's in-built filters.
      */
@@ -65,9 +66,9 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      */
     dataContext: SimpleDataContext;
     /**
-     * The type of report generated, data is a simple table, plot is a chart and html is a custom HTML report
+     * The type of component generated, data is a simple table, plot is a chart and html is a custom HTML component
      * For data/plot types, the results will be server-generated and available in the executionResults property
-     * For html type, the executionResults will be null because the server generates an HTML report that is intended to run on the client.
+     * For html type, the executionResults will be null because the server generates an HTML component that is intended to run on the client.
      */
     resultType: "data" | "plot" | "html" | null;
     /**
@@ -75,69 +76,55 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      */
     executionResults?: SkipSubProcessResponse | null;
     /**
-     * A user-friendly explanation of what the report does
+     * A user-friendly explanation of what the component does
      */
     userExplanation?: string;
     /**
-     * A more detailed technical explanation of what the report does and how it works
+     * A more detailed technical explanation of what the component does and how it works
      */
     techExplanation?: string;
     /**
-     * Describes each column in the report's computed data output that is what is displayed in either a table or a chart
+     * Describes each column in the component's computed data output that is what is displayed in either a table or a chart
      */
     tableDataColumns?: SkipColumnInfo[];
     /**
-     * Zero or more suggested questions that the AI engine suggests might be good follow up questions to ask after reviewing the provided report
+     * Zero or more suggested questions that the AI engine suggests might be good follow up questions to ask after reviewing the provided component
      */
     suggestedQuestions?: string[] | null;
+
     /**
-     * The title of the report
+     * Legacy property that is no longer used, but is kept for backwards compatibility
+     * @deprecated This property is no longer used and will be removed in a future version. Use the `title` property instead.
      */
     reportTitle?: string | null;
+
     /**
-     * An analysis of the report, the data and the formatted report output.
+     * The title of the component
+     */
+    title?: string | null;
+    /**
+     * An analysis of the component, the data and the formatted component output.
      */
     analysis?: string | null;
     /**
-     * Information that will support a drill-down experience in the reporting UI
+     * Information that will support a drill-down experience in the component UI
      */
     drillDown?: SkipAPIAnalysisDrillDown | null;
     /**
-     * The script text that was used to generated the report and can be saved to be run again later
+     * The script text that was used to generated the component and can be saved to be run again later
      */
     scriptText?: string | null;
     /**
      * When provided, this array of data requests indicate to the caller of the Skip API that Skip was able to retrieve, on his own, additional data
      * BEYOND what was provided in the SkipAPIRequest object. The caller of the Skip API should update its internal representation of its data context
-     * to include these new data items so that they will be run and provided to Skip for future iterations/requests and for re-running reports as well.
+     * to include these new data items so that they will be run and provided to Skip for future iterations/requests and for re-running components as well.
      */
     newDataItems?: SkipDataRequest[];
 
     /**
-     * For result type of html, this is the HTML that was returned from the sub-process to show in the HTML report
-     * This HTML is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
-     * designed to be embedded as a shadow DOM element within the container application's UI in the desired location
-     * as chosen by the container application.
-     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
+     * Contains a list of all the possible components that were generated (1 or more) for the given request.
      */
-    htmlReport: string | null;
-    /**
-     * For HTML Reports, the generation process must return not only the HTML itself stored in htmlReport, but also a globally unique
-     * object name that is used to communicate with the HTML Report. This name will be a globally unique name that is used to identify the object
-     * agains the global memory of the browser (e.g. the window object) and is used to communicate with the HTML report. The object will comply with the
-     * @interface SkipHTMLReportObject interface and will be used to communicate with the HTML report.
-     * 
-     * Generally speaking, this object name will be provided to the AI system generating the code and use a UUIDv4 or similar approach that is 
-     * modified to be a valid JavaScript function name. The AI generates the object within its HTML with this name. 
-     * The object name is provided here in this property so that the container application for the custom HTML report can invoke it as needed.
-     * @deprecated - this is now part of an entry in the htmlReportOptions array, this property is deprecated and will be removed in a future version.
-     */
-    htmlReportObjectName: string | null;
-
-    /**
-     * Contains a list of all the possible HTML reports that were generated (1 or more) for the given request.
-     */
-    htmlReportOptions?: SkipHTMLReportOption[];
+    componentOptions?: SkipComponentOption[];
 
     /**
      * If the AI Agent decides it would be best to display the result in an artifact, this information can be used by the calling application to properly

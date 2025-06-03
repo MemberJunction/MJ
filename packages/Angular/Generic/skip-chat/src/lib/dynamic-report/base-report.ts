@@ -255,7 +255,8 @@ export abstract class SkipDynamicReportBase  extends BaseAngularComponent implem
       newSkipData.resultType = this.SkipData.resultType;  
       newSkipData.responsePhase = this.SkipData.responsePhase; 
       newSkipData.messages = this.SkipData.messages; // this is the array of messages that are used to create the report from the original message, we don't want message from the refresh, it is simple message
-      newSkipData.reportTitle = this.SkipData.reportTitle; // this is the title of the report, we don't want to change it
+      newSkipData.reportTitle = this.SkipData.reportTitle; // legacy property, carry it over if it exists
+      newSkipData.title = this.SkipData.title || this.SkipData.reportTitle; // favor the new title but fallback to the legacy reportTitle. This is the title of the component, we don't want to change it
       newSkipData.drillDown = this.SkipData.drillDown; // this is the drill down data, we don't want to change it
       
       this.ReportEntity.Configuration = JSON.stringify(newSkipData);

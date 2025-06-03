@@ -11,7 +11,7 @@
  * - query-types.ts: Query-related types
  * - agent-types.ts: AI agent and learning cycle types
  * - artifact-types.ts: Artifact-related types
- * - report-types.ts: Report and HTML-specific types
+ * - component-types.ts: Component-specific types
  * - auth-types.ts: Authentication types
  * 
  * This organization makes the codebase more maintainable while preserving 
@@ -30,6 +30,5 @@ export * from './entity-metadata-types';
 export * from './query-types';
 export * from './agent-types';
 export * from './artifact-types';
-export * from './report-types';
 export * from './auth-types';
-export * from './html-report-types';
+export * from './component-types';
