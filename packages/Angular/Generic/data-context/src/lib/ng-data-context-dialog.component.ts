@@ -22,7 +22,7 @@ export class DataContextDialogComponent {
   }
 
   public get dialogHeight(): number {
-    return this.isMaximized ? window.innerHeight * 0.95 : 600;
+    return this.isMaximized ? window.innerHeight * 0.95 : 700;
   }
 
   closeDialog(): void {

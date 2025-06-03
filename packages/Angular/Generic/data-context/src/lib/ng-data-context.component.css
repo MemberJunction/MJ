@@ -33,6 +33,7 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 24px;
+    flex-shrink: 0;
 }
 
 .header-info {
@@ -129,6 +130,7 @@
     padding: 16px 24px;
     background-color: #ffffff;
     border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
 }
 
 .search-input {
@@ -142,7 +144,7 @@
 
 /* Items Container */
 .items-container {
-    flex: 1;
+    height: 100%;
     padding: 24px;
     overflow-y: auto;
     overflow-x: hidden;
