@@ -1,13 +1,13 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { CompositeKey, GetEntityNameFromSchemaAndViewString, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipEntityFieldInfo, SkipEntityInfo, SkipEntityRelationshipInfo, SkipComponentStyles, SkipComponentCallbacks, SkipComponentInitFunction, SkipComponentInitParams, SkipComponentObject, SkipComponentUtilities } from '@memberjunction/skip-types';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipEntityFieldInfo, SkipEntityInfo, SkipEntityRelationshipInfo, SkipComponentStyles, SkipComponentCallbacks, SkipComponentInitFunction, SkipComponentInitParams, SkipComponentObject, SkipComponentUtilities, SkipComponentOption } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-dynamic-html-report',
   template: `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      @if (ShowReportOptionsToggle && htmlReportOptions.length > 1) {
+      @if (ShowReportOptionsToggle && reportOptions.length > 1) {
         <div style="display: flex; align-items: center; gap: 10px;">
           <label for="reportOption">Report Option:</label>
           <kendo-dropdownlist 
@@ -45,7 +45,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     @ViewChild('htmlContainer', { static: false }) htmlContainer!: ElementRef;
 
     // Properties for handling multiple report options
-    public htmlReportOptions: SkipHTMLReportOption[] = [];
+    public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public reportOptionLabels: { text: string; value: number }[] = [];
 
@@ -54,9 +54,9 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     /**
      * Gets the currently selected report option
      */
-    public get selectedReportOption(): SkipHTMLReportOption | null {
-        return this.htmlReportOptions.length > this.selectedReportOptionIndex 
-            ? this.htmlReportOptions[this.selectedReportOptionIndex] 
+    public get selectedReportOption(): SkipComponentOption | null {
+        return this.reportOptions.length > this.selectedReportOptionIndex 
+            ? this.reportOptions[this.selectedReportOptionIndex] 
             : null;
     }
 
@@ -64,7 +64,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
      * Handles when the user changes the selected report option
      */
     public onReportOptionChange(selectedIndex: number): void {
-        if (selectedIndex >= 0 && selectedIndex < this.htmlReportOptions.length) {
+        if (selectedIndex >= 0 && selectedIndex < this.reportOptions.length) {
             this.selectedReportOptionIndex = selectedIndex;
             this.updateCurrentReport();
         }
@@ -76,8 +76,8 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     private updateCurrentReport(): void {
         const selectedOption = this.selectedReportOption;
         if (selectedOption) {
-            this.HTMLReport = selectedOption.reportCode;
-            this.HTMLReportObjectName = selectedOption.reportObjectName;
+            this.HTMLReport = selectedOption.option.componentCode;
+            this.ComponentObjectName = selectedOption.option.componentName;
             
             // Clear the container before loading new report
             const container = this.htmlContainer?.nativeElement;
@@ -119,8 +119,8 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
             if (d.componentOptions && d.componentOptions.length > 0) {
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
-                this.HTMLReport = component.code;
-                this.ComponentObjectName = component.componentObjectName;
+                this.HTMLReport = component.option.componentCode;
+                this.ComponentObjectName = component.option.componentName;
             } else {
                 // Fallback for old format
                 this.HTMLReport = (d as any).htmlReport;
@@ -139,33 +139,26 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
      */
     private setupReportOptions(data: SkipAPIAnalysisCompleteResponse): void {
         // Check if we have the new htmlReportOptions array
-        if (data.htmlReportOptions && data.htmlReportOptions.length > 0) {
+        if (data.componentOptions && data.componentOptions.length > 0) {
             // Sort by AIRank (lower numbers = better ranking)
-            this.htmlReportOptions = [...data.htmlReportOptions].sort((a, b) => {
+            this.reportOptions = [...data.componentOptions].sort((a, b) => {
                 const rankA = a.AIRank ?? Number.MAX_SAFE_INTEGER;
                 const rankB = b.AIRank ?? Number.MAX_SAFE_INTEGER;
                 return rankA - rankB;
             });
             
             // Create dropdown labels
-            this.reportOptionLabels = this.htmlReportOptions.map((option, index) => ({
+            this.reportOptionLabels = this.reportOptions.map((option, index) => ({
                 text: `Option ${index + 1}${option.AIRank ? ` (Rank ${option.AIRank})` : ''}`,
                 value: index
             }));
             
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
-            const bestOption = this.htmlReportOptions[0];
-            this.HTMLReport = bestOption.reportCode;
-            this.HTMLReportObjectName = bestOption.reportObjectName;
-        } else {
-            // Fall back to deprecated properties for backward compatibility
-            this.htmlReportOptions = [];
-            this.reportOptionLabels = [];
-            this.selectedReportOptionIndex = 0;
-            this.HTMLReport = data.htmlReport;
-            this.HTMLReportObjectName = data.htmlReportObjectName;
-        }
+            const bestOption = this.reportOptions[0];
+            this.HTMLReport = bestOption.option.componentCode;
+            this.ComponentObjectName = bestOption.option.componentName;
+        } 
     }
 
     private async invokeHTMLInitFunction() {

@@ -176,26 +176,9 @@ export interface SkipComponentUtilities {
  */
 export type SkipComponentOption = {
     /**
-     * This code is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
-     * designed to be embedded within the container application's UI in the desired location
-     * as chosen by the container application.
+     * Full details of the generated component option including functional, technical, code, and child componentry.
      */
-    code: string;
-
-    /**
-     * The programmatic name of the component that is used to render the component in the UI. 
-     * This is typically a string that is used to identify the component in the container application.
-     */
-    componentObjectName: string;
-
-    /**
-     * The type of data access this component uses, static means that the data is provided to the component as static data during the initialization
-     * process described in the @interface SkipComponentObject interface, dynamic means that the component will use capabilities provided by 
-     * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
-     * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
-     * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
-     */
-    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';
+    option: SkipComponentRootSpec;
 
     /**
      * If multiple component options are provided for a given @interface SkipAPIAnalysisCompleteResponse, a "judge" AI will evaluate all the functional
@@ -247,10 +230,20 @@ export type SkipComponentRootSpec = {
     componentName: string;
     
     /**
-     * The type of component (e.g., "report", "dashboard", "form", etc.)
+     * The type of component: report, dashboard, form, chart, table, or other. Over time this list
+     * might grow to include more types as Skip evolves and new component types are needed.  
      */
-    componentType: string;
-    
+    componentType: "report" | "dashboard" | "form" | "other",
+
+    /**
+     * The type of data access this component uses, static means that the data is provided to the component as static data during the initialization
+     * process described in the @interface SkipComponentObject interface, dynamic means that the component will use capabilities provided by 
+     * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
+     * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
+     * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
+     */
+    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';    
+
     /**
      * A description of what this component does
      */
