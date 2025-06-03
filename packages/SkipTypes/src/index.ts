@@ -6,8 +6,7 @@ export * from './entity-metadata-types';
 export * from './query-types';
 export * from './agent-types';
 export * from './artifact-types';
-export * from './report-types';
 export * from './auth-types';
-export * from './html-report-types';
+export * from './component-types';
  
 export * from './util';
