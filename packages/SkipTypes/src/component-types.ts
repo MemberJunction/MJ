@@ -176,26 +176,9 @@ export interface SkipComponentUtilities {
  */
 export type SkipComponentOption = {
     /**
-     * This code is typically a combination of HTML, CSS and JavaScript all contained within a single DIV tag and 
-     * designed to be embedded within the container application's UI in the desired location
-     * as chosen by the container application.
+     * Full details of the generated component option including functional, technical, code, and child componentry.
      */
-    code: string;
-
-    /**
-     * The programmatic name of the component that is used to render the component in the UI. 
-     * This is typically a string that is used to identify the component in the container application.
-     */
-    componentObjectName: string;
-
-    /**
-     * The type of data access this component uses, static means that the data is provided to the component as static data during the initialization
-     * process described in the @interface SkipComponentObject interface, dynamic means that the component will use capabilities provided by 
-     * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
-     * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
-     * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
-     */
-    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';
+    option: SkipComponentRootSpec;
 
     /**
      * If multiple component options are provided for a given @interface SkipAPIAnalysisCompleteResponse, a "judge" AI will evaluate all the functional
@@ -218,4 +201,125 @@ export type SkipComponentOption = {
      * this is the explanation of why the user rated the component the way they did if they provided feedback.
      */
     UserRankExplanation: string | undefined;
+}
+
+/**
+ * Represents a complete specification for a generated Skip component, including its structure,
+ * requirements, code, and nested component hierarchy
+ */
+export type SkipComponentRootSpec = {
+    /**
+     * A description of what the component should do from a functional perspective
+     */
+    functionalRequirements: string;
+    
+    /**
+     * A technical description of how the component is designed and implemented
+     */
+    technicalDesign: string;
+    
+    /**
+     * The actual code for the main component, typically wrapped in an IIFE that returns
+     * the component object with component, print, and refresh properties
+     */
+    componentCode: string;
+    
+    /**
+     * The name of the main component
+     */
+    componentName: string;
+    
+    /**
+     * The type of component: report, dashboard, form, chart, table, or other. Over time this list
+     * might grow to include more types as Skip evolves and new component types are needed.  
+     */
+    componentType: "report" | "dashboard" | "form" | "other",
+
+    /**
+     * The type of data access this component uses, static means that the data is provided to the component as static data during the initialization
+     * process described in the @interface SkipComponentObject interface, dynamic means that the component will use capabilities provided by 
+     * the SkipComponentObject interface to dynamically access data from the MemberJunction instance that it is running within. 'both' means
+     * that the component can use both static and dynamic data access methods, and 'none' means that the component does not use any data (rare, but possible for example if
+     * a component does something other than show data or if it uses 3rd party data sources via API that are not related to the MJ instance it is running within).
+     */
+    dataAccessType: 'static' | 'dynamic' | 'both' | 'none';    
+
+    /**
+     * A description of what this component does
+     */
+    description: string;
+    
+    /**
+     * The callback strategy used by this component (e.g., "hybrid", "direct", "none")
+     */
+    callbackStrategy: string;
+    
+    /**
+     * Describes the state structure managed by this component
+     */
+    stateStructure: Record<string, string>;
+    
+    /**
+     * An array of child component specifications
+     */
+    childComponents: SkipComponentChildSpec[];
+    
+    /**
+     * The title of the component
+     */
+    title: string;
+    
+    /**
+     * A user-friendly explanation of what the component does
+     */
+    userExplanation: string;
+    
+    /**
+     * A technical explanation of how the component works
+     */
+    techExplanation: string;
+};
+ 
+
+/**
+ * Represents a child component within a component hierarchy
+ */
+export interface SkipComponentChildSpec {
+    /**
+     * The placeholder text used to identify where this component should be inserted
+     */
+    placeholder: string;
+    
+    /**
+     * The programmatic name of the component
+     */
+    componentName: string;
+    
+    /**
+     * Example of the component being used in JSX format. This is used to provide a clear example on the properties and 
+     * event handling that the component supports. This is used to teach the next AI exactly what we want it to generate for the 
+     * child component.
+     */
+    exampleUsage: string;  
+    
+    /**
+     * The code for the child component. This is generated LATER by a separate process after the parent
+     * component generation is complete. When the parent component generates this is undefined.
+     */
+    componentCode?: string;
+
+    /**
+     * A detailed description of what this child component does
+     */
+    description: string;
+    
+    /**
+     * The path in the state tree where this component's state is stored
+     */
+    statePath: string;
+    
+    /**
+     * An array of sub-components (recursive structure)
+     */
+    components: SkipComponentChildSpec[];
 }

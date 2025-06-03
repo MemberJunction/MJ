@@ -1,5 +1,6 @@
 import { EntityFieldInfo, EntityFieldValueInfo, EntityInfo, EntityRelationshipInfo } from "@memberjunction/core";
 import { SkipEntityFieldInfo, SkipEntityFieldValueInfo, SkipEntityInfo, SkipEntityRelationshipInfo } from "./entity-metadata-types";
+import { SkipComponentChildSpec, SkipComponentRootSpec } from "./component-types";
 
 /**
  * Maps a MemberJunction EntityInfo object to a SkipEntityInfo object for use in the Skip query system.
@@ -113,4 +114,96 @@ export function MapEntityRelationshipInfoToSkipEntityRelationshipInfo(re: Entity
         joinEntityJoinField: re.JoinEntityJoinField,
     }
     return sre;    
+}
+
+/**
+ * Builds the complete code for a Skip component based on the provided spec.
+ * 
+ * This function generates the full code representation of a Skip component, including
+ * the root component code and recursively pulling in child components and also replacing
+ * the placeholders for those child components in the parent component's code with the 
+ * actual code for those child components (which were generated after the parent component was generated).
+ * 
+ * @param spec - The SkipComponentRootSpec defining the component structure and behavior
+ * @returns A string containing the complete executable JavaScript code for the Skip component
+ */
+export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): string {
+    // Start with the base code for the root component
+    let code = spec.componentCode;
+    // Recursively replace placeholders for child components with their generated code
+    for (const child of spec.childComponents) {
+        const childCode = BuildSkipComponentChildCode(child);
+        // Replace the placeholder in the parent component's code with the actual child component code
+        code = replacePlaceholderWithCode(code, child.placeholder, childCode);
+    }
+    // Return the complete code for this component
+    return code;
+}
+
+/**
+ * Builds the code for a Skip component child based on the provided spec including recursive child components.
+ * @param spec - The SkipComponentChildSpec defining the child component structure and behavior
+ * @returns A string containing the executable JavaScript code for the Skip component child
+ */
+export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): string {
+    // Start with the base code for the child component
+    let code = child.componentCode;
+    // Recursively replace placeholders for child components with their generated code
+    for (const sub of child.components) {
+        const subCode = BuildSkipComponentChildCode(sub);
+        // Replace the placeholder in the parent component's code with the actual child component code
+        code = replacePlaceholderWithCode(code, sub.placeholder, subCode);
+    }
+    // Return the complete code for this child component
+    return code;
+}
+
+/**
+ * Replaces a placeholder with code, handling commented placeholders and maintaining proper indentation.
+ * 
+ * This function finds the entire line containing the placeholder (including if it's commented out)
+ * and replaces it with the provided code, maintaining the original indentation level for all
+ * inserted lines.
+ * 
+ * @param sourceCode - The source code containing the placeholder
+ * @param placeholder - The placeholder name (without << >> brackets)
+ * @param replacementCode - The code to insert in place of the placeholder
+ * @returns The source code with the placeholder replaced
+ */
+function replacePlaceholderWithCode(sourceCode: string, placeholder: string, replacementCode: string): string {
+    // Split the source code into lines
+    const lines = sourceCode.split('\n');
+    
+    // Find the line containing the placeholder (with or without comment prefix)
+    // Look for patterns like: <<placeholder>>, // <<placeholder>>, /* <<placeholder>> */, etc.
+    const placeholderPattern = new RegExp(`<<${placeholder}>>`);
+    const lineIndex = lines.findIndex(line => placeholderPattern.test(line));
+    
+    if (lineIndex === -1) {
+        // Placeholder not found, return original code
+        console.warn(`Placeholder <<${placeholder}>> not found in code`);
+        return sourceCode;
+    }
+    
+    // Get the line with the placeholder
+    const placeholderLine = lines[lineIndex];
+    
+    // Calculate the indentation (number of leading spaces/tabs)
+    const indentMatch = placeholderLine.match(/^(\s*)/);
+    const indent = indentMatch ? indentMatch[1] : '';
+    
+    // Split the replacement code into lines
+    const replacementLines = replacementCode.split('\n');
+    
+    // Add the indentation to each line of the replacement code
+    const indentedReplacementLines = replacementLines.map(line => {
+        // Don't add indentation to empty lines
+        return line.trim() === '' ? line : indent + line;
+    });
+    
+    // Replace the placeholder line with the indented replacement lines
+    lines.splice(lineIndex, 1, ...indentedReplacementLines);
+    
+    // Join the lines back together
+    return lines.join('\n');
 }
