@@ -1,0 +1,107 @@
+.data-context-dialog-wrapper {
+    position: relative;
+}
+
+.data-context-window {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+
+.data-context-window.maximized {
+    position: fixed !important;
+    top: 2.5% !important;
+    left: 2.5% !important;
+}
+
+/* Custom Title Bar */
+.window-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+}
+
+.title-icon {
+    color: #2196f3;
+    font-size: 18px;
+}
+
+.window-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.window-action-btn {
+    background: none;
+    border: none;
+    padding: 8px 10px;
+    cursor: pointer;
+    color: #656565;
+    transition: all 0.2s;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.window-action-btn:hover {
+    background-color: #e3f2fd;
+    color: #2196f3;
+}
+
+.window-action-btn:last-child:hover {
+    background-color: #ffebee;
+    color: #f44336;
+}
+
+/* Dialog Content */
+.dialog-content {
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Override Kendo Window Styles */
+:host ::ng-deep .k-window-titlebar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+:host ::ng-deep .k-window-title {
+    display: contents;
+}
+
+:host ::ng-deep .k-window-actions {
+    display: contents;
+}
+
+:host ::ng-deep .k-window-content {
+    padding: 0;
+    overflow: hidden;
+}
+
+:host ::ng-deep .k-window {
+    border: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.data-context-window {
+    animation: fadeIn 0.2s ease-out;
+}

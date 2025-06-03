@@ -1,35 +1,203 @@
-<div>
-    @if (!showLoader) {
-        <div class="k-d-flex k-flex-col k-justify-content-between k-h-full">
-            <div *ngIf="dataContextRecord">
-                <div>
-                    ID: {{dataContextRecord.ID}}
+<div class="data-context-viewer">
+    @if (showLoader) {
+        <div class="loading-container">
+            <kendo-loader type="converging-spinner" size="large"></kendo-loader>
+            <p class="loading-text">Loading data context...</p>
+        </div>
+    } @else {
+        <!-- Header Section -->
+        <div class="data-context-header">
+            <div class="header-info">
+                <div class="header-title">
+                    <i class="fa-solid fa-layer-group header-icon"></i>
+                    <h2>{{ dataContextRecord?.Name || 'Data Context' }}</h2>
                 </div>
-                <div>
-                    Name: {{dataContextRecord.Name}}
-                </div>
-                <div>
-                    Description: {{dataContextRecord.Description}}
+                @if (dataContextRecord && dataContextRecord.Description) {
+                    <p class="header-description">{{ dataContextRecord.Description }}</p>
+                }
+                <div class="header-meta">
+                    <span class="meta-item">
+                        <i class="fa-solid fa-fingerprint"></i>
+                        ID: {{ dataContextRecord?.ID }}
+                        <button class="copy-btn" (click)="copyToClipboard(dataContextRecord?.ID || '', 'context-id')" title="Copy ID">
+                            <i class="fa-solid" [class.fa-copy]="copiedField !== 'context-id'" [class.fa-check]="copiedField === 'context-id'"></i>
+                        </button>
+                    </span>
+                    <span class="meta-item">
+                        <i class="fa-solid fa-list-ol"></i>
+                        {{ itemCount }} {{ itemCount === 1 ? 'item' : 'items' }}
+                    </span>
                 </div>
             </div>
-            <div style="margin-top: 10px;">
-                <b>Items</b>
+            <div class="header-actions">
+                <button kendoButton look="flat" (click)="refresh()" title="Refresh">
+                    <i class="fa-solid fa-rotate"></i>
+                    Refresh
+                </button>
+                <button kendoButton look="flat" (click)="exportToCSV()" title="Export to CSV">
+                    <i class="fa-solid fa-download"></i>
+                    Export
+                </button>
             </div>
-            <div class="kendo-grid-container">
-                <kendo-grid 
-                    [kendoGridBinding]="dataContextItems" 
-                    scrollable="virtual" 
-                    [pageSize]="100" 
-                    [sortable]="true"
-                    [loading]="showLoader" 
-                    [resizable]="true" 
-                    [navigable]="true"
-                >
-                </kendo-grid>
+        </div>
+
+        @if (errorMessage) {
+            <div class="error-message">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                {{ errorMessage }}
             </div>
-        </div>    
+        }
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <kendo-textbox 
+                [(ngModel)]="searchTerm" 
+                (ngModelChange)="onSearchChange()"
+                placeholder="Search items by type, SQL, entity name, or description..."
+                [clearButton]="true"
+                class="search-input">
+                <ng-template kendoTextBoxPrefixTemplate>
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                </ng-template>
+            </kendo-textbox>
+        </div>
+
+        <!-- Data Grid -->
+        <div class="grid-container">
+            <kendo-grid 
+                #grid
+                [data]="gridData" 
+                [pageSize]="pageSize"
+                [skip]="skip"
+                [pageable]="true"
+                [sortable]="true"
+                [sort]="sort"
+                (pageChange)="pageChange($event)"
+                (sortChange)="sortChange($event)"
+                [loading]="showLoader" 
+                [resizable]="true" 
+                [navigable]="true"
+                [height]="400"
+                class="data-context-grid">
+                
+                <kendo-grid-column field="Type" title="Type" [width]="80">
+                    <ng-template kendoGridCellTemplate let-item>
+                        <div class="type-cell">
+                            <i [class]="getTypeIcon(item.Type)" [style.color]="getTypeColor(item.Type)" title="{{ item.Type }}"></i>
+                            <span>{{ item.Type }}</span>
+                        </div>
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="SQL" title="SQL">
+                    <ng-template kendoGridCellTemplate let-item>
+                        @if (item.SQL) {
+                            <div class="sql-cell">
+                                <code class="sql-preview">{{ item.SQL }}</code>
+                                <div class="sql-actions">
+                                    <button class="icon-btn" (click)="previewSQLCode(item.SQL)" title="View full SQL">
+                                        <i class="fa-solid fa-expand"></i>
+                                    </button>
+                                    <button class="icon-btn" (click)="copyToClipboard(item.SQL, 'sql-' + item.ID)" title="Copy SQL">
+                                        <i class="fa-solid" [class.fa-copy]="copiedField !== 'sql-' + item.ID" [class.fa-check]="copiedField === 'sql-' + item.ID"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        } @else {
+                            <span class="null-value">-</span>
+                        }
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="EntityID" title="Entity" [width]="180">
+                    <ng-template kendoGridCellTemplate let-item>
+                        @if (item.EntityID) {
+                            <div class="entity-cell">
+                                <span>{{ getEntityName(item.EntityID) || 'Unknown Entity' }}</span>
+                                <button class="icon-btn" (click)="navigateToEntity(item.EntityID)" title="View entity">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </button>
+                            </div>
+                        } @else {
+                            <span class="null-value">-</span>
+                        }
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="ViewID" title="View" [width]="120">
+                    <ng-template kendoGridCellTemplate let-item>
+                        @if (item.ViewID) {
+                            <div class="view-cell">
+                                <span class="truncate-text" title="{{ item.ViewID }}">{{ item.ViewID }}</span>
+                                <button class="icon-btn" (click)="navigateToView(item.ViewID)" title="View details">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </button>
+                            </div>
+                        } @else {
+                            <span class="null-value">-</span>
+                        }
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="QueryID" title="Query" [width]="120">
+                    <ng-template kendoGridCellTemplate let-item>
+                        @if (item.QueryID) {
+                            <div class="query-cell">
+                                <span class="truncate-text" title="{{ item.QueryID }}">{{ item.QueryID }}</span>
+                                <button class="icon-btn" (click)="navigateToQuery(item.QueryID)" title="View query">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </button>
+                            </div>
+                        } @else {
+                            <span class="null-value">-</span>
+                        }
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="RecordID" title="Record ID" [width]="100">
+                    <ng-template kendoGridCellTemplate let-item>
+                        @if (item.RecordID) {
+                            <div class="record-cell">
+                                <code>{{ item.RecordID }}</code>
+                                <button class="icon-btn" (click)="copyToClipboard(item.RecordID, 'record-' + item.ID)" title="Copy Record ID">
+                                    <i class="fa-solid" [class.fa-copy]="copiedField !== 'record-' + item.ID" [class.fa-check]="copiedField === 'record-' + item.ID"></i>
+                                </button>
+                            </div>
+                        } @else {
+                            <span class="null-value">-</span>
+                        }
+                    </ng-template>
+                </kendo-grid-column>
+
+                <kendo-grid-column field="Description" title="Description" [width]="250">
+                    <ng-template kendoGridCellTemplate let-item>
+                        <span class="description-text" title="{{ item.Description }}">{{ item.Description || '-' }}</span>
+                    </ng-template>
+                </kendo-grid-column>
+            </kendo-grid>
+        </div>
     }
-    @else {
-        <kendo-loader type="converging-spinner" ></kendo-loader>
+
+    <!-- SQL Preview Dialog -->
+    @if (showSQLPreview) {
+        <div class="sql-preview-overlay" (click)="closeSQLPreview()">
+            <div class="sql-preview-dialog" (click)="$event.stopPropagation()">
+                <div class="sql-preview-header">
+                    <h3>SQL Preview</h3>
+                    <button class="close-btn" (click)="closeSQLPreview()">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="sql-preview-content">
+                    <pre><code>{{ previewSQL }}</code></pre>
+                </div>
+                <div class="sql-preview-actions">
+                    <button kendoButton (click)="copyToClipboard(previewSQL, 'preview-sql')">
+                        <i class="fa-solid" [class.fa-copy]="copiedField !== 'preview-sql'" [class.fa-check]="copiedField === 'preview-sql'"></i>
+                        {{ copiedField === 'preview-sql' ? 'Copied!' : 'Copy SQL' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     }
 </div>
