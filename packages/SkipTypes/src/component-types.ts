@@ -293,8 +293,14 @@ export interface SkipComponentChildSpec {
     /**
      * The programmatic name of the component
      */
-    programmaticName: string;
-    
+    componentName: string;
+ 
+    /**
+     * The code for the child component. This is generated LATER by a separate process after the parent
+     * component generation is complete. When the parent component generates this is undefined.
+     */
+    componentCode?: string;
+
     /**
      * A detailed description of what this child component does
      */
