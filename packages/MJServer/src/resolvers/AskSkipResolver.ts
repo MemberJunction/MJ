@@ -2680,7 +2680,7 @@ cycle.`);
     dataSource: DataSource,
     startTime: Date
   ): Promise<{ AIMessageConversationDetailID: string }> {
-    const sTitle = apiResponse.reportTitle;
+    const sTitle = apiResponse.title;
     const sResult = JSON.stringify(apiResponse);
 
     // first up, let's see if Skip asked us to create an artifact or add a new version to an existing artifact, or NOT

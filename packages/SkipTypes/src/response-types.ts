@@ -91,10 +91,17 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
      * Zero or more suggested questions that the AI engine suggests might be good follow up questions to ask after reviewing the provided component
      */
     suggestedQuestions?: string[] | null;
+
+    /**
+     * Legacy property that is no longer used, but is kept for backwards compatibility
+     * @deprecated This property is no longer used and will be removed in a future version. Use the `title` property instead.
+     */
+    reportTitle?: string | null;
+
     /**
      * The title of the component
      */
-    componentTitle?: string | null;
+    title?: string | null;
     /**
      * An analysis of the component, the data and the formatted component output.
      */

@@ -1313,7 +1313,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
             if (this.SelectedConversation.Name === 'New Chat' || this.SelectedConversation.Name?.trim().length === 0 )  {
               // we are on the first message so skip renamed the convo, use that
-              this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
+              this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).title!; // this will update the UI
 
               // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
               // otherwise Angular binding doesn't pick up the change without the below.

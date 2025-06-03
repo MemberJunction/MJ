@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { CompositeKey, GetEntityNameFromSchemaAndViewString, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipEntityFieldInfo, SkipEntityInfo, SkipEntityRelationshipInfo, SkipHTMLReportBaseStyles, SkipHTMLReportCallbacks, SkipHTMLReportInitFunction, SkipHTMLReportInitParams, SkipHTMLReportObject, SkipHTMLReportUtilities } from '@memberjunction/skip-types';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipEntityFieldInfo, SkipEntityInfo, SkipEntityRelationshipInfo, SkipComponentStyles, SkipComponentCallbacks, SkipComponentInitFunction, SkipComponentInitParams, SkipComponentObject, SkipComponentUtilities } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { InvokeManualResize } from '@memberjunction/global';
 import { Meta } from '@angular/platform-browser';
@@ -21,7 +21,7 @@ import { DataContext, DataContextItem } from '@memberjunction/data-context';
 })
 export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     @Input() HTMLReport: string | null = null;
-    @Input() HTMLReportObjectName: string | null = null;
+    @Input() ComponentObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
@@ -37,7 +37,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         if (this.HTMLReport) {
             const container = this.htmlContainer?.nativeElement;
             if (container) {
-                if (this.HTMLReportObjectName && this.SkipData) {
+                if (this.ComponentObjectName && this.SkipData) {
                     this.invokeHTMLInitFunction();
                 }
             }
@@ -52,8 +52,17 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         const hadData = this._skipData ? true : false;
         this._skipData = d;
         if (d) {
-            this.HTMLReport = d.htmlReport;
-            this.HTMLReportObjectName = d.htmlReportObjectName;
+            // For backward compatibility, check if we have component options
+            if (d.componentOptions && d.componentOptions.length > 0) {
+                // Use the first component option (or the highest ranked one)
+                const component = d.componentOptions[0];
+                this.HTMLReport = component.code;
+                this.ComponentObjectName = component.componentObjectName;
+            } else {
+                // Fallback for old format
+                this.HTMLReport = (d as any).htmlReport;
+                this.ComponentObjectName = (d as any).htmlReportObjectName;
+            }
         }
         if (d && hadData) {
             // normally the initFunction is called in ngAfterViewInit, but here the data changed so we need to call it again
@@ -64,7 +73,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     private async invokeHTMLInitFunction() {
         try {
             const container = this.htmlContainer?.nativeElement;
-            if (container && this.HTMLReportObjectName) {
+            if (container && this.ComponentObjectName) {
                 // First set the HTML as is, with script tags
                 container.innerHTML = this.HTMLReport; 
                 
@@ -141,16 +150,23 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
     }
 
     protected finishHTMLInitialization() {
+        // TODO: The new Skip component architecture uses a completely different approach
+        // for bootstrapping generated code. The old init function approach is deprecated.
+        // This needs to be reimplemented to support the new React-based component architecture.
+        
+        throw new Error('Skip component initialization not yet implemented for new component architecture. This functionality needs to be updated to support the new React-based approach.');
+        
+        /* Commented out old implementation for reference:
         try {
-            if (!this.HTMLReportObjectName) {
-                console.warn('HTML Report object name not provided');
+            if (!this.ComponentObjectName) {
+                console.warn('Component object name not provided');
                 return;
             }
     
-            const reportObject = (window as any)[this.HTMLReportObjectName];
+            const componentObject = (window as any)[this.ComponentObjectName];
             const md = new Metadata();
-            if (reportObject && this.SkipData?.dataContext) {
-                const castedObject = reportObject as SkipHTMLReportObject;
+            if (componentObject && this.SkipData?.dataContext) {
+                const castedObject = componentObject as SkipComponentObject;
                 const userState = {};
     
                 const flattenedDataContext: Record<string, any> = {};
@@ -162,27 +178,30 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                 }
     
 
-                const params: SkipHTMLReportInitParams = {
+                const params: SkipComponentInitParams = {
                     data: flattenedDataContext,
                     userState: userState,
                     utilities: this.SetupUtilities(md),
                     styles: this.SetupStyles(),
                     callbacks: this.SetupCallbacks(),
                 };
+                
+                // Old approach with init function no longer applies
             }
             else {
-                console.warn(`HTML Report object ${this.HTMLReportObjectName} not found or invalid data context`);
+                console.warn(`Component object ${this.ComponentObjectName} not found or invalid data context`);
             }
         }
         catch (e) {
             LogError(e);
-        }         
+        }
+        */
     }
 
-    protected SetupUtilities(md: Metadata): SkipHTMLReportUtilities {
+    protected SetupUtilities(md: Metadata): SkipComponentUtilities {
         const rv = new RunView();
         const rq = new RunQuery();
-        const u: SkipHTMLReportUtilities = {
+        const u: SkipComponentUtilities = {
             md: this.CreateSimpleMetadata(md),
             rv: this.CreateSimpleRunView(rv),
             rq: this.CreateSimpleRunQuery(rq)
@@ -196,7 +215,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         }
     }
 
-    protected SetupStyles(): SkipHTMLReportBaseStyles{
+    protected SetupStyles(): SkipComponentStyles{
         // This is a placeholder for any styles that the HTML report might need
         // For now, we just return an empty object
         return {
@@ -274,15 +293,15 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
         }
     }
 
-    protected SetupCallbacks(): SkipHTMLReportCallbacks {
-        const cb: SkipHTMLReportCallbacks = {
+    protected SetupCallbacks(): SkipComponentCallbacks {
+        const cb: SkipComponentCallbacks = {
             RefreshData: () => {
-                // this is a callback function that can be called from the HTML report to refresh data
-                console.log('HTML Report requested data refresh');
+                // this is a callback function that can be called from the component to refresh data
+                console.log('Component requested data refresh');
                 // need to implement this
             },
             OpenEntityRecord: (entityName: string, key: CompositeKey) => {
-                // this is a callback function that can be called from the HTML report to open an entity record
+                // this is a callback function that can be called from the component to open an entity record
                 if (entityName) {
                     // bubble this up to our parent component as we don't directly open records in this component
                     const md = new Metadata();
@@ -302,13 +321,13 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit {
                 }
             },
             UpdateUserState: (userState: any) => {
-                // this is a callback function that can be called from the HTML report to update user state
-                console.log('HTML Report updated user state:', userState);
+                // this is a callback function that can be called from the component to update user state
+                console.log('Component updated user state:', userState);
                 // need to implement this
             },
             NotifyEvent: (eventName: string, eventData: any) => {
-                // this is a callback function that can be called from the HTML report to notify an event
-                console.log(`HTML Report raised event: ${eventName} notified with data:`, eventData);
+                // this is a callback function that can be called from the component to notify an event
+                console.log(`Component raised event: ${eventName} notified with data:`, eventData);
             }
         };
         return cb;

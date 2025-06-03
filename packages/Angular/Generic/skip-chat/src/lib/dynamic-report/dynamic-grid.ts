@@ -198,7 +198,7 @@ export class SkipDynamicGridComponent implements AfterViewInit {
 
         if (entityName) {
           const filterSQL = drillDown.filters.map(f => {
-            const val = rowSelected[f.reportFieldName];
+            const val = rowSelected[f.componentFieldName];
             const isDateValue = val instanceof Date;
             const isNumberValue = !isNaN(parseFloat(val));
             const needsQuotes = isDateValue ? true : (isNumberValue ? false : true);
@@ -230,7 +230,10 @@ export class SkipDynamicGridComponent implements AfterViewInit {
       // before we call the save, we need to let Angular do its thing that will result in the kendoExcelExport component binding properly to
       // the exportColumns and exportData arrays. So we wait for the next tick before we call save()
       setTimeout(() => {
-        this.kendoExcelExport!.fileName = (this.SkipData?.reportTitle || 'Report_Grid_Export') + '.xlsx';
+        // support the legacy report title as old conversation details had a reportTitle property
+        // but the new SkipData object has a title property, so favor the title property
+        const title = this.SkipData?.title || this.SkipData?.reportTitle || 'Report_Grid_Export';
+        this.kendoExcelExport!.fileName = `${title}.xlsx`;
         this.kendoExcelExport!.save();
         this.notificationService.CreateSimpleNotification("Excel Export Complete", 'success', 2000)
       }, 100);
