@@ -21,7 +21,8 @@
     "@memberjunction/ai": "2.47.0",
     "@memberjunction/aiengine": "2.47.0",
     "@memberjunction/ai-prompts": "2.47.0",
-    "@memberjunction/templates": "2.47.0",
+    "@memberjunction/actions": "2.47.0",
+    "@memberjunction/actions-base": "2.47.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },
