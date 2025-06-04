@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, SimpleChanges } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
 import { SkipReactComponentHost } from './skip-react-component-host';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption } from '@memberjunction/skip-types';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
@@ -143,7 +143,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
             if (d.componentOptions && d.componentOptions.length > 0) {
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
-                this.HTMLReport = component.option.componentCode;
+                this.HTMLReport = BuildSkipComponentCompleteCode(component.option);
                 this.ComponentObjectName = component.option.componentName;
             } else {
                 // Fallback for old format
@@ -180,7 +180,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
             const bestOption = this.reportOptions[0];
-            this.HTMLReport = bestOption.option.componentCode;
+            this.HTMLReport = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
         } 
     }
