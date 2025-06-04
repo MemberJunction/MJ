@@ -216,9 +216,9 @@ export class SkipReactComponentHost {
       // Create the component factory function from the transpiled code
       // Evaluate the code with React and styles in scope to get the createComponent function
       const createComponent = new Function(
-        'React', 'styles',
+        'React', 'styles', 'console',
         `${transpiledCode}; return createComponent;`
-      )(this.React, styles);
+      )(this.React, styles, console);
 
       // Debug: Check if React hooks are available
       if (!this.React.useState) {
@@ -281,6 +281,18 @@ export class SkipReactComponentHost {
       callbacks: callbacks,
       styles: styles
     };
+    
+    // Debug: Log the data being passed to the component
+    console.log('=== SkipReactComponentHost: Rendering component ===');
+    console.log('Data:', componentProps.data);
+    console.log('User state:', componentProps.userState);
+    if (componentProps.data?.data_item_0) {
+      console.log('First entity:', componentProps.data.data_item_0[0]);
+      console.log('Entity count:', componentProps.data.data_item_0.length);
+    } else {
+      console.log('WARNING: No data_item_0 found in data');
+    }
+    console.log('=== End component props debug ===');
 
     if (!this.reactRoot && this.componentContainer) {
       this.reactRoot = this.ReactDOM.createRoot(this.componentContainer);
@@ -397,6 +409,7 @@ export class SkipReactComponentHost {
       ...baseStyles
     };
   }
+
 
 
   /**
