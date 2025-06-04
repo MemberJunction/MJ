@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, SimpleChanges } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
 import { SkipReactComponentHost } from './skip-react-component-host';
 import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
@@ -15,6 +15,7 @@ import { DrillDownInfo } from '../drill-down-info';
             [data]="reportOptionLabels" 
             [textField]="'text'" 
             [valueField]="'value'" 
+            [valuePrimitive]="true"
             [(ngModel)]="selectedReportOptionIndex"
             (ngModelChange)="onReportOptionChange($event)"
             [style.min-width.px]="150">
@@ -58,7 +59,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
         NotifyEvent: (eventName: string, eventData: any) => this.handleNotifyEvent(eventName, eventData)
     };
 
-    constructor(private cdr: ChangeDetectorRef) { }
+    constructor() { }
 
     /**
      * Gets the currently selected report option
@@ -199,7 +200,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
                     componentCode: this.HTMLReport,
                     container: container,
                     callbacks: this.callbacks,
-                    initialState: data,
+                    data: data,
                     utilities: this.SetupUtilities(md),
                     styles: this.SetupStyles()
                 });
