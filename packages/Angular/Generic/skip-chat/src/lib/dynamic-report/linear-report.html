@@ -1,64 +1,69 @@
 @if(SkipData) {
-    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 
+    <div style="display: flex; flex-direction: column; height: 100%;">
+        <!-- Report Controls -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center;">
+                @if (matchingReportID !== null) {
+                    <div class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
+                }
+            </div>
+            @if (ShowCreateReportButton && !matchingReportID) {
+                <button kendoButton 
                         (click)="askCreateReport()" 
                         [disabled]="IsCreatingReport"
-                        class="create-report-button">Create Report</button>
-    <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
-    <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
-        <h3>Explanation</h3>
-        <div>
-            {{SkipData.userExplanation || 'No Explanation Provided'}}
+                        class="create-report-button">
+                    <span class="fa-solid fa-file-plus"></span>
+                    Create Report
+                </button>
+            }
         </div>
+
+        <!-- Main Report Content -->
+        <div style="flex: 1; min-height: 0; overflow: hidden;">
+            @if(IsChart) {
+                <skip-dynamic-chart 
+                    #theChart 
+                    [AutoResizeChart]="false"
+                    [SkipData]="SkipData" 
+                    style="display:block; height: 100%;">
+                </skip-dynamic-chart>
+            }
+            @else if(IsTable) {
+                <skip-dynamic-grid  
+                    [GridHeight]="300"
+                    #theGrid 
+                    [SkipData]="SkipData"
+                    style="display:block; height: 100%;">
+                </skip-dynamic-grid>  
+            }
+            @else if (IsHTML) {
+                <skip-dynamic-html-report
+                    #theHtmlReport 
+                    [SkipData]="SkipData"
+                    (DrillDownEvent)="HandleDrillDownEvent($event)"
+                    style="display:block; height: 100%;">
+                </skip-dynamic-html-report>  
+            }
+        </div>
+
+        <!-- Bottom Bar with Explanation -->
+        @if (SkipData.userExplanation || SkipData.analysis) {
+            <div style="border-top: 1px solid #e0e0e0; padding: 10px; background-color: #f8f9fa; display: flex; gap: 20px; align-items: flex-start;">
+                @if (SkipData.userExplanation) {
+                    <div style="flex: 1;">
+                        <strong style="color: #666;">Explanation:</strong>
+                        <span style="margin-left: 5px;">{{SkipData.userExplanation}}</span>
+                    </div>
+                }
+                @if (SkipData.analysis) {
+                    <div style="flex: 1;">
+                        <strong style="color: #666;">Analysis:</strong>
+                        <markdown [data]="SkipData.analysis" style="display: inline; margin-left: 5px;"></markdown>
+                    </div>
+                }
+            </div>
+        }
     </div>
-
-    <!-- Report Type is next -->
-    @if(IsChart) {
-      <kendo-expansionpanel
-        [title]="'Chart'"
-        [expanded]="ExpandAll"
-        >
-        <skip-dynamic-chart 
-            #theChart 
-            [AutoResizeChart]="false"
-            [SkipData]="SkipData" 
-            style="display:block;">
-        </skip-dynamic-chart>
-      </kendo-expansionpanel>                     
-    }
-    @else if(IsTable) {
-      <kendo-expansionpanel
-          [title]="'Table'"
-          [expanded]="ExpandAll"
-          mjSkipResize="true"
-      >
-          <skip-dynamic-grid  
-                          [GridHeight]="300"
-                          #theGrid [SkipData]="SkipData"
-                          ></skip-dynamic-grid>  
-      </kendo-expansionpanel>
-    }
-    @else if (IsHTML) {
-      <kendo-expansionpanel
-          [title]="'Report'"
-          [expanded]="ExpandAll"
-          mjSkipResize="true"
-      >
-          <skip-dynamic-html-report
-                          #theHtmlReport 
-                          [SkipData]="SkipData"
-                          (DrillDownEvent)="HandleDrillDownEvent($event)"
-                          ></skip-dynamic-html-report>  
-      </kendo-expansionpanel>
-    }
-
-    @if (SkipData.analysis) {
-      <kendo-expansionpanel
-          [title]="'Analysis'"
-          [expanded]="ExpandAll"
-          >
-          <markdown [data]="SkipData.analysis"></markdown>
-      </kendo-expansionpanel>                     
-    }
     
   @if (confirmCreateReportDialogOpen) {
     <kendo-dialog
