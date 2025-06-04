@@ -162,107 +162,88 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
  
 
     public get Agents(): AIAgentEntityExtended[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agents;
+        return this._agents;
     }
 
     public GetAgentByName(agentName: string): AIAgentEntityExtended {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
+        return this._agents.find(a => a.Name.trim().toLowerCase() === agentName.trim().toLowerCase());
     }
 
     public get AgentActions(): AIAgentActionEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentActions;
+        return this._agentActions;
     }
 
     public get AgentModels(): AIAgentModelEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentModels;
+        return this._agentModels;
     }
 
     public get AgentNoteTypes(): AIAgentNoteTypeEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentNoteTypes;
+        return this._agentNoteTypes;
     }
 
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase())?.ID;
+        return this._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase())?.ID;
     }
 
     public get AgentNotes(): AIAgentNoteEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._agentNotes;
+        return this._agentNotes;
     }
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._vendorTypeDefinitions;
+        return this._vendorTypeDefinitions;
     }
 
     public get Prompts(): AIPromptEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._prompts;
+        return this._prompts;
     }
 
     public get PromptModels(): AIPromptModelEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._promptModels;
+        return this._promptModels;
     }
 
     public get PromptTypes(): AIPromptTypeEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._promptTypes;
+        return this._promptTypes;
     }
 
     public get PromptCategories(): AIPromptCategoryEntityExtended[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._promptCategories;
+        return this._promptCategories;
     }
 
     public get Models(): AIModelEntityExtended[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._models;
+        return this._models;
     }
 
     public get ArtifactTypes(): ArtifactTypeEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._artifactTypes;
+        return this._artifactTypes;
     }
 
     /**
      * Convenience method to return only the Language Models. Loads the metadata if not already loaded.
      */
     public get LanguageModels(): AIModelEntityExtended[] {  
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm');
+        return this._models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm');
     }
 
     public get VectorDatabases(): VectorDatabaseEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._vectorDatabases;
+        return this._vectorDatabases;
     }
 
     public get ModelActions(): AIModelActionEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._modelActions;
+        return this._modelActions;
     }
 
     /**
      * @deprecated AI Actions are deprecated.  
      */
     public get Actions(): AIActionEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._actions;
+        return this._actions;
     }
 
     /**
      * @deprecated Entity AI Actions are deprecated. 
      */
     public get EntityAIActions(): EntityAIActionEntity[] {
-        AIEngineBase.checkMetadataLoaded();
-        return AIEngineBase.Instance._entityActions;
+        return this._entityActions;
     }
 
     public static get Instance(): AIEngineBase {
