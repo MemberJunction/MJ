@@ -11,6 +11,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 
 import { DataContextComponent } from './ng-data-context.component';
 import { DataContextDialogComponent } from './ng-data-context-dialog.component';
+import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
 @NgModule({
   declarations: [
@@ -24,7 +25,8 @@ import { DataContextDialogComponent } from './ng-data-context-dialog.component';
     DialogsModule,
     ButtonsModule,
     IndicatorsModule,
-    InputsModule
+    InputsModule,
+    ContainerDirectivesModule
   ],
   exports: [
     DataContextComponent,

@@ -3,6 +3,14 @@ import { SkipComponentCallbacks, SkipComponentStyles, SkipComponentUtilities } f
 import { LogError } from '@memberjunction/core';
 
 /**
+ * CDN URLs for external dependencies
+ * These can be configured via environment variables in the future
+ */
+const BABEL_STANDALONE_CDN_URL = 'https://unpkg.com/@babel/standalone@7/babel.min.js';
+const REACT_CDN_URL = 'https://unpkg.com/react@18/umd/react.production.min.js';
+const REACT_DOM_CDN_URL = 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';
+
+/**
  * Configuration for a React component to be hosted in Angular
  */
 export interface ReactComponentConfig {
@@ -11,6 +19,9 @@ export interface ReactComponentConfig {
   
   /** The HTML container element where the React component will be rendered */
   container: HTMLElement;
+  
+  /** Data to pass to the component (e.g., entities, lists, etc.) */
+  data?: any;
   
   /** Callbacks for component lifecycle events */
   callbacks?: SkipComponentCallbacks;
@@ -88,6 +99,9 @@ export class SkipReactComponentHost {
   private React: any;
   private ReactDOM: any;
 
+  // Static style system that's created once and reused
+  private static cachedStyleSystem: SkipComponentStyles | null = null;
+
   constructor(private config: ReactComponentConfig) {
     this.loadReactLibraries();
   }
@@ -125,26 +139,95 @@ export class SkipReactComponentHost {
   }
 
   /**
+   * Generic method to load a script from CDN
+   */
+  private loadScriptFromCDN(url: string, globalName: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Check if already loaded
+      if ((window as any)[globalName]) {
+        resolve((window as any)[globalName]);
+        return;
+      }
+
+      // Check if script is already in DOM
+      const existingScript = document.querySelector(`script[src="${url}"]`);
+      if (existingScript) {
+        // Wait for it to load
+        existingScript.addEventListener('load', () => {
+          if ((window as any)[globalName]) {
+            resolve((window as any)[globalName]);
+          } else {
+            reject(new Error(`${globalName} not found after script load`));
+          }
+        });
+        return;
+      }
+
+      // Load new script
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = () => {
+        if ((window as any)[globalName]) {
+          resolve((window as any)[globalName]);
+        } else {
+          reject(new Error(`${globalName} not found after script load`));
+        }
+      };
+      script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Load Babel standalone for JSX transpilation
+   */
+  private async loadBabel(): Promise<any> {
+    return this.loadScriptFromCDN(BABEL_STANDALONE_CDN_URL, 'Babel');
+  }
+
+  /**
    * Initialize the React component
    */
   public async initialize(): Promise<void> {
     try {
       await this.loadReactLibraries();
+      const Babel = await this.loadBabel();
 
       // Create utility functions
       const createStateUpdater = this.createStateUpdaterFunction();
       const createStandardEventHandler = this.createStandardEventHandlerFunction();
       
-      // Create the style system globally available
-      const styles = this.config.styles || this.createStyleSystem();
-      (window as any).styles = styles;
+      // Get or create the style system
+      const styles = this.getOrCreateStyleSystem();
 
-      // Create the component factory function from the generated code
-      const componentFactory = new Function(
-        'React', 'ReactDOM', 'useState', 'useEffect', 'useCallback',
-        'createStateUpdater', 'createStandardEventHandler',
-        `${this.config.componentCode}; return createComponent;`
-      )(
+      // Transpile the JSX code to JavaScript
+      let transpiledCode: string;
+      try {
+        const result = Babel.transform(this.config.componentCode, {
+          presets: ['react'],
+          filename: 'component.jsx'
+        });
+        transpiledCode = result.code;
+      } catch (transpileError) {
+        LogError(`Failed to transpile JSX: ${transpileError}`);
+        throw new Error(`JSX transpilation failed: ${transpileError}`);
+      }
+
+      // Create the component factory function from the transpiled code
+      // Evaluate the code with React and styles in scope to get the createComponent function
+      const createComponent = new Function(
+        'React', 'styles', 'console',
+        `${transpiledCode}; return createComponent;`
+      )(this.React, styles, console);
+
+      // Debug: Check if React hooks are available
+      if (!this.React.useState) {
+        console.error('React.useState is not available. React object:', this.React);
+        throw new Error('React hooks are not available. Make sure React is loaded correctly.');
+      }
+
+      // Then call createComponent with all the necessary dependencies
+      this.componentResult = createComponent(
         this.React, 
         this.ReactDOM, 
         this.React.useState, 
@@ -153,9 +236,6 @@ export class SkipReactComponentHost {
         createStateUpdater,
         createStandardEventHandler
       );
-
-      // Execute the factory to get the component object
-      this.componentResult = componentFactory();
 
       // Create container if it doesn't exist
       if (!this.componentContainer) {
@@ -188,13 +268,31 @@ export class SkipReactComponentHost {
     }
 
     const Component = this.componentResult.component;
+    
+    // Ensure utilities and callbacks are available
+    const utilities = this.config.utilities || {};
+    const callbacks = this.createCallbacks();
+    const styles = this.getOrCreateStyleSystem();
+    
     const componentProps = {
-      data: this.currentState,
-      utilities: this.config.utilities || {},
-      userState: {},
-      callbacks: this.createCallbacks(),
-      styles: this.config.styles || this.createStyleSystem()
+      data: this.config.data || {},
+      utilities: utilities,
+      userState: this.currentState,
+      callbacks: callbacks,
+      styles: styles
     };
+    
+    // Debug: Log the data being passed to the component
+    console.log('=== SkipReactComponentHost: Rendering component ===');
+    console.log('Data:', componentProps.data);
+    console.log('User state:', componentProps.userState);
+    if (componentProps.data?.data_item_0) {
+      console.log('First entity:', componentProps.data.data_item_0[0]);
+      console.log('Entity count:', componentProps.data.data_item_0.length);
+    } else {
+      console.log('WARNING: No data_item_0 found in data');
+    }
+    console.log('=== End component props debug ===');
 
     if (!this.reactRoot && this.componentContainer) {
       this.reactRoot = this.ReactDOM.createRoot(this.componentContainer);
@@ -220,18 +318,28 @@ export class SkipReactComponentHost {
   }
 
   /**
+   * Update the component data
+   */
+  public updateData(newData: any): void {
+    this.config.data = {
+      ...this.config.data,
+      ...newData
+    };
+    
+    // Re-render with new data
+    this.render();
+  }
+
+  /**
    * Refresh the component with optional new data
    */
   public refresh(newData?: any): void {
     if (newData) {
-      this.currentState = {
-        ...this.currentState,
-        ...newData
-      };
+      this.updateData(newData);
     }
     
     if (this.componentResult && this.componentResult.refresh) {
-      this.componentResult.refresh(this.currentState);
+      this.componentResult.refresh(this.config.data);
     } else {
       // Re-render the component if no refresh method is available
       this.render();
@@ -278,6 +386,21 @@ export class SkipReactComponentHost {
   }
 
   /**
+   * Get or create the cached style system
+   */
+  private getOrCreateStyleSystem(): SkipComponentStyles {
+    // If we already have a cached style system, return it
+    if (SkipReactComponentHost.cachedStyleSystem) {
+      return SkipReactComponentHost.cachedStyleSystem;
+    }
+
+    // Create the style system by merging defaults with config
+    SkipReactComponentHost.cachedStyleSystem = this.createStyleSystem(this.config.styles);
+    
+    return SkipReactComponentHost.cachedStyleSystem;
+  }
+
+  /**
    * Create a unified style system for the component
    */
   private createStyleSystem(baseStyles?: Partial<SkipComponentStyles>): SkipComponentStyles {
@@ -287,19 +410,27 @@ export class SkipReactComponentHost {
     };
   }
 
+
+
   /**
    * Create the state updater utility function for the React component
    */
   private createStateUpdaterFunction(): any {
-    return function createStateUpdater(statePath: string) {
-      return (updater: any) => {
-        // This is simplified - in the full implementation, you'd handle nested paths
-        if (typeof updater === 'function') {
-          // Handle function updater
-          console.log(`State update for ${statePath} with function updater`);
+    return function createStateUpdater(statePath: string, parentStateUpdater: Function) {
+      return (componentStateUpdate: any) => {
+        if (!statePath) {
+          // Root component - call container callback directly
+          parentStateUpdater(componentStateUpdate);
         } else {
-          // Handle direct value update
-          console.log(`State update for ${statePath}:`, updater);
+          // Sub-component - bubble up with path context
+          const pathParts = statePath.split('.');
+          const componentKey = pathParts[pathParts.length - 1];
+          
+          parentStateUpdater({
+            [componentKey]: {
+              ...componentStateUpdate
+            }
+          });
         }
       };
     };
@@ -309,27 +440,24 @@ export class SkipReactComponentHost {
    * Create the standard event handler utility function for the React component
    */
   private createStandardEventHandlerFunction(): any {
-    const callbacks = this.config.callbacks;
-    
-    return function createStandardEventHandler(eventType: string, componentPath: string) {
-      return (event: any, data?: any) => {
-        console.log(`Event ${eventType} from ${componentPath}:`, data || event);
-        
-        // Route events to appropriate callbacks
-        switch (eventType) {
-          case 'navigation':
-            if (callbacks?.OpenEntityRecord && data?.entity && data?.key) {
-              callbacks.OpenEntityRecord(data.entity, data.key);
+    return function createStandardEventHandler(updateUserState: Function, callbacksParam: any) {
+      return (event: any) => {
+        switch (event.type) {
+          case 'stateChanged':
+            if (event.payload?.statePath && event.payload?.newState) {
+              const update: any = {};
+              update[event.payload.statePath] = event.payload.newState;
+              updateUserState(update);
             }
             break;
-          case 'refresh':
-            if (callbacks?.RefreshData) {
-              callbacks.RefreshData();
+          case 'navigate':
+            if (callbacksParam?.OpenEntityRecord && event.payload) {
+              callbacksParam.OpenEntityRecord(event.payload.entityName, event.payload.key);
             }
             break;
           default:
-            if (callbacks?.NotifyEvent) {
-              callbacks.NotifyEvent(eventType, data || event);
+            if (callbacksParam?.NotifyEvent) {
+              callbacksParam.NotifyEvent(event.type, event.payload);
             }
         }
       };

@@ -23,6 +23,12 @@
                     class="window-action-btn">
                     <i class="fa-solid" [class.fa-maximize]="!isMaximized" [class.fa-compress]="isMaximized"></i>
                 </button>
+                <button 
+                    (click)="closeDialog()"
+                    title="Close"
+                    class="window-action-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
         </kendo-window-titlebar>
         

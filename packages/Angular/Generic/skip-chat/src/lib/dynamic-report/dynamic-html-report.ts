@@ -1,39 +1,185 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, ViewChildren, QueryList, SimpleChanges } from '@angular/core';
 import { CompositeKey, KeyValuePair, LogError, Metadata, RunQuery, RunQueryParams, RunView, RunViewParams } from '@memberjunction/core';
 import { SkipReactComponentHost } from './skip-react-component-host';
-import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption } from '@memberjunction/skip-types';
+import { MapEntityInfoToSkipEntityInfo, SimpleMetadata, SimpleRunQuery, SimpleRunView, SkipAPIAnalysisCompleteResponse, SkipComponentStyles, SkipComponentCallbacks, SkipComponentUtilities, SkipComponentOption, BuildSkipComponentCompleteCode } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 
 @Component({
   selector: 'skip-dynamic-html-report',
   template: `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-      @if (ShowReportOptionsToggle && reportOptions.length > 1) {
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <label for="reportOption">Report Option:</label>
-          <kendo-dropdownlist 
-            [data]="reportOptionLabels" 
-            [textField]="'text'" 
-            [valueField]="'value'" 
-            [(ngModel)]="selectedReportOptionIndex"
-            (ngModelChange)="onReportOptionChange($event)"
-            [style.min-width.px]="150">
-          </kendo-dropdownlist>
+    @if (reportOptions.length > 1) {
+      <!-- Multiple options: show tabs -->
+      <kendo-tabstrip 
+        (tabSelect)="onTabSelect($event)"
+        [keepTabContent]="true"
+        style="height: 100%; display: flex; flex-direction: column;">
+        @for (option of reportOptions; track option; let i = $index) {
+          <kendo-tabstrip-tab [title]="getTabTitle(i)" [selected]="i === selectedReportOptionIndex">
+            <ng-template kendoTabContent>
+              <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
+                <!-- Print button for this tab -->
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                  <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
+                    <span class="fa-solid fa-print"></span>
+                    Print Report
+                  </button>
+                </div>
+                
+                <!-- React component container -->
+                <div #htmlContainer [attr.data-tab-index]="i" 
+                     style="flex: 1; position: relative; min-height: 0;">
+                  <!-- Content will be rendered here by React host -->
+                </div>
+              </div>
+            </ng-template>
+          </kendo-tabstrip-tab>
+        }
+      </kendo-tabstrip>
+    } @else {
+      <!-- Single option: no tabs needed -->
+      <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
+        <!-- Print button -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+          <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
+            <span class="fa-solid fa-print"></span>
+            Print Report
+          </button>
         </div>
-      }
-      
-      <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
-        <span class="fa-regular fa-image"></span>
-        Print 
-      </button>
-    </div>
+        
+        <!-- React component container -->
+        <div #htmlContainer style="flex: 1; position: relative; min-height: 0;">
+          <!-- Content will be rendered here by React host -->
+        </div>
+      </div>
+    }
     
-    <div #htmlContainer mjFillContainer>
-        <!-- this is where we'll dynamically inject the HTML that was AI generated -->
-    </div>
+    <!-- Error overlay (shown on top of content when needed) -->
+    @if (currentError) {
+      <div style="position: absolute; 
+                  top: 0; 
+                  left: 0; 
+                  right: 0; 
+                  bottom: 0; 
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  background: rgba(255, 255, 255, 0.95);
+                  z-index: 1000;">
+        <div style="width: 90%; 
+                    max-width: 600px; 
+                    max-height: 80vh;
+                    background-color: #f8f9fa; 
+                    border: 2px solid #dc3545; 
+                    border-radius: 8px; 
+                    padding: 20px;
+                    overflow-y: auto;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <div style="position: relative;">
+            <button kendoButton (click)="copyErrorToClipboard()" 
+                    style="position: absolute; top: 0; right: 0;">
+              <span class="fa-solid fa-copy"></span>
+              Copy Error Details
+            </button>
+            <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px;">
+              <span class="fa-solid fa-exclamation-triangle"></span>
+              Component Rendering Error
+            </h3>
+          </div>
+          <p style="margin-bottom: 10px;">
+            The selected component option could not be rendered due to the following error:
+          </p>
+          <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                      border-radius: 4px; padding: 15px; margin-bottom: 15px;
+                      font-family: 'Courier New', monospace; font-size: 14px;">
+            <strong>Error Type:</strong> {{ currentError.type }}<br>
+            <strong>Details:</strong> {{ currentError.message }}
+            @if (currentError.technicalDetails) {
+              <details style="margin-top: 10px;">
+                <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                <pre style="margin-top: 10px; white-space: pre-wrap; word-break: break-word;">{{ currentError.technicalDetails }}</pre>
+              </details>
+            }
+          </div>
+          <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                      border-radius: 4px; padding: 15px; margin-bottom: 15px;">
+            <strong>What to do:</strong>
+            <ol style="margin: 10px 0 0 20px; padding: 0;">
+              <li>Try selecting a different report option from the dropdown above</li>
+              <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+              <li>Contact your IT department if the issue persists</li>
+            </ol>
+          </div>
+          <button kendoButton (click)="retryCurrentOption()">
+            <span class="fa-solid fa-rotate"></span>
+            Retry
+          </button>
+        </div>
+      </div>
+    }
   `,
   styles: [`
-    button { margin-top: 5px; margin-bottom: 5px;}
+    :host {
+      display: block;
+      height: 100%;
+      position: relative;
+    }
+    
+    button { 
+      margin-top: 5px; 
+      margin-bottom: 5px;
+    }
+    
+    /* Tab styling */
+    .k-tabstrip {
+      border: none;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .k-tabstrip-items {
+      background: transparent;
+      border-bottom: 2px solid #e0e0e0;
+      flex: 0 0 auto;
+    }
+    
+    .k-tabstrip-items-wrapper {
+      height: 100%;
+    }
+    
+    .k-content {
+      flex: 1;
+      overflow: hidden;
+      padding: 0;
+    }
+    
+    .k-tabstrip .k-item {
+      margin-right: 4px;
+      border: none;
+      background: transparent;
+    }
+    
+    .k-tabstrip .k-item.k-selected {
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-bottom: 1px solid #ffffff;
+      margin-bottom: -1px;
+    }
+    
+    .k-tabstrip .k-link {
+      padding: 8px 16px;
+      font-weight: 500;
+    }
+    
+    .k-tabstrip .k-item.k-selected .k-link {
+      color: #2196f3;
+    }
+    
+    /* React host container */
+    .react-host-container {
+      width: 100%;
+      height: 100%;
+    }
   `] 
 })
 export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy {
@@ -43,14 +189,17 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     @Input() ShowReportOptionsToggle: boolean = true;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
-    @ViewChild('htmlContainer', { static: false }) htmlContainer!: ElementRef;
+    @ViewChildren('htmlContainer') htmlContainers!: QueryList<ElementRef>;
 
     // Properties for handling multiple report options
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
-    public reportOptionLabels: { text: string; value: number }[] = [];
+    public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
     
-    private reactHost: SkipReactComponentHost | null = null;
+    // Cache for React component hosts - lazy loaded per option
+    private reactHostCache: Map<number, SkipReactComponentHost> = new Map();
+    private currentHostIndex: number | null = null;
+    
     private callbacks: SkipComponentCallbacks = {
         RefreshData: () => this.handleRefreshData(),
         OpenEntityRecord: (entityName: string, key: CompositeKey) => this.handleOpenEntityRecord(entityName, key),
@@ -58,7 +207,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
         NotifyEvent: (eventName: string, eventData: any) => this.handleNotifyEvent(eventName, eventData)
     };
 
-    constructor(private cdr: ChangeDetectorRef) { }
+    constructor() { }
 
     /**
      * Gets the currently selected report option
@@ -67,6 +216,36 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
         return this.reportOptions.length > this.selectedReportOptionIndex 
             ? this.reportOptions[this.selectedReportOptionIndex] 
             : null;
+    }
+
+    /**
+     * Get tab title for a specific option index
+     */
+    public getTabTitle(index: number): string {
+        const option = this.reportOptions[index];
+        if (!option) return `Option ${index + 1}`;
+        
+        // Create a more descriptive title
+        const rankText = option.AIRank ? ` (Rank ${option.AIRank})` : '';
+        const componentType = option.option.componentType || 'Report';
+        
+        // Add an icon based on rank
+        let icon = '';
+        if (option.AIRank === 1) {
+            icon = '⭐ '; // Star for best option
+        } else if (option.AIRank && option.AIRank <= 3) {
+            icon = '✓ '; // Check for good options
+        }
+        
+        return `${icon}${componentType} ${index + 1}${rankText}`;
+    }
+
+    /**
+     * Handles when the user selects a tab
+     */
+    public onTabSelect(event: any): void {
+        const selectedIndex = event.index;
+        this.onReportOptionChange(selectedIndex);
     }
 
     /**
@@ -84,51 +263,143 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
      */
     private updateCurrentReport(): void {
         const selectedOption = this.selectedReportOption;
-        if (selectedOption) {
-            this.HTMLReport = selectedOption.option.componentCode;
-            this.ComponentObjectName = selectedOption.option.componentName;
-            
-            // Clear the container before loading new report
-            const container = this.htmlContainer?.nativeElement;
-            if (container) {
-                container.innerHTML = '';
-            }
-            
-            this.invokeHTMLInitFunction();
+        if (!selectedOption) return;
+
+        // Clear any previous error
+        this.currentError = null;
+
+        // Update the component info
+        this.HTMLReport = BuildSkipComponentCompleteCode(selectedOption.option);
+        this.ComponentObjectName = selectedOption.option.componentName;
+        
+        // Simply create or reuse the React host for this option
+        // The tab component handles visibility automatically
+        if (!this.reactHostCache.has(this.selectedReportOptionIndex)) {
+            // Create a new host for this option
+            this.createReactHostForOption(this.selectedReportOptionIndex);
         }
+        
+        this.currentHostIndex = this.selectedReportOptionIndex;
     }
   
     public async PrintReport() {
-        if (this.reactHost) {
-            this.reactHost.print();
+        const currentHost = this.getCurrentReactHost();
+        if (currentHost) {
+            currentHost.print();
         } else {
             window.print();
         }
+    }
+
+    /**
+     * Copy error details to clipboard for user to send back to Skip
+     */
+    public copyErrorToClipboard(): void {
+        if (!this.currentError) return;
+        
+        const errorText = `Skip Component Error:
+Type: ${this.currentError.type}
+Message: ${this.currentError.message}
+${this.currentError.technicalDetails ? `\nTechnical Details:\n${this.currentError.technicalDetails}` : ''}
+
+Component Option: ${this.selectedReportOptionIndex + 1}
+Component Name: ${this.ComponentObjectName || 'Unknown'}`;
+
+        navigator.clipboard.writeText(errorText).then(() => {
+            alert('Error details copied to clipboard. You can paste this in the Skip chat to get help.');
+        }).catch(err => {
+            console.error('Failed to copy to clipboard:', err);
+        });
+    }
+
+    /**
+     * Get the container element for a specific option index
+     */
+    private getContainerForOption(optionIndex: number): HTMLElement | null {
+        if (!this.htmlContainers || this.htmlContainers.length === 0) {
+            return null;
+        }
+        
+        if (this.reportOptions.length === 1) {
+            // Single option - use the only container
+            return this.htmlContainers.first?.nativeElement || null;
+        } else {
+            // Multiple options - find container by data-tab-index
+            const container = this.htmlContainers.find(ref => 
+                ref.nativeElement.getAttribute('data-tab-index') === optionIndex.toString()
+            );
+            return container?.nativeElement || null;
+        }
+    }
+
+    /**
+     * Retry loading the current option
+     */
+    public retryCurrentOption(): void {
+        // Clear the error
+        this.currentError = null;
+        
+        // Remove the cached host for this option to force recreation
+        if (this.reactHostCache.has(this.selectedReportOptionIndex)) {
+            const host = this.reactHostCache.get(this.selectedReportOptionIndex);
+            if (host) {
+                host.destroy();
+            }
+            this.reactHostCache.delete(this.selectedReportOptionIndex);
+        }
+        
+        // Try creating it again
+        this.createReactHostForOption(this.selectedReportOptionIndex);
     }
 
     ngAfterViewInit() {
         if (this.SkipData) {
             this.setupReportOptions(this.SkipData);
         }
-        if (this.HTMLReport) {
-            const container = this.htmlContainer?.nativeElement;
-            if (container) {
-                if (this.ComponentObjectName && this.SkipData) {
-                    this.invokeHTMLInitFunction();
-                }
+        
+        // Wait for ViewChildren to be available
+        setTimeout(() => {
+            if (this.HTMLReport && this.ComponentObjectName && this.SkipData) {
+                // Create the initial React host for the first option
+                this.createReactHostForOption(this.selectedReportOptionIndex);
             }
-        }
+        });
     }
     
     ngOnDestroy(): void {
-        this.cleanupReactComponent();
+        // Clean up all cached React hosts
+        this.reactHostCache.forEach(host => {
+            try {
+                host.destroy();
+            } catch (e) {
+                console.error('Error destroying React host:', e);
+            }
+        });
+        this.reactHostCache.clear();
     }
     
     ngOnChanges(changes: SimpleChanges): void {
-        if (this.reactHost && changes['SkipData'] && !changes['SkipData'].firstChange) {
-            // Update React component state when Angular data changes
-            this.reactHost.updateState('data', this.getFlattenedDataContext());
+        if (changes['SkipData'] && !changes['SkipData'].firstChange) {
+            // Update all cached React components with new data
+            const newData = this.getFlattenedDataContext();
+            this.reactHostCache.forEach(host => {
+                try {
+                    host.updateState('data', newData);
+                } catch (e) {
+                    console.error('Error updating React host data:', e);
+                }
+            });
         }
+    }
+
+    /**
+     * Get the currently active React host
+     */
+    private getCurrentReactHost(): SkipReactComponentHost | null {
+        if (this.currentHostIndex !== null && this.reactHostCache.has(this.currentHostIndex)) {
+            return this.reactHostCache.get(this.currentHostIndex) || null;
+        }
+        return null;
     }
   
     private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
@@ -143,7 +414,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
             if (d.componentOptions && d.componentOptions.length > 0) {
                 // Use the first component option (or the highest ranked one)
                 const component = d.componentOptions[0];
-                this.HTMLReport = component.option.componentCode;
+                this.HTMLReport = BuildSkipComponentCompleteCode(component.option);
                 this.ComponentObjectName = component.option.componentName;
             } else {
                 // Fallback for old format
@@ -152,8 +423,8 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
             }
         }
         if (d && hadData) {
-            // normally the initFunction is called in ngAfterViewInit, but here the data changed so we need to call it again
-            this.invokeHTMLInitFunction();
+            // Update the current display with new data
+            this.updateCurrentReport();
         }
     }
 
@@ -171,57 +442,94 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
                 return rankA - rankB;
             });
             
-            // Create dropdown labels
-            this.reportOptionLabels = this.reportOptions.map((option, index) => ({
-                text: `Option ${index + 1}${option.AIRank ? ` (Rank ${option.AIRank})` : ''}`,
-                value: index
-            }));
-            
             // Select the best option (first in sorted array)
             this.selectedReportOptionIndex = 0;
             const bestOption = this.reportOptions[0];
-            this.HTMLReport = bestOption.option.componentCode;
+            this.HTMLReport = BuildSkipComponentCompleteCode(bestOption.option);
             this.ComponentObjectName = bestOption.option.componentName;
         } 
     }
 
-    private async invokeHTMLInitFunction() {
+    /**
+     * Create a React host for a specific option index
+     */
+    private async createReactHostForOption(optionIndex: number): Promise<void> {
+        const option = this.reportOptions[optionIndex];
+        if (!option) return;
+
+        const container = this.getContainerForOption(optionIndex);
+        if (!container) return;
+
         try {
-            const container = this.htmlContainer?.nativeElement;
-            if (container && this.ComponentObjectName && this.HTMLReport) {
-                this.cleanupReactComponent();
+            const componentCode = BuildSkipComponentCompleteCode(option.option);
+
+            // Check for unresolved placeholders in the code
+            if (componentCode.includes('<<') && componentCode.includes('>>')) {
+                const placeholderMatch = componentCode.match(/<<([^>]+)>>/);
+                const placeholderName = placeholderMatch ? placeholderMatch[1] : 'Unknown';
                 
-                const md = new Metadata();
-                const data = this.getFlattenedDataContext();
-                
-                // Create the React component host
-                this.reactHost = new SkipReactComponentHost({
-                    componentCode: this.HTMLReport,
-                    container: container,
-                    callbacks: this.callbacks,
-                    initialState: data,
-                    utilities: this.SetupUtilities(md),
-                    styles: this.SetupStyles()
-                });
-                
-                // Initialize and render the React component
-                this.reactHost.initialize();
+                this.currentError = {
+                    type: 'Incomplete Component',
+                    message: `This component option contains unresolved placeholders (${placeholderName}). The component generation was not completed successfully.`,
+                    technicalDetails: `The component code contains placeholder tokens that should have been replaced with actual implementations. This typically happens when the AI generation process was interrupted or encountered an error.\n\nPlaceholder found: <<${placeholderName}>>`
+                };
+                return;
             }
-            else {
-                console.warn('HTML Report container not found or component code not provided');
+            
+            const md = new Metadata();
+            const data = this.getFlattenedDataContext();
+            
+            // Create the React component host directly in the tab container
+            const reactHost = new SkipReactComponentHost({
+                componentCode: componentCode,
+                container: container,
+                callbacks: this.callbacks,
+                data: data,
+                utilities: this.SetupUtilities(md),
+                styles: this.SetupStyles()
+            });
+            
+            // Initialize and render the React component
+            await reactHost.initialize();
+            
+            // Cache the host
+            this.reactHostCache.set(optionIndex, reactHost);
+            
+            // Update current index if this is the selected option
+            if (optionIndex === this.selectedReportOptionIndex) {
+                this.currentHostIndex = optionIndex;
             }
         }
-        catch (e) {
+        catch (e: any) {
+            console.error('Error creating React host:', e);
+            
+            // Determine the type of error and create a user-friendly message
+            let errorType = 'Component Initialization Error';
+            let errorMessage = 'Failed to initialize the React component.';
+            let technicalDetails = e.toString();
+            
+            if (e.message?.includes('JSX transpilation failed')) {
+                errorType = 'Code Compilation Error';
+                errorMessage = 'The component code could not be compiled. This usually indicates a syntax error in the generated code.';
+                technicalDetails = e.message;
+            } else if (e.message?.includes('is not defined')) {
+                errorType = 'Missing Dependency';
+                errorMessage = 'The component is trying to use a feature or library that is not available.';
+            } else if (e.message?.includes('Cannot read properties')) {
+                errorType = 'Property Access Error';
+                errorMessage = 'The component is trying to access data that doesn\'t exist. This often happens when property names don\'t match the data structure.';
+            }
+            
+            this.currentError = {
+                type: errorType,
+                message: errorMessage,
+                technicalDetails: technicalDetails + '\n\nComponent Option: ' + (optionIndex + 1) + '\nComponent Name: ' + option.option.componentName
+            };
+            
             LogError(e);
         }
     }
 
-    private cleanupReactComponent(): void {
-        if (this.reactHost) {
-            this.reactHost.destroy();
-            this.reactHost = null;
-        }
-    }
     
     private getFlattenedDataContext(): Record<string, any> {
         const flattenedDataContext: Record<string, any> = {};
@@ -408,11 +716,12 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     }
 
     public async refreshReport(data?: any): Promise<void> {
-        if (this.reactHost) {
-            this.reactHost.refresh(data);
+        const currentHost = this.getCurrentReactHost();
+        if (currentHost) {
+            currentHost.refresh(data);
         } else {
-            // If no React host is available, re-render the report
-            this.invokeHTMLInitFunction();
+            // If no React host is available, create one for the current option
+            this.createReactHostForOption(this.selectedReportOptionIndex);
         }
     }
 }
