@@ -16,13 +16,28 @@ import { DrillDownInfo } from '../drill-down-info';
         @for (option of reportOptions; track option; let i = $index) {
           <kendo-tabstrip-tab [title]="getTabTitle(i)" [selected]="i === selectedReportOptionIndex">
             <ng-template kendoTabContent>
-              <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-                <!-- Print button for this tab -->
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-                  <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
-                    <span class="fa-solid fa-print"></span>
-                    Print Report
-                  </button>
+              <div style="height: 100%; display: flex; flex-direction: column;">
+                <!-- Tab Action Bar -->
+                <div class="tab-action-bar">
+                  <div class="tab-actions-left">
+                    <!-- Space for future left-aligned actions -->
+                  </div>
+                  <div class="tab-actions-right">
+                    <button class="tab-action-button create-button" 
+                            *ngIf="ShowCreateReportButton && !matchingReportID"
+                            (click)="createReportForOption(i)"
+                            [disabled]="isCreatingReport">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>Create Report</span>
+                    </button>
+                    <button class="tab-action-button print-button" 
+                            *ngIf="ShowPrintReport" 
+                            (click)="PrintReport()"
+                            title="Print Report">
+                      <i class="fa-solid fa-print"></i>
+                      <span>Print Report</span>
+                    </button>
+                  </div>
                 </div>
                 
                 <!-- React component container -->
@@ -37,13 +52,28 @@ import { DrillDownInfo } from '../drill-down-info';
       </kendo-tabstrip>
     } @else {
       <!-- Single option: no tabs needed -->
-      <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-        <!-- Print button -->
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-          <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
-            <span class="fa-solid fa-print"></span>
-            Print Report
-          </button>
+      <div style="height: 100%; display: flex; flex-direction: column;">
+        <!-- Tab Action Bar -->
+        <div class="tab-action-bar">
+          <div class="tab-actions-left">
+            <!-- Space for future left-aligned actions -->
+          </div>
+          <div class="tab-actions-right">
+            <button class="tab-action-button create-button" 
+                    *ngIf="ShowCreateReportButton && !matchingReportID"
+                    (click)="createReportForOption(0)"
+                    [disabled]="isCreatingReport">
+              <i class="fa-solid fa-plus"></i>
+              <span>Create Report</span>
+            </button>
+            <button class="tab-action-button print-button" 
+                    *ngIf="ShowPrintReport" 
+                    (click)="PrintReport()"
+                    title="Print Report">
+              <i class="fa-solid fa-print"></i>
+              <span>Print Report</span>
+            </button>
+          </div>
         </div>
         
         <!-- React component container -->
@@ -124,9 +154,66 @@ import { DrillDownInfo } from '../drill-down-info';
       position: relative;
     }
     
-    button { 
-      margin-top: 5px; 
-      margin-bottom: 5px;
+    /* Tab Action Bar */
+    .tab-action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background-color: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .tab-actions-left,
+    .tab-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* Tab Action Buttons */
+    .tab-action-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background-color: transparent;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    
+    .tab-action-button:hover:not(:disabled) {
+      background-color: #f5f5f5;
+      border-color: #d0d0d0;
+    }
+    
+    .tab-action-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .tab-action-button i {
+      font-size: 12px;
+    }
+    
+    /* Both buttons use the same white/secondary style */
+    .tab-action-button.create-button,
+    .tab-action-button.print-button {
+      background-color: white;
+      color: #333;
+      border-color: #e0e0e0;
+    }
+    
+    .tab-action-button.create-button:hover:not(:disabled),
+    .tab-action-button.print-button:hover:not(:disabled) {
+      background-color: #f5f5f5;
+      border-color: #d0d0d0;
     }
     
     /* Tab styling */
@@ -138,9 +225,10 @@ import { DrillDownInfo } from '../drill-down-info';
     }
     
     .k-tabstrip-items {
-      background: transparent;
-      border-bottom: 2px solid #e0e0e0;
+      background: #ffffff;
+      border-bottom: 1px solid #e0e0e0;
       flex: 0 0 auto;
+      padding: 0 16px;
     }
     
     .k-tabstrip-items-wrapper {
@@ -157,22 +245,31 @@ import { DrillDownInfo } from '../drill-down-info';
       margin-right: 4px;
       border: none;
       background: transparent;
-    }
-    
-    .k-tabstrip .k-item.k-selected {
-      background: #ffffff;
-      border: 1px solid #e0e0e0;
-      border-bottom: 1px solid #ffffff;
+      border-bottom: 2px solid transparent;
       margin-bottom: -1px;
     }
     
+    .k-tabstrip .k-item.k-selected {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid #1976d2;
+    }
+    
     .k-tabstrip .k-link {
-      padding: 8px 16px;
+      padding: 12px 16px;
       font-weight: 500;
+      font-size: 13px;
+      color: #666;
+      transition: color 0.15s ease;
+    }
+    
+    .k-tabstrip .k-item:hover .k-link {
+      color: #333;
     }
     
     .k-tabstrip .k-item.k-selected .k-link {
-      color: #2196f3;
+      color: #1976d2;
+      font-weight: 600;
     }
     
     /* React host container */
@@ -187,7 +284,10 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     @Input() ComponentObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
     @Input() ShowReportOptionsToggle: boolean = true;
+    @Input() ShowCreateReportButton: boolean = false;
+    @Input() matchingReportID: string | null = null;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
+    @Output() CreateReportRequested = new EventEmitter<number>();
 
     @ViewChildren('htmlContainer') htmlContainers!: QueryList<ElementRef>;
 
@@ -195,6 +295,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
+    public isCreatingReport: boolean = false;
     
     // Cache for React component hosts - lazy loaded per option
     private reactHostCache: Map<number, SkipReactComponentHost> = new Map();
@@ -350,6 +451,15 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         
         // Try creating it again
         this.createReactHostForOption(this.selectedReportOptionIndex);
+    }
+
+    /**
+     * Handle create report request for a specific option
+     */
+    public createReportForOption(optionIndex: number): void {
+        this.isCreatingReport = true;
+        // Emit the event with the option index so the parent can handle it
+        this.CreateReportRequested.emit(optionIndex);
     }
 
     ngAfterViewInit() {

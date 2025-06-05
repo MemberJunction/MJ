@@ -1,22 +1,13 @@
 @if(SkipData) {
     <div style="display: flex; flex-direction: column; height: 100%;">
         <!-- Report Controls -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div style="display: flex; align-items: center;">
-                @if (matchingReportID !== null) {
+        @if (matchingReportID !== null) {
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center;">
                     <div class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}}</div>
-                }
+                </div>
             </div>
-            @if (ShowCreateReportButton && !matchingReportID) {
-                <button kendoButton 
-                        (click)="askCreateReport()" 
-                        [disabled]="IsCreatingReport"
-                        class="create-report-button">
-                    <span class="fa-solid fa-file-plus"></span>
-                    Create Report
-                </button>
-            }
-        </div>
+        }
 
         <!-- Main Report Content -->
         <div style="flex: 1; min-height: 0; overflow: hidden;">
@@ -40,7 +31,10 @@
                 <skip-dynamic-html-report
                     #theHtmlReport 
                     [SkipData]="SkipData"
+                    [ShowCreateReportButton]="ShowCreateReportButton"
+                    [matchingReportID]="matchingReportID"
                     (DrillDownEvent)="HandleDrillDownEvent($event)"
+                    (CreateReportRequested)="handleCreateReportForOption($event)"
                     style="display:block; height: 100%;">
                 </skip-dynamic-html-report>  
             }
