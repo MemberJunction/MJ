@@ -6,14 +6,13 @@
 }
 
 .skip-artifact-viewer-header {
-  padding: 12px 20px;
+  padding: 8px 16px;
   background-color: #ffffff;
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   z-index: 10;
-  min-height: 56px;
 }
 
 .version-selector {
@@ -49,7 +48,6 @@
 }
 
 .report-container {
-  margin-top: 16px;
   width: 100%;
 }
 
@@ -62,13 +60,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .version-info {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -88,12 +86,12 @@
 
 .artifact-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #1a1a1a;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   line-height: 1.2;
   flex: 1;
   min-width: 0;
@@ -236,8 +234,8 @@
 .skip-artifact-viewer-content {
   flex: 1;
   overflow: auto;
-  padding: 20px;
-  background-color: #f8f9fa;
+  padding: 0;
+  background-color: #ffffff;
 }
 
 .content-container {
