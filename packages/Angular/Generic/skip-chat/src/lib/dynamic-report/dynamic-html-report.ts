@@ -50,6 +50,70 @@ import { DrillDownInfo } from '../drill-down-info';
                 <div #htmlContainer [attr.data-tab-index]="i" 
                      style="flex: 1; position: relative; min-height: 0;">
                   <!-- Content will be rendered here by React host -->
+                  
+                  <!-- Error overlay for this tab (shown on top of content when needed) -->
+                  @if (currentError && selectedReportOptionIndex === i) {
+                    <div style="position: absolute; 
+                                top: 0; 
+                                left: 0; 
+                                right: 0; 
+                                bottom: 0; 
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                background: rgba(255, 255, 255, 0.95);
+                                z-index: 10;">
+                      <div style="width: 90%; 
+                                  max-width: 600px; 
+                                  max-height: 80%;
+                                  background-color: #f8f9fa; 
+                                  border: 2px solid #dc3545; 
+                                  border-radius: 8px; 
+                                  padding: 20px;
+                                  overflow-y: auto;
+                                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <div style="position: relative;">
+                          <button kendoButton (click)="copyErrorToClipboard()" 
+                                  style="position: absolute; top: 0; right: 0; font-size: 12px;">
+                            <span class="fa-solid fa-copy"></span>
+                            Copy Error Details
+                          </button>
+                          <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
+                            <span class="fa-solid fa-exclamation-triangle"></span>
+                            Component Rendering Error
+                          </h3>
+                        </div>
+                        <p style="margin-bottom: 10px; font-size: 14px;">
+                          The selected component option could not be rendered due to the following error:
+                        </p>
+                        <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                                    border-radius: 4px; padding: 12px; margin-bottom: 12px;
+                                    font-family: 'Courier New', monospace; font-size: 12px;">
+                          <strong>Error Type:</strong> {{ currentError.type }}<br>
+                          <strong>Details:</strong> {{ currentError.message }}
+                          @if (currentError.technicalDetails) {
+                            <details style="margin-top: 8px;">
+                              <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                              <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ currentError.technicalDetails }}</pre>
+                            </details>
+                          }
+                        </div>
+                        <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                                    border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                          <strong style="font-size: 14px;">What to do:</strong>
+                          <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                            <li>Try selecting a different report option from the tabs above</li>
+                            <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+                            <li>Contact your IT department if the issue persists</li>
+                          </ol>
+                        </div>
+                        <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
+                          <span class="fa-solid fa-rotate"></span>
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
             </ng-template>
@@ -85,73 +149,73 @@ import { DrillDownInfo } from '../drill-down-info';
         <!-- React component container -->
         <div #htmlContainer style="flex: 1; position: relative; min-height: 0;">
           <!-- Content will be rendered here by React host -->
+          
+          <!-- Error overlay (shown on top of content when needed) -->
+          @if (currentError) {
+            <div style="position: absolute; 
+                        top: 0; 
+                        left: 0; 
+                        right: 0; 
+                        bottom: 0; 
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: rgba(255, 255, 255, 0.95);
+                        z-index: 10;">
+              <div style="width: 90%; 
+                          max-width: 600px; 
+                          max-height: 80%;
+                          background-color: #f8f9fa; 
+                          border: 2px solid #dc3545; 
+                          border-radius: 8px; 
+                          padding: 20px;
+                          overflow-y: auto;
+                          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <div style="position: relative;">
+                  <button kendoButton (click)="copyErrorToClipboard()" 
+                          style="position: absolute; top: 0; right: 0; font-size: 12px;">
+                    <span class="fa-solid fa-copy"></span>
+                    Copy Error Details
+                  </button>
+                  <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
+                    <span class="fa-solid fa-exclamation-triangle"></span>
+                    Component Rendering Error
+                  </h3>
+                </div>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  The selected component option could not be rendered due to the following error:
+                </p>
+                <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                            border-radius: 4px; padding: 12px; margin-bottom: 12px;
+                            font-family: 'Courier New', monospace; font-size: 12px;">
+                  <strong>Error Type:</strong> {{ currentError.type }}<br>
+                  <strong>Details:</strong> {{ currentError.message }}
+                  @if (currentError.technicalDetails) {
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                      <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ currentError.technicalDetails }}</pre>
+                    </details>
+                  }
+                </div>
+                <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                            border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                  <strong style="font-size: 14px;">What to do:</strong>
+                  <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                    <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+                    <li>Contact your IT department if the issue persists</li>
+                  </ol>
+                </div>
+                <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
+                  <span class="fa-solid fa-rotate"></span>
+                  Retry
+                </button>
+              </div>
+            </div>
+          }
         </div>
       </div>
     }
     
-    <!-- Error overlay (shown on top of content when needed) -->
-    @if (currentError) {
-      <div style="position: absolute; 
-                  top: 0; 
-                  left: 0; 
-                  right: 0; 
-                  bottom: 0; 
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  background: rgba(255, 255, 255, 0.95);
-                  z-index: 1000;">
-        <div style="width: 90%; 
-                    max-width: 600px; 
-                    max-height: 80vh;
-                    background-color: #f8f9fa; 
-                    border: 2px solid #dc3545; 
-                    border-radius: 8px; 
-                    padding: 20px;
-                    overflow-y: auto;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-          <div style="position: relative;">
-            <button kendoButton (click)="copyErrorToClipboard()" 
-                    style="position: absolute; top: 0; right: 0;">
-              <span class="fa-solid fa-copy"></span>
-              Copy Error Details
-            </button>
-            <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px;">
-              <span class="fa-solid fa-exclamation-triangle"></span>
-              Component Rendering Error
-            </h3>
-          </div>
-          <p style="margin-bottom: 10px;">
-            The selected component option could not be rendered due to the following error:
-          </p>
-          <div style="background-color: #fff; border: 1px solid #dee2e6; 
-                      border-radius: 4px; padding: 15px; margin-bottom: 15px;
-                      font-family: 'Courier New', monospace; font-size: 14px;">
-            <strong>Error Type:</strong> {{ currentError.type }}<br>
-            <strong>Details:</strong> {{ currentError.message }}
-            @if (currentError.technicalDetails) {
-              <details style="margin-top: 10px;">
-                <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
-                <pre style="margin-top: 10px; white-space: pre-wrap; word-break: break-word;">{{ currentError.technicalDetails }}</pre>
-              </details>
-            }
-          </div>
-          <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
-                      border-radius: 4px; padding: 15px; margin-bottom: 15px;">
-            <strong>What to do:</strong>
-            <ol style="margin: 10px 0 0 20px; padding: 0;">
-              <li>Try selecting a different report option from the dropdown above</li>
-              <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
-              <li>Contact your IT department if the issue persists</li>
-            </ol>
-          </div>
-          <button kendoButton (click)="retryCurrentOption()">
-            <span class="fa-solid fa-rotate"></span>
-            Retry
-          </button>
-        </div>
-      </div>
-    }
   `,
   styles: [`
     :host {
@@ -165,7 +229,7 @@ import { DrillDownInfo } from '../drill-down-info';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
+      padding: 8px 12px;
       background-color: #fafafa;
       border-bottom: 1px solid #e0e0e0;
     }
