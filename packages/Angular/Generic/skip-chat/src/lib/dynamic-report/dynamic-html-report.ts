@@ -14,7 +14,13 @@ import { DrillDownInfo } from '../drill-down-info';
         [keepTabContent]="true"
         style="height: 100%; display: flex; flex-direction: column;">
         @for (option of reportOptions; track option; let i = $index) {
-          <kendo-tabstrip-tab [title]="getTabTitle(i)" [selected]="i === selectedReportOptionIndex">
+          <kendo-tabstrip-tab [selected]="i === selectedReportOptionIndex">
+            <ng-template kendoTabTitle>
+              @if (isTopRanked(i)) {
+                <i class="fa-solid fa-star star-icon"></i>
+              }
+              {{ getTabTitle(i) }}
+            </ng-template>
             <ng-template kendoTabContent>
               <div style="height: 100%; display: flex; flex-direction: column;">
                 <!-- Tab Action Bar -->
@@ -217,59 +223,113 @@ import { DrillDownInfo } from '../drill-down-info';
     }
     
     /* Tab styling */
-    .k-tabstrip {
+    ::ng-deep .k-tabstrip {
       border: none;
       height: 100%;
       display: flex;
       flex-direction: column;
+      margin: 10px 5px 5px 5px;
     }
     
-    .k-tabstrip-items {
-      background: #ffffff;
-      border-bottom: 1px solid #e0e0e0;
+    ::ng-deep .k-tabstrip-items {
+      background: #f8f9fa;
+      border: none;
+      border-radius: 8px 8px 0 0;
       flex: 0 0 auto;
-      padding: 0 16px;
+      padding: 8px 12px 0 12px;
+      gap: 4px;
+      display: flex;
     }
     
-    .k-tabstrip-items-wrapper {
+    ::ng-deep .k-tabstrip-items-wrapper {
       height: 100%;
     }
     
-    .k-content {
+    ::ng-deep .k-content {
       flex: 1;
       overflow: hidden;
       padding: 0;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
     }
     
-    .k-tabstrip .k-item {
-      margin-right: 4px;
+    ::ng-deep .k-tabstrip .k-item {
+      margin-right: 2px;
       border: none;
       background: transparent;
-      border-bottom: 2px solid transparent;
+      border-radius: 6px 6px 0 0;
+      padding: 2px;
+      transition: all 0.2s ease;
+    }
+    
+    ::ng-deep .k-tabstrip .k-item.k-selected {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-bottom: 1px solid white;
       margin-bottom: -1px;
+      z-index: 1;
     }
     
-    .k-tabstrip .k-item.k-selected {
-      background: transparent;
-      border: none;
-      border-bottom: 2px solid #1976d2;
-    }
-    
-    .k-tabstrip .k-link {
-      padding: 12px 16px;
+    ::ng-deep .k-tabstrip .k-link {
+      padding: 8px 16px;
       font-weight: 500;
       font-size: 13px;
       color: #666;
-      transition: color 0.15s ease;
+      transition: all 0.15s ease;
+      border-radius: 4px 4px 0 0;
+      background: transparent;
+      border: none;
+      text-transform: lowercase;
     }
     
-    .k-tabstrip .k-item:hover .k-link {
+    ::ng-deep .k-tabstrip .k-link:first-letter {
+      text-transform: uppercase;
+    }
+    
+    ::ng-deep .k-tabstrip .k-item:hover:not(.k-selected) .k-link {
       color: #333;
+      background: rgba(0, 0, 0, 0.04);
     }
     
-    .k-tabstrip .k-item.k-selected .k-link {
+    ::ng-deep .k-tabstrip .k-item.k-selected .k-link {
       color: #1976d2;
       font-weight: 600;
+      background: white;
+    }
+    
+    /* Star icon styling */
+    ::ng-deep .k-tabstrip .k-link .star-icon {
+      display: inline-block;
+      margin-right: 4px;
+      color: #ffd700;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    
+    /* Hide default Kendo tab styling */
+    ::ng-deep .k-tabstrip-items::before,
+    ::ng-deep .k-tabstrip-items::after {
+      display: none;
+    }
+    
+    ::ng-deep .k-tabstrip .k-item::before,
+    ::ng-deep .k-tabstrip .k-item::after {
+      display: none;
+    }
+    
+    /* Remove focus outline */
+    ::ng-deep .k-tabstrip .k-link:focus {
+      outline: none;
+      box-shadow: none;
+    }
+    
+    /* Make sure tab content fills available space */
+    ::ng-deep .k-tabstrip .k-content.k-state-active {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     
     /* React host container */
@@ -324,21 +384,19 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
      */
     public getTabTitle(index: number): string {
         const option = this.reportOptions[index];
-        if (!option) return `Option ${index + 1}`;
+        if (!option) return `report ${index + 1}`;
         
-        // Create a more descriptive title
-        const rankText = option.AIRank ? ` (Rank ${option.AIRank})` : '';
-        const componentType = option.option.componentType || 'Report';
+        const componentType = option.option.componentType || 'report';
         
-        // Add an icon based on rank
-        let icon = '';
-        if (option.AIRank === 1) {
-            icon = '⭐ '; // Star for best option
-        } else if (option.AIRank && option.AIRank <= 3) {
-            icon = '✓ '; // Check for good options
-        }
-        
-        return `${icon}${componentType} ${index + 1}${rankText}`;
+        return `${componentType} ${index + 1}`;
+    }
+    
+    /**
+     * Check if this option is the AI's top recommendation
+     */
+    public isTopRanked(index: number): boolean {
+        const option = this.reportOptions[index];
+        return option?.AIRank === 1;
     }
 
     /**
