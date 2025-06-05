@@ -56,6 +56,10 @@
                 [Mode]="EnableArtifactSplitView && selectedArtifact ? 'BothSides' : 'LeftOnly'" 
                 [SplitRatio]="SplitRatio" 
                 (SplitRatioChanged)="onSplitRatioChanged($event)"
+                [RightPanelHeaderContent]="artifactHeaderInfo"
+                [VersionList]="artifactVersionList"
+                [SelectedVersionId]="selectedArtifactVersionId"
+                (VersionSelected)="onArtifactVersionSelected($event)"
                 mjFillContainer [fillWidth]="false" [fillHeight]="true">
                 
                 <!-- Left Panel (Chat) -->
@@ -146,7 +150,8 @@
                         [DataContext]="DataContext"
                         (NavigateToMatchingReport)="NavigateToMatchingReport.emit($event)"
                         (NewReportCreated)="NewReportCreated.emit($event)"
-                        (DrillDownEvent)="DrillDownEvent.emit($event)">
+                        (DrillDownEvent)="DrillDownEvent.emit($event)"
+                        (ArtifactInfoChanged)="onArtifactInfoChanged($event)">
                     </skip-artifact-viewer>
                 </div>
             </skip-split-panel>

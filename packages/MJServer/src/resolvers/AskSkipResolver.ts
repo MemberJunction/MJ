@@ -1660,7 +1660,8 @@ cycle.`);
   
       // get the list of entities
       const entities = md.Entities.filter((e) => {
-        if (e.SchemaName !== mj_core_schema || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
+        if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
+            skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
           const sd = e.ScopeDefault?.trim();
           if (sd && sd.length > 0) {
             const scopes = sd.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];

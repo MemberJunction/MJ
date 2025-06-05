@@ -14,21 +14,106 @@ import { DrillDownInfo } from '../drill-down-info';
         [keepTabContent]="true"
         style="height: 100%; display: flex; flex-direction: column;">
         @for (option of reportOptions; track option; let i = $index) {
-          <kendo-tabstrip-tab [title]="getTabTitle(i)" [selected]="i === selectedReportOptionIndex">
+          <kendo-tabstrip-tab [selected]="i === selectedReportOptionIndex">
+            <ng-template kendoTabTitle>
+              @if (isTopRanked(i)) {
+                <i class="fa-solid fa-star star-icon"></i>
+              }
+              {{ getTabTitle(i) }}
+            </ng-template>
             <ng-template kendoTabContent>
-              <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-                <!-- Print button for this tab -->
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-                  <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
-                    <span class="fa-solid fa-print"></span>
-                    Print Report
-                  </button>
+              <div style="height: 100%; display: flex; flex-direction: column;">
+                <!-- Tab Action Bar -->
+                <div class="tab-action-bar">
+                  <div class="tab-actions-left">
+                    <!-- Space for future left-aligned actions -->
+                  </div>
+                  <div class="tab-actions-right">
+                    <button class="tab-action-button create-button" 
+                            *ngIf="ShowCreateReportButton && !matchingReportID"
+                            (click)="createReportForOption(i)"
+                            [disabled]="isCreatingReport">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>Create Report</span>
+                    </button>
+                    <button class="tab-action-button print-button" 
+                            *ngIf="ShowPrintReport" 
+                            (click)="PrintReport()"
+                            title="Print Report">
+                      <i class="fa-solid fa-print"></i>
+                      <span>Print Report</span>
+                    </button>
+                  </div>
                 </div>
                 
                 <!-- React component container -->
                 <div #htmlContainer [attr.data-tab-index]="i" 
                      style="flex: 1; position: relative; min-height: 0;">
                   <!-- Content will be rendered here by React host -->
+                  
+                  <!-- Error overlay for this tab (shown on top of content when needed) -->
+                  @if (currentError && selectedReportOptionIndex === i) {
+                    <div style="top: 0; 
+                                left: 0; 
+                                right: 0; 
+                                bottom: 0; 
+                                display: flex;
+                                align-items: flex-start;
+                                justify-content: center;
+                                padding-top: 20px;
+                                background: rgba(255, 255, 255, 0.95);
+                                z-index: 10;">
+                      <div style="width: 90%; 
+                                  max-width: 600px; 
+                                  height: 500px;
+                                  background-color: #f8f9fa; 
+                                  border: 2px solid #dc3545; 
+                                  border-radius: 8px; 
+                                  padding: 20px;
+                                  overflow-y: auto;
+                                  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <div style="position: relative;">
+                          <button kendoButton (click)="copyErrorToClipboard()" 
+                                  style="position: absolute; top: 0; right: 0; font-size: 12px;">
+                            <span class="fa-solid fa-copy"></span>
+                            Copy Error Details
+                          </button>
+                          <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
+                            <span class="fa-solid fa-exclamation-triangle"></span>
+                            Component Rendering Error
+                          </h3>
+                        </div>
+                        <p style="margin-bottom: 10px; font-size: 14px;">
+                          The selected component option could not be rendered due to the following error:
+                        </p>
+                        <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                                    border-radius: 4px; padding: 12px; margin-bottom: 12px;
+                                    font-family: 'Courier New', monospace; font-size: 12px;">
+                          <strong>Error Type:</strong> {{ currentError.type }}<br>
+                          <strong>Details:</strong> {{ currentError.message }}
+                          @if (currentError.technicalDetails) {
+                            <details style="margin-top: 8px;">
+                              <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                              <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ currentError.technicalDetails }}</pre>
+                            </details>
+                          }
+                        </div>
+                        <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                                    border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                          <strong style="font-size: 14px;">What to do:</strong>
+                          <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                            <li>Try selecting a different report option from the tabs above</li>
+                            <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+                            <li>Contact your IT department if the issue persists</li>
+                          </ol>
+                        </div>
+                        <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
+                          <span class="fa-solid fa-rotate"></span>
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  }
                 </div>
               </div>
             </ng-template>
@@ -37,85 +122,101 @@ import { DrillDownInfo } from '../drill-down-info';
       </kendo-tabstrip>
     } @else {
       <!-- Single option: no tabs needed -->
-      <div style="height: 100%; display: flex; flex-direction: column; padding: 20px;">
-        <!-- Print button -->
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-          <button kendoButton *ngIf="ShowPrintReport" (click)="PrintReport()">
-            <span class="fa-solid fa-print"></span>
-            Print Report
-          </button>
+      <div style="height: 100%; display: flex; flex-direction: column;">
+        <!-- Tab Action Bar -->
+        <div class="tab-action-bar">
+          <div class="tab-actions-left">
+            <!-- Space for future left-aligned actions -->
+          </div>
+          <div class="tab-actions-right">
+            <button class="tab-action-button create-button" 
+                    *ngIf="ShowCreateReportButton && !matchingReportID"
+                    (click)="createReportForOption(0)"
+                    [disabled]="isCreatingReport">
+              <i class="fa-solid fa-plus"></i>
+              <span>Create Report</span>
+            </button>
+            <button class="tab-action-button print-button" 
+                    *ngIf="ShowPrintReport" 
+                    (click)="PrintReport()"
+                    title="Print Report">
+              <i class="fa-solid fa-print"></i>
+              <span>Print Report</span>
+            </button>
+          </div>
         </div>
         
         <!-- React component container -->
         <div #htmlContainer style="flex: 1; position: relative; min-height: 0;">
           <!-- Content will be rendered here by React host -->
+          
+          <!-- Error overlay (shown on top of content when needed) -->
+          @if (currentError) {
+            <div style="position: absolute; 
+                        top: 0; 
+                        left: 0; 
+                        right: 0; 
+                        bottom: 0; 
+                        display: flex;
+                        align-items: flex-start;
+                        justify-content: center;
+                        padding-top: 20px;
+                        background: rgba(255, 255, 255, 0.95);
+                        z-index: 10;">
+              <div style="width: 90%; 
+                          max-width: 600px; 
+                          height: 500px;
+                          background-color: #f8f9fa; 
+                          border: 2px solid #dc3545; 
+                          border-radius: 8px; 
+                          padding: 20px;
+                          overflow-y: auto;
+                          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <div style="position: relative;">
+                  <button kendoButton (click)="copyErrorToClipboard()" 
+                          style="position: absolute; top: 0; right: 0; font-size: 12px;">
+                    <span class="fa-solid fa-copy"></span>
+                    Copy Error Details
+                  </button>
+                  <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px; font-size: 18px;">
+                    <span class="fa-solid fa-exclamation-triangle"></span>
+                    Component Rendering Error
+                  </h3>
+                </div>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  The selected component option could not be rendered due to the following error:
+                </p>
+                <div style="background-color: #fff; border: 1px solid #dee2e6; 
+                            border-radius: 4px; padding: 12px; margin-bottom: 12px;
+                            font-family: 'Courier New', monospace; font-size: 12px;">
+                  <strong>Error Type:</strong> {{ currentError.type }}<br>
+                  <strong>Details:</strong> {{ currentError.message }}
+                  @if (currentError.technicalDetails) {
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
+                      <pre style="margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-size: 11px;">{{ currentError.technicalDetails }}</pre>
+                    </details>
+                  }
+                </div>
+                <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
+                            border-radius: 4px; padding: 12px; margin-bottom: 12px;">
+                  <strong style="font-size: 14px;">What to do:</strong>
+                  <ol style="margin: 8px 0 0 20px; padding: 0; font-size: 13px;">
+                    <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
+                    <li>Contact your IT department if the issue persists</li>
+                  </ol>
+                </div>
+                <button kendoButton (click)="retryCurrentOption()" style="font-size: 13px;">
+                  <span class="fa-solid fa-rotate"></span>
+                  Retry
+                </button>
+              </div>
+            </div>
+          }
         </div>
       </div>
     }
     
-    <!-- Error overlay (shown on top of content when needed) -->
-    @if (currentError) {
-      <div style="position: absolute; 
-                  top: 0; 
-                  left: 0; 
-                  right: 0; 
-                  bottom: 0; 
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  background: rgba(255, 255, 255, 0.95);
-                  z-index: 1000;">
-        <div style="width: 90%; 
-                    max-width: 600px; 
-                    max-height: 80vh;
-                    background-color: #f8f9fa; 
-                    border: 2px solid #dc3545; 
-                    border-radius: 8px; 
-                    padding: 20px;
-                    overflow-y: auto;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-          <div style="position: relative;">
-            <button kendoButton (click)="copyErrorToClipboard()" 
-                    style="position: absolute; top: 0; right: 0;">
-              <span class="fa-solid fa-copy"></span>
-              Copy Error Details
-            </button>
-            <h3 style="color: #dc3545; margin-top: 0; margin-right: 150px;">
-              <span class="fa-solid fa-exclamation-triangle"></span>
-              Component Rendering Error
-            </h3>
-          </div>
-          <p style="margin-bottom: 10px;">
-            The selected component option could not be rendered due to the following error:
-          </p>
-          <div style="background-color: #fff; border: 1px solid #dee2e6; 
-                      border-radius: 4px; padding: 15px; margin-bottom: 15px;
-                      font-family: 'Courier New', monospace; font-size: 14px;">
-            <strong>Error Type:</strong> {{ currentError.type }}<br>
-            <strong>Details:</strong> {{ currentError.message }}
-            @if (currentError.technicalDetails) {
-              <details style="margin-top: 10px;">
-                <summary style="cursor: pointer; color: #0056b3;">Technical Details (click to expand)</summary>
-                <pre style="margin-top: 10px; white-space: pre-wrap; word-break: break-word;">{{ currentError.technicalDetails }}</pre>
-              </details>
-            }
-          </div>
-          <div style="background-color: #e7f3ff; border: 1px solid #b3d9ff; 
-                      border-radius: 4px; padding: 15px; margin-bottom: 15px;">
-            <strong>What to do:</strong>
-            <ol style="margin: 10px 0 0 20px; padding: 0;">
-              <li>Try selecting a different report option from the dropdown above</li>
-              <li>Copy the error details and send them back to Skip in the chat to get a corrected version</li>
-              <li>Contact your IT department if the issue persists</li>
-            </ol>
-          </div>
-          <button kendoButton (click)="retryCurrentOption()">
-            <span class="fa-solid fa-rotate"></span>
-            Retry
-          </button>
-        </div>
-      </div>
-    }
   `,
   styles: [`
     :host {
@@ -124,55 +225,176 @@ import { DrillDownInfo } from '../drill-down-info';
       position: relative;
     }
     
-    button { 
-      margin-top: 5px; 
-      margin-bottom: 5px;
+    /* Tab Action Bar */
+    .tab-action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background-color: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .tab-actions-left,
+    .tab-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* Tab Action Buttons */
+    .tab-action-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background-color: transparent;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #333;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    
+    .tab-action-button:hover:not(:disabled) {
+      background-color: #f5f5f5;
+      border-color: #d0d0d0;
+    }
+    
+    .tab-action-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .tab-action-button i {
+      font-size: 12px;
+    }
+    
+    /* Both buttons use the same white/secondary style */
+    .tab-action-button.create-button,
+    .tab-action-button.print-button {
+      background-color: white;
+      color: #333;
+      border-color: #e0e0e0;
+    }
+    
+    .tab-action-button.create-button:hover:not(:disabled),
+    .tab-action-button.print-button:hover:not(:disabled) {
+      background-color: #f5f5f5;
+      border-color: #d0d0d0;
     }
     
     /* Tab styling */
-    .k-tabstrip {
+    ::ng-deep .k-tabstrip {
       border: none;
       height: 100%;
       display: flex;
       flex-direction: column;
+      margin: 10px 5px 5px 5px;
     }
     
-    .k-tabstrip-items {
-      background: transparent;
-      border-bottom: 2px solid #e0e0e0;
+    ::ng-deep .k-tabstrip-items {
+      background: #f8f9fa;
+      border: none;
+      border-radius: 8px 8px 0 0;
       flex: 0 0 auto;
+      padding: 8px 12px 0 12px;
+      gap: 4px;
+      display: flex;
     }
     
-    .k-tabstrip-items-wrapper {
+    ::ng-deep .k-tabstrip-items-wrapper {
       height: 100%;
     }
     
-    .k-content {
+    ::ng-deep .k-content {
       flex: 1;
       overflow: hidden;
       padding: 0;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
     }
     
-    .k-tabstrip .k-item {
-      margin-right: 4px;
+    ::ng-deep .k-tabstrip .k-item {
+      margin-right: 2px;
       border: none;
       background: transparent;
+      border-radius: 6px 6px 0 0;
+      padding: 2px;
+      transition: all 0.2s ease;
     }
     
-    .k-tabstrip .k-item.k-selected {
-      background: #ffffff;
+    ::ng-deep .k-tabstrip .k-item.k-selected {
+      background: white;
       border: 1px solid #e0e0e0;
-      border-bottom: 1px solid #ffffff;
+      border-bottom: 1px solid white;
       margin-bottom: -1px;
+      z-index: 1;
     }
     
-    .k-tabstrip .k-link {
+    ::ng-deep .k-tabstrip .k-link {
       padding: 8px 16px;
       font-weight: 500;
+      font-size: 13px;
+      color: #666;
+      transition: all 0.15s ease;
+      border-radius: 4px 4px 0 0;
+      background: transparent;
+      border: none;
+      text-transform: lowercase;
     }
     
-    .k-tabstrip .k-item.k-selected .k-link {
-      color: #2196f3;
+    ::ng-deep .k-tabstrip .k-link:first-letter {
+      text-transform: uppercase;
+    }
+    
+    ::ng-deep .k-tabstrip .k-item:hover:not(.k-selected) .k-link {
+      color: #333;
+      background: rgba(0, 0, 0, 0.04);
+    }
+    
+    ::ng-deep .k-tabstrip .k-item.k-selected .k-link {
+      color: #1976d2;
+      font-weight: 600;
+      background: white;
+    }
+    
+    /* Star icon styling */
+    ::ng-deep .k-tabstrip .k-link .star-icon {
+      display: inline-block;
+      margin-right: 4px;
+      color: #ffd700;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    
+    /* Hide default Kendo tab styling */
+    ::ng-deep .k-tabstrip-items::before,
+    ::ng-deep .k-tabstrip-items::after {
+      display: none;
+    }
+    
+    ::ng-deep .k-tabstrip .k-item::before,
+    ::ng-deep .k-tabstrip .k-item::after {
+      display: none;
+    }
+    
+    /* Remove focus outline */
+    ::ng-deep .k-tabstrip .k-link:focus {
+      outline: none;
+      box-shadow: none;
+    }
+    
+    /* Make sure tab content fills available space */
+    ::ng-deep .k-tabstrip .k-content.k-state-active {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
     }
     
     /* React host container */
@@ -187,7 +409,10 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     @Input() ComponentObjectName: string | null = null;
     @Input() ShowPrintReport: boolean = true;
     @Input() ShowReportOptionsToggle: boolean = true;
+    @Input() ShowCreateReportButton: boolean = false;
+    @Input() matchingReportID: string | null = null;
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
+    @Output() CreateReportRequested = new EventEmitter<number>();
 
     @ViewChildren('htmlContainer') htmlContainers!: QueryList<ElementRef>;
 
@@ -195,6 +420,7 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
     public reportOptions: SkipComponentOption[] = [];
     public selectedReportOptionIndex: number = 0;
     public currentError: { type: string; message: string; technicalDetails?: string } | null = null;
+    public isCreatingReport: boolean = false;
     
     // Cache for React component hosts - lazy loaded per option
     private reactHostCache: Map<number, SkipReactComponentHost> = new Map();
@@ -223,21 +449,19 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
      */
     public getTabTitle(index: number): string {
         const option = this.reportOptions[index];
-        if (!option) return `Option ${index + 1}`;
+        if (!option) return `report ${index + 1}`;
         
-        // Create a more descriptive title
-        const rankText = option.AIRank ? ` (Rank ${option.AIRank})` : '';
-        const componentType = option.option.componentType || 'Report';
+        const componentType = option.option.componentType || 'report';
         
-        // Add an icon based on rank
-        let icon = '';
-        if (option.AIRank === 1) {
-            icon = '⭐ '; // Star for best option
-        } else if (option.AIRank && option.AIRank <= 3) {
-            icon = '✓ '; // Check for good options
-        }
-        
-        return `${icon}${componentType} ${index + 1}${rankText}`;
+        return `${componentType} ${index + 1}`;
+    }
+    
+    /**
+     * Check if this option is the AI's top recommendation
+     */
+    public isTopRanked(index: number): boolean {
+        const option = this.reportOptions[index];
+        return option?.AIRank === 1;
     }
 
     /**
@@ -350,6 +574,15 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
         
         // Try creating it again
         this.createReactHostForOption(this.selectedReportOptionIndex);
+    }
+
+    /**
+     * Handle create report request for a specific option
+     */
+    public createReportForOption(optionIndex: number): void {
+        this.isCreatingReport = true;
+        // Emit the event with the option index so the parent can handle it
+        this.CreateReportRequested.emit(optionIndex);
     }
 
     ngAfterViewInit() {
@@ -598,19 +831,48 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     }
 
     protected SetupStyles(): SkipComponentStyles{
-        // This is a placeholder for any styles that the HTML report might need
-        // For now, we just return an empty object
+        // Return modern, contemporary styles for generated components
         return {
             colors: {
-                primary: '#2196f3',
-                primaryHover:  '#1976d2',
-                secondary: '#757575',
-                success: '#4caf50',
-                background: '#ffffff',
-                surface: '#f8f9fa',
-                text: '#333333',
-                textSecondary: '#656565',
-                border: '#e2e8f0',
+                // Primary colors - modern purple/blue gradient feel
+                primary: '#5B4FE9',
+                primaryHover: '#4940D4',
+                primaryLight: '#E8E6FF',
+                
+                // Secondary colors - sophisticated gray
+                secondary: '#64748B',
+                secondaryHover: '#475569',
+                
+                // Status colors
+                success: '#10B981',
+                successLight: '#D1FAE5',
+                warning: '#F59E0B',
+                warningLight: '#FEF3C7',
+                error: '#EF4444',
+                errorLight: '#FEE2E2',
+                info: '#3B82F6',
+                infoLight: '#DBEAFE',
+                
+                // Base colors
+                background: '#FFFFFF',
+                surface: '#F8FAFC',
+                surfaceHover: '#F1F5F9',
+                
+                // Text colors with better contrast
+                text: '#1E293B',
+                textSecondary: '#64748B',
+                textTertiary: '#94A3B8',
+                textInverse: '#FFFFFF',
+                
+                // Border colors
+                border: '#E2E8F0',
+                borderLight: '#F1F5F9',
+                borderFocus: '#5B4FE9',
+                
+                // Shadows (as color strings for easy use)
+                shadow: 'rgba(0, 0, 0, 0.05)',
+                shadowMedium: 'rgba(0, 0, 0, 0.1)',
+                shadowLarge: 'rgba(0, 0, 0, 0.15)',
             },
             spacing: {
                 xs: '4px',
@@ -618,19 +880,58 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
                 md: '16px',
                 lg: '24px',
                 xl: '32px',
+                xxl: '48px',
+                xxxl: '64px',
             },
             typography: {
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
                 fontSize: {
-                sm:  '14px',
-                md:  '16px',
-                lg:  '18px',
-                xl:  '24px'
+                    xs: '11px',
+                    sm: '12px',
+                    md: '14px',
+                    lg: '16px',
+                    xl: '20px',
+                    xxl: '24px',
+                    xxxl: '32px',
+                },
+                fontWeight: {
+                    light: '300',
+                    regular: '400',
+                    medium: '500',
+                    semibold: '600',
+                    bold: '700',
+                },
+                lineHeight: {
+                    tight: '1.25',
+                    normal: '1.5',
+                    relaxed: '1.75',
                 },
             },
             borders: {
-                radius: '4px',
-                width: '1px'
+                radius: {
+                    sm: '6px',
+                    md: '8px',
+                    lg: '12px',
+                    xl: '16px',
+                    full: '9999px',
+                },
+                width: {
+                    thin: '1px',
+                    medium: '2px',
+                    thick: '3px',
+                },
+            },
+            shadows: {
+                sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                md: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+            },
+            transitions: {
+                fast: '150ms ease-in-out',
+                normal: '250ms ease-in-out',
+                slow: '350ms ease-in-out',
             },
             overflow: 'auto' // Default overflow style        
         }

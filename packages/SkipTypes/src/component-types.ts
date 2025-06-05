@@ -105,15 +105,48 @@ export interface SkipComponentInitParams {
  */
 export interface SkipComponentStyles {
     colors: {
-        primary: string// '#2196f3',
-        primaryHover: string // '#1976d2',
-        secondary: string // '#757575',
-        success: string // '#4caf50',
-        background: string // '#ffffff',
-        surface: string // '#f8f9fa',
-        text: string //'#333333',
-        textSecondary: string // '#656565',
-        border: string // '#e2e8f0',
+        // Primary palette
+        primary: string // '#5B4FE9',
+        primaryHover: string // '#4940D4',
+        primaryLight?: string // '#E8E6FF',
+        
+        // Secondary palette
+        secondary: string // '#64748B',
+        secondaryHover?: string // '#475569',
+        
+        // Status colors
+        success: string // '#10B981',
+        successLight?: string // '#D1FAE5',
+        warning?: string // '#F59E0B',
+        warningLight?: string // '#FEF3C7',
+        error?: string // '#EF4444',
+        errorLight?: string // '#FEE2E2',
+        info?: string // '#3B82F6',
+        infoLight?: string // '#DBEAFE',
+        
+        // Base colors
+        background: string // '#FFFFFF',
+        surface: string // '#F8FAFC',
+        surfaceHover?: string // '#F1F5F9',
+        
+        // Text colors
+        text: string // '#1E293B',
+        textSecondary: string // '#64748B',
+        textTertiary?: string // '#94A3B8',
+        textInverse?: string // '#FFFFFF',
+        
+        // Border colors
+        border: string // '#E2E8F0',
+        borderLight?: string // '#F1F5F9',
+        borderFocus?: string // '#5B4FE9',
+        
+        // Shadow colors
+        shadow?: string // 'rgba(0, 0, 0, 0.05)',
+        shadowMedium?: string // 'rgba(0, 0, 0, 0.1)',
+        shadowLarge?: string // 'rgba(0, 0, 0, 0.15)',
+        
+        // Allow additional custom colors
+        [key: string]: string | undefined;
     };
     spacing: {
         xs: string // '4px',
@@ -121,19 +154,82 @@ export interface SkipComponentStyles {
         md: string // '16px',
         lg: string // '24px',
         xl: string // '32px',
+        xxl?: string // '48px',
+        xxxl?: string // '64px',
+        
+        // Allow additional custom spacing
+        [key: string]: string | undefined;
     };
     typography: {
-        fontFamily: string //'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontFamily: string //'-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
         fontSize: {
+          xs?: string // '12px',
           sm: string // '14px',
           md: string // '16px',
           lg: string // '18px',
-          xl: string // '24px'
+          xl: string // '24px',
+          xxl?: string // '32px',
+          xxxl?: string // '40px',
+          
+          // Allow additional custom sizes
+          [key: string]: string | undefined;
         },
+        fontWeight?: {
+          light?: string // '300',
+          regular?: string // '400',
+          medium?: string // '500',
+          semibold?: string // '600',
+          bold?: string // '700',
+          
+          // Allow additional custom weights
+          [key: string]: string | undefined;
+        },
+        lineHeight?: {
+          tight?: string // '1.25',
+          normal?: string // '1.5',
+          relaxed?: string // '1.75',
+          
+          // Allow additional custom line heights
+          [key: string]: string | undefined;
+        }
     };
     borders: {
-        radius: string // '4px';
-        width: string // '1px';
+        radius: string | { // Allow either a single string or an object with multiple radius options
+          sm?: string // '6px',
+          md?: string // '8px',
+          lg?: string // '12px',
+          xl?: string // '16px',
+          full?: string // '9999px',
+          
+          // Allow additional custom radii
+          [key: string]: string | undefined;
+        };
+        width: string | { // Allow either a single string or an object with multiple width options
+          thin?: string // '1px',
+          medium?: string // '2px',
+          thick?: string // '3px',
+          
+          // Allow additional custom widths
+          [key: string]: string | undefined;
+        };
+    }
+    shadows?: {
+        sm?: string // '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        md?: string // '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        lg?: string // '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+        xl?: string // '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+        inner?: string // 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)',
+        
+        // Allow additional custom shadows
+        [key: string]: string | undefined;
+    }
+    transitions?: {
+        fast?: string // '150ms ease-in-out',
+        normal?: string // '250ms ease-in-out',
+        slow?: string // '350ms ease-in-out',
+        
+        // Allow additional custom transitions
+        [key: string]: string | undefined;
     }
     overflow: string
 }

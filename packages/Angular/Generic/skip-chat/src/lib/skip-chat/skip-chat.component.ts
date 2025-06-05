@@ -193,6 +193,26 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   public selectedArtifact: any = null;
   
   /**
+   * Artifact header info to display in split panel
+   */
+  public artifactHeaderInfo: {
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+  } | null = null;
+  
+  /**
+   * Artifact version list for dropdown
+   */
+  public artifactVersionList: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}> = [];
+  
+  /**
+   * Selected artifact version ID
+   */
+  public selectedArtifactVersionId: string = '';
+  
+  /**
    * Current split ratio for the split panel
    */
   public SplitRatio: number = this.DefaultSplitRatio;
@@ -1930,6 +1950,54 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public closeArtifactPanel(): void {
     this.selectedArtifact = null;
+    this.artifactHeaderInfo = null;
+    this.artifactVersionList = [];
+    this.selectedArtifactVersionId = '';
+  }
+
+  /**
+   * Handles when an artifact version is selected from the dropdown
+   * @param versionId The ID of the selected version
+   */
+  public onArtifactVersionSelected(versionId: string): void {
+    if (this.selectedArtifact) {
+      // Update the selected artifact with the new version
+      this.selectedArtifact = {
+        ...this.selectedArtifact,
+        artifactVersionId: versionId
+      };
+      
+      // The artifact viewer will handle loading the new version
+      this.ArtifactViewed.emit(this.selectedArtifact);
+    }
+  }
+  
+  /**
+   * Handles when artifact info changes (from the artifact viewer)
+   * @param info The updated artifact header information
+   */
+  public onArtifactInfoChanged(info: {
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+    versionList?: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}>;
+    selectedVersionId?: string;
+  }): void {
+    this.artifactHeaderInfo = {
+      title: info.title,
+      type: info.type,
+      date: info.date,
+      version: info.version
+    };
+    
+    if (info.versionList) {
+      this.artifactVersionList = info.versionList;
+    }
+    
+    if (info.selectedVersionId) {
+      this.selectedArtifactVersionId = info.selectedVersionId;
+    }
   }
 
   /**
