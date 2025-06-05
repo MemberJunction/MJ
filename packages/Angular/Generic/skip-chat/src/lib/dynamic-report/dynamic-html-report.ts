@@ -53,19 +53,19 @@ import { DrillDownInfo } from '../drill-down-info';
                   
                   <!-- Error overlay for this tab (shown on top of content when needed) -->
                   @if (currentError && selectedReportOptionIndex === i) {
-                    <div style="position: absolute; 
-                                top: 0; 
+                    <div style="top: 0; 
                                 left: 0; 
                                 right: 0; 
                                 bottom: 0; 
                                 display: flex;
-                                align-items: center;
+                                align-items: flex-start;
                                 justify-content: center;
+                                padding-top: 20px;
                                 background: rgba(255, 255, 255, 0.95);
                                 z-index: 10;">
                       <div style="width: 90%; 
                                   max-width: 600px; 
-                                  max-height: 80%;
+                                  height: 500px;
                                   background-color: #f8f9fa; 
                                   border: 2px solid #dc3545; 
                                   border-radius: 8px; 
@@ -158,13 +158,14 @@ import { DrillDownInfo } from '../drill-down-info';
                         right: 0; 
                         bottom: 0; 
                         display: flex;
-                        align-items: center;
+                        align-items: flex-start;
                         justify-content: center;
+                        padding-top: 20px;
                         background: rgba(255, 255, 255, 0.95);
                         z-index: 10;">
               <div style="width: 90%; 
                           max-width: 600px; 
-                          max-height: 80%;
+                          height: 500px;
                           background-color: #f8f9fa; 
                           border: 2px solid #dc3545; 
                           border-radius: 8px; 
