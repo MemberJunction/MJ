@@ -462,7 +462,7 @@ Respond with your decision following the JSON format specified above.`;
       }
 
       // Report initialization progress
-      this.reportProgress(params.onProgress, {
+      this.sendProgress(params.onProgress, {
         step: 'initialization',
         percentage: 10,
         message: `Initializing agent '${this.Name}'`,
@@ -481,7 +481,7 @@ Respond with your decision following the JSON format specified above.`;
       }
 
       // Report context processing progress
-      this.reportProgress(params.onProgress, {
+      this.sendProgress(params.onProgress, {
         step: 'context_processing',
         percentage: 20,
         message: 'Processing conversation context',
@@ -495,7 +495,7 @@ Respond with your decision following the JSON format specified above.`;
       result.executionTimeMS = endTime.getTime() - startTime.getTime();
 
       // Report completion
-      this.reportProgress(params.onProgress, {
+      this.sendProgress(params.onProgress, {
         step: 'completion',
         percentage: 100,
         message: `Agent '${this.Name}' execution completed`,
@@ -551,7 +551,7 @@ Respond with your decision following the JSON format specified above.`;
         }
 
         // Report progress
-        this.reportProgress(context.params.onProgress, {
+        this.sendProgress(context.params.onProgress, {
           step: 'subagent_coordination',
           percentage: 30 + (50 * iteration / maxIterations),
           message: `Decision-making iteration ${iteration}/${maxIterations}`,
@@ -766,9 +766,9 @@ Respond with your decision following the JSON format specified above.`;
   }
 
   /**
-   * Reports progress to the callback if provided.
+   * Sends progress status to the callback if provided.
    */
-  private reportProgress(callback: ((progress: AgentProgressUpdate) => void) | undefined, progress: AgentProgressUpdate): void {
+  private sendProgress(callback: ((progress: AgentProgressUpdate) => void) | undefined, progress: AgentProgressUpdate): void {
     if (callback) {
       try {
         callback(progress);
@@ -1165,7 +1165,7 @@ Consider:
     // Execute each group in order (1, 2, 3, etc.)
     for (const [order, steps] of executionGroups) {
       // Report progress for this execution order
-      this.reportProgress(context.params.onProgress, {
+      this.sendProgress(context.params.onProgress, {
         step: 'subagent_coordination',
         percentage: 40 + (40 * order / executionGroups.size),
         message: `Executing steps at order ${order}`,
