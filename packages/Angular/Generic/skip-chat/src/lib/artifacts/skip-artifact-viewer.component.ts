@@ -45,6 +45,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   public error: string | null = null;
   public artifactVersions: ConversationArtifactVersionEntity[] = [];
   public selectedVersionId: string = '';
+  public showVersionDropdown: boolean = false;
   private reportComponentRef: ComponentRef<any> | null = null;
   private conversationDetailRecord: ConversationDetailEntity | null = null;
 
@@ -396,6 +397,30 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
   public get isHtml(): boolean {
     return this.contentType.includes('html');
+  }
+
+  /**
+   * Toggles the version dropdown menu
+   */
+  public toggleVersionDropdown(): void {
+    this.showVersionDropdown = !this.showVersionDropdown;
+  }
+
+  /**
+   * Selects a version and closes the dropdown
+   */
+  public selectVersion(versionId: string): void {
+    this.selectedVersionId = versionId;
+    this.showVersionDropdown = false;
+    this.onVersionChange();
+  }
+
+  /**
+   * Gets the current version number for display
+   */
+  public getCurrentVersionNumber(): string {
+    if (!this.artifactVersion) return '1';
+    return String(this.artifactVersion.Version || '1');
   }
 
   public get isPlainText(): boolean {
