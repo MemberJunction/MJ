@@ -308,9 +308,21 @@ Associates prompts with specific models and configurations.
 
 ### 3.4 Agent Framework
 
-#### 3.4.1 AIAgent
+#### 3.4.1 AIAgentType
 
-Defines AI agents in the system with hierarchical structure.
+Defines types of AI agents with their system prompts and behavioral characteristics.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| Name | nvarchar(100) | Type name (e.g., "Base Agent", "CustomerSupport", "DataAnalysis") |
+| Description | nvarchar(max) | Detailed description of the agent type |
+| SystemPromptID | uniqueidentifier | References the AI Prompt that contains system-level instructions |
+| IsActive | bit | Whether this agent type is available for use |
+
+#### 3.4.2 AIAgent
+
+Defines AI agents in the system with hierarchical structure and type classification.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -318,6 +330,7 @@ Defines AI agents in the system with hierarchical structure.
 | Name | nvarchar(255) | Agent name |
 | Description | nvarchar(max) | Detailed description |
 | LogoURL | nvarchar(255) | URL to agent logo/avatar |
+| TypeID | uniqueidentifier | References AIAgentType that defines category and system-level behavior |
 | ParentID | uniqueidentifier | References parent agent (self-referencing) |
 | ExposeAsAction | bit | Whether to expose as an action |
 | ExecutionOrder | int | Order among siblings |
@@ -327,7 +340,48 @@ Defines AI agents in the system with hierarchical structure.
 | ContextCompressionPromptID | uniqueidentifier | Prompt used for compression |
 | ContextCompressionMessageRetentionCount | int | Messages to keep uncompressed |
 
-#### 3.4.2 AIAgentPrompt
+#### 3.4.3 AIAgentRun
+
+Tracks individual execution runs of AI agents with comprehensive state management.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentID | uniqueidentifier | References the AIAgent being executed |
+| ParentRunID | uniqueidentifier | References parent agent run (self-referencing for hierarchical execution) |
+| Status | nvarchar(50) | Current status: Running, Completed, Paused, Failed, Cancelled |
+| StartedAt | datetimeoffset(7) | When the agent run began execution |
+| CompletedAt | datetimeoffset(7) | When the agent run completed (NULL while running) |
+| Success | bit | Whether the execution was successful (NULL while running) |
+| ErrorMessage | nvarchar(max) | Error message if the run failed |
+| ConversationID | uniqueidentifier | Links to conversation or user session |
+| UserID | uniqueidentifier | User context for authentication and permissions |
+| Result | nvarchar(max) | Final result or output from the agent execution |
+| AgentState | nvarchar(max) | JSON serialization of complete agent state for pause/resume |
+| TotalTokensUsed | int | Total tokens consumed by all LLM calls |
+| TotalCost | decimal(18,6) | Total estimated cost for all AI model usage |
+
+#### 3.4.4 AIAgentRunStep
+
+Provides step-by-step tracking of agent execution for debugging and monitoring.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ID | uniqueidentifier | Primary key |
+| AgentRunID | uniqueidentifier | References the parent AIAgentRun |
+| StepNumber | int | Sequential step number within the run (starting from 1) |
+| StepType | nvarchar(50) | Type of step: prompt, action, subagent, decision |
+| StepName | nvarchar(255) | Human-readable name of what this step accomplishes |
+| TargetID | uniqueidentifier | ID of the target being executed (prompt, action, agent, etc.) |
+| Status | nvarchar(50) | Current execution status: Running, Completed, Failed, Cancelled |
+| StartedAt | datetimeoffset(7) | When this step began execution |
+| CompletedAt | datetimeoffset(7) | When this step completed (NULL while running) |
+| Success | bit | Whether this step completed successfully (NULL while running) |
+| ErrorMessage | nvarchar(max) | Error message if this step failed |
+| InputData | nvarchar(max) | JSON serialization of input data for this step |
+| OutputData | nvarchar(max) | JSON serialization of output data from this step |
+
+#### 3.4.5 AIAgentPrompt
 
 Associates prompts with agents.
 
@@ -345,7 +399,7 @@ Associates prompts with agents.
 
 **Unique Constraints:** AgentID + PromptID + ConfigurationID
 
-#### 3.4.3 AIAgentModel
+#### 3.4.6 AIAgentModel
 
 Associates agents with specific AI models.
 
@@ -357,7 +411,7 @@ Associates agents with specific AI models.
 | Active | bit | Whether this model association is active |
 | Priority | int | Priority ranking for model selection |
 
-#### 3.4.4 AIAgentAction
+#### 3.4.7 AIAgentAction
 
 Links AI agents to actions they can perform.
 
@@ -368,7 +422,7 @@ Links AI agents to actions they can perform.
 | ActionID | uniqueidentifier | References the action |
 | Status | nvarchar(15) | Status of this agent-action association |
 
-#### 3.4.5 AIAgentRequest
+#### 3.4.8 AIAgentRequest
 
 Tracks requests made to AI agents.
 
@@ -385,7 +439,7 @@ Tracks requests made to AI agents.
 | RespondedAt | datetime | When the response was provided |
 | Comments | nvarchar(max) | Additional comments |
 
-#### 3.4.6 AIAgentLearningCycle
+#### 3.4.9 AIAgentLearningCycle
 
 Tracks learning cycles for AI agents.
 
@@ -398,7 +452,7 @@ Tracks learning cycles for AI agents.
 | Status | nvarchar(20) | Status of the learning cycle |
 | AgentSummary | nvarchar(max) | Summary of what the agent learned |
 
-#### 3.4.7 AIAgentNote
+#### 3.4.10 AIAgentNote
 
 Notes and annotations for AI agents.
 
@@ -411,7 +465,7 @@ Notes and annotations for AI agents.
 | Type | nvarchar(20) | Type of note |
 | UserID | uniqueidentifier | User who created the note |
 
-#### 3.4.8 AIAgentNoteType
+#### 3.4.11 AIAgentNoteType
 
 Categorizes different types of agent notes.
 
@@ -425,7 +479,7 @@ Categorizes different types of agent notes.
 
 #### 3.5.1 AIPromptRun
 
-Tracks the execution of prompts with comprehensive metrics.
+Tracks the execution of prompts with comprehensive metrics and agent integration.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -434,6 +488,7 @@ Tracks the execution of prompts with comprehensive metrics.
 | ModelID | uniqueidentifier | References the model |
 | VendorID | uniqueidentifier | References the vendor |
 | AgentID | uniqueidentifier | References the agent (if any) |
+| AgentRunID | uniqueidentifier | References the AIAgentRun that initiated this prompt execution |
 | ConfigurationID | uniqueidentifier | References the configuration |
 | RunAt | datetime2(7) | Execution start time |
 | CompletedAt | datetime2(7) | Execution end time |
@@ -470,9 +525,22 @@ Caches results for reuse with vector similarity matching.
 | PromptEmbedding | varbinary(max) | Vector representation of prompt |
 | PromptRunID | uniqueidentifier | References the execution that created this cache |
 
-### 3.6 Model Actions and Capabilities
+### 3.6 Data Context Enhancements
 
-#### 3.6.1 AIModelAction
+#### 3.6.1 DataContextItem (Enhanced)
+
+The DataContextItem table has been enhanced with programmatic naming for improved code generation.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ... | ... | (Existing fields remain unchanged) |
+| CodeName | nvarchar(255) | Optional programmatic identifier following JavaScript naming conventions |
+
+**Unique Constraints:** DataContextID + CodeName
+
+### 3.7 Model Actions and Capabilities
+
+#### 3.7.1 AIModelAction
 
 Links AI models to actions they support.
 
@@ -487,7 +555,41 @@ Links AI models to actions they support.
 
 ## 4. Key Workflows
 
-### 4.1 Prompt Execution Workflow
+### 4.1 Agent Execution Workflow (Enhanced)
+
+The agent execution workflow has been significantly enhanced with decision-driven architecture and comprehensive tracking:
+
+1. **Agent Initialization**:
+   - Create AIAgentRun entry with Running status
+   - Load agent configuration, type, and associated prompts
+   - Initialize execution context with conversation history and parameters
+   - Set up progress tracking and cancellation support
+
+2. **Decision-Driven Execution Loop**:
+   - **Context Analysis**: Agent analyzes current conversation and available resources
+   - **Decision Making**: LLM-powered decision making determines next actions
+   - **Action Execution**: Execute decided actions (prompts, subagents, or tools) with proper ordering
+   - **Result Integration**: Incorporate results into conversation context
+   - **Completion Check**: Determine if task is complete or continue iteration
+
+3. **Step Tracking**:
+   - Create AIAgentRunStep entries for each discrete action
+   - Track execution order, timing, and success/failure status
+   - Store input/output data for debugging and analytics
+   - Handle parallel and sequential execution strategies
+
+4. **State Management**:
+   - Support for pause/resume through AgentState serialization
+   - Context compression for long conversations
+   - Hierarchical execution with parent-child run relationships
+   - Resource tracking (tokens, cost, timing)
+
+5. **Completion and Cleanup**:
+   - Update AIAgentRun with final status and results
+   - Aggregate metrics from all execution steps
+   - Return comprehensive execution results
+
+### 4.2 Prompt Execution Workflow
 
 1. **Initialization**:
    - Client requests prompt execution with parameters
@@ -544,47 +646,43 @@ Links AI models to actions they support.
    - Set expiration based on CacheTTLSeconds
    - Store embedding if CacheMatchType=Vector
 
-### 4.2 Agent Execution Workflow
+### 4.3 Hierarchical Agent Orchestration
 
-1. **Agent Invocation**:
-   - Client invokes agent with initial context
-   - System loads agent configuration and prompt associations
+1. **Agent Type Resolution**:
+   - Load AIAgentType to determine system-level behavior
+   - Apply type-specific system prompts and configurations
+   - Initialize agent with type-appropriate capabilities
 
-2. **Hierarchical Resolution**:
-   - If ParentID is null, execute as root agent
-   - Otherwise, resolve parent-child relationships
-   - Prepare for execution based on ExecutionMode
-
-3. **Prompt Sequencing**:
-   - Execute prompts in the order specified by ExecutionOrder
-   - For each prompt:
-     - Apply ContextBehavior to filter conversation history
-     - Execute prompt using Prompt Execution Workflow
-     - Add result to conversation context
-
-4. **Child Agent Orchestration**:
+2. **Child Agent Coordination**:
    - Based on ExecutionMode:
      - Sequential: Execute child agents in ExecutionOrder sequence
      - Parallel: Execute child agents concurrently
    - For each child agent:
+     - Create child AIAgentRun with ParentRunID reference
      - Pass appropriate context subset
-     - Execute using Agent Execution Workflow (recursive)
-     - Integrate results into parent context
+     - Execute using recursive agent workflow
+     - Track execution in AIAgentRunStep entries
 
-5. **Context Management**:
+3. **Context Management**:
    - If EnableContextCompression=true and message count exceeds threshold:
      - Retain ContextCompressionMessageRetentionCount recent messages
      - Use ContextCompressionPromptID to compress older messages
      - Replace compressed messages with summary
 
-6. **Result Aggregation**:
+4. **Result Aggregation**:
    - Combine results from all executed prompts and child agents
-   - Format according to agent's defined output structure
-   - Return to client or parent agent
+   - Update parent AIAgentRun with aggregated metrics
+   - Return comprehensive results to client or parent agent
 
-### 4.3 Configuration and Deployment
+### 4.4 Configuration and Deployment
 
-1. **Agent Configuration**:
+1. **Agent Type Configuration**:
+   - Create AIAgentType entries for different categories of agents
+   - Define system prompts that provide base behavior for each type
+   - Set up type-specific capabilities and constraints
+
+2. **Agent Configuration**:
+   - Create AIAgent entries with TypeID references
    - Define agent structure (parent-child relationships)
    - Associate prompts with agents (AIAgentPrompt entries)
    - Configure execution parameters (order, mode, etc.)
@@ -611,7 +709,69 @@ Links AI models to actions they support.
 
 ## 5. Advanced Features
 
-### 5.1 Context Compression
+### 5.1 Decision-Driven Agent Architecture
+
+The framework now implements an advanced decision-driven architecture where agents use LLM-powered reasoning to determine their next actions:
+
+1. **Dynamic Action Selection**:
+   - Agents analyze current context and available resources
+   - LLM makes strategic decisions about which actions to take
+   - Support for mixed execution of prompts, tools, and subagents
+
+2. **Execution Planning**:
+   - Agents create execution plans with proper ordering
+   - Support for parallel and sequential execution strategies
+   - Dynamic adaptation based on results and context
+
+3. **Comprehensive Resource Awareness**:
+   - Agents have full visibility into available actions and subagents
+   - Metadata-driven capability discovery
+   - Intelligent resource selection based on context
+
+### 5.2 Enhanced Factory Pattern
+
+The framework includes an improved factory pattern for agent instantiation:
+
+1. **Global Agent Factory**:
+   - `GetAgentFactory()` function provides consistent access
+   - Support for factory subclassing and customization
+   - Integration with MemberJunction ClassFactory system
+
+2. **Extensible Agent Types**:
+   - Agent types can be subclassed and registered
+   - Custom agents inherit full framework capabilities
+   - Seamless integration with existing metadata system
+
+### 5.3 Comprehensive Execution Tracking
+
+The new tracking system provides detailed insights into agent execution:
+
+1. **Run-Level Tracking**:
+   - AIAgentRun entries track complete agent executions
+   - Support for pause/resume through state serialization
+   - Hierarchical tracking for parent-child relationships
+
+2. **Step-Level Granularity**:
+   - AIAgentRunStep entries track individual actions
+   - Input/output data capture for debugging
+   - Timing and success metrics for performance analysis
+
+### 5.4 Action vs Tool Terminology
+
+The framework has been updated to use consistent "actions" terminology:
+
+1. **Unified Terminology**:
+   - "Actions" replace "tools" throughout the system
+   - Consistent naming in interfaces and documentation
+   - Improved clarity for developers and users
+
+2. **Backward Compatibility**:
+   - Existing functionality remains unchanged
+   - Only terminology has been updated for consistency
+
+### 5.5 Context Compression
+
+### 5.6 Vectorized Cache Matching
 
 Long conversations with agents can accumulate many messages, leading to increased token usage and potential context window limitations. The framework addresses this with automatic context compression:
 
@@ -629,7 +789,7 @@ Long conversations with agents can accumulate many messages, leading to increase
    - System preserves key information needed for continuity
    - Special messages (e.g., system instructions) are exempt from compression
 
-### 5.2 Vectorized Cache Matching
+### 5.7 Parallel Model Execution
 
 Traditional exact-match caching fails when prompts vary slightly but semantically represent the same query. The framework's vector-based cache matching addresses this:
 
@@ -647,7 +807,7 @@ Traditional exact-match caching fails when prompts vary slightly but semanticall
    - CacheSimilarityThreshold controls strictness of matching
    - CacheMustMatch* fields control which attributes must match
 
-### 5.3 Parallel Model Execution
+### 5.8 Structured Output Validation
 
 The framework supports executing prompts across multiple models in parallel to leverage the strengths of different AI models:
 
@@ -665,7 +825,6 @@ The framework supports executing prompts across multiple models in parallel to l
    - ResultSelectorPromptID specifies a prompt that selects the best result
    - Selection can be based on quality, correctness, or custom criteria
 
-### 5.4 Structured Output Validation
 
 To ensure AI outputs meet application requirements, the framework includes robust validation:
 

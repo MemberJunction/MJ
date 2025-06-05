@@ -1,5 +1,5 @@
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseAgent, IAgentFactory } from './base-agent';
@@ -12,6 +12,9 @@ import { BaseAgent, IAgentFactory } from './base-agent';
  * custom subclass or the base agent). It integrates with MemberJunction's ClassFactory
  * system to support dynamic agent class registration and instantiation.
  * 
+ * This class can be subclassed and registered with a higher priority to override
+ * the default factory behavior.
+ * 
  * Example usage:
  * ```typescript
  * // Register a custom agent
@@ -20,11 +23,12 @@ import { BaseAgent, IAgentFactory } from './base-agent';
  *   // Custom implementation
  * }
  * 
- * // Create an agent instance
- * const factory = new AgentFactory();
+ * // Create an agent instance using the global factory function
+ * const factory = GetAgentFactory();
  * const agent = await factory.CreateAgent("Code", contextUser);
  * ```
  */
+@RegisterClass(AgentFactory, null)
 export class AgentFactory implements IAgentFactory {
   private _metadata: Metadata;
 
@@ -189,6 +193,22 @@ export class AgentFactory implements IAgentFactory {
       LogError(`Error getting agent entity '${agentName}': ${error.message}`);
       return null;
     }
+  }
+}
+
+/**
+ * Helper function that gets an instance of the AgentFactory class or any registered subclass of AgentFactory.
+ * This follows the MemberJunction pattern for using the global class factory to support extensibility.
+ * 
+ * @returns AgentFactory instance (or subclass instance if one is registered with higher priority)
+ * @throws Error if the AgentFactory class cannot be instantiated
+ */
+export function GetAgentFactory(): AgentFactory {
+  const factory = MJGlobal.Instance.ClassFactory.CreateInstance<AgentFactory>(AgentFactory);
+  if (factory) {
+    return factory;
+  } else {
+    throw new Error('Could not instantiate AgentFactory class');
   }
 }
 

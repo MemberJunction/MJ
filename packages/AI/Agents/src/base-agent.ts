@@ -10,7 +10,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 /**
  * Decision types that an agent can make
  */
-export type AgentDecisionType = 'execute_tool' | 'execute_subagent' | 'complete_task' | 'request_clarification' | 'continue_processing';
+export type AgentDecisionType = 'execute_action' | 'execute_subagent' | 'complete_task' | 'request_clarification' | 'continue_processing';
 
 /**
  * Structure for LLM decision-making input
@@ -18,8 +18,8 @@ export type AgentDecisionType = 'execute_tool' | 'execute_subagent' | 'complete_
 export interface AgentDecisionInput {
   /** Current conversation context */
   messages: ChatMessage[];
-  /** Available tools/actions */
-  availableTools: ToolDescription[];
+  /** Available actions */
+  availableActions: ActionDescription[];
   /** Available sub-agents */
   availableSubAgents: SubAgentDescription[];
   /** Current task/goal description */
@@ -38,7 +38,7 @@ export interface AgentDecisionResponse {
   decision: AgentDecisionType;
   /** Reasoning behind the decision */
   reasoning: string;
-  /** Ordered execution steps to take (tools and sub-agents can be mixed) */
+  /** Ordered execution steps to take (actions and sub-agents can be mixed) */
   executionPlan: ExecutionStep[];
   /** Whether this completes the current task */
   isTaskComplete: boolean;
@@ -58,20 +58,20 @@ export interface AgentDecisionResponse {
 }
 
 /**
- * Description of available tools/actions
+ * Description of available actions
  */
-export interface ToolDescription {
-  /** Tool ID */
+export interface ActionDescription {
+  /** Action ID */
   id: string;
-  /** Tool name */
+  /** Action name */
   name: string;
-  /** Tool description */
+  /** Action description */
   description: string;
   /** Required parameters */
-  parameters: ToolParameter[];
-  /** Whether tool can run in parallel with others */
+  parameters: ActionParameter[];
+  /** Whether action can run in parallel with others */
   supportsParallel: boolean;
-  /** Additional tool metadata (optional) */
+  /** Additional action metadata (optional) */
   metadata?: {
     /** Estimated execution time in milliseconds */
     estimatedDuration?: number;
@@ -106,9 +106,9 @@ export interface SubAgentDescription {
 }
 
 /**
- * Tool parameter description
+ * Action parameter description
  */
-export interface ToolParameter {
+export interface ActionParameter {
   /** Parameter name */
   name: string;
   /** Parameter type */
@@ -122,12 +122,12 @@ export interface ToolParameter {
 }
 
 /**
- * Execution step that can be a tool or sub-agent
+ * Execution step that can be an action or sub-agent
  */
 export interface ExecutionStep {
   /** Type of execution step */
-  type: 'tool' | 'subagent';
-  /** ID of tool or subagent to execute */
+  type: 'action' | 'subagent';
+  /** ID of action or subagent to execute */
   targetId: string;
   /** Parameters to pass */
   parameters?: Record<string, unknown>;
@@ -144,7 +144,7 @@ export interface ExecutionStep {
  */
 export interface ExecutionHistoryItem {
   /** Type of execution */
-  type: 'tool' | 'subagent' | 'decision';
+  type: 'action' | 'subagent' | 'decision';
   /** Target ID */
   targetId: string;
   /** Parameters used */
@@ -225,8 +225,8 @@ export interface AgentExecutionResult {
   conversationMessages?: ChatMessage[];
   /** Decision-making history */
   decisionHistory?: AgentDecisionResponse[];
-  /** Tool execution results */
-  toolResults?: ActionResult[];
+  /** Action execution results */
+  actionResults?: ActionResult[];
   /** Final decision that led to completion */
   finalDecision?: AgentDecisionResponse;
 }
@@ -310,15 +310,15 @@ The following are your specialized instructions that define your specific behavi
 {{ agentPrompt }}
 {% endif %}
 
-## Available Tools and Resources
+## Available Actions and Resources
 
-{% if availableTools.length > 0 %}
-### Tools Available to You:
-{% for tool in availableTools %}
-- **{{ tool.name }}** (ID: {{ tool.id }})
-  - Description: {{ tool.description }}
-  - Parameters: {% for param in tool.parameters %}{{ param.name }} ({{ param.type }}){% if param.required %} [required]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
-  - Supports parallel execution: {{ tool.supportsParallel }}
+{% if availableActions.length > 0 %}
+### Actions Available to You:
+{% for action in availableActions %}
+- **{{ action.name }}** (ID: {{ action.id }})
+  - Description: {{ action.description }}
+  - Parameters: {% for param in action.parameters %}{{ param.name }} ({{ param.type }}){% if param.required %} [required]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+  - Supports parallel execution: {{ action.supportsParallel }}
 {% endfor %}
 {% endif %}
 
@@ -347,12 +347,12 @@ You must ALWAYS respond with a valid JSON object following this exact structure:
 
 \`\`\`json
 {
-  "decision": "execute_tool" | "execute_subagent" | "complete_task" | "request_clarification" | "continue_processing",
+  "decision": "execute_action" | "execute_subagent" | "complete_task" | "request_clarification" | "continue_processing",
   "reasoning": "Your detailed thought process and justification for this decision",
   "executionPlan": [
     {
-      "type": "tool" | "subagent",
-      "targetId": "ID of the tool or subagent to execute",
+      "type": "action" | "subagent",
+      "targetId": "ID of the action or subagent to execute",
       "parameters": {"key": "value"},
       "executionOrder": 1,
       "allowParallel": true | false,
@@ -366,7 +366,7 @@ You must ALWAYS respond with a valid JSON object following this exact structure:
 \`\`\`
 
 ### Decision Types
-- **execute_tool**: Use one of your available tools to perform an action
+- **execute_action**: Use one of your available actions to perform a task
 - **execute_subagent**: Delegate a subtask to a specialized sub-agent
 - **complete_task**: You have successfully completed the requested task
 - **request_clarification**: You need more information from the user to proceed
@@ -376,28 +376,28 @@ You must ALWAYS respond with a valid JSON object following this exact structure:
 **You have complete autonomy in choosing your approach.** There are no predetermined pathways or required sequences. Instead:
 
 - **Evaluate the Goal**: Understand what the user truly wants to accomplish
-- **Choose Your Strategy**: Decide which combination of tools and sub-agents will best achieve the goal
-- **Design Execution Order**: You determine the sequence - tools and sub-agents can be mixed (e.g., Tool1 → SubAgent2 → Tool3 → SubAgent1)
+- **Choose Your Strategy**: Decide which combination of actions and sub-agents will best achieve the goal
+- **Design Execution Order**: You determine the sequence - actions and sub-agents can be mixed (e.g., Action1 → SubAgent2 → Action3 → SubAgent1)
 - **Decide Parallelization**: 
-  - Tools can run in parallel (set allowParallel: true for same executionOrder)
+  - Actions can run in parallel (set allowParallel: true for same executionOrder)
   - Sub-agents should generally run sequentially unless specifically designed for parallel execution
   - Steps with the same executionOrder number can run simultaneously if allowParallel is true
 - **Adapt Dynamically**: After each execution round, reassess and choose the next steps
 
 ### Execution Guidelines
 - **Strategic Thinking**: Choose the most effective path, not just the most obvious one
-- **Flexibility**: You can combine any tools and sub-agents in any order that makes sense
-- **Parallel Efficiency**: Use parallel execution for tools when it won't cause conflicts
+- **Flexibility**: You can combine any actions and sub-agents in any order that makes sense
+- **Parallel Efficiency**: Use parallel execution for actions when it won't cause conflicts
 - **Sequential Control**: Use sequential execution when results from one step inform the next
 - **Iterative Approach**: After execution, you'll be asked "what's next?" - be prepared to continue or conclude
 
 ## What Should We Do Next?
 
-Based on the current conversation context, available tools, and your specific instructions, analyze the situation and decide on the most appropriate next action. Consider:
+Based on the current conversation context, available actions, and your specific instructions, analyze the situation and decide on the most appropriate next action. Consider:
 
 1. What is the user ultimately trying to accomplish?
 2. What information or capabilities do I need to fulfill this request?
-3. Which tools or sub-agents would be most effective?
+3. Which actions or sub-agents would be most effective?
 4. Can any actions be performed in parallel to improve efficiency?
 5. Do I have enough information to proceed, or do I need clarification?
 
@@ -527,7 +527,7 @@ Respond with your decision following the JSON format specified above.`;
    * rather than following a predetermined sequence. The agent will:
    * 1. Analyze the current context
    * 2. Make a decision about what to do next
-   * 3. Execute the decided actions (tools/subagents)
+   * 3. Execute the decided actions (actions/subagents)
    * 4. Repeat until task is complete
    * 
    * @param context The execution context
@@ -537,7 +537,7 @@ Respond with your decision following the JSON format specified above.`;
     try {
       const decisionHistory: AgentDecisionResponse[] = [];
       const executionHistory: ExecutionHistoryItem[] = [];
-      const toolResults: ActionResult[] = [];
+      const actionResults: ActionResult[] = [];
       let currentMessages = [...context.conversationMessages];
       let maxIterations = 10; // Prevent infinite loops
       let iteration = 0;
@@ -573,12 +573,12 @@ Respond with your decision following the JSON format specified above.`;
             result: decision.finalResponse || decision.reasoning,
             conversationMessages: currentMessages,
             decisionHistory,
-            toolResults,
+            actionResults: actionResults,
             finalDecision: decision,
             metadata: {
               iterations: iteration,
               decisionCount: decisionHistory.length,
-              toolExecutions: toolResults.length
+              actionExecutions: actionResults.length
             }
           };
         }
@@ -602,7 +602,7 @@ Respond with your decision following the JSON format specified above.`;
         
         // Add execution results to history
         executionHistory.push(...executionResults.historyItems);
-        toolResults.push(...executionResults.toolResults);
+        actionResults.push(...executionResults.actionResults);
 
         // Update conversation messages with results
         if (executionResults.newMessages.length > 0) {
@@ -623,7 +623,7 @@ Respond with your decision following the JSON format specified above.`;
         errorMessage: `Agent reached maximum iterations (${maxIterations}) without completing the task`,
         conversationMessages: currentMessages,
         decisionHistory,
-        toolResults,
+        actionResults: actionResults,
         metadata: {
           maxIterationsReached: true,
           iterations: iteration,
@@ -787,8 +787,8 @@ Respond with your decision following the JSON format specified above.`;
     currentMessages: ChatMessage[],
     executionHistory: ExecutionHistoryItem[]
   ): Promise<AgentDecisionInput> {
-    // Load available tools and subagents
-    const availableTools = await this.getAvailableTools();
+    // Load available actions and subagents
+    const availableActions = await this.getAvailableActions();
     const availableSubAgents = await this.getAvailableSubAgents();
     
     // Determine current goal from context or agent description
@@ -799,7 +799,7 @@ Respond with your decision following the JSON format specified above.`;
 
     return {
       messages: currentMessages,
-      availableTools,
+      availableActions,
       availableSubAgents,
       currentGoal,
       executionHistory,
@@ -826,7 +826,7 @@ Respond with your decision following the JSON format specified above.`;
         agentName: this.Name,
         agentDescription: this.Description,
         agentPrompt,
-        availableTools: decisionInput.availableTools,
+        availableActions: decisionInput.availableActions,
         availableSubAgents: decisionInput.availableSubAgents
       };
 
@@ -956,9 +956,9 @@ Respond with your decision following the JSON format specified above.`;
       ? this.summarizeExecutionHistory(decisionInput.executionHistory)
       : 'No previous actions taken.';
 
-    // Enhanced tool information
-    const toolDetails = decisionInput.availableTools.length > 0 
-      ? this.formatToolsForDecision(decisionInput.availableTools)
+    // Enhanced action information
+    const actionDetails = decisionInput.availableActions.length > 0 
+      ? this.formatActionsForDecision(decisionInput.availableActions)
       : '';
 
     // Enhanced sub-agent information  
@@ -972,8 +972,8 @@ Respond with your decision following the JSON format specified above.`;
 
 **Conversation Context:** ${decisionInput.messages.length} messages in conversation
 **Previous Actions:** ${executionSummary}
-**Available Tools:** ${decisionInput.availableTools.length} tools
-**Available Sub-Agents:** ${decisionInput.availableSubAgents.length} sub-agents${toolDetails}${subAgentDetails}
+**Available Actions:** ${decisionInput.availableActions.length} actions
+**Available Sub-Agents:** ${decisionInput.availableSubAgents.length} sub-agents${actionDetails}${subAgentDetails}
 
 ## Decision Request
 
@@ -990,28 +990,28 @@ Consider:
   }
 
   /**
-   * Formats tool information for decision-making context.
+   * Formats action information for decision-making context.
    */
-  private formatToolsForDecision(tools: ToolDescription[]): string {
-    if (tools.length === 0) return '';
+  private formatActionsForDecision(actions: ActionDescription[]): string {
+    if (actions.length === 0) return '';
     
-    let section = '\n## Available Tools Details\n';
-    for (const tool of tools.slice(0, 5)) { // Limit to first 5 to avoid overwhelming the LLM
-      section += `**${tool.name}** (${tool.id}): ${tool.description}\n`;
-      if (tool.metadata) {
-        if (tool.metadata.estimatedDuration) {
-          section += `  - Duration: ~${tool.metadata.estimatedDuration}ms\n`;
+    let section = '\n## Available Actions Details\n';
+    for (const action of actions.slice(0, 5)) { // Limit to first 5 to avoid overwhelming the LLM
+      section += `**${action.name}** (${action.id}): ${action.description}\n`;
+      if (action.metadata) {
+        if (action.metadata.estimatedDuration) {
+          section += `  - Duration: ~${action.metadata.estimatedDuration}ms\n`;
         }
-        if (tool.metadata.reliability) {
-          section += `  - Reliability: ${(tool.metadata.reliability * 100).toFixed(0)}%\n`;
+        if (action.metadata.reliability) {
+          section += `  - Reliability: ${(action.metadata.reliability * 100).toFixed(0)}%\n`;
         }
-        if (tool.metadata.costLevel) {
-          section += `  - Cost level: ${tool.metadata.costLevel}\n`;
+        if (action.metadata.costLevel) {
+          section += `  - Cost level: ${action.metadata.costLevel}\n`;
         }
       }
     }
-    if (tools.length > 5) {
-      section += `... and ${tools.length - 5} more tools available\n`;
+    if (actions.length > 5) {
+      section += `... and ${actions.length - 5} more actions available\n`;
     }
     return section;
   }
@@ -1140,7 +1140,7 @@ Consider:
 
   /**
    * Executes the execution plan decided by the LLM.
-   * Handles mixed tools and sub-agents with proper execution order and parallelization.
+   * Handles mixed actions and sub-agents with proper execution order and parallelization.
    */
   protected async executeDecidedActions(
     context: AgentExecutionContext,
@@ -1148,15 +1148,15 @@ Consider:
     executionHistory: ExecutionHistoryItem[]
   ): Promise<{
     historyItems: ExecutionHistoryItem[];
-    toolResults: ActionResult[];
+    actionResults: ActionResult[];
     newMessages: ChatMessage[];
   }> {
     const historyItems: ExecutionHistoryItem[] = [];
-    const toolResults: ActionResult[] = [];
+    const actionResults: ActionResult[] = [];
     const newMessages: ChatMessage[] = [];
 
     if (!decision.executionPlan || decision.executionPlan.length === 0) {
-      return { historyItems, toolResults, newMessages };
+      return { historyItems, actionResults, newMessages };
     }
 
     // Group execution steps by executionOrder
@@ -1189,7 +1189,7 @@ Consider:
         );
         
         historyItems.push(...parallelResults.historyItems);
-        toolResults.push(...parallelResults.toolResults);
+        actionResults.push(...parallelResults.actionResults);
         newMessages.push(...parallelResults.newMessages);
       }
 
@@ -1202,7 +1202,7 @@ Consider:
         );
         
         historyItems.push(...sequentialResults.historyItems);
-        toolResults.push(...sequentialResults.toolResults);
+        actionResults.push(...sequentialResults.actionResults);
         newMessages.push(...sequentialResults.newMessages);
       }
 
@@ -1217,7 +1217,7 @@ Consider:
       }
     }
 
-    return { historyItems, toolResults, newMessages };
+    return { historyItems, actionResults, newMessages };
   }
 
   /**
@@ -1247,7 +1247,7 @@ Consider:
     executionHistory: ExecutionHistoryItem[]
   ): Promise<{
     historyItems: ExecutionHistoryItem[];
-    toolResults: ActionResult[];
+    actionResults: ActionResult[];
     newMessages: ChatMessage[];
   }> {
     const promises = steps.map(step => 
@@ -1257,7 +1257,7 @@ Consider:
     const results = await Promise.allSettled(promises);
     
     const historyItems: ExecutionHistoryItem[] = [];
-    const toolResults: ActionResult[] = [];
+    const actionResults: ActionResult[] = [];
     const newMessages: ChatMessage[] = [];
     
     for (let i = 0; i < results.length; i++) {
@@ -1266,8 +1266,8 @@ Consider:
       
       if (result.status === 'fulfilled') {
         historyItems.push(result.value.historyItem);
-        if (result.value.toolResult) {
-          toolResults.push(result.value.toolResult);
+        if (result.value.actionResult) {
+          actionResults.push(result.value.actionResult);
         }
         if (result.value.newMessage) {
           newMessages.push(result.value.newMessage);
@@ -1286,7 +1286,7 @@ Consider:
       }
     }
     
-    return { historyItems, toolResults, newMessages };
+    return { historyItems, actionResults, newMessages };
   }
 
   /**
@@ -1298,11 +1298,11 @@ Consider:
     executionHistory: ExecutionHistoryItem[]
   ): Promise<{
     historyItems: ExecutionHistoryItem[];
-    toolResults: ActionResult[];
+    actionResults: ActionResult[];
     newMessages: ChatMessage[];
   }> {
     const historyItems: ExecutionHistoryItem[] = [];
-    const toolResults: ActionResult[] = [];
+    const actionResults: ActionResult[] = [];
     const newMessages: ChatMessage[] = [];
     
     for (const step of steps) {
@@ -1310,8 +1310,8 @@ Consider:
         const result = await this.executeSingleStep(context, step, executionHistory);
         historyItems.push(result.historyItem);
         
-        if (result.toolResult) {
-          toolResults.push(result.toolResult);
+        if (result.actionResult) {
+          actionResults.push(result.actionResult);
         }
         if (result.newMessage) {
           newMessages.push(result.newMessage);
@@ -1329,11 +1329,11 @@ Consider:
       }
     }
     
-    return { historyItems, toolResults, newMessages };
+    return { historyItems, actionResults, newMessages };
   }
 
   /**
-   * Executes a single execution step (tool or subagent).
+   * Executes a single execution step (action or subagent).
    */
   protected async executeSingleStep(
     context: AgentExecutionContext,
@@ -1341,31 +1341,31 @@ Consider:
     executionHistory: ExecutionHistoryItem[]
   ): Promise<{
     historyItem: ExecutionHistoryItem;
-    toolResult?: ActionResult;
+    actionResult?: ActionResult;
     newMessage?: ChatMessage;
   }> {
     const timestamp = new Date();
     
     try {
-      if (step.type === 'tool') {
-        // Execute tool using ActionEngine
-        const toolResult = await this.executeTool(step.targetId, step.parameters || {});
+      if (step.type === 'action') {
+        // Execute action using ActionEngine
+        const actionResult = await this.executeAction(step.targetId, step.parameters || {});
         
         const statusMessage = step.description 
-          ? `${step.description} - ${toolResult.Success ? 'Completed' : 'Failed'}`
-          : `Executed tool '${step.targetId}': ${toolResult.Success ? 'Success' : toolResult.Message}`;
+          ? `${step.description} - ${actionResult.Success ? 'Completed' : 'Failed'}`
+          : `Executed action '${step.targetId}': ${actionResult.Success ? 'Success' : actionResult.Message}`;
         
         return {
           historyItem: {
-            type: 'tool',
+            type: 'action',
             targetId: step.targetId,
             parameters: step.parameters,
-            result: toolResult,
-            success: toolResult.Success,
-            errorMessage: toolResult.Success ? undefined : toolResult.Message,
+            result: actionResult,
+            success: actionResult.Success,
+            errorMessage: actionResult.Success ? undefined : actionResult.Message,
             timestamp
           },
-          toolResult,
+          actionResult,
           newMessage: {
             role: 'assistant',
             content: statusMessage
@@ -1413,9 +1413,9 @@ Consider:
   }
 
   /**
-   * Gets available tools for this agent.
+   * Gets available actions for this agent.
    */
-  protected async getAvailableTools(): Promise<ToolDescription[]> {
+  protected async getAvailableActions(): Promise<ActionDescription[]> {
     try {
       // Load action engine configuration
       await this._actionEngine.Config(false, this._contextUser);
@@ -1424,12 +1424,12 @@ Consider:
       const agentActions = AIEngine.Instance.AgentActions
         .filter(aa => aa.AgentID === this._agentEntity.ID && aa.Status === 'Active');
       
-      const tools: ToolDescription[] = [];
+      const actions: ActionDescription[] = [];
       
       for (const agentAction of agentActions) {
         const action = this._actionEngine.Actions.find(a => a.ID === agentAction.ActionID);
         if (action && action.Status === 'Active') {
-          tools.push({
+          actions.push({
             id: action.ID,
             name: action.Name,
             description: action.Description || '',
@@ -1445,9 +1445,9 @@ Consider:
         }
       }
       
-      return tools;
+      return actions;
     } catch (error) {
-      LogError(`Error loading available tools: ${error.message}`);
+      LogError(`Error loading available actions: ${error.message}`);
       return [];
     }
   }
@@ -1477,9 +1477,9 @@ Consider:
   }
 
   /**
-   * Executes a tool using the ActionEngine.
+   * Executes an action using the ActionEngine.
    */
-  protected async executeTool(toolId: string, parameters: Record<string, unknown>): Promise<ActionResult> {
+  protected async executeAction(actionId: string, parameters: Record<string, unknown>): Promise<ActionResult> {
     try {
       // Convert parameters to ActionParam format
       const actionParams: ActionParam[] = Object.entries(parameters).map(([name, value]) => ({
@@ -1489,13 +1489,13 @@ Consider:
       }));
 
       return await this._actionEngine.RunActionByID({
-        ActionID: toolId,
+        ActionID: actionId,
         ContextUser: this._contextUser,
         Params: actionParams,
         SkipActionLog: false
       });
     } catch (error) {
-      LogError(`Error executing tool '${toolId}': ${error.message}`);
+      LogError(`Error executing action '${actionId}': ${error.message}`);
       return {
         Success: false,
         Message: error.message,
@@ -1547,7 +1547,7 @@ Consider:
     let executionPlan: ExecutionStep[] = [];
     if (decision.executionPlan && Array.isArray(decision.executionPlan)) {
       executionPlan = decision.executionPlan.map((step, index) => ({
-        type: step.type || 'tool',
+        type: step.type || 'action',
         targetId: step.targetId || '',
         parameters: step.parameters || {},
         executionOrder: step.executionOrder || (index + 1),
@@ -1574,7 +1574,7 @@ Consider:
     decision: AgentDecisionResponse,
     executionResults: {
       historyItems: ExecutionHistoryItem[];
-      toolResults: ActionResult[];
+      actionResults: ActionResult[];
       newMessages: ChatMessage[];
     }
   ): string {

@@ -1,4 +1,5 @@
-import { BaseAgent, IAgentFactory, AgentDecisionInput, AgentDecisionResponse, ToolDescription, SubAgentDescription, ExecutionStep } from '../base-agent';
+import { BaseAgent, IAgentFactory, AgentDecisionInput, AgentDecisionResponse, ActionDescription, SubAgentDescription, ExecutionStep } from '../base-agent';
+import { GetAgentFactory } from '../AgentFactory';
 import { UserInfo } from '@memberjunction/core';
 
 /**
@@ -28,8 +29,9 @@ export class EnhancedAgentExamples {
    * 3. Available tools and sub-agents are listed
    * 4. Decision-making loop determines next actions
    */
-  static async CreateConductorExample(factory: IAgentFactory, contextUser?: UserInfo): Promise<BaseAgent | null> {
-    // The agent would be created from database metadata
+  static async CreateConductorExample(contextUser?: UserInfo): Promise<BaseAgent | null> {
+    // The agent would be created from database metadata using the global factory
+    const factory = GetAgentFactory();
     return await factory.CreateAgent("CONDUCTOR", contextUser);
     
     // Usage example:
@@ -61,17 +63,17 @@ export class EnhancedAgentExamples {
    * With the enhanced system:
    * 1. System prompt provides the framework
    * 2. Data gathering instructions are embedded
-   * 3. Available tools (database queries, entity analyzers) are listed
+   * 3. Available actions (database queries, entity analyzers) are listed
    * 4. Decision loop determines which entities to query and how
    */
   static ExampleDataGatherDecisionFlow(): AgentDecisionResponse {
     // Example decision that DATA_GATHER agent might make using the new execution plan approach:
     return {
-      decision: 'execute_tool',
+      decision: 'execute_action',
       reasoning: 'Based on the user request for sales data analysis, I need to first identify relevant entities and then query the database for specific information. I\'ll execute entity analysis first, then use those results to generate optimized SQL queries.',
       executionPlan: [
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'entity-analyzer',
           parameters: { 
             domain: 'sales',
@@ -83,7 +85,7 @@ export class EnhancedAgentExamples {
           description: 'Analyze domain entities to identify relevant data sources'
         },
         {
-          type: 'tool', 
+          type: 'action', 
           targetId: 'sql-generator',
           parameters: {
             entities: ['Sales', 'Customers', 'Products'],
@@ -95,7 +97,7 @@ export class EnhancedAgentExamples {
           description: 'Generate optimized SQL queries based on entity analysis'
         },
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'data-validator',
           parameters: {
             validateSchema: true,
@@ -121,14 +123,15 @@ export class EnhancedAgentExamples {
   }
 
   /**
-   * Example of enhanced decision input that would be provided to agents
+   * Example of enhanced decision input that would be provided to agents.
+   * Note: Updated to use 'availableActions' instead of 'availableTools' for consistency.
    */
   static CreateExampleDecisionInput(): AgentDecisionInput {
     return {
       messages: [
         { role: 'user', content: 'I need to analyze Q4 sales performance and create a comprehensive report' }
       ],
-      availableTools: [
+      availableActions: [
         {
           id: 'sql-generator',
           name: 'SQL Query Generator',
@@ -278,7 +281,7 @@ a business user seeking information from a data platform...
 \`\`\`
 
 ## 3. Enhanced Context
-- Available tools: sql-generator, report-generator, entity-analyzer
+- Available actions: sql-generator, report-generator, entity-analyzer
 - Available sub-agents: DATA_GATHER, REPORT_GENERATOR, VISUALIZATION_EXPERT
 - Time constraints, priorities, execution preferences
 
@@ -383,7 +386,7 @@ export class AgentTestScenarios {
 
     expectedDecisions: [
       { agent: "CONDUCTOR", decision: "execute_subagent", target: "DATA_GATHER" },
-      { agent: "DATA_GATHER", decision: "execute_tool", target: "sql-generator" },
+      { agent: "DATA_GATHER", decision: "execute_action", target: "sql-generator" },
       { agent: "DATA_GATHER", decision: "complete_task", target: null },
       { agent: "CONDUCTOR", decision: "execute_subagent", target: "visualization-expert" },
       { agent: "CONDUCTOR", decision: "complete_task", target: null }
@@ -415,18 +418,18 @@ export class AgentTestScenarios {
     
     expectedFlow: [
       "CONDUCTOR agent decides on optimal execution strategy",
-      "Order 1: Use data-gather tool to get baseline data",
+      "Order 1: Use data-gather action to get baseline data",
       "Order 2: Execute data-analyst and feedback-analyzer sub-agents in parallel", 
-      "Order 3: Use market-research tool while parallel agents complete",
+      "Order 3: Use market-research action while parallel agents complete",
       "Order 4: Execute report-generator sub-agent to compile results"
     ],
 
     aiDrivenDecision: {
-      decision: 'execute_tool',
+      decision: 'execute_action',
       reasoning: 'I need to gather baseline data first, then analyze it in parallel with feedback analysis, incorporate market research, and finally compile everything into a board-ready report.',
       executionPlan: [
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'data-gather',
           parameters: { domain: 'sales', timeframe: 'current_quarter' },
           executionOrder: 1,
@@ -450,7 +453,7 @@ export class AgentTestScenarios {
           description: 'Analyze customer feedback in parallel with sales analysis'
         },
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'market-research',
           parameters: { competitors: ['company_a', 'company_b'], metrics: ['pricing', 'features'] },
           executionOrder: 3,
@@ -480,16 +483,16 @@ export class AgentTestScenarios {
     expectedFlow: [
       "CONDUCTOR recognizes time constraint and adapts strategy",
       "Chooses parallel execution for speed over thoroughness",
-      "Uses faster tools instead of comprehensive sub-agents",
+      "Uses faster actions instead of comprehensive sub-agents",
       "Provides interim results with confidence levels"
     ],
 
     adaptiveDecision: {
-      decision: 'execute_tool',
+      decision: 'execute_action',
       reasoning: 'Given the 2-hour time constraint, I need to prioritize speed over comprehensive analysis. I\'ll run essential data gathering and metrics calculation in parallel, then provide a streamlined report.',
       executionPlan: [
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'quick-metrics-calculator',
           parameters: { metrics: ['revenue', 'growth', 'customer_count'], mode: 'fast' },
           executionOrder: 1,
@@ -497,7 +500,7 @@ export class AgentTestScenarios {
           description: 'Calculate essential metrics quickly'
         },
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'trend-analyzer',
           parameters: { timeframe: 'quarter', depth: 'summary' },
           executionOrder: 1,
@@ -505,7 +508,7 @@ export class AgentTestScenarios {
           description: 'Generate trend summaries in parallel'
         },
         {
-          type: 'tool',
+          type: 'action',
           targetId: 'report-formatter',
           parameters: { template: 'quarterly_brief', priority_sections: ['executive_summary', 'key_metrics'] },
           executionOrder: 2,
@@ -543,16 +546,16 @@ export class AgentTestScenarios {
       advantages: [
         "Adapts to time constraints and priorities",
         "Optimizes execution order for efficiency",
-        "Mixes tools and sub-agents strategically", 
+        "Mixes actions and sub-agents strategically", 
         "Considers parallel vs sequential trade-offs",
         "Learns from execution history"
       ],
       
       exampleDecisions: [
         "Simple query: Skip complex analysis, go straight to visualization",
-        "Urgent request: Use parallel execution with faster tools",
+        "Urgent request: Use parallel execution with faster actions",
         "Complex analysis: Full sequential workflow with comprehensive sub-agents",
-        "Partial data: Mix estimation tools with available data processing"
+        "Partial data: Mix estimation actions with available data processing"
       ]
     }
   };
