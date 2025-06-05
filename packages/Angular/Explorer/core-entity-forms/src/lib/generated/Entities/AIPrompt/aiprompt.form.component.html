@@ -29,6 +29,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Agent Types" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','SystemPromptID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Types')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Configurations" [Visible]="record.IsSaved"> 
                         MJ: AI Configurations
                     </mj-tab>

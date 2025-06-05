@@ -1072,6 +1072,13 @@ export const AIAgentSchema = z.object({
         * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
+    TypeID: z.string().describe(`
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+        * * Default Value: A7B8C9D0-E1F2-3456-7890-123456789ABC
+    * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1383,7 +1390,7 @@ export const AIPromptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
+    ResponseFormat: z.union([z.literal('Any'), z.literal('Text'), z.literal('Markdown'), z.literal('JSON'), z.literal('ModelSpecific'), z.literal('JSON')]).describe(`
         * * Field Name: ResponseFormat
         * * Display Name: Response Format
         * * SQL Data Type: nvarchar(20)
@@ -1393,6 +1400,7 @@ export const AIPromptSchema = z.object({
     *   * Any
     *   * Text
     *   * Markdown
+    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
@@ -3626,16 +3634,16 @@ export const DashboardSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Applications (vwApplications.ID)
     * * Description: Associated Application ID if Scope is App, otherwise NULL`),
-    Code: z.string().nullable().describe(`
-        * * Field Name: Code
-        * * Display Name: Code
-        * * SQL Data Type: nvarchar(255)
-    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
         * * SQL Data Type: nvarchar(255)
     * * Description: Specifies the runtime class that will be used for the Dashboard when Type is set to 'Code'. This class contains the custom logic and implementation for code-based dashboards.`),
+    Code: z.string().nullable().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -3727,6 +3735,11 @@ export const DataContextItemSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
+    CodeName: z.string().nullable().describe(`
+        * * Field Name: CodeName
+        * * Display Name: Code Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Optional programmatic identifier for this data context item. Must be unique within the DataContext and follow JavaScript naming conventions (letters, numbers, underscore, starting with letter or underscore). Used for improved code generation and programmatic access to data context items.`),
     DataContext: z.string().describe(`
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -7083,6 +7096,249 @@ export const AIAgentPromptSchema = z.object({
 export type AIAgentPromptEntityType = z.infer<typeof AIAgentPromptSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Run Steps
+ */
+export const AIAgentRunStepSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this execution step`),
+    AgentRunID: z.string().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent AIAgentRun that contains this step`),
+    StepNumber: z.number().describe(`
+        * * Field Name: StepNumber
+        * * Display Name: Step Number
+        * * SQL Data Type: int
+    * * Description: Sequential number of this step within the agent run, starting from 1`),
+    StepType: z.string().describe(`
+        * * Field Name: StepType
+        * * Display Name: Step Type
+        * * SQL Data Type: nvarchar(50)
+    * * Description: Type of execution step: prompt, tool, subagent, decision`),
+    StepName: z.string().describe(`
+        * * Field Name: StepName
+        * * Display Name: Step Name
+        * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of what this step accomplishes`),
+    TargetID: z.string().nullable().describe(`
+        * * Field Name: TargetID
+        * * Display Name: Target ID
+        * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.`),
+    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this step began execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this step completed. NULL while still running.`),
+    Success: z.boolean().nullable().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+    * * Description: Whether this step completed successfully. NULL while running, TRUE/FALSE when completed.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if this step failed. NULL for successful steps.`),
+    InputData: z.string().nullable().describe(`
+        * * Field Name: InputData
+        * * Display Name: Input Data
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of input data passed to this step for execution`),
+    OutputData: z.string().nullable().describe(`
+        * * Field Name: OutputData
+        * * Display Name: Output Data
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the output data produced by this step`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Runs
+ */
+export const AIAgentRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this agent run`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Reference to the AIAgent that is being executed in this run`),
+    ParentRunID: z.string().nullable().describe(`
+        * * Field Name: ParentRunID
+        * * Display Name: Parent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.`),
+    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Paused'), z.literal('Failed'), z.literal('Cancelled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Paused
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the agent run began execution`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the agent run completed (successfully or with failure). NULL while running.`),
+    Success: z.boolean().nullable().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+    * * Description: Indicates whether the agent run completed successfully. NULL while running, TRUE/FALSE when completed.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the agent run failed. NULL for successful runs.`),
+    ConversationID: z.string().nullable().describe(`
+        * * Field Name: ConversationID
+        * * Display Name: Conversation ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User context identifier for authentication and permissions during the agent run`),
+    Result: z.string().nullable().describe(`
+        * * Field Name: Result
+        * * Display Name: Result
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final result or output from the agent execution, stored as JSON or text`),
+    AgentState: z.string().nullable().describe(`
+        * * Field Name: AgentState
+        * * Display Name: Agent State
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
+    TotalTokensUsed: z.number().nullable().describe(`
+        * * Field Name: TotalTokensUsed
+        * * Display Name: Total Tokens Used
+        * * SQL Data Type: int
+        * * Default Value: 0
+    * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
+    TotalCost: z.number().nullable().describe(`
+        * * Field Name: TotalCost
+        * * Display Name: Total Cost
+        * * SQL Data Type: decimal(18, 6)
+        * * Default Value: 0.000000
+    * * Description: Total estimated cost for all AI model usage during this agent run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Types
+ */
+export const AIAgentTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the agent type`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the agent type (e.g., "Base", "CustomerSupport", "DataAnalysis"). Used for programmatic identification and factory instantiation.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the agent type, its purpose, and typical use cases`),
+    SystemPromptID: z.string().nullable().describe(`
+        * * Field Name: SystemPromptID
+        * * Display Name: System Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+    * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type AIAgentTypeEntityType = z.infer<typeof AIAgentTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Configuration Params
  */
 export const AIConfigurationParamSchema = z.object({
@@ -7568,6 +7824,12 @@ export const AIPromptRunSchema = z.object({
         * * Display Name: Execution Order
         * * SQL Data Type: int
     * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -14257,6 +14519,21 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
+    * * Field Name: TypeID
+    * * Display Name: Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
+    * * Default Value: A7B8C9D0-E1F2-3456-7890-123456789ABC
+    * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
+    */
+    get TypeID(): string {
+        return this.Get('TypeID');
+    }
+    set TypeID(value: string) {
+        this.Set('TypeID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -15004,11 +15281,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.  
     * @public
     * @method
     * @override
@@ -15017,11 +15294,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
-        this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
 
         return result;
     }
@@ -15047,18 +15324,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -15107,6 +15372,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -15233,14 +15510,15 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     *   * Any
     *   * Text
     *   * Markdown
+    *   * JSON
     *   * ModelSpecific
     *   * JSON
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
-    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON' {
+    get ResponseFormat(): 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON' {
         return this.Get('ResponseFormat');
     }
-    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'ModelSpecific' | 'JSON') {
+    set ResponseFormat(value: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' | 'JSON') {
         this.Set('ResponseFormat', value);
     }
 
@@ -21127,19 +21405,6 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
 
     /**
-    * * Field Name: Code
-    * * Display Name: Code
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.
-    */
-    get Code(): string | null {
-        return this.Get('Code');
-    }
-    set Code(value: string | null) {
-        this.Set('Code', value);
-    }
-
-    /**
     * * Field Name: DriverClass
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(255)
@@ -21150,6 +21415,19 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     }
     set DriverClass(value: string | null) {
         this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Used to identify the dashboard for code-base dashboards. Allows reuse of the same DriverClass for multiple dashboards that can be rendered differently.
+    */
+    get Code(): string | null {
+        return this.Get('Code');
+    }
+    set Code(value: string | null) {
+        this.Set('Code', value);
     }
 
     /**
@@ -21375,6 +21653,19 @@ export class DataContextItemEntity extends BaseEntity<DataContextItemEntityType>
     }
     set Description(value: string | null) {
         this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CodeName
+    * * Display Name: Code Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional programmatic identifier for this data context item. Must be unique within the DataContext and follow JavaScript naming conventions (letters, numbers, underscore, starting with letter or underscore). Used for improved code generation and programmatic access to data context items.
+    */
+    get CodeName(): string | null {
+        return this.Get('CodeName');
+    }
+    set CodeName(value: string | null) {
+        this.Set('CodeName', value);
     }
 
     /**
@@ -30013,6 +30304,621 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
 
 
 /**
+ * MJ: AI Agent Run Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRunStep
+ * * Base View: vwAIAgentRunSteps
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
+export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
+    /**
+    * Loads the MJ: AI Agent Run Steps record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateStepNumberGreaterThanZero(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the step number must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.StepNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this execution step
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent AIAgentRun that contains this step
+    */
+    get AgentRunID(): string {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: StepNumber
+    * * Display Name: Step Number
+    * * SQL Data Type: int
+    * * Description: Sequential number of this step within the agent run, starting from 1
+    */
+    get StepNumber(): number {
+        return this.Get('StepNumber');
+    }
+    set StepNumber(value: number) {
+        this.Set('StepNumber', value);
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Type of execution step: prompt, tool, subagent, decision
+    */
+    get StepType(): string {
+        return this.Get('StepType');
+    }
+    set StepType(value: string) {
+        this.Set('StepType', value);
+    }
+
+    /**
+    * * Field Name: StepName
+    * * Display Name: Step Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of what this step accomplishes
+    */
+    get StepName(): string {
+        return this.Get('StepName');
+    }
+    set StepName(value: string) {
+        this.Set('StepName', value);
+    }
+
+    /**
+    * * Field Name: TargetID
+    * * Display Name: Target ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: ID of the specific target being executed (AIPrompt.ID, AIAction.ID, AIAgent.ID, etc.). NULL for steps that don't target a specific entity.
+    */
+    get TargetID(): string | null {
+        return this.Get('TargetID');
+    }
+    set TargetID(value: string | null) {
+        this.Set('TargetID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled
+    */
+    get Status(): 'Running' | 'Completed' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Running' | 'Completed' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this step began execution
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this step completed. NULL while still running.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Description: Whether this step completed successfully. NULL while running, TRUE/FALSE when completed.
+    */
+    get Success(): boolean | null {
+        return this.Get('Success');
+    }
+    set Success(value: boolean | null) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if this step failed. NULL for successful steps.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: InputData
+    * * Display Name: Input Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of input data passed to this step for execution
+    */
+    get InputData(): string | null {
+        return this.Get('InputData');
+    }
+    set InputData(value: string | null) {
+        this.Set('InputData', value);
+    }
+
+    /**
+    * * Field Name: OutputData
+    * * Display Name: Output Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the output data produced by this step
+    */
+    get OutputData(): string | null {
+        return this.Get('OutputData');
+    }
+    set OutputData(value: string | null) {
+        this.Set('OutputData', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRun
+ * * Base View: vwAIAgentRuns
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
+export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
+    /**
+    * Loads the MJ: AI Agent Runs record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this agent run
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Reference to the AIAgent that is being executed in this run
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ParentRunID
+    * * Display Name: Parent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.
+    */
+    get ParentRunID(): string | null {
+        return this.Get('ParentRunID');
+    }
+    set ParentRunID(value: string | null) {
+        this.Set('ParentRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Paused
+    *   * Failed
+    *   * Cancelled
+    * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled
+    */
+    get Status(): 'Running' | 'Completed' | 'Paused' | 'Failed' | 'Cancelled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Running' | 'Completed' | 'Paused' | 'Failed' | 'Cancelled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the agent run began execution
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the agent run completed (successfully or with failure). NULL while running.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Description: Indicates whether the agent run completed successfully. NULL while running, TRUE/FALSE when completed.
+    */
+    get Success(): boolean | null {
+        return this.Get('Success');
+    }
+    set Success(value: boolean | null) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the agent run failed. NULL for successful runs.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
+    * * Description: Identifier linking multiple agent runs that are part of the same conversation or user session
+    */
+    get ConversationID(): string | null {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string | null) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User context identifier for authentication and permissions during the agent run
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Result
+    * * Display Name: Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Final result or output from the agent execution, stored as JSON or text
+    */
+    get Result(): string | null {
+        return this.Get('Result');
+    }
+    set Result(value: string | null) {
+        this.Set('Result', value);
+    }
+
+    /**
+    * * Field Name: AgentState
+    * * Display Name: Agent State
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.
+    */
+    get AgentState(): string | null {
+        return this.Get('AgentState');
+    }
+    set AgentState(value: string | null) {
+        this.Set('AgentState', value);
+    }
+
+    /**
+    * * Field Name: TotalTokensUsed
+    * * Display Name: Total Tokens Used
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of tokens consumed by all LLM calls during this agent run
+    */
+    get TotalTokensUsed(): number | null {
+        return this.Get('TotalTokensUsed');
+    }
+    set TotalTokensUsed(value: number | null) {
+        this.Set('TotalTokensUsed', value);
+    }
+
+    /**
+    * * Field Name: TotalCost
+    * * Display Name: Total Cost
+    * * SQL Data Type: decimal(18, 6)
+    * * Default Value: 0.000000
+    * * Description: Total estimated cost for all AI model usage during this agent run
+    */
+    get TotalCost(): number | null {
+        return this.Get('TotalCost');
+    }
+    set TotalCost(value: number | null) {
+        this.Set('TotalCost', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentType
+ * * Base View: vwAIAgentTypes
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Types')
+export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the agent type
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the agent type (e.g., "Base", "CustomerSupport", "DataAnalysis"). Used for programmatic identification and factory instantiation.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the agent type, its purpose, and typical use cases
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SystemPromptID
+    * * Display Name: System Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt that contains the system-level instructions for all agents of this type. This prompt will be blended with individual agent prompts.
+    */
+    get SystemPromptID(): string | null {
+        return this.Get('SystemPromptID');
+    }
+    set SystemPromptID(value: string | null) {
+        this.Set('SystemPromptID', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether this agent type is available for use. Inactive types cannot be assigned to new agents.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Configuration Params - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIConfigurationParam
@@ -31355,6 +32261,20 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
     set ExecutionOrder(value: number | null) {
         this.Set('ExecutionOrder', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
     }
 
     /**
