@@ -2,6 +2,38 @@
 
 A CLI tool for synchronizing MemberJunction database metadata with local file system representations. This tool enables developers and non-technical users to manage MJ metadata using their preferred editors and version control systems while maintaining the database as the source of truth.
 
+## Purpose
+
+MemberJunction is a powerful metadata-driven system where configuration, business logic, AI prompts, templates, and more are stored as metadata in the database. This approach provides tremendous flexibility and runtime configurability, but it can create friction in modern development workflows.
+
+### Why This Tool Matters
+
+**For Developers:**
+- **Full IDE Support**: Edit complex prompts and templates with syntax highlighting, IntelliSense, and all your favorite editor features
+- **Version Control**: Track every change with Git - see diffs, blame, history, and collaborate through pull requests
+- **Branch-based Development**: Work on features in isolation, test changes, and merge when ready
+- **CI/CD Integration**: Automatically deploy metadata changes as code moves through environments
+- **Bulk Operations**: Use familiar command-line tools (grep, sed, find) to make sweeping changes
+- **Offline Development**: Work on metadata without database connectivity
+
+**For Non-Technical Users:**
+- **Familiar Tools**: Edit prompts in Word, Notepad++, or any text editor
+- **No Database Access Needed**: IT can set up sync, users just edit files
+- **Folder Organization**: Intuitive file/folder structure instead of database IDs
+- **Easy Sharing**: Send prompt files via email or shared drives
+- **Simple Backups**: Copy/paste folders for personal backups
+
+**For Organizations:**
+- **Migration Path**: Metadata flows naturally from dev → staging → production with code
+- **Compliance**: Full audit trail through version control
+- **Collaboration**: Multiple team members can work on different metadata simultaneously
+- **Disaster Recovery**: File-based backups complement database backups
+- **Cross-System Sync**: Export from one MJ instance, import to another
+
+### The Best of Both Worlds
+
+This tool preserves the power of MJ's metadata-driven architecture while adding the convenience of file-based workflows. The database remains the source of truth for runtime operations, while files become the medium for creation, editing, and deployment.
+
 ## Overview
 
 The Metadata Sync tool bridges the gap between database-stored metadata and file-based workflows by:
