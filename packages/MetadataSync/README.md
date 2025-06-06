@@ -79,23 +79,54 @@ metadata/
 ### Individual Record (e.g., ai-prompts/customer-service/greeting.json)
 ```json
 {
-  "_id": "550e8400-e29b-41d4-a716-446655440000",
+  "_primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "_fields": {
+    "Name": "Customer Greeting",
+    "Description": "Friendly customer service greeting",
+    "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Service",
+    "Temperature": 0.7,
+    "MaxTokens": 1000,
+    "Prompt": "@file:greeting.prompt.md",
+    "Notes": "@file:greeting.notes.md"
+  },
   "_sync": {
     "lastModified": "2024-01-15T10:30:00Z",
     "checksum": "sha256:abcd1234..."
+  }
+}
+```
+
+### Composite Primary Key Example (e.g., entity-relationships/user-role.json)
+```json
+{
+  "_primaryKey": {
+    "UserID": "550e8400-e29b-41d4-a716-446655440000",
+    "RoleID": "660f9400-f39c-51e5-b827-557766551111"
   },
-  "Name": "Customer Greeting",
-  "Description": "Friendly customer service greeting",
-  "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
-  "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Service",
-  "Temperature": 0.7,
-  "MaxTokens": 1000,
-  "Prompt": "@file:greeting.prompt.md",
-  "Notes": "@file:greeting.notes.md"
+  "_fields": {
+    "GrantedAt": "2024-01-15T10:30:00Z",
+    "GrantedBy": "@lookup:Users.Email=admin@company.com",
+    "ExpiresAt": "2025-01-15T10:30:00Z",
+    "Notes": "@file:user-role-notes.md"
+  },
+  "_sync": {
+    "lastModified": "2024-01-15T10:30:00Z",
+    "checksum": "sha256:abcd1234..."
+  }
 }
 ```
 
 ## Special Conventions
+
+### Primary Key Handling
+The tool automatically detects primary key fields from entity metadata:
+- **Single primary keys**: Most common, stored as `{"ID": "value"}` or `{"CustomKeyName": "value"}`
+- **Composite primary keys**: Multiple fields that together form the primary key
+- **Auto-detection**: Tool reads entity metadata to determine primary key structure
+- **No hardcoding**: Works with any primary key field name(s)
 
 ### @file: References
 When a field value is exactly `@file:filename`, the tool will:
@@ -226,6 +257,8 @@ Configuration follows a hierarchical structure:
 - Leverages existing data providers
 - Supports watch mode via chokidar
 - Checksums for change detection
+- Dynamic primary key detection from entity metadata
+- No hardcoded assumptions about entity structure
 
 ## Future Enhancements
 
