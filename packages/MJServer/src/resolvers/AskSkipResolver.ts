@@ -2044,8 +2044,10 @@ cycle.`);
                 responsePhase: SkipResponsePhase.AnalysisComplete,
                 techExplanation: analysisDetail.techExplanation,
                 userExplanation: analysisDetail.userExplanation,
-                scriptText: analysisDetail.scriptText,
+                executionResults: analysisDetail.executionResults,
                 tableDataColumns: analysisDetail.tableDataColumns,
+                componentOptions: analysisDetail.componentOptions,
+                artifactRequest: analysisDetail.artifactRequest
               });
             } else if (detail?.responsePhase === SkipResponsePhase.ClarifyingQuestion) {
               const clarifyingQuestionDetail = <SkipAPIClarifyingQuestionResponse>detail;
@@ -2681,7 +2683,7 @@ cycle.`);
     dataSource: DataSource,
     startTime: Date
   ): Promise<{ AIMessageConversationDetailID: string }> {
-    const sTitle = apiResponse.title;
+    const sTitle = apiResponse.title || apiResponse.reportTitle;
     const sResult = JSON.stringify(apiResponse);
 
     // first up, let's see if Skip asked us to create an artifact or add a new version to an existing artifact, or NOT
