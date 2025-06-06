@@ -45,11 +45,13 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 
 ## File Structure
 
-The tool uses a hierarchical directory structure where:
+The tool uses a hierarchical directory structure with cascading defaults:
 - Each top-level directory represents an entity type
-- Each directory contains a `.mj-sync.json` defining the entity
+- `.mj-sync.json` files define entities and base defaults
+- `.mj-folder.json` files define folder-specific defaults (optional)
 - All JSON files within are treated as records of that entity type
 - External files (`.md`, `.html`, etc.) are referenced from the JSON files
+- Defaults cascade down through the folder hierarchy
 
 ### Example Structure
 ```
@@ -58,18 +60,22 @@ metadata/
 ├── ai-prompts/
 │   ├── .mj-sync.json               # Defines entity: "AI Prompts"
 │   ├── customer-service/
+│   │   ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
 │   │   ├── greeting.json           # AI Prompt record
 │   │   ├── greeting.prompt.md      # Prompt content (referenced)
 │   │   └── greeting.notes.md       # Notes field (referenced)
 │   └── analytics/
+│       ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
 │       ├── daily-report.json       # AI Prompt record
 │       └── daily-report.prompt.md  # Prompt content (referenced)
 └── templates/
     ├── .mj-sync.json               # Defines entity: "Templates"
     ├── email/
+    │   ├── .mj-folder.json         # Folder metadata
     │   ├── welcome.json            # Template record
     │   └── welcome.template.html   # Template content (referenced)
     └── reports/
+        ├── .mj-folder.json         # Folder metadata
         ├── invoice.json            # Template record
         └── invoice.template.html   # Template content (referenced)
 ```
@@ -119,6 +125,29 @@ metadata/
   }
 }
 ```
+
+## Default Value Inheritance
+
+The tool implements a cascading inheritance system for field defaults, similar to CSS or OOP inheritance:
+
+1. **Entity-level defaults** (in `.mj-sync.json`) - Base defaults for all records
+2. **Folder-level defaults** (in `.mj-folder.json`) - Override/extend entity defaults
+3. **Nested folder defaults** - Override/extend parent folder defaults
+4. **Record-level values** - Override all inherited defaults
+
+### Inheritance Example
+```
+ai-prompts/.mj-sync.json         → Temperature: 0.7, MaxTokens: 1500
+├── customer-service/.mj-folder.json → Temperature: 0.8 (overrides)
+│   ├── greeting.json            → Uses Temperature: 0.8, MaxTokens: 1500
+│   └── escalation/.mj-folder.json → Temperature: 0.6 (overrides again)
+│       └── urgent.json          → Temperature: 0.9 (record override)
+```
+
+Final values for `urgent.json`:
+- Temperature: 0.9 (from record)
+- MaxTokens: 1500 (from entity defaults)
+- All other fields from folder hierarchy
 
 ## Special Conventions
 
@@ -223,9 +252,33 @@ Configuration follows a hierarchical structure:
 {
   "entity": "AI Prompts",
   "filePattern": "*.json",
-  "organizationStrategy": {
-    "mode": "category-folders",
-    "categoryField": "CategoryID"
+  "defaults": {
+    "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "Temperature": 0.7,
+    "MaxTokens": 1500,
+    "IsActive": true
+  }
+}
+```
+
+### Folder Defaults (metadata/ai-prompts/customer-service/.mj-folder.json)
+```json
+{
+  "defaults": {
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Service",
+    "Temperature": 0.8,
+    "Tags": ["customer-service", "support"]
+  }
+}
+```
+
+### Nested Folder Defaults (metadata/ai-prompts/customer-service/escalation/.mj-folder.json)
+```json
+{
+  "defaults": {
+    "Tags": ["customer-service", "support", "escalation", "priority"],
+    "MaxTokens": 2000,
+    "Temperature": 0.6
   }
 }
 ```
