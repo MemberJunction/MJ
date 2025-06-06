@@ -4,6 +4,8 @@ import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AIAgentTypeEntityExtended } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from './agent-runner';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
  * Manager class for AI Agent entities and AgentRunner instances.
@@ -113,6 +115,11 @@ export class AgentManager {
         LogError(`Agent type with name '${agentTypeName}' not found`);
         return null;
       }
+
+      // Config all dependent engines to ensure they are loaded
+      await AIEngine.Instance.Config(false, contextUser);
+      await ActionEngineServer.Instance.Config(false, contextUser);
+      await TemplateEngineServer.Instance.Config(false, contextUser);
 
       // Use ClassFactory to create the runner instance
       // The key is the agent type name, which allows for agent-type-specific subclasses

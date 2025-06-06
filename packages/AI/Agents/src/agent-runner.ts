@@ -124,7 +124,12 @@ export interface ActionParameter {
 }
 
 /**
- * Execution step that can be an action or sub-agent
+ * Execution step that can be an action or sub-agent.
+ * 
+ * Execution Order Logic:
+ * - Steps with the SAME executionOrder number run in PARALLEL with each other
+ * - Steps with DIFFERENT executionOrder numbers run SEQUENTIALLY (1 first, then 2, then 3, etc.)
+ * - The allowParallel field can override parallel behavior within the same execution order
  */
 export interface ExecutionStep {
   /** Type of execution step */
@@ -133,9 +138,16 @@ export interface ExecutionStep {
   targetId: string;
   /** Parameters to pass */
   parameters?: Record<string, unknown>;
-  /** Execution order position (1, 2, 3, etc.) */
+  /** 
+   * Execution order position (1, 2, 3, etc.). 
+   * Steps with the same number run in parallel, different numbers run sequentially. 
+   */
   executionOrder: number;
-  /** Whether this step can run in parallel with other steps at the same executionOrder */
+  /** 
+   * Whether this step can run in parallel with other steps at the same executionOrder.
+   * Defaults to true. Set to false to force sequential execution even within the same order.
+   * Use false when actions depend on each other or could conflict.
+   */
   allowParallel?: boolean;
   /** Human-readable description of what this step accomplishes */
   description?: string;
@@ -369,23 +381,70 @@ You must ALWAYS respond with a valid JSON object following this exact structure:
 - **request_clarification**: You need more information from the user to proceed
 - **continue_processing**: Continue with your current approach (for multi-step processes)
 
+### Execution Order Logic - CRITICAL UNDERSTANDING
+
+**How Execution Order Works:**
+- Steps with the SAME executionOrder number run in PARALLEL with each other
+- Steps with DIFFERENT executionOrder numbers run SEQUENTIALLY (1 first, then 2, then 3, etc.)
+
+**Execution Order Examples:**
+
+Example 1 - Mixed Sequential and Parallel:
+\`\`\`json
+"executionPlan": [
+  {"type": "subagent", "targetId": "subagent_2", "executionOrder": 1, "allowParallel": true},
+  {"type": "action", "targetId": "action_3", "executionOrder": 2, "allowParallel": true},
+  {"type": "action", "targetId": "action_4", "executionOrder": 2, "allowParallel": true},
+  {"type": "subagent", "targetId": "subagent_3", "executionOrder": 3, "allowParallel": true}
+]
+\`\`\`
+This executes as: Step 1: subagent_2 → Step 2: action_3 AND action_4 in parallel → Step 3: subagent_3
+
+Example 2 - All Sequential:
+\`\`\`json
+"executionPlan": [
+  {"type": "action", "targetId": "action_1", "executionOrder": 1},
+  {"type": "action", "targetId": "action_2", "executionOrder": 2},
+  {"type": "subagent", "targetId": "subagent_1", "executionOrder": 3}
+]
+\`\`\`
+This executes as: action_1 → action_2 → subagent_1 (all sequential)
+
+Example 3 - All Parallel:
+\`\`\`json
+"executionPlan": [
+  {"type": "action", "targetId": "action_1", "executionOrder": 1, "allowParallel": true},
+  {"type": "action", "targetId": "action_2", "executionOrder": 1, "allowParallel": true},
+  {"type": "action", "targetId": "action_3", "executionOrder": 1, "allowParallel": true}
+]
+\`\`\`
+This executes as: action_1, action_2, and action_3 all run simultaneously
+
+**allowParallel Field:**
+- When true (default): Steps with the same executionOrder can run in parallel
+- When false: Forces sequential execution even within the same executionOrder
+- Use false when actions depend on each other or could conflict
+
 ### AI-Driven Execution Planning
 **You have complete autonomy in choosing your approach.** There are no predetermined pathways or required sequences. Instead:
 
 - **Evaluate the Goal**: Understand what the user truly wants to accomplish
 - **Choose Your Strategy**: Decide which combination of actions and sub-agents will best achieve the goal
-- **Design Execution Order**: You determine the sequence - actions and sub-agents can be mixed (e.g., Action1 → SubAgent2 → Action3 → SubAgent1)
-- **Decide Parallelization**: 
-  - Actions can run in parallel (set allowParallel: true for same executionOrder)
-  - Sub-agents should generally run sequentially unless specifically designed for parallel execution
-  - Steps with the same executionOrder number can run simultaneously if allowParallel is true
-- **Adapt Dynamically**: After each execution round, reassess and choose the next steps
+- **Design Execution Order**: 
+  - Use executionOrder to control when things happen (1 = first, 2 = second, etc.)
+  - Put independent tasks at the same executionOrder to run them in parallel
+  - Put dependent tasks at different executionOrder numbers to run them sequentially
+  - Actions and sub-agents can be mixed at any order (e.g., Action1 → SubAgent2 → Action3)
+- **Optimize for Efficiency**: 
+  - Use parallel execution (same executionOrder) when tasks don't depend on each other
+  - Use sequential execution (different executionOrder) when one task needs results from another
+  - Sub-agents can not run in parallel.
 
 ### Execution Guidelines
-- **Strategic Thinking**: Choose the most effective path, not just the most obvious one
-- **Flexibility**: You can combine any actions and sub-agents in any order that makes sense
-- **Parallel Efficiency**: Use parallel execution for actions when it won't cause conflicts
-- **Sequential Control**: Use sequential execution when results from one step inform the next
+- **Strategic Thinking**: Choose the most effective execution strategy, not just the most obvious one
+- **Dependency Awareness**: If Task B needs results from Task A, use different executionOrder numbers (A=1, B=2)
+- **Parallel Efficiency**: If tasks are independent, use the same executionOrder to run them in parallel
+- **Resource Conflicts**: Use allowParallel=false if parallel execution could cause conflicts
 - **Iterative Approach**: After execution, you'll be asked "what's next?" - be prepared to continue or conclude
 
 ## What Should We Do Next?
@@ -395,10 +454,10 @@ Based on the current conversation context, available actions, and your specific 
 1. What is the user ultimately trying to accomplish?
 2. What information or capabilities do I need to fulfill this request?
 3. Which actions or sub-agents would be most effective?
-4. Can any actions be performed in parallel to improve efficiency?
+4. What is the optimal execution order? Which tasks can run in parallel vs. sequentially?
 5. Do I have enough information to proceed, or do I need clarification?
 
-Respond with your decision following the JSON format specified above.`;
+Respond with your decision following the JSON format specified above, paying special attention to setting appropriate executionOrder values for optimal performance.`;
 
   /**
    * Creates a new agent runner instance.
@@ -1187,34 +1246,33 @@ Consider:
         }
       });
 
-      // Separate parallel-allowed and sequential steps within this order
-      const parallelSteps = steps.filter(step => step.allowParallel !== false);
-      const sequentialSteps = steps.filter(step => step.allowParallel === false);
-
-      // Execute parallel steps first (if any)
-      if (parallelSteps.length > 0) {
-        const parallelResults = await this.executeStepsInParallel(
-          context, 
-          parallelSteps, 
-          executionHistory
-        );
-        
-        historyItems.push(...parallelResults.historyItems);
-        actionResults.push(...parallelResults.actionResults);
-        newMessages.push(...parallelResults.newMessages);
-      }
-
-      // Execute sequential steps (if any)
-      if (sequentialSteps.length > 0) {
+      // Determine execution strategy for this order
+      // If ANY step has allowParallel=false, execute all steps in this order sequentially
+      // Otherwise, execute all steps in parallel (default behavior)
+      const hasSequentialSteps = steps.some(step => step.allowParallel === false);
+      
+      if (hasSequentialSteps) {
+        // Execute all steps in this order sequentially
         const sequentialResults = await this.executeStepsSequentially(
           context, 
-          sequentialSteps, 
+          steps, 
           executionHistory
         );
         
         historyItems.push(...sequentialResults.historyItems);
         actionResults.push(...sequentialResults.actionResults);
         newMessages.push(...sequentialResults.newMessages);
+      } else {
+        // Execute all steps in this order in parallel (default behavior)
+        const parallelResults = await this.executeStepsInParallel(
+          context, 
+          steps, 
+          executionHistory
+        );
+        
+        historyItems.push(...parallelResults.historyItems);
+        actionResults.push(...parallelResults.actionResults);
+        newMessages.push(...parallelResults.newMessages);
       }
 
       // Add a summary message for this execution order
