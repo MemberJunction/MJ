@@ -20,6 +20,7 @@
     "@memberjunction/core-entities": "2.45.0",
     "@memberjunction/ai": "2.45.0",
     "@memberjunction/aiengine": "2.45.0",
+    "@memberjunction/ai-engine-base": "2.45.0",
     "@memberjunction/ai-prompts": "2.45.0",
     "@memberjunction/templates": "2.45.0",
     "@memberjunction/actions": "2.45.0",
