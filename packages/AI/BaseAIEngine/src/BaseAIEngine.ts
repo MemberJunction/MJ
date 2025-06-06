@@ -5,6 +5,7 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
          AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
          AIAgentPromptEntity} from "@memberjunction/core-entities";
+import { AIAgentTypeEntityExtended } from "./AIAgentTypeEntityExtended";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -19,6 +20,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
+    private _agentTypes: AIAgentTypeEntityExtended[] = [];
     private _artifactTypes: ArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: AIVendorTypeDefinitionEntity[] = [];
 
@@ -65,6 +67,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 EntityName: 'AI Agents'
             },
             {
+                PropertyName: '_agentTypes',
+                EntityName: 'AI Agent Types'
+            },
+            {
                 PropertyName: '_artifactTypes',
                 EntityName: 'MJ: Artifact Types'
             },
@@ -106,6 +112,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 agent.Notes.push(note);
             });
         }
+
+        // handle associating system prompts with agent types
+        for(const agentType of this._agentTypes) {
+            if (agentType.SystemPromptID) {
+                const systemPrompt = this._prompts.find(p => p.ID === agentType.SystemPromptID);
+                if (systemPrompt) {
+                    agentType.SystemPrompt = systemPrompt;
+                } else {
+                    LogError(`System prompt with ID ${agentType.SystemPromptID} not found for agent type ${agentType.Name}`);
+                }
+            }
+        }
     }
 
     /**
@@ -143,6 +161,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get Agents(): AIAgentEntityExtended[] {
         return this._agents;
+    }
+
+    public get AgentTypes(): AIAgentTypeEntityExtended[] {
+        return this._agentTypes;
     }
 
     public GetAgentByName(agentName: string): AIAgentEntityExtended {
