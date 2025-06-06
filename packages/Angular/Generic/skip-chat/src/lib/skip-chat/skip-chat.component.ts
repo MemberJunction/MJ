@@ -1198,6 +1198,23 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       }
 
       this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
+      
+      // Check if this conversation is in 'Processing' status and restore the streaming state
+      if (conversation.Status === 'Processing') {
+        // This conversation is currently being processed
+        this.setProcessingStatus(conversation.ID, true);
+        this._conversationsInProgress[conversation.ID] = true;
+        this._messageInProgress = true;
+        this.AllowSend = false;
+        
+        // Create the temporary status message after a brief delay to ensure DOM is ready
+        setTimeout(() => {
+          this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
+          // Start polling after the temporary message is created
+          this.startRequestStatusPolling(conversation.ID);
+        }, 100);
+      }
+      
       InvokeManualResize(500);
 
       // ensure the list box has the conversation in view
@@ -1406,6 +1423,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   public ClearMessages() {
     this.Messages = []; // clear out the messages
+    
+    // Clear the temporary message reference
+    this._temporaryMessage = undefined;
 
     // Get the first mjContainer in the DOM which is the one we're injecting into
     const containerElements = document.querySelectorAll('div[mjContainer]');
