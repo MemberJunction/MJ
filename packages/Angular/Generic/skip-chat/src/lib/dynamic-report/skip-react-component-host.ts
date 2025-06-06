@@ -6,9 +6,28 @@ import { LogError } from '@memberjunction/core';
  * CDN URLs for external dependencies
  * These can be configured via environment variables in the future
  */
-const BABEL_STANDALONE_CDN_URL = 'https://unpkg.com/@babel/standalone@7/babel.min.js';
-const REACT_CDN_URL = 'https://unpkg.com/react@18/umd/react.production.min.js';
-const REACT_DOM_CDN_URL = 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';
+const CDN_URLS = {
+  // Core React dependencies
+  BABEL_STANDALONE: 'https://unpkg.com/@babel/standalone@7/babel.min.js',
+  REACT: 'https://unpkg.com/react@18/umd/react.development.js',
+  REACT_DOM: 'https://unpkg.com/react-dom@18/umd/react-dom.development.js',
+  
+  // Ant Design dependencies
+  DAYJS: 'https://unpkg.com/dayjs@1.11.10/dayjs.min.js',
+  
+  // UI Libraries - Using UMD builds that work with global React
+  ANTD_JS: 'https://unpkg.com/antd@5.12.8/dist/antd.js',
+  ANTD_CSS: 'https://unpkg.com/antd@5.12.8/dist/reset.css',
+  REACT_BOOTSTRAP_JS: 'https://unpkg.com/react-bootstrap@2.9.1/dist/react-bootstrap.js',
+  BOOTSTRAP_CSS: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css',
+  
+  // Data Visualization
+  D3_JS: 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js',
+  CHART_JS: 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js',
+  
+  // Utilities
+  LODASH_JS: 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js'
+};
 
 /**
  * Configuration for a React component to be hosted in Angular
@@ -171,6 +190,10 @@ export class SkipReactComponentHost {
   // Static style system that's created once and reused
   private static cachedStyleSystem: SkipComponentStyles | null = null;
 
+  // Static cached libraries
+  private static cachedLibraries: any = null;
+  private static libraryLoadPromise: Promise<any> | null = null;
+
   constructor(private config: ReactComponentConfig) {
     this.loadReactLibraries();
   }
@@ -186,23 +209,36 @@ export class SkipReactComponentHost {
       return;
     }
 
-    // Otherwise, we need to load React dynamically
-    // This is a simplified approach - in production, you might want to use a proper module loader
+    // Load React from CDN to ensure it's available globally for other libraries
     try {
-      // Try to use ES modules if available
-      const [ReactModule, ReactDOMModule] = await Promise.all([
-        import('react'),
-        import('react-dom/client')
-      ]);
-      this.React = ReactModule;
-      this.ReactDOM = ReactDOMModule;
+      // Load React first
+      await this.loadScriptFromCDN(CDN_URLS.REACT, 'React');
+      
+      // Then load ReactDOM (it depends on React being available)
+      await this.loadScriptFromCDN(CDN_URLS.REACT_DOM, 'ReactDOM');
+      
+      this.React = (window as any).React;
+      this.ReactDOM = (window as any).ReactDOM;
+      
+      // Verify they loaded correctly
+      if (!this.React || !this.ReactDOM) {
+        throw new Error('React and ReactDOM failed to load from CDN');
+      }
     } catch (error) {
-      // Fallback to assuming React is available globally
-      if ((window as any).React && (window as any).ReactDOM) {
-        this.React = (window as any).React;
-        this.ReactDOM = (window as any).ReactDOM;
-      } else {
-        throw new Error('React and ReactDOM must be available either as ES modules or global variables');
+      // Try ES modules as fallback
+      try {
+        const [ReactModule, ReactDOMModule] = await Promise.all([
+          import('react'),
+          import('react-dom/client')
+        ]);
+        this.React = ReactModule;
+        this.ReactDOM = ReactDOMModule;
+        
+        // Also set them globally for other libraries
+        (window as any).React = ReactModule;
+        (window as any).ReactDOM = ReactDOMModule;
+      } catch (moduleError) {
+        throw new Error('Failed to load React and ReactDOM from any source');
       }
     }
   }
@@ -251,7 +287,87 @@ export class SkipReactComponentHost {
    * Load Babel standalone for JSX transpilation
    */
   private async loadBabel(): Promise<any> {
-    return this.loadScriptFromCDN(BABEL_STANDALONE_CDN_URL, 'Babel');
+    return this.loadScriptFromCDN(CDN_URLS.BABEL_STANDALONE, 'Babel');
+  }
+
+  /**
+   * Load a CSS file from CDN
+   */
+  private loadCSS(url: string): void {
+    // Check if CSS is already loaded
+    const existingLink = document.querySelector(`link[href="${url}"]`);
+    if (existingLink) {
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = url;
+    document.head.appendChild(link);
+  }
+
+  /**
+   * Load a script from CDN with promise
+   */
+  private loadScript(url: string, globalName: string): Promise<any> {
+    return this.loadScriptFromCDN(url, globalName);
+  }
+
+  /**
+   * Load common UI and utility libraries
+   */
+  private async loadCommonLibraries(): Promise<any> {
+    // If already cached, return immediately
+    if (SkipReactComponentHost.cachedLibraries) {
+      return SkipReactComponentHost.cachedLibraries;
+    }
+
+    // If currently loading, wait for the existing promise
+    if (SkipReactComponentHost.libraryLoadPromise) {
+      return SkipReactComponentHost.libraryLoadPromise;
+    }
+
+    // Start loading libraries
+    SkipReactComponentHost.libraryLoadPromise = this.doLoadLibraries();
+    
+    try {
+      SkipReactComponentHost.cachedLibraries = await SkipReactComponentHost.libraryLoadPromise;
+      return SkipReactComponentHost.cachedLibraries;
+    } finally {
+      SkipReactComponentHost.libraryLoadPromise = null;
+    }
+  }
+
+  /**
+   * Actually load the libraries
+   */
+  private async doLoadLibraries(): Promise<any> {
+    // Load CSS files first (these don't need to be awaited)
+    this.loadCSS(CDN_URLS.ANTD_CSS);
+    this.loadCSS(CDN_URLS.BOOTSTRAP_CSS);
+
+    // Load base dependencies first
+    const [dayjs, _, d3, Chart] = await Promise.all([
+      this.loadScript(CDN_URLS.DAYJS, 'dayjs'),
+      this.loadScript(CDN_URLS.LODASH_JS, '_'),
+      this.loadScript(CDN_URLS.D3_JS, 'd3'),
+      this.loadScript(CDN_URLS.CHART_JS, 'Chart')
+    ]);
+
+    // Then load UI libraries that depend on React
+    const [antd, ReactBootstrap] = await Promise.all([
+      this.loadScript(CDN_URLS.ANTD_JS, 'antd'),
+      this.loadScript(CDN_URLS.REACT_BOOTSTRAP_JS, 'ReactBootstrap')
+    ]);
+
+    return {
+      antd,
+      ReactBootstrap,
+      d3,
+      Chart,
+      _,
+      dayjs
+    };
   }
 
   /**
@@ -259,8 +375,14 @@ export class SkipReactComponentHost {
    */
   public async initialize(): Promise<void> {
     try {
+      // First load React to ensure it's available globally
       await this.loadReactLibraries();
-      const Babel = await this.loadBabel();
+      
+      // Then load Babel and common libraries in parallel
+      const [Babel, libraries] = await Promise.all([
+        this.loadBabel(),
+        this.loadCommonLibraries()
+      ]);
 
       // Create utility functions
       const createStateUpdater = this.createStateUpdaterFunction();
@@ -283,11 +405,11 @@ export class SkipReactComponentHost {
       }
 
       // Create the component factory function from the transpiled code
-      // Evaluate the code with React and styles in scope to get the createComponent function
+      // Always pass all libraries - unused ones will just be undefined in older components
       const createComponent = new Function(
-        'React', 'styles', 'console',
+        'React', 'styles', 'console', 'antd', 'ReactBootstrap', 'd3', 'Chart', '_', 'dayjs',
         `${transpiledCode}; return createComponent;`
-      )(this.React, styles, console);
+      )(this.React, styles, console, libraries.antd, libraries.ReactBootstrap, libraries.d3, libraries.Chart, libraries._, libraries.dayjs);
 
       // Debug: Check if React hooks are available
       if (!this.React.useState) {
@@ -295,7 +417,7 @@ export class SkipReactComponentHost {
         throw new Error('React hooks are not available. Make sure React is loaded correctly.');
       }
 
-      // Then call createComponent with all the necessary dependencies
+      // Call createComponent with all parameters - older components will just ignore the extra libraries parameter
       this.componentResult = createComponent(
         this.React, 
         this.ReactDOM, 
@@ -303,7 +425,8 @@ export class SkipReactComponentHost {
         this.React.useEffect,
         this.React.useCallback,
         createStateUpdater,
-        createStandardEventHandler
+        createStandardEventHandler,
+        libraries
       );
 
       // Create container if it doesn't exist
