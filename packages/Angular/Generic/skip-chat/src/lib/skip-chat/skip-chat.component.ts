@@ -1109,9 +1109,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * @returns 
    */
   public async SelectConversation(conversation: ConversationEntity) {
-    if (this.IsSkipProcessing(conversation)) {
-      return; // already processing this conversation so don't go back and forth
-    }
     
       // load up the conversation if not already the one that's loaded
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
