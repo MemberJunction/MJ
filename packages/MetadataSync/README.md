@@ -90,7 +90,8 @@ metadata/
     "Temperature": 0.7,
     "MaxTokens": 1000,
     "Prompt": "@file:greeting.prompt.md",
-    "Notes": "@file:greeting.notes.md"
+    "Notes": "@file:../shared/notes/greeting-notes.md",
+    "SystemPrompt": "@url:https://raw.githubusercontent.com/company/prompts/main/system/customer-service.md"
   },
   "_sync": {
     "lastModified": "2024-01-15T10:30:00Z",
@@ -121,6 +122,8 @@ metadata/
 
 ## Special Conventions
 
+The tool supports special reference types that can be used in ANY field that accepts text content. These references are processed during push/pull operations to handle external content, lookups, and environment-specific values.
+
 ### Primary Key Handling
 The tool automatically detects primary key fields from entity metadata:
 - **Single primary keys**: Most common, stored as `{"ID": "value"}` or `{"CustomKeyName": "value"}`
@@ -129,10 +132,26 @@ The tool automatically detects primary key fields from entity metadata:
 - **No hardcoding**: Works with any primary key field name(s)
 
 ### @file: References
-When a field value is exactly `@file:filename`, the tool will:
+When a field value starts with `@file:`, the tool will:
 1. Read content from the specified file for push operations
 2. Write content to the specified file for pull operations
 3. Track both files for change detection
+
+Examples:
+- `@file:greeting.prompt.md` - File in same directory as JSON
+- `@file:./shared/common-prompt.md` - Relative path
+- `@file:../templates/standard-header.md` - Parent directory reference
+
+### @url: References
+When a field value starts with `@url:`, the tool will:
+1. Fetch content from the URL during push operations
+2. Cache the content with appropriate headers
+3. Support both HTTP(S) and file:// protocols
+
+Examples:
+- `@url:https://example.com/prompts/greeting.md` - Remote content
+- `@url:https://raw.githubusercontent.com/company/prompts/main/customer.md` - GitHub raw content
+- `@url:file:///shared/network/drive/prompts/standard.md` - Local file URL
 
 ### @lookup: References
 Enable entity relationships using human-readable values:
@@ -204,11 +223,6 @@ Configuration follows a hierarchical structure:
 {
   "entity": "AI Prompts",
   "filePattern": "*.json",
-  "externalFileFields": ["Prompt", "Notes"],
-  "fileExtensions": {
-    "Prompt": ".prompt.md",
-    "Notes": ".notes.md"
-  },
   "organizationStrategy": {
     "mode": "category-folders",
     "categoryField": "CategoryID"
