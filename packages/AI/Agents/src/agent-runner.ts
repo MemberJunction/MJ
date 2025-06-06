@@ -1,5 +1,5 @@
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { AIAgentEntityExtended, AIAgentPromptEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { AIAgentEntityExtended, AIAgentPromptEntity, AIPromptEntity, AIAgentRunEntity, AIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { AIAgentTypeEntityExtended } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner, AIPromptParams } from '@memberjunction/ai-prompts';
@@ -227,22 +227,29 @@ export interface ExecutionHistoryItem {
 }
 
 /**
- * Parameters for agent execution
+ * Input parameters for agent execution.
+ * 
+ * Contains all the configuration, context, and callbacks needed to execute an AI agent,
+ * including support for multi-turn conversations, progress tracking, and cancellation.
+ * 
+ * @public
+ * @see {@link AgentRunner.Execute} for the main execution method
+ * @see {@link AgentExecutionResult} for the corresponding output structure
  */
 export interface AgentExecutionParams {
-  /** The AI agent entity to execute */
+  /** The AI agent entity to execute (must match the runner's agent type) */
   agentEntity: AIAgentEntityExtended;
-  /** User context for authentication and permissions */
+  /** User context for authentication, permissions, and personalization */
   contextUser?: UserInfo;
-  /** Data context for template rendering and agent execution */
+  /** Data context passed to prompts and templates during execution */
   data?: Record<string, unknown>;
-  /** Optional conversation messages for multi-turn conversations */
+  /** Existing conversation messages for multi-turn conversations */
   conversationMessages?: ChatMessage[];
-  /** Optional cancellation token to abort agent execution */
+  /** Cancellation token to abort execution gracefully */
   cancellationToken?: AbortSignal;
-  /** Optional callback for receiving execution progress updates */
+  /** Callback for receiving real-time progress updates during execution */
   onProgress?: (progress: AgentProgressUpdate) => void;
-  /** Optional callback for receiving streaming content updates */
+  /** Callback for receiving streaming content as it's generated */
   onStreaming?: (chunk: AgentStreamingUpdate) => void;
 }
 
@@ -275,29 +282,62 @@ export interface AgentStreamingUpdate {
 }
 
 /**
- * Result of an agent execution
+ * Result of an AI agent execution.
+ * 
+ * Contains the final outcome, decision history, and comprehensive metadata from
+ * the agent's autonomous execution process.
+ * 
+ * @public
+ * @see {@link AgentRunner.Execute} for the execution method that returns this
+ * @see {@link AgentExecutionParams} for the corresponding input structure
  */
 export interface AgentExecutionResult {
-  /** Whether the execution was successful */
+  /** Whether the agent execution completed successfully */
   success: boolean;
-  /** The main result content */
+  /** The main result content (final response or computed value) */
   result?: unknown;
-  /** Error message if execution failed */
+  /** Error message if the execution failed */
   errorMessage?: string;
   /** Total execution time in milliseconds */
   executionTimeMS?: number;
-  /** Additional metadata from the execution */
+  /** Additional metadata about the execution process */
   metadata?: Record<string, unknown>;
-  /** Whether the execution was cancelled */
+  /** Whether the execution was cancelled by the user */
   cancelled?: boolean;
-  /** Conversation messages generated during execution */
+  /** All conversation messages generated during execution */
   conversationMessages?: ChatMessage[];
-  /** Decision-making history */
+  /** Complete history of LLM decisions made during execution */
   decisionHistory?: AgentDecisionResponse[];
-  /** Action execution results */
+  /** Results from all actions that were executed */
   actionResults?: ActionResult[];
-  /** Final decision that led to completion */
+  /** The final decision that led to task completion or termination */
   finalDecision?: AgentDecisionResponse;
+}
+
+/**
+ * State serialization interface for pause/resume functionality
+ */
+export interface SerializedAgentState {
+  /** Current conversation messages */
+  conversationMessages: ChatMessage[];
+  /** Historical record of execution steps */
+  executionHistory: ExecutionHistoryItem[];
+  /** Complete history of LLM decisions */
+  decisionHistory: AgentDecisionResponse[];
+  /** Results from executed actions */
+  actionResults: ActionResult[];
+  /** Current execution step identifier */
+  currentStep: string;
+  /** Current step number */
+  currentStepNumber: number;
+  /** Execution context data */
+  contextData: Record<string, unknown>;
+  /** Agent configuration at time of serialization */
+  agentConfiguration?: Record<string, unknown>;
+  /** Timestamp when state was serialized */
+  serializedAt: Date;
+  /** Version of serialization format */
+  version: string;
 }
 
 /**
@@ -318,6 +358,10 @@ export interface AgentExecutionContext {
   currentStep: string;
   /** Start time of execution */
   startTime: Date;
+  /** Database run record for tracking */
+  agentRun?: AIAgentRunEntity;
+  /** Current step number for sequential tracking */
+  currentStepNumber: number;
 }
 
 /**
@@ -357,6 +401,7 @@ export class AgentRunner {
   private _agentType: AIAgentTypeEntityExtended;
   private _promptRunner: AIPromptRunner;
   private _contextUser?: UserInfo;
+  protected _metadata: Metadata;
   
   /**
    * Optimized system prompt template for AI agent decision-making.
@@ -461,6 +506,8 @@ Analyze the current situation and respond with your optimal decision plan.`;
   constructor(agentType: AIAgentTypeEntityExtended, contextUser: UserInfo) {
     this._agentType = agentType;
     this._promptRunner = new AIPromptRunner();
+    this._contextUser = contextUser;
+    this._metadata = new Metadata();
   }
   
   // Protected getters for subclasses to access private fields
@@ -604,7 +651,18 @@ Analyze the current situation and respond with your optimal decision plan.`;
    * @protected
    */
   protected async executeCore(context: AgentExecutionContext): Promise<AgentExecutionResult> {
+    let executionStepEntity: AIAgentRunStepEntity | null = null;
+    
     try {
+      // Create initial execution step for core logic
+      executionStepEntity = await this.createExecutionStep(
+        context,
+        'decision',
+        'Agent core execution loop',
+        context.agentEntity.ID,
+        { maxIterations: 10 }
+      );
+
       const decisionHistory: AgentDecisionResponse[] = [];
       const executionHistory: ExecutionHistoryItem[] = [];
       const actionResults: ActionResult[] = [];
@@ -615,30 +673,84 @@ Analyze the current situation and respond with your optimal decision plan.`;
       while (iteration < maxIterations) {
         iteration++;
         
+        // Update current step and save state
+        context.currentStep = `decision-iteration-${iteration}`;
+        await this.updateAgentRunState(context, executionHistory, decisionHistory, actionResults);
+        
         // Check for cancellation
         if (context.params.cancellationToken?.aborted) {
+          if (executionStepEntity) {
+            await this.completeExecutionStep(executionStepEntity, false, null, 'Execution cancelled by user');
+          }
+          await this.finalizeAgentRun(context, false, 'Execution cancelled by user', null, null, null);
           return this.createCancelledResult(context.startTime);
         }
 
-        // Report progress
+        // Report progress with run information
         this.sendProgress(context.params.onProgress, {
           step: 'subagent_coordination',
           percentage: 30 + (50 * iteration / maxIterations),
           message: `Decision-making iteration ${iteration}/${maxIterations}`,
-          metadata: { iteration, maxIterations }
+          metadata: { 
+            iteration, 
+            maxIterations,
+            runId: context.agentRun?.ID,
+            stepNumber: context.currentStepNumber
+          }
         });
 
-        // Step 1: Create decision input
-        const decisionInput = await this.createDecisionInput(context, currentMessages, executionHistory);
+        // Step 1: Create decision step and input
+        const decisionStepEntity = await this.createExecutionStep(
+          context,
+          'decision',
+          `Decision making - iteration ${iteration}`,
+          undefined,
+          { iteration, maxIterations, messagesCount: currentMessages.length }
+        );
 
-        // Step 2: Make decision using LLM
-        const decision = await this.makeDecision(context, decisionInput);
-        decisionHistory.push(decision);
+        let decision: AgentDecisionResponse;
+        try {
+          const decisionInput = await this.createDecisionInput(context, currentMessages, executionHistory);
+          decision = await this.makeDecision(context, decisionInput);
+          decisionHistory.push(decision);
+          
+          await this.completeExecutionStep(decisionStepEntity, true, {
+            decision: decision.decision,
+            reasoning: decision.reasoning,
+            executionPlanLength: decision.executionPlan.length,
+            confidence: decision.confidence
+          });
+        } catch (error) {
+          await this.completeExecutionStep(decisionStepEntity, false, null, error.message);
+          throw error;
+        }
 
-        // Step 3: Handle the decision
+        // Step 3: Handle the decision outcome
         if (decision.isTaskComplete || decision.decision === 'complete_task') {
-          // Task is complete, return final result
-          return {
+          // Create completion step
+          const completionStepEntity = await this.createExecutionStep(
+            context,
+            'completion',
+            'Task completion',
+            undefined,
+            { finalResponse: decision.finalResponse }
+          );
+          
+          await this.completeExecutionStep(completionStepEntity, true, {
+            taskComplete: true,
+            finalResponse: decision.finalResponse
+          });
+          
+          if (executionStepEntity) {
+            await this.completeExecutionStep(executionStepEntity, true, {
+              iterations: iteration,
+              decisionCount: decisionHistory.length,
+              taskCompleted: true
+            });
+          }
+          
+          // Finalize the agent run as successful
+          const result = {
             success: true,
             result: decision.finalResponse || decision.reasoning,
             conversationMessages: currentMessages,
@@ -648,47 +760,87 @@ Analyze the current situation and respond with your optimal decision plan.`;
             metadata: {
               iterations: iteration,
               decisionCount: decisionHistory.length,
-              actionExecutions: actionResults.length
+              actionExecutions: actionResults.length,
+              runId: context.agentRun?.ID
             }
           };
+          
+          await this.finalizeAgentRun(context, true, null, result.result, decisionHistory, actionResults);
+          return result;
         }
 
         if (decision.decision === 'request_clarification') {
-          // Need clarification from user
-          return {
+          // Create clarification step
+          const clarificationStepEntity = await this.createExecutionStep(
+            context,
+            'clarification',
+            'Requesting user clarification',
+            undefined,
+            { reasoning: decision.reasoning }
+          );
+          
+          await this.completeExecutionStep(clarificationStepEntity, true, {
+            clarificationRequest: decision.reasoning
+          });
+          
+          if (executionStepEntity) {
+            await this.completeExecutionStep(executionStepEntity, false, null, 'Clarification needed from user');
+          }
+          
+          const result = {
             success: false,
             errorMessage: decision.reasoning,
             conversationMessages: currentMessages,
             decisionHistory,
             metadata: {
               needsClarification: true,
-              clarificationRequest: decision.reasoning
+              clarificationRequest: decision.reasoning,
+              runId: context.agentRun?.ID
             }
           };
+          
+          await this.finalizeAgentRun(context, false, decision.reasoning, null, decisionHistory, actionResults);
+          return result;
         }
 
-        // Step 4: Execute the decided actions
-        const executionResults = await this.executeDecidedActions(context, decision, executionHistory);
+        // Step 4: Execute the decided actions with logging
+        let executionResults;
+        try {
+          executionResults = await this.executeDecidedActions(context, decision, executionHistory);
+          
+          // Add execution results to history
+          executionHistory.push(...executionResults.historyItems);
+          actionResults.push(...executionResults.actionResults);
+
+          // Update conversation messages with results
+          if (executionResults.newMessages.length > 0) {
+            currentMessages.push(...executionResults.newMessages);
+          }
+
+          // Add a summary of what was executed
+          const executionSummary = this.createExecutionSummary(decision, executionResults);
+          currentMessages.push({
+            role: 'assistant',
+            content: executionSummary
+          });
+        } catch (error) {
+          LogError(`Error executing actions in iteration ${iteration}: ${error.message}`);
+          // Continue execution loop despite action failures
+        }
         
-        // Add execution results to history
-        executionHistory.push(...executionResults.historyItems);
-        actionResults.push(...executionResults.actionResults);
-
-        // Update conversation messages with results
-        if (executionResults.newMessages.length > 0) {
-          currentMessages.push(...executionResults.newMessages);
-        }
-
-        // Add a summary of what was executed
-        const executionSummary = this.createExecutionSummary(decision, executionResults);
-        currentMessages.push({
-          role: 'assistant',
-          content: executionSummary
-        });
+        // Update state with latest results
+        await this.updateAgentRunState(context, executionHistory, decisionHistory, actionResults);
       }
 
       // If we reach here, we hit the max iterations limit
-      return {
+      if (executionStepEntity) {
+        await this.completeExecutionStep(executionStepEntity, false, {
+          iterations: iteration,
+          maxIterationsReached: true
+        }, `Reached maximum iterations (${maxIterations}) without task completion`);
+      }
+      
+      const result = {
         success: false,
         errorMessage: `Agent reached maximum iterations (${maxIterations}) without completing the task`,
         conversationMessages: currentMessages,
@@ -697,19 +849,33 @@ Analyze the current situation and respond with your optimal decision plan.`;
         metadata: {
           maxIterationsReached: true,
           iterations: iteration,
-          decisionCount: decisionHistory.length
+          decisionCount: decisionHistory.length,
+          runId: context.agentRun?.ID
         }
       };
+      
+      await this.finalizeAgentRun(context, false, result.errorMessage, null, decisionHistory, actionResults);
+      return result;
+      
     } catch (error) {
       LogError(`Error in executeCore for agent '${context.agentEntity.Name}' of agent type '${this.AgentType.Name}': ${error.message}`);
-      return {
+      
+      if (executionStepEntity) {
+        await this.completeExecutionStep(executionStepEntity, false, null, error.message);
+      }
+      
+      const result = {
         success: false,
         errorMessage: error.message,
         metadata: {
           errorStep: 'executeCore',
           agentName: context.agentEntity.Name,
+          runId: context.agentRun?.ID
         }
       };
+      
+      await this.finalizeAgentRun(context, false, error.message, null, [], []);
+      return result;
     }
   }
 
@@ -731,16 +897,67 @@ Analyze the current situation and respond with your optimal decision plan.`;
   }
   
   /**
-   * Initializes the execution context for the agent.
+   * Initializes the execution context for the agent and creates the database run record.
    */
   private async initializeContext(params: AgentExecutionParams, startTime: Date): Promise<AgentExecutionContext> {
+    // Create the AIAgentRun record
+    const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', this.contextUser);
+    agentRun.NewRecord();
+    agentRun.AgentID = params.agentEntity.ID;
+    agentRun.Status = 'Running';
+    agentRun.StartedAt = startTime;
+    
+    // Set optional context fields
+    if (params.contextUser) {
+      agentRun.UserID = params.contextUser.ID;
+    }
+    
+    // Extract conversation ID from parameters or data
+    const conversationId = params.data?.conversationId as string || 
+                          params.data?.conversationID as string;
+    if (conversationId) {
+      agentRun.ConversationID = conversationId;
+    }
+    
+    // Set parent run ID if this is a sub-agent execution
+    const parentRunId = params.data?.parentRunId as string ||
+                       params.data?.parentRunID as string;
+    if (parentRunId) {
+      agentRun.ParentRunID = parentRunId;
+    }
+    
+    // Save the run record
+    const saveResult = await agentRun.Save();
+    if (!saveResult) {
+      throw new Error('Failed to create agent run record in database');
+    }
+    
+    // Initialize and serialize the starting state
+    const initialState: SerializedAgentState = {
+      conversationMessages: params.conversationMessages || [],
+      executionHistory: [],
+      decisionHistory: [],
+      actionResults: [],
+      currentStep: 'initialization',
+      currentStepNumber: 1,
+      contextData: params.data || {},
+      agentConfiguration: {},
+      serializedAt: new Date(),
+      version: '1.0'
+    };
+    
+    agentRun.AgentState = JSON.stringify(initialState);
+    await agentRun.Save();
+    
     return {
       agentEntity: params.agentEntity,
       conversationMessages: params.conversationMessages || [],
       params,
       data: params.data || {},
       currentStep: 'initialization',
-      startTime
+      startTime,
+      agentRun,
+      currentStepNumber: 1
     };
   }
 
@@ -865,6 +1082,265 @@ Analyze the current situation and respond with your optimal decision plan.`;
     }
   }
 
+  /**
+   * Creates a new execution step record in the database.
+   * 
+   * @param context - The execution context containing run information
+   * @param stepType - Type of step (decision, action, subagent, etc.)
+   * @param stepName - Human-readable name for the step
+   * @param targetId - Optional ID of the target being executed
+   * @param inputData - Optional input data for the step
+   * @returns Promise resolving to the created step entity
+   * 
+   * @protected
+   */
+  protected async createExecutionStep(
+    context: AgentExecutionContext,
+    stepType: string,
+    stepName: string,
+    targetId?: string,
+    inputData?: Record<string, unknown>
+  ): Promise<AIAgentRunStepEntity> {
+    try {
+      if (!context.agentRun) {
+        throw new Error('Agent run record not found in context');
+      }
+
+      const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntity>('AI Agent Run Steps', this.contextUser);
+      stepEntity.NewRecord();
+      stepEntity.AgentRunID = context.agentRun.ID;
+      stepEntity.StepNumber = context.currentStepNumber;
+      stepEntity.StepType = stepType;
+      stepEntity.StepName = stepName;
+      stepEntity.Status = 'Running';
+      stepEntity.StartedAt = new Date();
+      
+      if (targetId) {
+        stepEntity.TargetID = targetId;
+      }
+      
+      if (inputData) {
+        stepEntity.InputData = JSON.stringify(inputData);
+      }
+      
+      const saveResult = await stepEntity.Save();
+      if (!saveResult) {
+        throw new Error(`Failed to create execution step: ${stepName}`);
+      }
+      
+      // Increment step number for next step
+      context.currentStepNumber++;
+      
+      return stepEntity;
+    } catch (error) {
+      LogError(`Error creating execution step '${stepName}': ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Completes an execution step by updating its status and results.
+   * 
+   * @param stepEntity - The step entity to complete
+   * @param success - Whether the step completed successfully
+   * @param outputData - Optional output data from the step
+   * @param errorMessage - Optional error message if the step failed
+   * 
+   * @protected
+   */
+  protected async completeExecutionStep(
+    stepEntity: AIAgentRunStepEntity,
+    success: boolean,
+    outputData?: unknown,
+    errorMessage?: string
+  ): Promise<void> {
+    try {
+      stepEntity.Status = success ? 'Completed' : 'Failed';
+      stepEntity.Success = success;
+      stepEntity.CompletedAt = new Date();
+      
+      if (outputData) {
+        stepEntity.OutputData = JSON.stringify(outputData);
+      }
+      
+      if (errorMessage) {
+        stepEntity.ErrorMessage = errorMessage;
+      }
+      
+      await stepEntity.Save();
+    } catch (error) {
+      LogError(`Error completing execution step: ${error.message}`);
+    }
+  }
+
+  /**
+   * Serializes the current agent state for pause/resume functionality.
+   * 
+   * @param context - Current execution context
+   * @param executionHistory - Historical execution data
+   * @param decisionHistory - Decision history
+   * @param actionResults - Action execution results
+   * @returns Serialized state object
+   * 
+   * @protected
+   */
+  protected serializeAgentState(
+    context: AgentExecutionContext,
+    executionHistory: ExecutionHistoryItem[],
+    decisionHistory: AgentDecisionResponse[],
+    actionResults: ActionResult[]
+  ): SerializedAgentState {
+    return {
+      conversationMessages: context.conversationMessages,
+      executionHistory,
+      decisionHistory,
+      actionResults,
+      currentStep: context.currentStep,
+      currentStepNumber: context.currentStepNumber,
+      contextData: context.data,
+      agentConfiguration: context.configuration || {},
+      serializedAt: new Date(),
+      version: '1.0'
+    };
+  }
+
+  /**
+   * Deserializes agent state from a saved state object.
+   * 
+   * @param serializedState - The serialized state to restore
+   * @param context - Current execution context to update
+   * @returns Restored execution data
+   * 
+   * @protected
+   */
+  protected deserializeAgentState(
+    serializedState: SerializedAgentState,
+    context: AgentExecutionContext
+  ): {
+    executionHistory: ExecutionHistoryItem[];
+    decisionHistory: AgentDecisionResponse[];
+    actionResults: ActionResult[];
+  } {
+    // Update context with restored state
+    context.conversationMessages = serializedState.conversationMessages;
+    context.currentStep = serializedState.currentStep;
+    context.currentStepNumber = serializedState.currentStepNumber;
+    context.data = { ...context.data, ...serializedState.contextData };
+    context.configuration = { ...context.configuration, ...serializedState.agentConfiguration };
+    
+    return {
+      executionHistory: serializedState.executionHistory,
+      decisionHistory: serializedState.decisionHistory,
+      actionResults: serializedState.actionResults
+    };
+  }
+
+  /**
+   * Updates the agent run state in the database.
+   * 
+   * @param context - Current execution context
+   * @param executionHistory - Current execution history
+   * @param decisionHistory - Current decision history  
+   * @param actionResults - Current action results
+   * 
+   * @protected
+   */
+  protected async updateAgentRunState(
+    context: AgentExecutionContext,
+    executionHistory: ExecutionHistoryItem[],
+    decisionHistory: AgentDecisionResponse[],
+    actionResults: ActionResult[]
+  ): Promise<void> {
+    try {
+      if (!context.agentRun) {
+        return;
+      }
+      
+      const serializedState = this.serializeAgentState(context, executionHistory, decisionHistory, actionResults);
+      context.agentRun.AgentState = JSON.stringify(serializedState);
+      await context.agentRun.Save();
+    } catch (error) {
+      LogError(`Error updating agent run state: ${error.message}`);
+    }
+  }
+
+  /**
+   * Finalizes the agent run by updating final status, results, and resource metrics.
+   * 
+   * @param context - Current execution context
+   * @param success - Whether the execution was successful
+   * @param errorMessage - Error message if execution failed
+   * @param finalResult - Final result if execution succeeded
+   * @param decisionHistory - Complete decision history
+   * @param actionResults - Complete action results
+   * 
+   * @protected
+   */
+  protected async finalizeAgentRun(
+    context: AgentExecutionContext,
+    success: boolean,
+    errorMessage: string | null,
+    finalResult: unknown,
+    decisionHistory: AgentDecisionResponse[] | null,
+    actionResults: ActionResult[] | null
+  ): Promise<void> {
+    try {
+      if (!context.agentRun) {
+        return;
+      }
+      
+      // Update final status and timing
+      context.agentRun.Status = success ? 'Completed' : 'Failed';
+      context.agentRun.Success = success;
+      context.agentRun.CompletedAt = new Date();
+      
+      if (errorMessage) {
+        context.agentRun.ErrorMessage = errorMessage;
+      }
+      
+      if (finalResult) {
+        context.agentRun.Result = typeof finalResult === 'string' ? finalResult : JSON.stringify(finalResult);
+      }
+      
+      // Calculate resource metrics from action results
+      if (actionResults && actionResults.length > 0) {
+        let totalTokens = 0;
+        let totalCost = 0;
+        
+        for (const actionResult of actionResults) {
+          // Extract token usage and cost from action results if available
+          if (actionResult.Params) {
+            for (const param of actionResult.Params) {
+              if (param.Name === 'tokensUsed' && typeof param.Value === 'number') {
+                totalTokens += param.Value;
+              }
+              if (param.Name === 'cost' && typeof param.Value === 'number') {
+                totalCost += param.Value;
+              }
+            }
+          }
+        }
+        
+        if (totalTokens > 0) {
+          context.agentRun.TotalTokensUsed = totalTokens;
+        }
+        
+        if (totalCost > 0) {
+          context.agentRun.TotalCost = totalCost;
+        }
+      }
+      
+      // Update final state
+      if (decisionHistory && actionResults) {
+        const finalState = this.serializeAgentState(context, [], decisionHistory, actionResults);
+        context.agentRun.AgentState = JSON.stringify(finalState);
+      }
+      
+      await context.agentRun.Save();
+    } catch (error) {
+      LogError(`Error finalizing agent run: ${error.message}`);
+    }
+  }
 
   /**
    * Creates decision input for the LLM based on current context.
@@ -1447,6 +1923,15 @@ Consider:
   }> {
     const timestamp = new Date();
     
+    // Create database step record
+    const stepEntity = await this.createExecutionStep(
+      context,
+      step.type,
+      step.description || `Execute ${step.type} '${step.targetId}'`,
+      step.targetId,
+      step.parameters
+    );
+    
     try {
       if (step.type === 'action') {
         // Execute action using ActionEngine
@@ -1455,6 +1940,20 @@ Consider:
         const statusMessage = step.description 
           ? `${step.description} - ${actionResult.Success ? 'Completed' : 'Failed'}`
           : `Executed action '${step.targetId}': ${actionResult.Success ? 'Success' : actionResult.Message}`;
+        
+        // Complete the database step record
+        await this.completeExecutionStep(
+          stepEntity,
+          actionResult.Success,
+          {
+            actionResult: {
+              success: actionResult.Success,
+              message: actionResult.Message,
+              paramsCount: actionResult.Params?.length || 0
+            }
+          },
+          actionResult.Success ? undefined : actionResult.Message
+        );
         
         return {
           historyItem: {
@@ -1480,6 +1979,20 @@ Consider:
           ? `${step.description} - ${subagentResult.success ? 'Completed' : 'Failed'}`
           : `Executed subagent '${step.targetId}': ${subagentResult.success ? 'Success' : subagentResult.errorMessage}`;
         
+        // Complete the database step record
+        await this.completeExecutionStep(
+          stepEntity,
+          subagentResult.success,
+          {
+            subagentResult: {
+              success: subagentResult.success,
+              executionTimeMS: subagentResult.executionTimeMS,
+              resultLength: subagentResult.result ? JSON.stringify(subagentResult.result).length : 0
+            }
+          },
+          subagentResult.success ? undefined : subagentResult.errorMessage
+        );
+        
         return {
           historyItem: {
             type: 'subagent',
@@ -1496,9 +2009,14 @@ Consider:
           }
         };
       } else {
-        throw new Error(`Unknown execution step type: ${step.type}`);
+        const errorMessage = `Unknown execution step type: ${step.type}`;
+        await this.completeExecutionStep(stepEntity, false, null, errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (error) {
+      // Complete the step record with error
+      await this.completeExecutionStep(stepEntity, false, null, error.message);
+      
       return {
         historyItem: {
           type: step.type,
@@ -1632,11 +2150,17 @@ Consider:
         throw new Error(`Agent type not found for sub-agent '${subAgentId}'`);
       }
       
-      // Create execution parameters for sub-agent
+      // Create execution parameters for sub-agent with hierarchical tracking
       const subAgentParams: AgentExecutionParams = {
         agentEntity: subAgentEntity,
         contextUser: parentContext.params.contextUser,
-        data: { ...parentContext.data, ...parameters },
+        data: { 
+          ...parentContext.data, 
+          ...parameters,
+          // Pass parent run ID for hierarchical tracking
+          parentRunId: parentContext.agentRun?.ID,
+          parentRunID: parentContext.agentRun?.ID  // Alternative naming
+        },
         conversationMessages: [...parentContext.conversationMessages],
         cancellationToken: parentContext.params.cancellationToken,
         onProgress: parentContext.params.onProgress,
@@ -1728,6 +2252,221 @@ Consider:
       errorMessage: 'Agent execution was cancelled',
       executionTimeMS: endTime.getTime() - startTime.getTime()
     };
+  }
+
+  /**
+   * Retrieves the complete run history for a specific agent run, including all execution steps.
+   * 
+   * @param agentRunId - ID of the agent run to retrieve
+   * @param contextUser - User context for database access
+   * @returns Promise resolving to the run details with steps, or null if not found
+   * 
+   * @public
+   */
+  public async getRunHistory(agentRunId: string): Promise<{
+    agentRun: AIAgentRunEntity;
+    steps: AIAgentRunStepEntity[];
+  } | null> {
+    try {
+      // Load the agent run
+      const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+      const loadSuccess = await agentRun.Load(agentRunId);
+      if (!loadSuccess) {
+        return null;
+      }
+      
+      // Load all steps for this run
+      const runView = new RunView();
+      const stepsResult = await runView.RunView<AIAgentRunStepEntity>({
+        EntityName: 'MJ: AI Agent Run Steps',
+        ExtraFilter: `AgentRunID = '${agentRunId}'`,
+        OrderBy: 'StepNumber ASC',
+        ResultType: 'entity_object'
+      }, this.contextUser);
+      
+      return {
+        agentRun,
+        steps: stepsResult.Results
+      };
+    } catch (error) {
+      LogError(`Error retrieving run history for '${agentRunId}': ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Pauses the current execution by serializing state and updating the run status.
+   * 
+   * Note: This method should be called from within an execution context where 
+   * the agent run is already created.
+   * 
+   * @param context - Current execution context
+   * @param reason - Optional reason for pausing
+   * @returns Promise resolving to the agent run ID
+   * 
+   * @public
+   */
+  public async pauseExecution(
+    context: AgentExecutionContext,
+    reason: string = 'Execution paused by user'
+  ): Promise<string | null> {
+    try {
+      if (!context.agentRun) {
+        throw new Error('No active agent run to pause');
+      }
+      
+      // Update run status to paused
+      context.agentRun.Status = 'Paused';
+      context.agentRun.ErrorMessage = reason;
+      
+      // Save current state
+      await this.updateAgentRunState(context, [], [], []);
+      await context.agentRun.Save();
+      
+      LogStatus(`Agent run '${context.agentRun.ID}' paused: ${reason}`);
+      return context.agentRun.ID;
+    } catch (error) {
+      LogError(`Error pausing execution: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Resumes execution from a paused agent run by restoring state and continuing.
+   * 
+   * @param agentRunId - ID of the paused agent run to resume
+   * @param contextUser - User context for the resumed execution
+   * @returns Promise resolving to the execution result
+   * 
+   * @public
+   */
+  public async resumeExecution(
+    agentRunId: string,
+    contextUser?: UserInfo
+  ): Promise<AgentExecutionResult> {
+    try {
+      // Load the paused agent run
+      const agentRun = await this._metadata.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+      const loadSuccess = await agentRun.Load(agentRunId);
+      if (!loadSuccess) {
+        throw new Error(`Agent run '${agentRunId}' not found`);
+      }
+      
+      if (agentRun.Status !== 'Paused') {
+        throw new Error(`Agent run '${agentRunId}' is not in paused state (current status: ${agentRun.Status})`);
+      }
+      
+      // Load the agent entity
+      const agentEntity = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+      if (!agentEntity) {
+        throw new Error(`Agent entity not found for run '${agentRunId}'`);
+      }
+      
+      // Deserialize the saved state
+      let serializedState: SerializedAgentState;
+      try {
+        serializedState = JSON.parse(agentRun.AgentState || '{}');
+      } catch (error) {
+        throw new Error(`Failed to parse saved agent state: ${error.message}`);
+      }
+      
+      // Create execution context for resumption
+      const resumedContext: AgentExecutionContext = {
+        agentEntity,
+        conversationMessages: serializedState.conversationMessages || [],
+        params: {
+          agentEntity,
+          contextUser,
+          data: serializedState.contextData || {},
+          conversationMessages: serializedState.conversationMessages || []
+        },
+        data: serializedState.contextData || {},
+        configuration: serializedState.agentConfiguration || {},
+        currentStep: serializedState.currentStep || 'resumed',
+        startTime: agentRun.StartedAt,
+        agentRun,
+        currentStepNumber: serializedState.currentStepNumber || 1
+      };
+      
+      // Update status back to running
+      agentRun.Status = 'Running';
+      agentRun.ErrorMessage = null;
+      await agentRun.Save();
+      
+      // Restore execution data
+      const { executionHistory, decisionHistory, actionResults } = 
+        this.deserializeAgentState(serializedState, resumedContext);
+      
+      LogStatus(`Resuming agent run '${agentRunId}' from step: ${resumedContext.currentStep}`);
+      
+      // Continue execution from where it left off
+      return await this.executeCore(resumedContext);
+      
+    } catch (error) {
+      LogError(`Error resuming execution for '${agentRunId}': ${error.message}`);
+      return {
+        success: false,
+        errorMessage: error.message,
+        metadata: {
+          errorStep: 'resumeExecution',
+          runId: agentRunId
+        }
+      };
+    }
+  }
+
+  /**
+   * Cleans up failed or stale agent runs by marking them as failed.
+   * 
+   * This method can be used to clean up runs that are stuck in 'Running' status
+   * due to unexpected termination or system failures.
+   * 
+   * @param maxAgeHours - Maximum age in hours for running agents before marking as failed
+   * @param contextUser - User context for database operations
+   * @returns Promise resolving to the number of runs cleaned up
+   * 
+   * @public
+   */
+  public async cleanupFailedRuns(
+    maxAgeHours: number = 24
+  ): Promise<number> {
+    try {
+      const cutoffTime = new Date();
+      cutoffTime.setHours(cutoffTime.getHours() - maxAgeHours);
+      
+      const runView = new RunView();
+      const staleRunsResult = await runView.RunView<AIAgentRunEntity>({
+        EntityName: 'MJ: AI Agent Runs',
+        ExtraFilter: `Status = 'Running' AND StartedAt < '${cutoffTime.toISOString()}'`,
+        ResultType: 'entity_object'
+      }, this.contextUser);
+      
+      const staleRuns = staleRunsResult.Results;
+      let cleanedCount = 0;
+      
+      for (const run of staleRuns) {
+        try {
+          run.Status = 'Failed';
+          run.Success = false;
+          run.CompletedAt = new Date();
+          run.ErrorMessage = `Run marked as failed due to cleanup - exceeded maximum age of ${maxAgeHours} hours`;
+          
+          await run.Save();
+          cleanedCount++;
+          
+          LogStatus(`Cleaned up stale agent run: ${run.ID} (Agent: ${run.AgentID})`);
+        } catch (error) {
+          LogError(`Failed to clean up run ${run.ID}: ${error.message}`);
+        }
+      }
+      
+      LogStatus(`Cleaned up ${cleanedCount} stale agent runs`);
+      return cleanedCount;
+      
+    } catch (error) {
+      LogError(`Error during cleanup of failed runs: ${error.message}`);
+      return 0;
+    }
   }
 }
 
