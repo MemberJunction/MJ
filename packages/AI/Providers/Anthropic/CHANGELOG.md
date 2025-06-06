@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [21d456d]
+  - @memberjunction/ai@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes
