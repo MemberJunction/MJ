@@ -134,7 +134,7 @@ export function BuildSkipComponentCompleteCode(spec: SkipComponentRootSpec): str
     for (const child of spec.childComponents) {
         const childCode = BuildSkipComponentChildCode(child);
         // Replace the placeholder in the parent component's code with the actual child component code
-        code = replacePlaceholderWithCode(code, child.placeholder, childCode);
+        code = replacePlaceholderWithCode(code, child.componentName, childCode);
     }
     // Return the complete code for this component
     return code;
@@ -152,7 +152,7 @@ export function BuildSkipComponentChildCode(child: SkipComponentChildSpec): stri
     for (const sub of child.components) {
         const subCode = BuildSkipComponentChildCode(sub);
         // Replace the placeholder in the parent component's code with the actual child component code
-        code = replacePlaceholderWithCode(code, sub.placeholder, subCode);
+        code = replacePlaceholderWithCode(code, sub.componentName, subCode);
     }
     // Return the complete code for this child component
     return code;
