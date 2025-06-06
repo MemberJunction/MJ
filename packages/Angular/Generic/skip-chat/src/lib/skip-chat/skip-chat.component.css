@@ -428,6 +428,16 @@
     border-radius: 12px;
     margin-left: 3px;
 }
+
+/* Stop button styling */
+.button-area > button.stop-button {
+    background-color: #dc3545;
+    color: white;
+}
+
+.button-area > button.stop-button:hover {
+    background-color: #c82333;
+}
 /* .input-area > button:first-of-type {
     margin-left: -40px;
 }

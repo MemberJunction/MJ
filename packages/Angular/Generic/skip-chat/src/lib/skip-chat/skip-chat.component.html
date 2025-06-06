@@ -130,11 +130,20 @@
                                                 (click)="showDataContextDialog()"></span>
                                     </button>    
                                 }
-                                <button kendoButton 
-                                    [disabled]="IsTextAreaEmpty() || (SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation))" 
-                                    (click)="sendSkipMessage()">
-                                    <span class="fas fa-solid fa-arrow-up"></span>
-                                </button>
+                                @if (SelectedConversation && IsSkipProcessing(SelectedConversation)) {
+                                    <button kendoButton 
+                                        class="stop-button"
+                                        (click)="stopProcessing()">
+                                        <span class="fas fa-solid fa-stop"></span>
+                                    </button>
+                                }
+                                @else {
+                                    <button kendoButton 
+                                        [disabled]="IsTextAreaEmpty()" 
+                                        (click)="sendSkipMessage()">
+                                        <span class="fas fa-solid fa-arrow-up"></span>
+                                    </button>
+                                }
                                 @if (ShowSharingButton && SelectedConversationCurrentUserPermissionLevel === 'Owner') {
                                     <button kendoButton class="share-button">
                                         <span class="fa-solid fa-share"

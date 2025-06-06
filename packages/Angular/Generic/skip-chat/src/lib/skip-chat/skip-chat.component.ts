@@ -1322,16 +1322,16 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       convoDetail.Role = 'User';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true, true);
-      
-      // Ensure scroll to bottom after adding user message
-      setTimeout(() => {
-        this.scrollToBottom();
-      }, 100);
-
-      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
+
+      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
+      
+      // Ensure scroll to bottom after adding user message AND progress message
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 950); // Slightly after the progress message is shown (850ms + 100ms buffer)
 
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
@@ -2061,6 +2061,100 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     
     if (info.selectedVersionId) {
       this.selectedArtifactVersionId = info.selectedVersionId;
+    }
+  }
+
+  /**
+   * Stops the current processing conversation
+   * - Updates conversation status to Available
+   * - Deletes the last user message
+   * - Restores the text to the input area
+   */
+  public async stopProcessing(): Promise<void> {
+    if (!this.SelectedConversation || !this.IsSkipProcessing(this.SelectedConversation)) {
+      return;
+    }
+
+    try {
+      // Get proper entity object for conversation if needed
+      let conversationEntity: ConversationEntity;
+      if (this.SelectedConversation.Save !== undefined) {
+        conversationEntity = this.SelectedConversation;
+      } else {
+        const p = this.ProviderToUse;
+        conversationEntity = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+        await conversationEntity.Load(this.SelectedConversation.ID);
+      }
+
+      // Find the last user message
+      const lastUserMessage = this.Messages
+        .slice()
+        .reverse()
+        .find(m => m.Role === 'User');
+
+      if (lastUserMessage) {
+        // Store the message text to restore to input
+        const messageText = lastUserMessage.Message;
+
+        // Update conversation status to Available
+        conversationEntity.Status = 'Available';
+        await conversationEntity.Save();
+        
+        // Update the selected conversation object if we loaded a new one
+        if (this.SelectedConversation !== conversationEntity) {
+          this.SelectedConversation = conversationEntity;
+          // Also update in the conversations list
+          const idx = this.Conversations.findIndex(c => c.ID === conversationEntity.ID);
+          if (idx >= 0) {
+            this.Conversations[idx] = conversationEntity;
+          }
+        }
+
+        // Get proper entity object for the message if needed
+        let messageEntity: ConversationDetailEntity;
+        if (lastUserMessage.Delete !== undefined) {
+          messageEntity = lastUserMessage;
+        } else {
+          const p = this.ProviderToUse;
+          messageEntity = await p.GetEntityObject<ConversationDetailEntity>('Conversation Details', p.CurrentUser);
+          await messageEntity.Load(lastUserMessage.ID);
+        }
+
+        // Delete the last user message
+        await messageEntity.Delete();
+        
+        // Remove from UI
+        this.RemoveMessageFromCurrentConversation(lastUserMessage);
+
+        // Restore text to input area
+        if (this.askSkipInput && this.askSkipInput.nativeElement) {
+          this.askSkipInput.nativeElement.value = messageText;
+          this.resizeTextInput();
+        }
+      }
+
+      // Clear processing state
+      this.setProcessingStatus(this.SelectedConversation.ID, false);
+      this._conversationsInProgress[this.SelectedConversation.ID] = false;
+      this._messageInProgress = false;
+      this.AllowSend = true;
+      
+      // Stop polling
+      this.stopRequestStatusPolling(this.SelectedConversation.ID);
+      
+      // Clear any temporary messages
+      this.SetSkipStatusMessage('', 0);
+      
+      // Update the UI
+      this.cdRef.detectChanges();
+      
+      // Focus on the input
+      if (this.askSkipInput && this.askSkipInput.nativeElement) {
+        this.askSkipInput.nativeElement.focus();
+      }
+    } catch (error) {
+      LogError(`Error stopping processing: ${error}`);
+      this.notificationService.CreateSimpleNotification('Failed to stop processing', 'error', 3000);
     }
   }
 
