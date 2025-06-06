@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.45.0
+
+### Minor Changes
+
+- 556ee8d: Add AI Agent framework database entities and enhanced agent execution support
+
+  New entity classes generated for AIAgentType, AIAgentRun, and AIAgentRunStep tables. Enhanced AIAgent and AIPromptRun entities with new foreign key relationships. Updated DataContextItem entity with CodeName property for improved code generation. These changes provide the foundational data layer for the AI Agent execution framework with hierarchical agent support, execution tracking, and pause/resume capabilities.
+
+### Patch Changes
+
+- @memberjunction/core@2.45.0
+- @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

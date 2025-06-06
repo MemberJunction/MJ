@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/server
 
+## 2.45.0
+
+### Minor Changes
+
+- 556ee8d: Add AI Agent framework database entities and enhanced agent execution support
+
+  New entity classes generated for AIAgentType, AIAgentRun, and AIAgentRunStep tables. Enhanced AIAgent and AIPromptRun entities with new foreign key relationships. Updated DataContextItem entity with CodeName property for improved code generation. These changes provide the foundational data layer for the AI Agent execution framework with hierarchical agent support, execution tracking, and pause/resume capabilities.
+
+### Patch Changes
+
+- 253de13: Tweaks to Skip Types and propogate changes
+- Updated dependencies [96c06dd]
+- Updated dependencies [253de13]
+- Updated dependencies [21d456d]
+- Updated dependencies [63f57f1]
+- Updated dependencies [eff73f8]
+- Updated dependencies [bbd9064]
+- Updated dependencies [556ee8d]
+  - @memberjunction/skip-types@2.45.0
+  - @memberjunction/ai@2.45.0
+  - @memberjunction/aiengine@2.45.0
+  - @memberjunction/ai-prompts@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ai-mistral@2.45.0
+  - @memberjunction/ai-openai@2.45.0
+  - @memberjunction/actions@2.45.0
+  - @memberjunction/queue@2.45.0
+  - @memberjunction/sqlserver-dataprovider@2.45.0
+  - @memberjunction/templates@2.45.0
+  - @memberjunction/ai-vectors-pinecone@2.45.0
+  - @memberjunction/core-actions@2.45.0
+  - @memberjunction/entity-communications-server@2.45.0
+  - @memberjunction/doc-utils@2.45.0
+  - @memberjunction/external-change-detection@2.45.0
+  - @memberjunction/graphql-dataprovider@2.45.0
+  - @memberjunction/data-context@2.45.0
+  - @memberjunction/storage@2.45.0
+  - @memberjunction/data-context-server@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

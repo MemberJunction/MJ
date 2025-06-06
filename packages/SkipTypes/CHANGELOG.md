@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.45.0
+
+### Patch Changes
+
+- 96c06dd: furhter changes
+- 253de13: Tweaks to Skip Types and propogate changes
+- 63f57f1: Updates to Angular component and utilities added to Skip Types package
+- eff73f8: Reorganized package internals to be more maintainbable, refactored the HTML report types to support new generation and React based component design.
+- bbd9064: various improvements
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/data-context@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

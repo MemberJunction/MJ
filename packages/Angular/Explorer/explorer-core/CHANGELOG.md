@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [5f23c1f]
+- Updated dependencies [96c06dd]
+- Updated dependencies [253de13]
+- Updated dependencies [63f57f1]
+- Updated dependencies [bbd9064]
+- Updated dependencies [556ee8d]
+- Updated dependencies [00bb82c]
+  - @memberjunction/ng-skip-chat@2.45.0
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ng-ask-skip@2.45.0
+  - @memberjunction/ng-compare-records@2.45.0
+  - @memberjunction/ng-dashboards@2.45.0
+  - @memberjunction/ng-entity-form-dialog@2.45.0
+  - @memberjunction/ng-explorer-settings@2.45.0
+  - @memberjunction/ng-shared@2.45.0
+  - @memberjunction/ng-user-view-grid@2.45.0
+  - @memberjunction/ng-user-view-properties@2.45.0
+  - @memberjunction/ng-file-storage@2.45.0
+  - @memberjunction/ng-query-grid@2.45.0
+  - @memberjunction/ng-record-selector@2.45.0
+  - @memberjunction/ng-resource-permissions@2.45.0
+  - @memberjunction/communication-types@2.45.0
+  - @memberjunction/entity-communications-client@2.45.0
+  - @memberjunction/templates-base-types@2.45.0
+  - @memberjunction/ng-record-changes@2.45.0
+  - @memberjunction/ng-base-forms@2.45.0
+  - @memberjunction/ng-auth-services@2.45.0
+  - @memberjunction/ng-container-directives@2.45.0
+  - @memberjunction/ng-tabstrip@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Minor Changes

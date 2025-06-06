@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 2.45.0
+
+### Minor Changes
+
+- 21d456d: Metadata and functional improvements for AI system (mainly parallelization and logging)
+
+### Patch Changes
+
+- @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

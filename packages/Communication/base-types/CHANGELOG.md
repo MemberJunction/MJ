@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/templates-base-types@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

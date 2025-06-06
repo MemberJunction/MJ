@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 2.45.0
+
+### Patch Changes
+
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ng-compare-records@2.45.0
+  - @memberjunction/ng-shared@2.45.0
+  - @memberjunction/ng-container-directives@2.45.0
+  - @memberjunction/core@2.45.0
+  - @memberjunction/global@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes

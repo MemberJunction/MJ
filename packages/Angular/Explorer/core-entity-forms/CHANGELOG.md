@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.45.0
+
+### Minor Changes
+
+- 556ee8d: Add AI Agent framework database entities and enhanced agent execution support
+
+  New entity classes generated for AIAgentType, AIAgentRun, and AIAgentRunStep tables. Enhanced AIAgent and AIPromptRun entities with new foreign key relationships. Updated DataContextItem entity with CodeName property for improved code generation. These changes provide the foundational data layer for the AI Agent execution framework with hierarchical agent support, execution tracking, and pause/resume capabilities.
+
+### Patch Changes
+
+- Updated dependencies [556ee8d]
+  - @memberjunction/core-entities@2.45.0
+  - @memberjunction/ng-explorer-core@2.45.0
+  - @memberjunction/ng-code-editor@2.45.0
+  - @memberjunction/ng-join-grid@2.45.0
+  - @memberjunction/ng-timeline@2.45.0
+  - @memberjunction/ng-form-toolbar@2.45.0
+  - @memberjunction/ng-base-forms@2.45.0
+  - @memberjunction/ng-container-directives@2.45.0
+  - @memberjunction/ng-tabstrip@2.45.0
+  - @memberjunction/core@2.45.0
+
 ## 2.44.0
 
 ### Patch Changes
