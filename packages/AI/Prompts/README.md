@@ -1142,6 +1142,7 @@ interface AIPromptParams {
     cancellationToken?: AbortSignal;           // Cancellation token for aborting execution
     onProgress?: ExecutionProgressCallback;    // Progress update callback
     onStreaming?: ExecutionStreamingCallback;  // Streaming content callback
+    agentRunId?: string;                       // Optional agent run ID to link prompt executions to parent agent run
 }
 
 /**
@@ -1267,29 +1268,88 @@ const result = await runner.ExecutePrompt({ prompt, data, contextUser });
 
 ### With AI Agents
 
-AI Agents can leverage the prompt system for sophisticated operations:
+AI Agents can leverage the prompt system for sophisticated operations with comprehensive execution tracking:
 
 ```typescript
-// Agents use prompts for their intelligence
-import { BaseAgent } from '@memberjunction/ai-agents';
+// Agents use prompts for their intelligence with hierarchical logging
+import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 
-class IntelligentAgent extends BaseAgent {
+class IntelligentAgent extends AgentRunner {
     private promptRunner = new AIPromptRunner();
     
-    async execute(context: AgentContext): Promise<AgentResult> {
+    async execute(context: AgentExecutionContext): Promise<AgentExecutionResult> {
         const prompt = this.getPromptForContext(context);
         
+        // Link prompt execution to agent run for comprehensive tracking
         const result = await this.promptRunner.ExecutePrompt({
             prompt: prompt,
             data: context.data,
-            contextUser: context.user
+            contextUser: context.user,
+            agentRunId: context.agentRun?.ID  // Links prompt to parent agent run
         });
         
         return this.formatAgentResult(result);
     }
 }
 ```
+
+#### Agent-Prompt Integration Features
+
+The AI Prompts system provides seamless integration with AI Agents through the `agentRunId` parameter:
+
+**Hierarchical Execution Tracking:**
+- Prompt executions are linked to their parent agent runs via `AgentRunID` foreign key
+- Provides complete audit trail from agent decision to prompt execution
+- Enables comprehensive resource usage tracking across agent workflows
+
+**Usage Patterns:**
+```typescript
+// 1. Direct agent-prompt linking
+const result = await promptRunner.ExecutePrompt({
+    prompt: myPrompt,
+    data: promptData,
+    agentRunId: agentRun.ID,  // Links to parent agent execution
+    contextUser: user
+});
+
+// 2. Parallel execution with agent tracking
+const parallelResult = await promptRunner.ExecutePrompt({
+    prompt: parallelPrompt,  // ParallelizationMode: 'ModelSpecific'
+    data: analysisData,
+    agentRunId: agentRun.ID,  // All parallel child prompts link to agent
+    contextUser: user
+});
+
+// 3. Context compression with agent linking (automatic in AgentRunner)
+// When agents use context compression, compression prompts are automatically
+// linked to the parent agent run for complete execution visibility
+```
+
+**Database Schema Integration:**
+```sql
+-- Query agent execution with all related prompts
+SELECT 
+    ar.ID as AgentRunID,
+    ar.Status as AgentStatus,
+    ar.StartedAt,
+    ar.CompletedAt,
+    pr.ID as PromptRunID,
+    pr.RunType,
+    pr.Success as PromptSuccess,
+    pr.ExecutionTimeMS,
+    pr.TokensUsed
+FROM AIAgentRun ar
+    LEFT JOIN AIPromptRun pr ON ar.ID = pr.AgentRunID
+WHERE ar.ID = 'your-agent-run-id'
+ORDER BY pr.RunAt;
+```
+
+**Benefits:**
+- **Complete Traceability**: Track all AI model usage from agent decisions to prompt executions
+- **Resource Attribution**: Understand token usage and costs at the agent level
+- **Performance Analysis**: Analyze execution patterns across the agent-prompt hierarchy
+- **Debugging Support**: Full execution history for troubleshooting agent workflows
 
 ## Dependencies
 
