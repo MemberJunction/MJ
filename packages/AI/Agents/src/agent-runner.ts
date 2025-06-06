@@ -10,116 +10,163 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
- * Decision types that an agent can make
+ * Represents the different types of decisions an AI agent can make during execution.
+ * 
+ * @public
+ * @see {@link AgentDecisionResponse} for the complete decision structure
  */
-export type AgentDecisionType = 'execute_action' | 'execute_subagent' | 'complete_task' | 'request_clarification' | 'continue_processing';
+export type AgentDecisionType = 
+  /** Execute one or more actions using the available action framework */
+  | 'execute_action' 
+  /** Delegate work to one or more specialized sub-agents */
+  | 'execute_subagent' 
+  /** Signal that the current task has been completed successfully */
+  | 'complete_task' 
+  /** Request additional information from the user before proceeding */
+  | 'request_clarification' 
+  /** Continue processing with the current approach (for multi-step workflows) */
+  | 'continue_processing';
 
 /**
- * Structure for LLM decision-making input
+ * Input structure provided to the LLM for AI-driven decision making.
+ * 
+ * Contains all the context and available resources needed for the agent to make
+ * informed decisions about what actions to take next.
+ * 
+ * @public
+ * @see {@link AgentDecisionResponse} for the corresponding output structure
+ * @see {@link AgentRunner.makeDecision} for usage in decision-making process
  */
 export interface AgentDecisionInput {
-  /** Current conversation context */
+  /** Current conversation context including user messages and previous responses */
   messages: ChatMessage[];
-  /** Available actions */
+  /** Available actions that can be executed by this agent */
   availableActions: ActionDescription[];
-  /** Available sub-agents */
+  /** Available sub-agents that can be delegated to for specialized tasks */
   availableSubAgents: SubAgentDescription[];
-  /** Current task/goal description */
+  /** Primary goal or task the agent is trying to accomplish */
   currentGoal: string;
-  /** Previous decisions and their results */
+  /** Historical record of previous execution steps and their outcomes */
   executionHistory: ExecutionHistoryItem[];
-  /** Additional context data */
+  /** Additional context data passed from the parent execution context */
   contextData?: Record<string, unknown>;
 }
 
 /**
- * Structure for LLM decision-making response
+ * Response structure returned by the LLM containing the agent's decision and execution plan.
+ * 
+ * This represents the AI agent's autonomous decision about what to do next, including
+ * the reasoning behind the decision and a detailed execution plan with proper ordering.
+ * 
+ * @public
+ * @see {@link AgentDecisionInput} for the corresponding input structure
+ * @see {@link ExecutionStep} for details about execution plan structure
+ * @see {@link AgentRunner.executeDecidedActions} for execution implementation
  */
 export interface AgentDecisionResponse {
-  /** Type of decision being made */
+  /** The type of decision made by the agent */
   decision: AgentDecisionType;
-  /** Reasoning behind the decision */
+  /** Detailed explanation of why this decision was made */
   reasoning: string;
-  /** Ordered execution steps to take (actions and sub-agents can be mixed) */
+  /** 
+   * Ordered list of execution steps (actions/sub-agents) with proper sequencing.
+   * Steps with the same executionOrder run in parallel, different orders run sequentially.
+   */
   executionPlan: ExecutionStep[];
-  /** Whether this completes the current task */
+  /** Whether this decision completes the overall task */
   isTaskComplete: boolean;
-  /** Response message if task is complete */
+  /** Final response to return to the user if the task is complete */
   finalResponse?: string;
-  /** Confidence level in this decision (0-1) */
+  /** Confidence level in this decision, ranging from 0.0 (low) to 1.0 (high) */
   confidence: number;
-  /** Additional metadata about the decision (optional) */
+  /** Optional metadata providing additional context about the decision */
   metadata?: {
-    /** Estimated time to complete all execution steps */
+    /** Estimated total time to complete all execution steps (milliseconds) */
     estimatedDuration?: number;
-    /** Risk assessment of the chosen execution plan */
+    /** Risk assessment for the chosen execution plan */
     riskLevel?: 'low' | 'medium' | 'high';
-    /** Strategy for handling failures (retry, fallback, etc.) */
+    /** Strategy for handling potential failures during execution */
     failureStrategy?: string;
   };
 }
 
 /**
- * Description of available actions
+ * Describes an available action that can be executed by an agent.
+ * 
+ * Actions represent discrete operations that an agent can perform, such as
+ * API calls, data processing, file operations, or external integrations.
+ * 
+ * @public
+ * @see {@link ActionParameter} for parameter definitions
+ * @see {@link AgentRunner.executeAction} for execution implementation
  */
 export interface ActionDescription {
-  /** Action ID */
+  /** Unique identifier for the action */
   id: string;
-  /** Action name */
+  /** Human-readable name of the action */
   name: string;
-  /** Action description */
+  /** Detailed description of what the action does */
   description: string;
-  /** Required parameters */
+  /** List of parameters that the action accepts */
   parameters: ActionParameter[];
-  /** Whether action can run in parallel with others */
+  /** Whether this action can safely run in parallel with other actions */
   supportsParallel: boolean;
-  /** Additional action metadata (optional) */
+  /** Optional performance and operational metadata */
   metadata?: {
-    /** Estimated execution time in milliseconds */
+    /** Expected execution time in milliseconds */
     estimatedDuration?: number;
-    /** Reliability rating (0-1) */
+    /** Reliability score from 0.0 (unreliable) to 1.0 (very reliable) */
     reliability?: number;
-    /** Cost or resource usage level */
+    /** Resource consumption level for cost optimization */
     costLevel?: 'low' | 'medium' | 'high';
   };
 }
 
 /**
- * Description of available sub-agents
+ * Describes an available sub-agent that can be delegated to for specialized tasks.
+ * 
+ * Sub-agents are specialized AI agents that handle specific domains or workflows,
+ * allowing for hierarchical task decomposition and expertise-based delegation.
+ * 
+ * @public
+ * @see {@link AgentRunner.executeSubAgent} for delegation implementation
  */
 export interface SubAgentDescription {
-  /** Sub-agent ID */
+  /** Unique identifier for the sub-agent */
   id: string;
-  /** Sub-agent name */
+  /** Human-readable name of the sub-agent */
   name: string;
-  /** Sub-agent description */
+  /** Description of the sub-agent's specialization and capabilities */
   description: string;
-  /** Whether sub-agent can run in parallel with other sub-agents */
+  /** Whether this sub-agent can run in parallel with other sub-agents */
   supportsParallel: boolean;
-  /** Execution order from database (used for default sequencing suggestions) */
+  /** Suggested execution order from metadata (used as default sequencing hint) */
   executionOrder?: number;
-  /** Additional sub-agent metadata (optional) */
+  /** Optional operational metadata */
   metadata?: {
-    /** Suggested execution context or prerequisites */
+    /** Execution context information or prerequisites */
     executionContext?: string;
-    /** Current load or availability */
+    /** Current availability status of the sub-agent */
     availabilityStatus?: 'available' | 'busy' | 'offline';
   };
 }
 
 /**
- * Action parameter description
+ * Describes a parameter that an action accepts.
+ * 
+ * @public
+ * @see {@link ActionDescription} for the containing action structure
  */
 export interface ActionParameter {
-  /** Parameter name */
+  /** The parameter name used in action invocation */
   name: string;
-  /** Parameter type */
+  /** TypeScript-style type description (e.g., 'string', 'number', 'boolean') */
   type: string;
-  /** Parameter description */
+  /** Human-readable description of the parameter's purpose */
   description: string;
-  /** Whether parameter is required */
+  /** Whether this parameter must be provided when invoking the action */
   required: boolean;
-  /** Default value if any */
+  /** Default value used when the parameter is not provided */
   defaultValue?: unknown;
 }
 
@@ -154,22 +201,28 @@ export interface ExecutionStep {
 }
 
 /**
- * History of previous executions
+ * Records the history of an executed action, sub-agent, or decision.
+ * 
+ * Used to provide context about previous execution steps to help the agent
+ * make informed decisions about subsequent actions.
+ * 
+ * @public
+ * @see {@link AgentDecisionInput.executionHistory} for usage in decision context
  */
 export interface ExecutionHistoryItem {
-  /** Type of execution */
+  /** The type of execution that was performed */
   type: 'action' | 'subagent' | 'decision';
-  /** Target ID */
+  /** Identifier of the action, sub-agent, or decision that was executed */
   targetId: string;
-  /** Parameters used */
+  /** Parameters that were passed to the execution */
   parameters?: Record<string, unknown>;
-  /** Result of execution */
+  /** The result returned from the execution */
   result: unknown;
-  /** Success status */
+  /** Whether the execution completed successfully */
   success: boolean;
-  /** Error message if failed */
+  /** Error message if the execution failed */
   errorMessage?: string;
-  /** Timestamp */
+  /** When the execution occurred */
   timestamp: Date;
 }
 
@@ -305,166 +358,105 @@ export class AgentRunner {
   private _promptRunner: AIPromptRunner;
   private _contextUser?: UserInfo;
   
-  // Enhanced system prompt template for decision-making with dynamic agent prompt embedding
-  private static readonly SYSTEM_PROMPT_TEMPLATE = `# System Instructions
-You are an AI agent named "{{ agentName }}" operating within the MemberJunction AI Agent framework.
+  /**
+   * Optimized system prompt template for AI agent decision-making.
+   * 
+   * This template provides clear, concise instructions for autonomous agent behavior,
+   * execution planning, and JSON response formatting with proper execution order semantics.
+   */
+  private static readonly SYSTEM_PROMPT_TEMPLATE = `# AI Agent Instructions
 
-## Your Purpose
-{{ agentDescription }}
+You are "{{ agentName }}", an autonomous AI agent in the MemberJunction framework.
 
-## Agent-Specific Instructions
+**Purpose:** {{ agentDescription }}
+
 {% if agentPrompt %}
-The following are your specialized instructions that define your specific behavior and capabilities:
-
+**Specialized Instructions:**
 {{ agentPrompt }}
 {% endif %}
 
-## Available Actions and Resources
+## Available Resources
 
 {% if availableActions.length > 0 %}
-### Actions Available to You:
+**Actions:**
 {% for action in availableActions %}
-- **{{ action.name }}** (ID: {{ action.id }})
-  - Description: {{ action.description }}
-  - Parameters: {% for param in action.parameters %}{{ param.name }} ({{ param.type }}){% if param.required %} [required]{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
-  - Supports parallel execution: {{ action.supportsParallel }}
+- {{ action.name }} ({{ action.id }}): {{ action.description }}
 {% endfor %}
 {% endif %}
 
 {% if availableSubAgents.length > 0 %}
-### Sub-Agents Available for Delegation:
+**Sub-Agents:**
 {% for subagent in availableSubAgents %}
-- **{{ subagent.name }}** (ID: {{ subagent.id }})
-  - Purpose: {{ subagent.description }}
-  - Supports parallel execution: {{ subagent.supportsParallel }}
+- {{ subagent.name }} ({{ subagent.id }}): {{ subagent.description }}
 {% endfor %}
 {% endif %}
 
-## Operational Framework
+## Decision Process
 
-### Decision-Making Process
-You operate using a continuous decision-making loop:
+1. Analyze context and goal
+2. Choose optimal strategy 
+3. Plan execution order
+4. Execute and evaluate
+5. Complete or continue
 
-1. **Analyze** the current context and user request
-2. **Decide** what action to take next
-3. **Execute** the chosen action(s)
-4. **Evaluate** the results
-5. **Determine** if the task is complete or if further action is needed
-
-### Response Format
-You must ALWAYS respond with a valid JSON object following this exact structure:
+## Required JSON Response Format
 
 \`\`\`json
 {
-  "decision": "execute_action" | "execute_subagent" | "complete_task" | "request_clarification" | "continue_processing",
-  "reasoning": "Your detailed thought process and justification for this decision",
+  "decision": "execute_action|execute_subagent|complete_task|request_clarification|continue_processing",
+  "reasoning": "Your thought process",
   "executionPlan": [
     {
-      "type": "action" | "subagent",
-      "targetId": "ID of the action or subagent to execute",
-      "parameters": {"key": "value"},
+      "type": "action|subagent",
+      "targetId": "ID_to_execute",
+      "parameters": {},
       "executionOrder": 1,
-      "allowParallel": true | false,
-      "description": "What this step accomplishes"
+      "allowParallel": true,
+      "description": "What this accomplishes"
     }
   ],
-  "isTaskComplete": true | false,
-  "finalResponse": "Your final response to the user if task is complete",
-  "confidence": 0.0-1.0
+  "isTaskComplete": false,
+  "finalResponse": "Response if complete",
+  "confidence": 0.8
 }
 \`\`\`
 
-### Decision Types
-- **execute_action**: Use one of your available actions to perform a task
-- **execute_subagent**: Delegate a subtask to a specialized sub-agent
-- **complete_task**: You have successfully completed the requested task
-- **request_clarification**: You need more information from the user to proceed
-- **continue_processing**: Continue with your current approach (for multi-step processes)
+## Execution Order Rules
 
-### Execution Order Logic - CRITICAL UNDERSTANDING
+**CRITICAL:** 
+- Same executionOrder = PARALLEL execution
+- Different executionOrder = SEQUENTIAL execution
 
-**How Execution Order Works:**
-- Steps with the SAME executionOrder number run in PARALLEL with each other
-- Steps with DIFFERENT executionOrder numbers run SEQUENTIALLY (1 first, then 2, then 3, etc.)
+**Examples:**
+- \`[{executionOrder: 1}, {executionOrder: 1}]\` → Both run simultaneously
+- \`[{executionOrder: 1}, {executionOrder: 2}]\` → First completes, then second runs
+- \`allowParallel: false\` → Forces sequential even with same executionOrder
 
-**Execution Order Examples:**
+## Strategy Guidelines
 
-Example 1 - Mixed Sequential and Parallel:
-\`\`\`json
-"executionPlan": [
-  {"type": "subagent", "targetId": "subagent_2", "executionOrder": 1, "allowParallel": true},
-  {"type": "action", "targetId": "action_3", "executionOrder": 2, "allowParallel": true},
-  {"type": "action", "targetId": "action_4", "executionOrder": 2, "allowParallel": true},
-  {"type": "subagent", "targetId": "subagent_3", "executionOrder": 3, "allowParallel": true}
-]
-\`\`\`
-This executes as: Step 1: subagent_2 → Step 2: action_3 AND action_4 in parallel → Step 3: subagent_3
+- **Parallel:** Use same executionOrder for independent tasks
+- **Sequential:** Use different executionOrder when results depend on each other
+- **Mixed:** Combine as needed (e.g., Action1 → [Action2 + Action3] → SubAgent1)
+- **Efficiency:** Minimize total execution time through smart parallelization
 
-Example 2 - All Sequential:
-\`\`\`json
-"executionPlan": [
-  {"type": "action", "targetId": "action_1", "executionOrder": 1},
-  {"type": "action", "targetId": "action_2", "executionOrder": 2},
-  {"type": "subagent", "targetId": "subagent_1", "executionOrder": 3}
-]
-\`\`\`
-This executes as: action_1 → action_2 → subagent_1 (all sequential)
-
-Example 3 - All Parallel:
-\`\`\`json
-"executionPlan": [
-  {"type": "action", "targetId": "action_1", "executionOrder": 1, "allowParallel": true},
-  {"type": "action", "targetId": "action_2", "executionOrder": 1, "allowParallel": true},
-  {"type": "action", "targetId": "action_3", "executionOrder": 1, "allowParallel": true}
-]
-\`\`\`
-This executes as: action_1, action_2, and action_3 all run simultaneously
-
-**allowParallel Field:**
-- When true (default): Steps with the same executionOrder can run in parallel
-- When false: Forces sequential execution even within the same executionOrder
-- Use false when actions depend on each other or could conflict
-
-### AI-Driven Execution Planning
-**You have complete autonomy in choosing your approach.** There are no predetermined pathways or required sequences. Instead:
-
-- **Evaluate the Goal**: Understand what the user truly wants to accomplish
-- **Choose Your Strategy**: Decide which combination of actions and sub-agents will best achieve the goal
-- **Design Execution Order**: 
-  - Use executionOrder to control when things happen (1 = first, 2 = second, etc.)
-  - Put independent tasks at the same executionOrder to run them in parallel
-  - Put dependent tasks at different executionOrder numbers to run them sequentially
-  - Actions and sub-agents can be mixed at any order (e.g., Action1 → SubAgent2 → Action3)
-- **Optimize for Efficiency**: 
-  - Use parallel execution (same executionOrder) when tasks don't depend on each other
-  - Use sequential execution (different executionOrder) when one task needs results from another
-  - Sub-agents can not run in parallel.
-
-### Execution Guidelines
-- **Strategic Thinking**: Choose the most effective execution strategy, not just the most obvious one
-- **Dependency Awareness**: If Task B needs results from Task A, use different executionOrder numbers (A=1, B=2)
-- **Parallel Efficiency**: If tasks are independent, use the same executionOrder to run them in parallel
-- **Resource Conflicts**: Use allowParallel=false if parallel execution could cause conflicts
-- **Iterative Approach**: After execution, you'll be asked "what's next?" - be prepared to continue or conclude
-
-## What Should We Do Next?
-
-Based on the current conversation context, available actions, and your specific instructions, analyze the situation and decide on the most appropriate next action. Consider:
-
-1. What is the user ultimately trying to accomplish?
-2. What information or capabilities do I need to fulfill this request?
-3. Which actions or sub-agents would be most effective?
-4. What is the optimal execution order? Which tasks can run in parallel vs. sequentially?
-5. Do I have enough information to proceed, or do I need clarification?
-
-Respond with your decision following the JSON format specified above, paying special attention to setting appropriate executionOrder values for optimal performance.`;
+Analyze the current situation and respond with your optimal decision plan.`;
 
   /**
-   * Creates a new agent runner instance.
+   * Creates a new AgentRunner instance for executing agents of a specific type.
    * 
-   * @param agentType The AIAgentTypeEntityExtended that defines this runner's type and system prompt
-   * @param agentManager Manager for creating child agent instances and accessing entities
-   * @throws Error if agentType is invalid or not compatible with this runner class
+   * The runner is bound to a particular agent type and can only execute agents
+   * that match that type. This ensures type safety and proper system prompt usage.
+   * 
+   * @param agentType - The agent type definition that this runner will handle
+   * @param contextUser - User context for authentication and permissions
+   * 
+   * @throws {Error} When agentType is null or invalid
+   * 
+   * @example
+   * ```typescript
+   * const agentType = await manager.GetAgentTypeEntity("Customer Support");
+   * const runner = new AgentRunner(agentType, contextUser);
+   * ```
    */
   constructor(agentType: AIAgentTypeEntityExtended, contextUser: UserInfo) {
     this._agentType = agentType;
@@ -492,16 +484,43 @@ Respond with your decision following the JSON format specified above, paying spe
   }
 
   /**
-   * Executes the agent with the provided parameters.
+   * Executes an AI agent using autonomous decision-making and action orchestration.
    * 
-   * This is the main entry point for agent execution. It handles initialization,
-   * context management, prompt execution, subagent coordination, and result aggregation.
+   * This is the primary entry point for agent execution. The method implements a sophisticated
+   * decision-driven architecture where the LLM autonomously decides what actions to take,
+   * in what order, and whether to use parallel or sequential execution.
    * 
-   * The agent entity must have the same agent type as this runner was constructed with.
+   * **Key Features:**
+   * - AI-driven decision making (no predetermined execution paths)
+   * - Mixed action and sub-agent execution with proper ordering
+   * - Context compression for long conversations
+   * - Progress tracking and cancellation support
+   * - Comprehensive error handling and fallback strategies
    * 
-   * @param params Execution parameters including the agent entity, context, data, and callbacks
-   * @returns Promise<AgentExecutionResult> The execution result
-   * @throws Error if the agent entity type doesn't match this runner's type
+   * @param params - Execution parameters including agent entity, context, and callbacks
+   * @returns Promise resolving to the execution result with decision history and outcomes
+   * 
+   * @throws {Error} When agent entity type doesn't match this runner's type
+   * @throws {Error} When required parameters are missing or invalid
+   * 
+   * @example
+   * ```typescript
+   * const result = await runner.Execute({
+   *   agentEntity: myAgent,
+   *   contextUser: user,
+   *   data: { customerQuery: "Help with my order" },
+   *   conversationMessages: [...],
+   *   onProgress: (progress) => console.log(progress.message),
+   *   cancellationToken: controller.signal
+   * });
+   * 
+   * if (result.success) {
+   *   console.log("Agent completed:", result.finalDecision?.finalResponse);
+   * }
+   * ```
+   * 
+   * @see {@link AgentExecutionParams} for parameter details
+   * @see {@link AgentExecutionResult} for return value structure
    */
   public async Execute(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     // Validate that the agent entity matches our agent type
@@ -574,17 +593,15 @@ Respond with your decision following the JSON format specified above, paying spe
   }
 
   /**
-   * Core execution logic with decision-driven implementation.
+   * Core decision-driven execution loop.
    * 
-   * This new approach uses LLM decision-making to determine what actions to take
-   * rather than following a predetermined sequence. The agent will:
-   * 1. Analyze the current context
-   * 2. Make a decision about what to do next
-   * 3. Execute the decided actions (actions/subagents)
-   * 4. Repeat until task is complete
+   * Implements the main execution logic using autonomous LLM decision-making.
+   * Continues iterating until the task is complete or max iterations reached.
    * 
-   * @param context The execution context
-   * @returns Promise<AgentExecutionResult> The execution result
+   * @param context - The execution context containing agent and conversation state
+   * @returns Promise resolving to the execution result
+   * 
+   * @protected
    */
   protected async executeCore(context: AgentExecutionContext): Promise<AgentExecutionResult> {
     try {
@@ -878,10 +895,16 @@ Respond with your decision following the JSON format specified above, paying spe
   }
 
   /**
-   * Makes a decision using the LLM with the enhanced system prompt template.
+   * Makes an autonomous decision using LLM reasoning.
    * 
-   * This method handles dynamic agent prompt embedding using string manipulation
-   * to inject specific agent template content at runtime.
+   * Combines the system prompt template with agent-specific instructions and current context
+   * to generate a decision about what actions to take next.
+   * 
+   * @param context - Current execution context
+   * @param decisionInput - Available resources and context for decision-making
+   * @returns Promise resolving to the LLM's decision response
+   * 
+   * @protected
    */
   protected async makeDecision(
     context: AgentExecutionContext,
@@ -1209,8 +1232,17 @@ Consider:
   }
 
   /**
-   * Executes the execution plan decided by the LLM.
-   * Handles mixed actions and sub-agents with proper execution order and parallelization.
+   * Executes the LLM's decided execution plan with proper ordering and parallelization.
+   * 
+   * Handles mixed actions and sub-agents, respecting execution order for sequential/parallel execution.
+   * Groups steps by execution order and executes each group according to parallelization rules.
+   * 
+   * @param context - Current execution context
+   * @param decision - The LLM's decision containing the execution plan
+   * @param executionHistory - History of previous executions for context
+   * @returns Promise resolving to execution results and history
+   * 
+   * @protected
    */
   protected async executeDecidedActions(
     context: AgentExecutionContext,
@@ -1650,7 +1682,13 @@ Consider:
   }
 
   /**
-   * Creates a summary of executed execution plan.
+   * Creates a concise summary of execution results.
+   * 
+   * @param decision - The decision that was executed
+   * @param executionResults - Results from executing the decision
+   * @returns Human-readable summary string
+   * 
+   * @protected
    */
   protected createExecutionSummary(
     decision: AgentDecisionResponse,
@@ -1660,26 +1698,23 @@ Consider:
       newMessages: ChatMessage[];
     }
   ): string {
-    const successfulSteps = executionResults.historyItems.filter(h => h.success);
-    const failedSteps = executionResults.historyItems.filter(h => !h.success);
+    const { historyItems } = executionResults;
+    const successful = historyItems.filter(h => h.success);
+    const failed = historyItems.filter(h => !h.success);
     
-    let summary = `Executed ${decision.executionPlan.length} execution steps based on decision: ${decision.reasoning}\n`;
+    const parts: string[] = [
+      `Executed ${decision.executionPlan.length} steps: ${decision.reasoning}`
+    ];
     
-    if (successfulSteps.length > 0) {
-      summary += `✅ Successful: ${successfulSteps.map(a => a.targetId).join(', ')}\n`;
+    if (successful.length) {
+      parts.push(`✅ Success: ${successful.map(h => h.targetId).join(', ')}`);
     }
     
-    if (failedSteps.length > 0) {
-      summary += `❌ Failed: ${failedSteps.map(a => `${a.targetId} (${a.errorMessage})`).join(', ')}\n`;
+    if (failed.length) {
+      parts.push(`❌ Failed: ${failed.map(h => h.targetId).join(', ')}`);
     }
     
-    // Add execution order summary
-    const executionOrders = decision.executionPlan.map(step => step.executionOrder).filter((v, i, a) => a.indexOf(v) === i).sort();
-    if (executionOrders.length > 1) {
-      summary += `📋 Execution order: ${executionOrders.join(' → ')}\n`;
-    }
-    
-    return summary;
+    return parts.join('\n');
   }
 
   /**
