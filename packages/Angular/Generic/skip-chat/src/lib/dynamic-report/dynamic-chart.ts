@@ -60,7 +60,10 @@ export class SkipDynamicChartComponent implements OnInit, OnDestroy {
           // Create an <a> element
           const downloadLink = document.createElement('a');
           // Set the download attribute with a default file name
-          downloadLink.download = this.SkipData?.reportTitle || this.plotLayout?.title || 'chart.png';
+          // reportTitle is the legacy name, title is the new name, so favor title if available
+          // otherwise use the plotLayout title, and finally default to 'chart'
+          const title = this.SkipData?.title || this.SkipData?.reportTitle || this.plotLayout?.title || 'chart';
+          downloadLink.download = `${title}.png`;
           // Set the href to the data URL
           downloadLink.href = image;
           // Append the <a> element to the body (required for Firefox)

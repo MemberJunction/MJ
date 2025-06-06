@@ -21,6 +21,7 @@
     "@memberjunction/ai": "2.44.0",
     "@memberjunction/aiengine": "2.44.0",
     "@memberjunction/templates": "2.44.0",
+    "ajv": "^8.12.0",
     "dotenv": "^16.4.1",
     "rxjs": "^7.8.1"
   },

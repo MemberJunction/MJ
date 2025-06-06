@@ -157,6 +157,13 @@ export class ChatParams extends BaseParams  {
      * When models support this and this property is set to true, the model will return logprobs for the tokens in the @see ChatResultData object within the array of @see ChatResultChoice objects.
      */
     includeLogProbs?: boolean = false;
+
+    /**
+     * Optional cancellation token to abort the chat completion request.
+     * When this signal is aborted, the provider should cancel the request
+     * and return a cancelled result as gracefully as possible.
+     */
+    cancellationToken?: AbortSignal;
 }
 /**
  * Returns the first user message from the chat params

@@ -1,27 +1,4 @@
 <div class="skip-artifact-viewer-container">
-  <div class="skip-artifact-viewer-header">
-    <div class="artifact-info">
-      <h3 class="artifact-title">{{ artifactTitle }}</h3>
-      <span class="artifact-type">{{ artifactTypeName }}</span>
-      @if (artifact?.Description) {
-        <div class="artifact-description">
-          <p>{{ artifact!.Description }}</p>
-        </div>
-      }
-    </div>
-
-    @if (artifactVersions && artifactVersions.length > 0) {
-      <div class="version-selector">
-        <label for="version-dropdown">Version:</label>
-        <select id="version-dropdown" [(ngModel)]="selectedVersionId" (change)="onVersionChange()">
-          @for (version of artifactVersions; track version.ID) {
-            <option [value]="version.ID">{{ version.Version }}</option>
-          }
-        </select>
-      </div>
-    }
-  </div>
-
   <div class="skip-artifact-viewer-content">
     @if (isLoading) {
       <div class="loading-container">

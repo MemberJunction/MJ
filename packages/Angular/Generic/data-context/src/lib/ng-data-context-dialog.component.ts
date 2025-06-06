@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { IMetadataProvider } from '@memberjunction/core';
 
 /**
- * Simple dialog wrapper component for the data context component
+ * Enhanced dialog wrapper component for the data context viewer
  */
 @Component({
   selector: 'mj-data-context-dialog',
@@ -12,9 +12,24 @@ import { IMetadataProvider } from '@memberjunction/core';
 export class DataContextDialogComponent {
   @Output() dialogClosed = new EventEmitter();
   @Input() dataContextId!: string;
+  @Input() dataContextName?: string;
   @Input() Provider: IMetadataProvider | null = null;
+  
+  public isMaximized: boolean = false;
 
-  closePropertiesDialog(){
+  public get dialogWidth(): number {
+    return this.isMaximized ? window.innerWidth * 0.95 : 900;
+  }
+
+  public get dialogHeight(): number {
+    return this.isMaximized ? window.innerHeight * 0.95 : 700;
+  }
+
+  closeDialog(): void {
     this.dialogClosed.emit();
+  }
+
+  toggleMaximize(): void {
+    this.isMaximized = !this.isMaximized;
   }
 }

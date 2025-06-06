@@ -13,6 +13,14 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
   @Input() public SplitRatio: number = 0.6; // Default left panel takes 60% of width
   @Input() public MinLeftPanelWidth: string = '20%';
   @Input() public MinRightPanelWidth: string = '20%';
+  @Input() public RightPanelHeaderContent: {
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+  } | null = null;
+  @Input() public VersionList: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}> = [];
+  @Input() public SelectedVersionId: string = '';
   
   private _mode: SplitPanelMode = 'BothSides';
   @Input() 
@@ -30,14 +38,18 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
   }
   
   @Output() public SplitRatioChanged = new EventEmitter<number>();
+  @Output() public VersionDropdownToggled = new EventEmitter<void>();
+  @Output() public VersionSelected = new EventEmitter<string>();
 
   @ViewChild('leftSplitterPane', { static: false }) leftSplitterPane!: SplitterPaneComponent;
-
 
   // Properties for pane sizes
   public leftPaneSize: string = '50%';
   public rightPaneSize: string = '50%';
   private _lastRatioBeforeClosing: number = 0.5; // Default value
+  
+  // Version dropdown state
+  public showVersionDropdown: boolean = false;
 
   constructor() {
     super();
@@ -119,5 +131,16 @@ export class SkipSplitPanelComponent extends BaseAngularComponent implements OnI
       this.SplitRatio = this._lastRatioBeforeClosing;
       this.updatePaneSizes();
     }
+  }
+  
+  public toggleVersionDropdown(): void {
+    this.showVersionDropdown = !this.showVersionDropdown;
+    this.VersionDropdownToggled.emit();
+  }
+  
+  public selectVersion(versionId: string): void {
+    this.SelectedVersionId = versionId;
+    this.showVersionDropdown = false;
+    this.VersionSelected.emit(versionId);
   }
 }

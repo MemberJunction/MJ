@@ -1,35 +1,205 @@
-<div>
-    @if (!showLoader) {
-        <div class="k-d-flex k-flex-col k-justify-content-between k-h-full">
-            <div *ngIf="dataContextRecord">
-                <div>
-                    ID: {{dataContextRecord.ID}}
+<div class="data-context-viewer">
+    @if (showLoader) {
+        <div class="loading-container">
+            <kendo-loader type="converging-spinner" size="large"></kendo-loader>
+            <p class="loading-text">Loading data context...</p>
+        </div>
+    } @else {
+        <!-- Header Section -->
+        <div class="data-context-header">
+            <div class="header-info">
+                <div class="header-title">
+                    <i class="fa-solid fa-layer-group header-icon"></i>
+                    <h2>{{ dataContextRecord?.Name || 'Data Context' }}</h2>
                 </div>
-                <div>
-                    Name: {{dataContextRecord.Name}}
-                </div>
-                <div>
-                    Description: {{dataContextRecord.Description}}
+                @if (dataContextRecord && dataContextRecord.Description) {
+                    <p class="header-description">{{ dataContextRecord.Description }}</p>
+                }
+                <div class="header-meta">
+                    <span class="meta-item">
+                        <i class="fa-solid fa-fingerprint"></i>
+                        ID: {{ dataContextRecord?.ID }}
+                        <button class="copy-btn" (click)="copyToClipboard(dataContextRecord?.ID || '', 'context-id')" title="Copy ID">
+                            <i class="fa-solid" [class.fa-copy]="copiedField !== 'context-id'" [class.fa-check]="copiedField === 'context-id'"></i>
+                        </button>
+                    </span>
+                    <span class="meta-item">
+                        <i class="fa-solid fa-list-ol"></i>
+                        {{ itemCount }} {{ itemCount === 1 ? 'item' : 'items' }}
+                    </span>
                 </div>
             </div>
-            <div style="margin-top: 10px;">
-                <b>Items</b>
+            <div class="header-actions">
+                <button kendoButton look="flat" (click)="refresh()" title="Refresh">
+                    <i class="fa-solid fa-rotate"></i>
+                    Refresh
+                </button>
+                <button kendoButton look="flat" (click)="exportToCSV()" title="Export to CSV">
+                    <i class="fa-solid fa-download"></i>
+                    Export
+                </button>
             </div>
-            <div class="kendo-grid-container">
-                <kendo-grid 
-                    [kendoGridBinding]="dataContextItems" 
-                    scrollable="virtual" 
-                    [pageSize]="100" 
-                    [sortable]="true"
-                    [loading]="showLoader" 
-                    [resizable]="true" 
-                    [navigable]="true"
-                >
-                </kendo-grid>
+        </div>
+
+        @if (errorMessage) {
+            <div class="error-message">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                {{ errorMessage }}
             </div>
-        </div>    
+        }
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <kendo-textbox 
+                [(ngModel)]="searchTerm" 
+                (ngModelChange)="onSearchChange()"
+                placeholder="Search items by type, SQL, entity name, or description..."
+                [clearButton]="true"
+                class="search-input">
+                <ng-template kendoTextBoxPrefixTemplate>
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                </ng-template>
+            </kendo-textbox>
+        </div>
+
+        <!-- Data Context Items as Cards -->
+        <div class="items-container">
+            @for (item of filteredItems; track item.ID; let i = $index) {
+                <div class="data-context-card" [class.expanded]="expandedItems[item.ID]">
+                    <!-- Card Header -->
+                    <div class="card-header" (click)="toggleItemExpansion(item.ID)">
+                        <div class="card-header-left">
+                            <div class="type-badge" [style.background-color]="getTypeColor(item.Type) + '20'" [style.color]="getTypeColor(item.Type)">
+                                <i [class]="getTypeIcon(item.Type)"></i>
+                                <span>{{ item.Type }}</span>
+                            </div>
+                            @if (item.Description) {
+                                <span class="card-description">{{ item.Description }}</span>
+                            }
+                        </div>
+                        <button class="expand-btn">
+                            <i class="fa-solid" [class.fa-chevron-down]="!expandedItems[item.ID]" [class.fa-chevron-up]="expandedItems[item.ID]"></i>
+                        </button>
+                    </div>
+
+                    <!-- Card Content -->
+                    <div class="card-content">
+                        <!-- SQL Section -->
+                        @if (item.SQL) {
+                            <div class="sql-section">
+                                <div class="section-header">
+                                    <h4><i class="fa-solid fa-code"></i> SQL Query</h4>
+                                    <div class="sql-actions">
+                                        <button class="action-btn" (click)="copyToClipboard(item.SQL, 'sql-' + item.ID)" title="Copy SQL">
+                                            <i class="fa-solid" [class.fa-copy]="copiedField !== 'sql-' + item.ID" [class.fa-check]="copiedField === 'sql-' + item.ID"></i>
+                                            {{ copiedField === 'sql-' + item.ID ? 'Copied!' : 'Copy' }}
+                                        </button>
+                                        <button class="action-btn" (click)="previewSQLCode(item.SQL)" title="Expand">
+                                            <i class="fa-solid fa-expand"></i>
+                                            Expand
+                                        </button>
+                                    </div>
+                                </div>
+                                <pre class="sql-code"><code>{{ item.SQL }}</code></pre>
+                            </div>
+                        }
+
+                        <!-- Metadata Section -->
+                        <div class="metadata-section">
+                            <div class="metadata-grid">
+                                @if (item.EntityID) {
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">Entity</span>
+                                        <div class="metadata-value">
+                                            <span>{{ getEntityName(item.EntityID) || 'Unknown' }}</span>
+                                            <button class="link-btn" (click)="navigateToEntity(item.EntityID)" title="View entity">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                @if (item.ViewID) {
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">View</span>
+                                        <div class="metadata-value">
+                                            <span title="{{ item.ViewID }}">{{ item.ViewID | slice:0:20 }}{{ item.ViewID.length > 20 ? '...' : '' }}</span>
+                                            <button class="link-btn" (click)="navigateToView(item.ViewID)" title="View details">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                @if (item.QueryID) {
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">Query</span>
+                                        <div class="metadata-value">
+                                            <span title="{{ item.QueryID }}">{{ item.QueryID | slice:0:20 }}{{ item.QueryID.length > 20 ? '...' : '' }}</span>
+                                            <button class="link-btn" (click)="navigateToQuery(item.QueryID)" title="View query">
+                                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                @if (item.RecordID) {
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">Record ID</span>
+                                        <div class="metadata-value">
+                                            <code>{{ item.RecordID }}</code>
+                                            <button class="link-btn" (click)="copyToClipboard(item.RecordID, 'record-' + item.ID)" title="Copy">
+                                                <i class="fa-solid" [class.fa-copy]="copiedField !== 'record-' + item.ID" [class.fa-check]="copiedField === 'record-' + item.ID"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="card-footer">
+                            <span class="timestamp">
+                                <i class="fa-solid fa-clock"></i>
+                                Created {{ item.__mj_CreatedAt | date:'short' }}
+                            </span>
+                            @if (item.__mj_UpdatedAt && item.__mj_UpdatedAt !== item.__mj_CreatedAt) {
+                                <span class="timestamp">
+                                    <i class="fa-solid fa-pen"></i>
+                                    Updated {{ item.__mj_UpdatedAt | date:'short' }}
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (filteredItems.length === 0) {
+                <div class="no-items">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No items found</p>
+                </div>
+            }
+        </div>
     }
-    @else {
-        <kendo-loader type="converging-spinner" ></kendo-loader>
+
+    <!-- SQL Preview Dialog -->
+    @if (showSQLPreview) {
+        <div class="sql-preview-overlay" (click)="closeSQLPreview()">
+            <div class="sql-preview-dialog" (click)="$event.stopPropagation()">
+                <div class="sql-preview-header">
+                    <h3>SQL Preview</h3>
+                    <button class="close-btn" (click)="closeSQLPreview()">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="sql-preview-content">
+                    <pre><code>{{ previewSQL }}</code></pre>
+                </div>
+                <div class="sql-preview-actions">
+                    <button kendoButton (click)="copyToClipboard(previewSQL, 'preview-sql')">
+                        <i class="fa-solid" [class.fa-copy]="copiedField !== 'preview-sql'" [class.fa-check]="copiedField === 'preview-sql'"></i>
+                        {{ copiedField === 'preview-sql' ? 'Copied!' : 'Copy SQL' }}
+                    </button>
+                </div>
+            </div>
+        </div>
     }
 </div>

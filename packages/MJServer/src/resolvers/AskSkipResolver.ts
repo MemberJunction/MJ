@@ -51,6 +51,7 @@ import {
   DataContextEntity,
   DataContextItemEntity,
   UserNotificationEntity,
+  AIAgentEntityExtended
 } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
 import { apiKey, baseUrl, configInfo, graphqlPort, mj_core_schema } from '../config.js';
@@ -60,7 +61,7 @@ import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
-import { AIAgentEntityExtended, AIEngine } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
 
@@ -1659,7 +1660,8 @@ cycle.`);
   
       // get the list of entities
       const entities = md.Entities.filter((e) => {
-        if (e.SchemaName !== mj_core_schema || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
+        if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
+            skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
           const sd = e.ScopeDefault?.trim();
           if (sd && sd.length > 0) {
             const scopes = sd.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
@@ -2679,7 +2681,7 @@ cycle.`);
     dataSource: DataSource,
     startTime: Date
   ): Promise<{ AIMessageConversationDetailID: string }> {
-    const sTitle = apiResponse.reportTitle;
+    const sTitle = apiResponse.title;
     const sResult = JSON.stringify(apiResponse);
 
     // first up, let's see if Skip asked us to create an artifact or add a new version to an existing artifact, or NOT

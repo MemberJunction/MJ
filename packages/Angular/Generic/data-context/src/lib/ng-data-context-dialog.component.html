@@ -1,18 +1,42 @@
-<div>
+<div class="data-context-dialog-wrapper">
     <div class="k-overlay"></div>
     <kendo-window 
-        class="kendo-window-custom"
-        [width]="700"
-        [height]="525"
-        [minHeight]="300"
-        [minWidth]="400"
-        [resizable]="true"
-        title="Data Context"
-        (close)="closePropertiesDialog()"
-    >
-        <mj-data-context 
+        class="data-context-window"
+        [class.maximized]="isMaximized"
+        [width]="dialogWidth"
+        [height]="dialogHeight"
+        [minHeight]="400"
+        [minWidth]="600"
+        [resizable]="!isMaximized"
+        [draggable]="!isMaximized"
+        (close)="closeDialog()">
+        
+        <kendo-window-titlebar>
+            <div class="window-title">
+                <i class="fa-solid fa-layer-group title-icon"></i>
+                <span>Data Context{{ dataContextName ? ': ' + dataContextName : '' }}</span>
+            </div>
+            <div class="window-actions">
+                <button 
+                    (click)="toggleMaximize()"
+                    title="{{ isMaximized ? 'Restore' : 'Maximize' }}"
+                    class="window-action-btn">
+                    <i class="fa-solid" [class.fa-maximize]="!isMaximized" [class.fa-compress]="isMaximized"></i>
+                </button>
+                <button 
+                    (click)="closeDialog()"
+                    title="Close"
+                    class="window-action-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </kendo-window-titlebar>
+        
+        <div class="dialog-content">
+            <mj-data-context 
                 [dataContextId]="dataContextId" 
-                [Provider]="Provider"
-        ></mj-data-context>
+                [Provider]="Provider">
+            </mj-data-context>
+        </div>
     </kendo-window>
 </div>

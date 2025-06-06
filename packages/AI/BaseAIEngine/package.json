@@ -1,0 +1,30 @@
+{
+  "name": "@memberjunction/ai-engine-base",
+  "version": "2.44.0",
+  "description": "MemberJunction: Base AI Engine Package - does extended types and data caching, can be used anywhere.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "2.44.0",
+    "@memberjunction/global": "2.44.0",
+    "@memberjunction/core-entities": "2.44.0",
+    "@memberjunction/ai": "2.44.0",
+    "dotenv": "^16.4.1",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.4.5"
+  }
+}

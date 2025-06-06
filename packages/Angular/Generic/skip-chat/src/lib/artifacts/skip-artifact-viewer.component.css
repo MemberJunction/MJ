@@ -6,12 +6,13 @@
 }
 
 .skip-artifact-viewer-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #eee;
-  background-color: #fafafa;
+  padding: 8px 16px;
+  background-color: #ffffff;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  z-index: 10;
 }
 
 .version-selector {
@@ -26,47 +27,228 @@
 }
 
 .version-selector select {
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
   background-color: white;
   font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.version-selector select:hover {
+  border-color: #1976d2;
+}
+
+.version-selector select:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
 }
 
 .report-container {
-  margin-top: 16px;
   width: 100%;
 }
 
-.artifact-info {
+.artifact-header-content {
   display: flex;
   flex-direction: column;
 }
 
-.artifact-title {
-  margin: 0 0 4px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
+.artifact-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.artifact-type {
-  font-size: 12px;
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.version-info .version-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   color: #666;
+  white-space: nowrap;
+}
+
+.version-info .version-date i {
+  font-size: 12px;
+  color: #888;
+}
+
+.artifact-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.2;
+  flex: 1;
+  min-width: 0;
+}
+
+.artifact-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background-color: #e8f0fe;
+  color: #1976d2;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Version Dropdown */
+.version-dropdown-wrapper {
+  position: relative;
+}
+
+.version-dropdown-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: transparent;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.version-dropdown-button:hover:not(:disabled) {
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.version-dropdown-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.version-dropdown-button.open {
+  border-color: #1976d2;
+  color: #1976d2;
+  background-color: #f8f9fa;
+}
+
+.version-label {
+  font-weight: 500;
+}
+
+.dropdown-icon {
+  font-size: 9px;
+  transition: transform 0.2s ease;
+  color: inherit;
+}
+
+.version-dropdown-button.open .dropdown-icon {
+  transform: rotate(180deg);
+}
+
+.version-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.version-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.version-option:last-child {
+  border-bottom: none;
+}
+
+.version-option:hover {
+  background-color: #f8f9fa;
+}
+
+.version-option.selected {
+  background-color: #e8f0fe;
+  color: #1976d2;
+}
+
+.version-option.selected .version-date {
+  color: #1976d2;
+  opacity: 0.8;
+}
+
+.version-number {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.version-date {
+  font-size: 11px;
+  color: #888;
+  font-weight: 400;
 }
 
 .skip-artifact-viewer-content {
   flex: 1;
   overflow: auto;
-  padding: 16px;
+  padding: 0;
+  background-color: #ffffff;
 }
 
 .content-container {
   margin-bottom: 16px;
   background-color: #fff;
-  border-radius: 6px;
-  border: 1px solid #eee;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   overflow: auto;
+  transition: box-shadow 0.2s ease;
+}
+
+.content-container:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .markdown-content {
@@ -122,6 +304,8 @@
   line-height: 1.5;
   color: #333;
 }
+
+/* Metadata Pills - Removed in favor of inline date display */
 
 .artifact-metadata {
   margin-top: 16px;

@@ -96,7 +96,10 @@ export class ReportResolverExtended {
 
       const report = await md.GetEntityObject<ReportEntity>('Reports', u);
       report.NewRecord();
-      report.Name = skipData.reportTitle ? skipData.reportTitle : 'Untitled Report';
+      // support the legacy report title as old conversation details had a reportTitle property
+      // but the new SkipData object has a title property, so favor the title property
+      const title = skipData.title ? skipData.title : skipData.reportTitle ? skipData.reportTitle : 'Untitled Report';
+      report.Name = title;
       report.Description = skipData.userExplanation ? skipData.userExplanation : '';
       report.ConversationID = result[0].ConversationID;
       report.ConversationDetailID = ConversationDetailID;

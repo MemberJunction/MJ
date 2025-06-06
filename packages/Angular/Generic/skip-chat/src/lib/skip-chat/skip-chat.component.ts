@@ -193,6 +193,26 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
   public selectedArtifact: any = null;
   
   /**
+   * Artifact header info to display in split panel
+   */
+  public artifactHeaderInfo: {
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+  } | null = null;
+  
+  /**
+   * Artifact version list for dropdown
+   */
+  public artifactVersionList: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}> = [];
+  
+  /**
+   * Selected artifact version ID
+   */
+  public selectedArtifactVersionId: string = '';
+  
+  /**
    * Current split ratio for the split panel
    */
   public SplitRatio: number = this.DefaultSplitRatio;
@@ -567,6 +587,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           if (aiDetail) {
             this.AddMessageToCurrentConversation(aiDetail, true, true);
             this.scrollToBottom();
+            
+            // Automatically show artifact if the new AI message has one
+            this.autoShowArtifactIfPresent(aiDetail);
           }
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
@@ -1313,7 +1336,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
             if (this.SelectedConversation.Name === 'New Chat' || this.SelectedConversation.Name?.trim().length === 0 )  {
               // we are on the first message so skip renamed the convo, use that
-              this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
+              this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).title!; // this will update the UI
 
               // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
               // otherwise Angular binding doesn't pick up the change without the below.
@@ -1332,6 +1355,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
           this.scrollToBottom();
+          
+          // Automatically show artifact if the new AI message has one
+          this.autoShowArtifactIfPresent(aiDetail);
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
@@ -1924,5 +1950,114 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    */
   public closeArtifactPanel(): void {
     this.selectedArtifact = null;
+    this.artifactHeaderInfo = null;
+    this.artifactVersionList = [];
+    this.selectedArtifactVersionId = '';
+  }
+
+  /**
+   * Handles when an artifact version is selected from the dropdown
+   * @param versionId The ID of the selected version
+   */
+  public onArtifactVersionSelected(versionId: string): void {
+    if (this.selectedArtifact) {
+      // Update the selected artifact with the new version
+      this.selectedArtifact = {
+        ...this.selectedArtifact,
+        artifactVersionId: versionId
+      };
+      
+      // The artifact viewer will handle loading the new version
+      this.ArtifactViewed.emit(this.selectedArtifact);
+    }
+  }
+  
+  /**
+   * Handles when artifact info changes (from the artifact viewer)
+   * @param info The updated artifact header information
+   */
+  public onArtifactInfoChanged(info: {
+    title: string;
+    type: string;
+    date: Date | null;
+    version: string;
+    versionList?: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}>;
+    selectedVersionId?: string;
+  }): void {
+    this.artifactHeaderInfo = {
+      title: info.title,
+      type: info.type,
+      date: info.date,
+      version: info.version
+    };
+    
+    if (info.versionList) {
+      this.artifactVersionList = info.versionList;
+    }
+    
+    if (info.selectedVersionId) {
+      this.selectedArtifactVersionId = info.selectedVersionId;
+    }
+  }
+
+  /**
+   * Automatically shows an artifact if the provided AI message has one
+   * This is called when new AI messages are received to automatically display artifacts
+   * @param aiMessage The AI message to check for artifacts
+   */
+  private autoShowArtifactIfPresent(aiMessage: ConversationDetailEntity): void {
+    if (!this.EnableArtifactSplitView || !aiMessage) {
+      return;
+    }
+    
+    // Check if this AI message has an artifact
+    const hasArtifact = aiMessage.ArtifactID && aiMessage.ArtifactID.length > 0;
+    
+    if (hasArtifact) {
+      // Check if this is a new artifact or a new version of an existing artifact
+      const isNewArtifactOrVersion = this.isNewArtifactOrVersion(aiMessage);
+      
+      if (isNewArtifactOrVersion) {
+        // Automatically show the artifact
+        setTimeout(() => {
+          this.onArtifactSelected({
+            artifactId: aiMessage.ArtifactID,
+            artifactVersionId: aiMessage.ArtifactVersionID,
+            messageId: aiMessage.ID,
+            name: null, // Will be loaded by the artifact viewer
+            description: null // Will be loaded by the artifact viewer
+          });
+        }, 100); // Small delay to ensure the UI is ready
+      }
+    }
+  }
+
+  /**
+   * Determines if the given AI message contains a new artifact or a new version of an existing artifact
+   * @param aiMessage The AI message to check
+   * @returns true if this is a new artifact or version, false otherwise
+   */
+  private isNewArtifactOrVersion(aiMessage: ConversationDetailEntity): boolean {
+    if (!aiMessage.ArtifactID) {
+      return false;
+    }
+    
+    // If no artifact is currently selected, this is definitely new
+    if (!this.selectedArtifact) {
+      return true;
+    }
+    
+    // If the artifact ID is different, this is a new artifact
+    if (this.selectedArtifact.artifactId !== aiMessage.ArtifactID) {
+      return true;
+    }
+    
+    // If the artifact ID is the same but version ID is different, this is a new version
+    if (this.selectedArtifact.artifactVersionId !== aiMessage.ArtifactVersionID) {
+      return true;
+    }
+    
+    // Same artifact and version, not new
+    return false;
   }
 }
