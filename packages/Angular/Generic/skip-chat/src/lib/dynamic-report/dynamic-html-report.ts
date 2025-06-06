@@ -492,18 +492,31 @@ export class SkipDynamicHTMLReportComponent implements AfterViewInit, OnDestroy 
         // Clear any previous error
         this.currentError = null;
 
-        // Update the component info
-        this.HTMLReport = BuildSkipComponentCompleteCode(selectedOption.option);
-        this.ComponentObjectName = selectedOption.option.componentName;
-        
-        // Simply create or reuse the React host for this option
-        // The tab component handles visibility automatically
-        if (!this.reactHostCache.has(this.selectedReportOptionIndex)) {
-            // Create a new host for this option
-            this.createReactHostForOption(this.selectedReportOptionIndex);
+        try {
+            // Update the component info - this can fail if placeholders are missing
+            this.HTMLReport = BuildSkipComponentCompleteCode(selectedOption.option);
+            this.ComponentObjectName = selectedOption.option.componentName;
+            
+            // Simply create or reuse the React host for this option
+            // The tab component handles visibility automatically
+            if (!this.reactHostCache.has(this.selectedReportOptionIndex)) {
+                // Create a new host for this option
+                this.createReactHostForOption(this.selectedReportOptionIndex);
+            }
+            
+            this.currentHostIndex = this.selectedReportOptionIndex;
+        } catch (error) {
+            console.error('Failed to build component code:', error);
+            this.currentError = {
+                type: 'Component Assembly Error',
+                message: 'Failed to assemble the component code. This usually happens when sub-components are missing or placeholders cannot be resolved.',
+                technicalDetails: error?.toString() || 'Unknown error during component assembly'
+            };
+            
+            // Clear the HTML report to prevent partial rendering
+            this.HTMLReport = null;
+            this.ComponentObjectName = null;
         }
-        
-        this.currentHostIndex = this.selectedReportOptionIndex;
     }
   
     public async PrintReport() {
@@ -810,7 +823,16 @@ Component Name: ${this.ComponentObjectName || 'Unknown'}`;
     
     private handleNotifyEvent(eventName: string, eventData: any): void {
         console.log(`Component raised event: ${eventName} notified with data:`, eventData);
-        // TODO: Handle custom events as needed
+        
+        // Handle component errors from React host
+        if (eventName === 'componentError') {
+            this.currentError = {
+                type: eventData.source || 'React Component Error',
+                message: eventData.error || 'An unknown error occurred in the React component',
+                technicalDetails: eventData.stackTrace || eventData.errorInfo?.componentStack || ''
+            };
+        }
+        // TODO: Handle other custom events as needed
     }
 
     protected SetupUtilities(md: Metadata): SkipComponentUtilities {
