@@ -1,0 +1,13 @@
+{
+  "_primaryKey": {
+    "ID": "example-001"
+  },
+  "_fields": {
+    "Name": "Example Greeting Prompt",
+    "Description": "A simple example prompt to demonstrate the sync tool",
+    "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "Temperature": 0.8,
+    "MaxTokens": 150,
+    "Prompt": "@file:greeting.prompt.md"
+  }
+}

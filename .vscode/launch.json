@@ -68,6 +68,102 @@
       "sourceMapPathOverrides": {
         "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
       }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync CLI",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["${input:metadataSyncCommand}", "${input:metadataSyncArgs}"],
+      "cwd": "${workspaceFolder}/packages/MetadataSync",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync - Init",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["init", "--dir=./metadata-test"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync - Pull AI Prompts",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["pull", "--entity=\"AI Prompts\"", "--dir=./metadata-test"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync - Status",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["status", "--dir=./metadata-test"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync - Push (Dry Run)",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["push", "--dir=ai-prompts", "--dry-run"],
+      "cwd": "${workspaceFolder}/metadata-test",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync - Watch",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["watch"],
+      "cwd": "${workspaceFolder}/metadata-test",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "metadataSyncCommand",
+      "type": "pickString",
+      "description": "Select MetadataSync command",
+      "options": [
+        "init",
+        "pull",
+        "push",
+        "status",
+        "watch"
+      ],
+      "default": "status"
+    },
+    {
+      "id": "metadataSyncArgs",
+      "type": "promptString",
+      "description": "Additional arguments - Examples: init: --dir=./metadata | pull: --entity=\"AI Prompts\" --dir=./metadata | push: --dir=ai-prompts --dry-run | status: --dir=./metadata",
+      "default": ""
     }
   ]
 }
