@@ -586,7 +586,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           const aiDetail = convoDetails[0];
           if (aiDetail) {
             this.AddMessageToCurrentConversation(aiDetail, true, true);
-            this.scrollToBottom();
+            
+            // Ensure scroll to bottom after adding AI message from status polling
+            setTimeout(() => {
+              this.scrollToBottom();
+            }, 100);
             
             // Automatically show artifact if the new AI message has one
             this.autoShowArtifactIfPresent(aiDetail);
@@ -594,7 +598,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
 
-        this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
         if (this.SelectedConversation) {
           this.setProcessingStatus(this.SelectedConversation.ID, false);
         }
@@ -1037,7 +1040,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         MJGlobal.Instance.ObjectCache.Add('Conversations', [convo, ...this.Conversations]);
       }
       await this.SelectConversation(convo);
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
+      // Ensure scroll to bottom for new conversation
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 100);
     } else {
       this.notificationService.CreateSimpleNotification('Error creating data context', 'error', 5000);
     }
@@ -1186,9 +1192,12 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         for (const m of this.Messages) {
           this.AddMessageToPanel(m, false);
         }
-
-        this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
         this.cdRef.reattach(); // resume change detection
+        
+        // Force scroll to bottom after rendering messages
+        setTimeout(() => {
+          this.scrollToBottom();
+        }, 300); // Give DOM time to render all messages
       }
 
       this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
@@ -1299,14 +1308,17 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       convoDetail.Role = 'User';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true, true);
-      this.scrollToBottom();
+      
+      // Ensure scroll to bottom after adding user message
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 100);
 
       this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
 
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
       // temporarily ask Angular to stop its change detection as many of the ops below are slow and async, we don't want flicker in the UI as stuff happens
@@ -1354,7 +1366,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           const aiDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
-          this.scrollToBottom();
+          
+          // Ensure scroll to bottom after AI response
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
           
           // Automatically show artifact if the new AI message has one
           this.autoShowArtifactIfPresent(aiDetail);
@@ -1362,7 +1378,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         }
       }
 
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       if (this.SelectedConversation) {
         this.setProcessingStatus(this.SelectedConversation.ID, false);
       }
@@ -1545,9 +1560,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message
     (<any>messageDetail)._componentRef = componentRef;
 
-    // set flag to scroll to the bottom of the chat panel
-    this._scrollToBottom = true;
-
     // Resume change detection
     if (stopChangeDetection) 
       this.cdRef.reattach();
@@ -1572,10 +1584,31 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
-  scrollToBottom(): void {
+  scrollToBottom(retryCount: number = 0): void {
     try {
-      this.askSkipPanel.nativeElement.scrollTop = this.askSkipPanel.nativeElement.scrollHeight;
-    } catch (err) {}
+      if (!this.scrollContainer) {
+        // If scrollContainer is not available yet, retry
+        if (retryCount < 10) {
+          setTimeout(() => {
+            this.scrollToBottom(retryCount + 1);
+          }, 50);
+        }
+        return;
+      }
+      
+      const element = this.scrollContainer.nativeElement;
+      if (element.scrollHeight === 0 && retryCount < 10) {
+        // If scrollHeight is 0, the content hasn't rendered yet, so retry after a delay
+        // But limit retries to prevent infinite loops
+        setTimeout(() => {
+          this.scrollToBottom(retryCount + 1);
+        }, 50);
+      } else if (element.scrollHeight > 0) {
+        element.scrollTop = element.scrollHeight;
+      }
+    } catch (err) {
+      console.error('Error scrolling to bottom:', err);
+    }
   }
 
   scrollToBottomAnimate() {
@@ -1583,6 +1616,20 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /**
+   * Calculates the horizontal position for the scroll-to-bottom icon
+   * to center it within the conversation panel
+   */
+  getScrollToBottomIconPosition(): number {
+    if (!this.scrollContainer) {
+      return window.innerWidth / 2; // Fallback to viewport center
+    }
+    
+    const rect = this.scrollContainer.nativeElement.getBoundingClientRect();
+    // Calculate the center of the conversation panel
+    return rect.left + (rect.width / 2);
   }
 
   protected async GetCreateDataContextID(): Promise<string> {
@@ -1768,7 +1815,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         filter((e) => e instanceof ActivationEnd),
         take(1)
       )
-      .subscribe((e) => {
+      .subscribe(() => {
         this.onNavBackToCachedComponent();
       });
   }
