@@ -1006,7 +1006,8 @@ Analyze the current situation and respond with your optimal decision plan.`;
           messages: messagesToCompress,
           messageCount: messagesToCompress.length
         },
-        contextUser: context.params.contextUser
+        contextUser: context.params.contextUser,
+        agentRunId: context.agentRun?.ID  // Link compression prompt to agent run
       };
 
       const compressionResult = await this.promptRunner.ExecutePrompt(compressionParams);

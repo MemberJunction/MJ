@@ -121,6 +121,12 @@ export class AIPromptParams {
    * Called when AI models support streaming responses
    */
   onStreaming?: ExecutionStreamingCallback;
+
+  /**
+   * Optional agent run ID to link this prompt execution to a parent agent run
+   * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
+   */
+  agentRunId?: string;
 }
 
 /**
@@ -578,7 +584,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks, undefined, undefined, params.cancellationToken);
+    const parallelResult = await this._parallelCoordinator.executeTasksInParallel(executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -855,6 +861,11 @@ export class AIPromptRunner {
       }
       promptRun.ConfigurationID = params.configurationId;
       promptRun.RunAt = startTime;
+      
+      // Set AgentRunID if provided for agent-prompt execution tracking
+      if (params.agentRunId) {
+        promptRun.AgentRunID = params.agentRunId;
+      }
 
       // Store the input data/context as JSON in Messages field
       if (params.data || params.templateData) {
