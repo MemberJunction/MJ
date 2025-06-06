@@ -401,33 +401,70 @@ export class SkipReactComponentHost {
         transpiledCode = result.code;
       } catch (transpileError) {
         LogError(`Failed to transpile JSX: ${transpileError}`);
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: `JSX transpilation failed: ${transpileError}`,
+            source: 'JSX Transpilation'
+          });
+        }
         throw new Error(`JSX transpilation failed: ${transpileError}`);
       }
 
       // Create the component factory function from the transpiled code
       // Always pass all libraries - unused ones will just be undefined in older components
-      const createComponent = new Function(
-        'React', 'styles', 'console', 'antd', 'ReactBootstrap', 'd3', 'Chart', '_', 'dayjs',
-        `${transpiledCode}; return createComponent;`
-      )(this.React, styles, console, libraries.antd, libraries.ReactBootstrap, libraries.d3, libraries.Chart, libraries._, libraries.dayjs);
+      let createComponent;
+      try {
+        createComponent = new Function(
+          'React', 'styles', 'console', 'antd', 'ReactBootstrap', 'd3', 'Chart', '_', 'dayjs',
+          `${transpiledCode}; return createComponent;`
+        )(this.React, styles, console, libraries.antd, libraries.ReactBootstrap, libraries.d3, libraries.Chart, libraries._, libraries.dayjs);
+      } catch (evalError) {
+        LogError(`Failed to evaluate component code: ${evalError}`);
+        console.error('Component code evaluation error:', evalError);
+        console.error('Transpiled code:', transpiledCode);
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: `Component code evaluation failed: ${evalError}`,
+            source: 'Code Evaluation'
+          });
+        }
+        throw new Error(`Component code evaluation failed: ${evalError}`);
+      }
 
       // Debug: Check if React hooks are available
       if (!this.React.useState) {
         console.error('React.useState is not available. React object:', this.React);
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: 'React hooks are not available. Make sure React is loaded correctly.',
+            source: 'React Initialization'
+          });
+        }
         throw new Error('React hooks are not available. Make sure React is loaded correctly.');
       }
 
       // Call createComponent with all parameters - older components will just ignore the extra libraries parameter
-      this.componentResult = createComponent(
-        this.React, 
-        this.ReactDOM, 
-        this.React.useState, 
-        this.React.useEffect,
-        this.React.useCallback,
-        createStateUpdater,
-        createStandardEventHandler,
-        libraries
-      );
+      try {
+        this.componentResult = createComponent(
+          this.React, 
+          this.ReactDOM, 
+          this.React.useState, 
+          this.React.useEffect,
+          this.React.useCallback,
+          createStateUpdater,
+          createStandardEventHandler,
+          libraries
+        );
+      } catch (factoryError) {
+        LogError(`Component factory failed: ${factoryError}`);
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: `Component factory failed: ${factoryError}`,
+            source: 'Component Factory'
+          });
+        }
+        throw factoryError;
+      }
 
       // Create container if it doesn't exist
       if (!this.componentContainer) {
@@ -446,9 +483,68 @@ export class SkipReactComponentHost {
     } catch (error) {
       LogError(error);
       if (this.config.callbacks?.NotifyEvent) {
-        this.config.callbacks.NotifyEvent('error', error);
+        this.config.callbacks.NotifyEvent('componentError', {
+          error: String(error),
+          source: 'Component Initialization'
+        });
       }
     }
+  }
+
+  /**
+   * Create an error boundary component
+   */
+  private createErrorBoundary(): any {
+    const React = this.React;
+    
+    class ErrorBoundary extends React.Component {
+      constructor(props: any) {
+        super(props);
+        this.state = { 
+          hasError: false, 
+          error: null, 
+          errorInfo: null
+        };
+      }
+
+      static getDerivedStateFromError(_error: any) {
+        return { hasError: true };
+      }
+
+      componentDidCatch(error: any, errorInfo: any) {
+        console.error('React Error Boundary caught:', error, errorInfo);
+        // Bubble error up to Angular
+        const host = (this as any).props.host;
+        if (host?.config?.callbacks?.NotifyEvent) {
+          host.config.callbacks.NotifyEvent('componentError', {
+            error: error?.toString() || 'Unknown error',
+            errorInfo: errorInfo,
+            stackTrace: errorInfo?.componentStack,
+            source: 'React Error Boundary'
+          });
+        }
+        // Set state to prevent re-rendering the broken component
+        this.setState({
+          error: error,
+          errorInfo: errorInfo
+        });
+      }
+
+      render() {
+        if ((this.state as any).hasError) {
+          // Just return an empty div - Angular will show the error
+          return React.createElement('div', {
+            style: {
+              display: 'none'
+            }
+          });
+        }
+
+        return (this.props as any).children;
+      }
+    }
+
+    return ErrorBoundary;
   }
 
   /**
@@ -460,6 +556,7 @@ export class SkipReactComponentHost {
     }
 
     const Component = this.componentResult.component;
+    const ErrorBoundary = this.createErrorBoundary();
     
     // Ensure utilities and callbacks are available
     const utilities = this.config.utilities || {};
@@ -491,7 +588,39 @@ export class SkipReactComponentHost {
     }
 
     if (this.reactRoot) {
-      this.reactRoot.render(this.React.createElement(Component, componentProps));
+      try {
+        // Wrap component in error boundary, passing host reference
+        const wrappedElement = this.React.createElement(ErrorBoundary, { host: this },
+          this.React.createElement(Component, componentProps)
+        );
+        
+        // Set a timeout to prevent infinite loops from freezing the browser
+        const renderTimeout = setTimeout(() => {
+          console.error('Component render timeout - possible infinite loop detected');
+          if (this.config.callbacks?.NotifyEvent) {
+            this.config.callbacks.NotifyEvent('componentError', {
+              error: 'Component render timeout - possible infinite loop or heavy computation detected',
+              source: 'Render Timeout'
+            });
+          }
+        }, 5000); // 5 second timeout
+        
+        this.reactRoot.render(wrappedElement);
+        
+        // Clear timeout if render completes
+        clearTimeout(renderTimeout);
+      } catch (renderError) {
+        console.error('Failed to render React component:', renderError);
+        console.error('Component:', Component);
+        console.error('Props:', componentProps);
+        
+        if (this.config.callbacks?.NotifyEvent) {
+          this.config.callbacks.NotifyEvent('componentError', {
+            error: `Component render failed: ${renderError}`,
+            source: 'React Render'
+          });
+        }
+      }
     }
   }
 
@@ -548,6 +677,7 @@ export class SkipReactComponentHost {
       window.print();
     }
   }
+
 
   /**
    * Clean up resources
