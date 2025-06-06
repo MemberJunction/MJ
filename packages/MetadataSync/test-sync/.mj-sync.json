@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "validateBeforePush": true,
+    "requireConfirmation": true
+  },
+  "watch": {
+    "debounceMs": 1000,
+    "ignorePatterns": [
+      "*.tmp",
+      "*.bak",
+      ".DS_Store"
+    ]
+  }
+}

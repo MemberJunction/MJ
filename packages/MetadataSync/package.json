@@ -1,0 +1,84 @@
+{
+  "name": "@memberjunction/metadata-sync",
+  "version": "2.45.0",
+  "description": "MemberJunction metadata synchronization CLI tool",
+  "keywords": [
+    "oclif",
+    "metadata",
+    "sync"
+  ],
+  "homepage": "https://github.com/MemberJunction/MJ",
+  "bugs": {
+    "url": "https://github.com/MemberJunction/MJ/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MemberJunction/MJ.git"
+  },
+  "license": "ISC",
+  "author": "MemberJunction",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mj-sync": "bin/run.js"
+  },
+  "files": [
+    "/bin",
+    "/dist",
+    "/oclif.manifest.json"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "prepack": "npm run build && oclif manifest && oclif readme",
+    "postpack": "rimraf oclif.manifest.json",
+    "version": "oclif readme && git add README.md"
+  },
+  "oclif": {
+    "bin": "mj-sync",
+    "commands": "./dist/commands",
+    "hooks": {
+      "init": "./dist/hooks/init"
+    },
+    "dirname": "mj-sync",
+    "plugins": [
+      "@oclif/plugin-help",
+      "@oclif/plugin-warn-if-update-available",
+      "@oclif/plugin-version"
+    ],
+    "warn-if-update-available": {
+      "timeoutInDays": 1
+    }
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^5.0.1",
+    "@memberjunction/core": "2.45.0",
+    "@memberjunction/core-entities": "2.45.0",
+    "@memberjunction/sqlserver-dataprovider": "2.45.0",
+    "@memberjunction/graphql-dataprovider": "2.45.0",
+    "@oclif/core": "^3",
+    "@oclif/plugin-help": "^6",
+    "@oclif/plugin-version": "^2.0.17",
+    "@oclif/plugin-warn-if-update-available": "^3.0.16",
+    "chokidar": "^3.6.0",
+    "cosmiconfig": "9.0.0",
+    "dotenv": "16.4.5",
+    "fast-glob": "^3.3.2",
+    "fs-extra": "^11.2.0",
+    "ora-classic": "^5.4.2",
+    "zod": "^3.23.4",
+    "crypto": "^1.0.1",
+    "axios": "^1.6.8",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "@oclif/prettier-config": "^0.2.1",
+    "@types/fs-extra": "^11.0.4",
+    "oclif": "^4",
+    "rimraf": "5.0.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
