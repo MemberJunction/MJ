@@ -131,40 +131,20 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const md = this.ProviderToUse as any as IMetadataProvider;
-        let tg: TransactionGroupBase | undefined = undefined;
-        if (!this.TransactionGroup) {
-            // we are not operating in a transaction group, so create one
-            tg = await md.CreateTransactionGroup();
-        }
 
         // now do the work of creating or updating the Template and Template Contents
         if (this.TemplateID === null && this.TemplateText?.trim().length > 0) {
-            const template = await this.CreateLinkedTemplateAndTemplateContents(md, tg);
+            const template = await this.CreateLinkedTemplateAndTemplateContents(md);
             if (template) {
                 this.TemplateID = template.ID; // link the Template to this AI Prompt
             }
         }
         else if (this.TemplateID && this.TemplateText?.trim().length > 0) {
             // we have a linked Template, so update the Template Contents associated with it
-            await this.UpdateLinkedTemplateContents(md, tg);
+            await this.UpdateLinkedTemplateContents(md);
         }
         // now save the AI Prompt itself
-        const saveResult = await super.Save(options);
-        if (tg) {
-            if (saveResult) {
-                // if we saved successfully, commit the transaction group
-                return await tg.Submit();
-            }
-            else {
-                // if we failed to save, rollback the transaction group
-                // which means we do NOT submit the transaction group
-                return false;
-            }
-        }
-        else  {
-            // we are not operating in a transaction group, so just return the save result
-            return saveResult;            
-        }
+        return await super.Save(options);
     }
 
     /**
@@ -179,7 +159,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         if (!this.TemplateID) {
             throw new Error("Cannot update linked Template Contents because TemplateID is null.");
         }
-        const rv = this.ProviderToUse as any as IRunViewProvider;
+        const rv = new RunView(this.ProviderToUse as any as IRunViewProvider);
         const result = await rv.RunView<TemplateContentEntity>({
             EntityName: "Template Contents",
             ExtraFilter: `TemplateID='${this.TemplateID}'`,
@@ -222,7 +202,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
      * It can be overridden by subclasses to provide custom logic for creating the linked Template.
      * @returns {Promise<TemplateEntity | null>} The created Template entity record or null if not created.
      */
-    protected async CreateLinkedTemplateAndTemplateContents(md: IMetadataProvider, tg: TransactionGroupBase): Promise<TemplateEntity | null> {
+    protected async CreateLinkedTemplateAndTemplateContents(md: IMetadataProvider): Promise<TemplateEntity | null> {
         // we have no linked template, but we have template text, so create a new template and template contents
         const t = await md.GetEntityObject<TemplateEntity>("Templates", this.ContextCurrentUser);
         t.NewRecord();
@@ -231,9 +211,6 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         t.UserID = this.ContextCurrentUser.ID;
         t.CategoryID = await this.getOrCreateRootTemplateCategoryID();
         t.IsActive = true;
-        if (tg) {
-            t.TransactionGroup = tg;
-        }
         if (await t.Save()) {
             // now create the template contents
             const tc = await md.GetEntityObject<TemplateContentEntity>("Template Contents", this.ContextCurrentUser);
@@ -243,9 +220,6 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
             tc.TemplateText = this.TemplateText;
             tc.Priority = 1; // default priority
             tc.IsActive = true;
-            if (tg) {
-                tc.TransactionGroup = tg;
-            }
             if (await tc.Save()) {
                 return t;
             } 

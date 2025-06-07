@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
-import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 
 export interface RecordData {
@@ -63,14 +63,43 @@ export class SyncEngine {
     // Check for @lookup: reference
     if (value.startsWith('@lookup:')) {
       const lookupStr = value.substring(8);
-      const match = lookupStr.match(/^(.+?)\.(.+?)=(.+)$/);
       
-      if (match) {
-        const [, entityName, fieldName, fieldValue] = match;
-        return await this.resolveLookup(entityName, fieldName, fieldValue);
-      } else {
+      // Parse lookup with optional create syntax
+      // Format: EntityName.FieldName=Value?create&OtherField=Value
+      const entityMatch = lookupStr.match(/^([^.]+)\./);
+      if (!entityMatch) {
         throw new Error(`Invalid lookup format: ${value}`);
       }
+      
+      const entityName = entityMatch[1];
+      const remaining = lookupStr.substring(entityName.length + 1);
+      
+      // Check if this has ?create syntax
+      const hasCreate = remaining.includes('?create');
+      const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
+      
+      // Parse the main lookup field
+      const fieldMatch = lookupPart.match(/^(.+?)=(.+)$/);
+      if (!fieldMatch) {
+        throw new Error(`Invalid lookup format: ${value}`);
+      }
+      
+      const [, fieldName, fieldValue] = fieldMatch;
+      
+      // Parse additional fields for creation if ?create is present
+      let createFields: Record<string, any> = {};
+      if (hasCreate && remaining.includes('?create&')) {
+        const createPart = remaining.split('?create&')[1];
+        const pairs = createPart.split('&');
+        for (const pair of pairs) {
+          const [key, val] = pair.split('=');
+          if (key && val) {
+            createFields[key] = decodeURIComponent(val);
+          }
+        }
+      }
+      
+      return await this.resolveLookup(entityName, fieldName, fieldValue, hasCreate, createFields);
     }
     
     // Check for @env: reference
@@ -89,29 +118,84 @@ export class SyncEngine {
   }
   
   /**
-   * Resolve a lookup reference to an ID
+   * Resolve a lookup reference to an ID, optionally creating the record if it doesn't exist
    */
-  async resolveLookup(entityName: string, fieldName: string, fieldValue: string): Promise<string> {
+  async resolveLookup(
+    entityName: string, 
+    fieldName: string, 
+    fieldValue: string,
+    autoCreate: boolean = false,
+    createFields: Record<string, any> = {}
+  ): Promise<string> {
+    console.log(`Resolving lookup: ${entityName}.${fieldName}=${fieldValue}${autoCreate ? ' (auto-create enabled)' : ''}`);
+    
     const rv = new RunView();
+    const entityInfo = this.metadata.EntityByName(entityName);
+    if (!entityInfo) {
+      throw new Error(`Entity not found: ${entityName}`);
+    }
+    
+    const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+    const quotes = field?.NeedsQuotes ? "'" : '';
     const result = await rv.RunView({
       EntityName: entityName,
-      ExtraFilter: `${fieldName} = '${fieldValue.replace(/'/g, "''")}'`,
+      ExtraFilter: `${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`,
       MaxRows: 1
     }, this.contextUser);
     
     if (result.Success && result.Results.length > 0) {
-      const entityInfo = this.metadata.EntityByName(entityName);
-      if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+      if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
-        return result.Results[0][pkeyField];
+        const id = result.Results[0][pkeyField];
+        console.log(`Lookup resolved to ID: ${id}`);
+        return id;
       }
     }
     
-    throw new Error(`Lookup failed: ${entityName}.${fieldName}=${fieldValue}`);
+    // If not found and auto-create is enabled, create the record
+    if (autoCreate) {
+      console.log(`Record not found, creating new ${entityName} with ${fieldName}='${fieldValue}'`);
+      
+      const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
+      if (!newEntity) {
+        throw new Error(`Failed to create entity object for: ${entityName}`);
+      }
+      
+      newEntity.NewRecord();
+      
+      // Set the lookup field
+      if (fieldName in newEntity) {
+        (newEntity as any)[fieldName] = fieldValue;
+      }
+      
+      // Set any additional fields provided
+      for (const [key, value] of Object.entries(createFields)) {
+        if (key in newEntity) {
+          (newEntity as any)[key] = value;
+        }
+      }
+      
+      // Save the new record
+      const saved = await newEntity.Save();
+      if (!saved) {
+        const errors = newEntity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+        throw new Error(`Failed to auto-create ${entityName}: ${errors}`);
+      }
+      
+      // Return the new ID
+      if (entityInfo.PrimaryKeys.length > 0) {
+        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const newId = newEntity.Get(pkeyField);
+        console.log(`Created new ${entityName} with ID: ${newId}`);
+        return newId;
+      }
+    }
+    
+    throw new Error(`Lookup failed: No record found in '${entityName}' where ${fieldName}='${fieldValue}'`);
   }
   
   /**
-   * Build cascading defaults for a file path
+   * Build cascading defaults for a file path and process field values
    */
   async buildDefaults(filePath: string, entityConfig: EntityConfig): Promise<Record<string, any>> {
     const parts = path.dirname(filePath).split(path.sep);
@@ -128,7 +212,19 @@ export class SyncEngine {
       }
     }
     
-    return defaults;
+    // Process all default values (lookups, file references, etc.)
+    const processedDefaults: Record<string, any> = {};
+    const baseDir = path.dirname(filePath);
+    
+    for (const [field, value] of Object.entries(defaults)) {
+      try {
+        processedDefaults[field] = await this.processFieldValue(value, baseDir);
+      } catch (error) {
+        throw new Error(`Failed to process default for field '${field}': ${error}`);
+      }
+    }
+    
+    return processedDefaults;
   }
   
   /**

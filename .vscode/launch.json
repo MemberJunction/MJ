@@ -78,10 +78,22 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
       }
     }
   ],

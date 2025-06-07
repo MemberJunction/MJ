@@ -1,8 +1,16 @@
 {
   "fields": {
-    "Name": "Example Greeting Prompt",
+    "Name": "Example Greeting Prompt 2",
     "Description": "A simple example prompt to demonstrate the sync tool",
     "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-    "TemplateText": "@file:greeting.prompt.md"
+    "TemplateText": "@file:greeting.prompt.md",
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A0A1433E-F36B-1410-8DB0-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-06-07T16:16:52.481Z",
+    "checksum": "28ae363182de71332da08c85f3fb4580a34d319ce7cf41633790b07bd84f3670"
   }
 }

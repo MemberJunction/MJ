@@ -55,6 +55,18 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "Build MetadataSync",
+      "type": "npm",
+      "script": "build",
+      "path": "packages/MetadataSync",
+      "group": "build",
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }

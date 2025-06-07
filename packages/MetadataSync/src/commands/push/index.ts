@@ -40,7 +40,7 @@ export default class Push extends Command {
       const syncConfig = await loadSyncConfig(process.cwd());
       
       // Initialize data provider
-      const provider = await initializeProvider(mjConfig);
+      await initializeProvider(mjConfig);
       
       // Initialize sync engine
       const syncEngine = new SyncEngine(getSystemUser());
@@ -142,7 +142,7 @@ export default class Push extends Command {
         const filePath = path.join(entityDir, file);
         const recordData: RecordData = await fs.readJson(filePath);
         
-        // Build defaults
+        // Build and process defaults (including lookups)
         const defaults = await syncEngine.buildDefaults(filePath, entityConfig);
         
         // Process the record
@@ -150,6 +150,7 @@ export default class Push extends Command {
           recordData,
           entityConfig.entity,
           path.dirname(filePath),
+          file,
           defaults,
           syncEngine,
           flags['dry-run']
@@ -167,7 +168,8 @@ export default class Push extends Command {
         
       } catch (error) {
         result.errors++;
-        this.warn(`Failed to process ${file}: ${error}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.error(`Failed to process ${file}: ${errorMessage}`, { exit: false });
       }
     }
     
@@ -179,6 +181,7 @@ export default class Push extends Command {
     recordData: RecordData,
     entityName: string,
     baseDir: string,
+    fileName: string,
     defaults: Record<string, any>,
     syncEngine: SyncEngine,
     dryRun: boolean
@@ -208,8 +211,13 @@ export default class Push extends Command {
     // Apply record fields
     for (const [field, value] of Object.entries(recordData.fields)) {
       if (field in entity) {
-        const processedValue = await syncEngine.processFieldValue(value, baseDir);
-        (entity as any)[field] = processedValue;
+        try {
+          const processedValue = await syncEngine.processFieldValue(value, baseDir);
+          console.log(`Setting field ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+          (entity as any)[field] = processedValue;
+        } catch (error) {
+          throw new Error(`Failed to process field '${field}': ${error}`);
+        }
       } else {
         this.warn(`Field '${field}' does not exist on entity '${entityName}'`);
       }
@@ -244,7 +252,6 @@ export default class Push extends Command {
         };
         
         // Write back to file
-        const fileName = path.basename(baseDir) + '.json';
         const filePath = path.join(baseDir, fileName);
         await fs.writeJson(filePath, recordData, { spaces: 2 });
       }
