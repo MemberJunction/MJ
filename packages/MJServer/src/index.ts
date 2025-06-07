@@ -46,6 +46,7 @@ export * from './entitySubclasses/userViewEntity.server.js';
 export * from './entitySubclasses/entityPermissions.server.js';
 export * from './entitySubclasses/DuplicateRunEntity.server.js';
 export * from './entitySubclasses/reportEntity.server.js';
+export * from './entitySubclasses/AIPromptEntityExtended.server.js'
 export * from './types.js';
 export { TokenExpiredError, getSystemUser } from './auth/index.js';
 
