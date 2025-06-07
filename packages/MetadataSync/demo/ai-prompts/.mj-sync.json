@@ -1,0 +1,7 @@
+{
+  "entity": "AI Prompts",
+  "filePattern": "*.json",
+  "defaults": {
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Examples"
+  }
+}

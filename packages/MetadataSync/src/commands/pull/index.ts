@@ -6,7 +6,7 @@ import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView } from '@memberjunction/core';
-import { initializeProvider } from '../../lib/provider-utils';
+import { getSystemUser, initializeProvider } from '../../lib/provider-utils';
 
 export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
@@ -38,7 +38,7 @@ export default class Pull extends Command {
       const provider = await initializeProvider(mjConfig);
       
       // Initialize sync engine
-      const syncEngine = new SyncEngine(provider);
+      const syncEngine = new SyncEngine(getSystemUser());
       await syncEngine.initialize();
       spinner.succeed('Configuration loaded');
       
@@ -160,9 +160,9 @@ export default class Pull extends Command {
   ): Promise<void> {
     // Build record data
     const recordData: RecordData = {
-      _primaryKey: primaryKey,
-      _fields: {},
-      _sync: {
+      primaryKey: primaryKey,
+      fields: {},
+      sync: {
         lastModified: new Date().toISOString(),
         checksum: ''
       }
@@ -188,14 +188,14 @@ export default class Pull extends Command {
           fieldName,
           String(fieldValue)
         );
-        recordData._fields[fieldName] = `@file:${fileName}`;
+        recordData.fields[fieldName] = `@file:${fileName}`;
       } else {
-        recordData._fields[fieldName] = fieldValue;
+        recordData.fields[fieldName] = fieldValue;
       }
     }
     
     // Calculate checksum
-    recordData._sync!.checksum = syncEngine.calculateChecksum(recordData._fields);
+    recordData.sync!.checksum = syncEngine.calculateChecksum(recordData.fields);
     
     // Determine file path
     const fileName = this.buildFileName(primaryKey, entityConfig);

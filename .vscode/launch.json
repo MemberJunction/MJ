@@ -72,10 +72,10 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "MetadataSync CLI",
+      "name": "MetadataSync CLI - Push Demo",
       "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["${input:metadataSyncCommand}", "${input:metadataSyncArgs}"],
-      "cwd": "${workspaceFolder}/packages/MetadataSync",
+      "args": ["push", "--dir", "packages/MetadataSync/demo/ai-prompts"],
+      "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
@@ -83,66 +83,6 @@
       "env": {
         "NODE_ENV": "development"
       }
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "MetadataSync - Init",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["init", "--dir=./metadata-test"],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "MetadataSync - Pull AI Prompts",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["pull", "--entity=\"AI Prompts\"", "--dir=./metadata-test"],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "MetadataSync - Status",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["status", "--dir=./metadata-test"],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "MetadataSync - Push (Dry Run)",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["push", "--dir=ai-prompts", "--dry-run"],
-      "cwd": "${workspaceFolder}/metadata-test",
-      "console": "integratedTerminal",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "MetadataSync - Watch",
-      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
-      "args": ["watch"],
-      "cwd": "${workspaceFolder}/metadata-test",
-      "console": "integratedTerminal",
-      "sourceMaps": true,
-      "outFiles": ["${workspaceFolder}/packages/MetadataSync/dist/**/*.js"],
-      "skipFiles": ["<node_internals>/**"]
     }
   ],
   "inputs": [
@@ -151,18 +91,55 @@
       "type": "pickString",
       "description": "Select MetadataSync command",
       "options": [
-        "init",
-        "pull",
-        "push",
-        "status",
-        "watch"
+        {
+          "label": "Push Demo AI Prompts",
+          "value": "push --dir packages/MetadataSync/demo/ai-prompts"
+        },
+        {
+          "label": "Push Demo AI Prompts (Dry Run)",
+          "value": "push --dir packages/MetadataSync/demo/ai-prompts --dry-run"
+        },
+        {
+          "label": "Pull AI Prompts",
+          "value": "pull --entity \"AI Prompts\""
+        },
+        {
+          "label": "Status",
+          "value": "status"
+        },
+        {
+          "label": "Watch",
+          "value": "watch"
+        },
+        {
+          "label": "Custom Command",
+          "value": "${input:customCommand}"
+        }
       ],
-      "default": "status"
+      "default": "push --dir packages/MetadataSync/demo/ai-prompts"
     },
     {
-      "id": "metadataSyncArgs",
+      "id": "metadataSyncArg1",
       "type": "promptString",
-      "description": "Additional arguments - Examples: init: --dir=./metadata | pull: --entity=\"AI Prompts\" --dir=./metadata | push: --dir=ai-prompts --dry-run | status: --dir=./metadata",
+      "description": "Arg 1 (e.g., --dir or --entity)",
+      "default": "--dir"
+    },
+    {
+      "id": "metadataSyncArg2",
+      "type": "promptString",
+      "description": "Arg 2 (e.g., path or entity name)",
+      "default": "packages/MetadataSync/demo/ai-prompts"
+    },
+    {
+      "id": "metadataSyncArg3",
+      "type": "promptString",
+      "description": "Arg 3 (optional, e.g., --dry-run)",
+      "default": ""
+    },
+    {
+      "id": "metadataSyncArg4",
+      "type": "promptString",
+      "description": "Arg 4 (optional)",
       "default": ""
     }
   ]

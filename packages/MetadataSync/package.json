@@ -53,6 +53,7 @@
     "@inquirer/prompts": "^5.0.1",
     "@memberjunction/core": "2.45.0",
     "@memberjunction/core-entities": "2.45.0",
+    "@memberjunction/core-entities-server": "2.45.0",
     "@memberjunction/sqlserver-dataprovider": "2.45.0",
     "@memberjunction/graphql-dataprovider": "2.45.0",
     "@oclif/core": "^3",

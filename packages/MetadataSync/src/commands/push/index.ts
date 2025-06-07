@@ -6,7 +6,7 @@ import ora from 'ora-classic';
 import fastGlob from 'fast-glob';
 import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
-import { initializeProvider, findEntityDirectories } from '../../lib/provider-utils';
+import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity } from '@memberjunction/core';
 
 export default class Push extends Command {
@@ -43,7 +43,7 @@ export default class Push extends Command {
       const provider = await initializeProvider(mjConfig);
       
       // Initialize sync engine
-      const syncEngine = new SyncEngine(provider);
+      const syncEngine = new SyncEngine(getSystemUser());
       await syncEngine.initialize();
       spinner.succeed('Configuration loaded');
       
@@ -187,8 +187,8 @@ export default class Push extends Command {
     let entity: BaseEntity | null = null;
     let isNew = false;
     
-    if (recordData._primaryKey) {
-      entity = await syncEngine.loadEntity(entityName, recordData._primaryKey);
+    if (recordData.primaryKey) {
+      entity = await syncEngine.loadEntity(entityName, recordData.primaryKey);
     }
     
     if (!entity) {
@@ -200,16 +200,18 @@ export default class Push extends Command {
     
     // Apply defaults first
     for (const [field, value] of Object.entries(defaults)) {
-      if ((entity as any).Fields.find((f: any) => f.Name === field)) {
-        entity.Set(field, value);
+      if (field in entity) {
+        (entity as any)[field] = value;
       }
     }
     
     // Apply record fields
-    for (const [field, value] of Object.entries(recordData._fields)) {
-      if ((entity as any).Fields.find((f: any) => f.Name === field)) {
+    for (const [field, value] of Object.entries(recordData.fields)) {
+      if (field in entity) {
         const processedValue = await syncEngine.processFieldValue(value, baseDir);
-        entity.Set(field, processedValue);
+        (entity as any)[field] = processedValue;
+      } else {
+        this.warn(`Field '${field}' does not exist on entity '${entityName}'`);
       }
     }
     
@@ -233,12 +235,12 @@ export default class Push extends Command {
         for (const pk of entityInfo.PrimaryKeys) {
           newPrimaryKey[pk.Name] = entity.Get(pk.Name);
         }
-        recordData._primaryKey = newPrimaryKey;
+        recordData.primaryKey = newPrimaryKey;
         
         // Update sync metadata
-        recordData._sync = {
+        recordData.sync = {
           lastModified: new Date().toISOString(),
-          checksum: syncEngine.calculateChecksum(recordData._fields)
+          checksum: syncEngine.calculateChecksum(recordData.fields)
         };
         
         // Write back to file

@@ -2,13 +2,13 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
-import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo, IEntityDataProvider } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 
 export interface RecordData {
-  _primaryKey: Record<string, any>;
-  _fields: Record<string, any>;
-  _sync?: {
+  primaryKey?: Record<string, any>;
+  fields: Record<string, any>;
+  sync?: {
     lastModified: string;
     checksum: string;
   };
@@ -16,11 +16,11 @@ export interface RecordData {
 
 export class SyncEngine {
   private metadata: Metadata;
-  private provider: IEntityDataProvider;
-  
-  constructor(provider: IEntityDataProvider) {
+  private contextUser: UserInfo;
+
+  constructor(contextUser: UserInfo) {
     this.metadata = new Metadata();
-    this.provider = provider;
+    this.contextUser = contextUser;
   }
   
   async initialize(): Promise<void> {
@@ -97,7 +97,7 @@ export class SyncEngine {
       EntityName: entityName,
       ExtraFilter: `${fieldName} = '${fieldValue.replace(/'/g, "''")}'`,
       MaxRows: 1
-    });
+    }, this.contextUser);
     
     if (result.Success && result.Results.length > 0) {
       const entityInfo = this.metadata.EntityByName(entityName);
@@ -169,7 +169,7 @@ export class SyncEngine {
    * Create a new entity object
    */
   async createEntityObject(entityName: string): Promise<BaseEntity> {
-    const entity = await this.metadata.GetEntityObject(entityName);
+    const entity = await this.metadata.GetEntityObject(entityName, this.contextUser);
     if (!entity) {
       throw new Error(`Failed to create entity object for: ${entityName}`);
     }

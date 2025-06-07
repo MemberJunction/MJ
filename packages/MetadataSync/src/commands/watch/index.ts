@@ -5,7 +5,7 @@ import chokidar from 'chokidar';
 import ora from 'ora-classic';
 import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
-import { initializeProvider, findEntityDirectories } from '../../lib/provider-utils';
+import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity } from '@memberjunction/core';
 
 export default class Watch extends Command {
@@ -42,7 +42,7 @@ export default class Watch extends Command {
       const provider = await initializeProvider(mjConfig);
       
       // Initialize sync engine
-      this.syncEngine = new SyncEngine(provider);
+      this.syncEngine = new SyncEngine(getSystemUser());
       await this.syncEngine.initialize();
       spinner.succeed('Configuration loaded');
       
@@ -170,8 +170,8 @@ export default class Watch extends Command {
     let entity: BaseEntity | null = null;
     let isNew = false;
     
-    if (recordData._primaryKey) {
-      entity = await this.syncEngine.loadEntity(entityConfig.entity, recordData._primaryKey);
+    if (recordData.primaryKey) {
+      entity = await this.syncEngine.loadEntity(entityConfig.entity, recordData.primaryKey);
     }
     
     if (!entity) {
@@ -183,16 +183,16 @@ export default class Watch extends Command {
     
     // Apply defaults first
     for (const [field, value] of Object.entries(defaults)) {
-      if ((entity as any).Fields.find((f: any) => f.Name === field)) {
-        entity.Set(field, value);
+      if (field in entity) {
+        (entity as any)[field] = value;
       }
     }
     
     // Apply record fields
-    for (const [field, value] of Object.entries(recordData._fields)) {
-      if ((entity as any).Fields.find((f: any) => f.Name === field)) {
+    for (const [field, value] of Object.entries(recordData.fields)) {
+      if (field in entity) {
         const processedValue = await this.syncEngine.processFieldValue(value, path.dirname(filePath));
-        entity.Set(field, processedValue);
+        (entity as any)[field] = processedValue;
       }
     }
     
@@ -213,12 +213,12 @@ export default class Watch extends Command {
         for (const pk of entityInfo.PrimaryKeys) {
           newPrimaryKey[pk.Name] = entity.Get(pk.Name);
         }
-        recordData._primaryKey = newPrimaryKey;
+        recordData.primaryKey = newPrimaryKey;
         
         // Update sync metadata
-        recordData._sync = {
+        recordData.sync = {
           lastModified: new Date().toISOString(),
-          checksum: this.syncEngine.calculateChecksum(recordData._fields)
+          checksum: this.syncEngine.calculateChecksum(recordData.fields)
         };
         
         // Write back to file
@@ -245,9 +245,9 @@ export default class Watch extends Command {
       if (await fs.pathExists(jsonFilePath)) {
         // Update the JSON file's sync metadata to trigger a sync
         const recordData: RecordData = await fs.readJson(jsonFilePath);
-        recordData._sync = {
+        recordData.sync = {
           lastModified: new Date().toISOString(),
-          checksum: recordData._sync?.checksum || ''
+          checksum: recordData.sync?.checksum || ''
         };
         await fs.writeJson(jsonFilePath, recordData, { spaces: 2 });
         

@@ -5,7 +5,7 @@ import fastGlob from 'fast-glob';
 import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
-import { initializeProvider, findEntityDirectories } from '../../lib/provider-utils';
+import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 
 export default class Status extends Command {
   static description = 'Show status of local files vs database';
@@ -35,7 +35,7 @@ export default class Status extends Command {
       const provider = await initializeProvider(mjConfig);
       
       // Initialize sync engine
-      const syncEngine = new SyncEngine(provider);
+      const syncEngine = new SyncEngine(getSystemUser());
       await syncEngine.initialize();
       spinner.succeed('Configuration loaded');
       
@@ -114,16 +114,16 @@ export default class Status extends Command {
         const filePath = path.join(entityDir, file);
         const recordData: RecordData = await fs.readJson(filePath);
         
-        if (recordData._primaryKey) {
+        if (recordData.primaryKey) {
           // Check if record exists in database
-          const entity = await syncEngine.loadEntity(entityConfig.entity, recordData._primaryKey);
+          const entity = await syncEngine.loadEntity(entityConfig.entity, recordData.primaryKey);
           
           if (!entity) {
             result.deleted++;
           } else {
             // Check if modified
-            const currentChecksum = syncEngine.calculateChecksum(recordData._fields);
-            if (recordData._sync?.checksum !== currentChecksum) {
+            const currentChecksum = syncEngine.calculateChecksum(recordData.fields);
+            if (recordData.sync?.checksum !== currentChecksum) {
               result.modified++;
             } else {
               result.unchanged++;

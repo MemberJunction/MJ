@@ -3,18 +3,15 @@ import path from 'path';
 import fs from 'fs-extra';
 
 export interface MJConfig {
-  db: {
-    host: string;
-    port?: number;
-    database: string;
-    username: string;
-    password: string;
-    options?: Record<string, any>;
-  };
-  providers?: {
-    sql?: any;
-    graphql?: any;
-  };
+  dbHost: string;
+  dbPort?: number;
+  dbDatabase: string;
+  dbUsername: string;
+  dbPassword: string;
+  dbTrustServerCertificate?: string;
+  dbInstanceName?: string;
+  mjCoreSchema?: string;
+  [key: string]: any; // Allow other properties
 }
 
 export interface SyncConfig {

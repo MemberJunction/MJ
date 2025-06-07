@@ -1,8 +1,9 @@
 import { DataSource } from 'typeorm';
-import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * Initialize a SQLServerDataProvider with the given configuration
@@ -13,17 +14,17 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   // Create TypeORM DataSource
   const dataSource = new DataSource({
     type: 'mssql',
-    host: config.db.host,
-    port: config.db.port || 1433,
-    database: config.db.database,
-    username: config.db.username,
-    password: config.db.password,
+    host: config.dbHost,
+    port: config.dbPort ? Number(config.dbPort) : 1433,
+    database: config.dbDatabase,
+    username: config.dbUsername,
+    password: config.dbPassword,
     synchronize: false,
     logging: false,
     options: {
-      ...config.db.options,
-      encrypt: config.db.options?.encrypt !== false,
-      trustServerCertificate: config.db.options?.trustServerCertificate !== false
+      encrypt: config.dbTrustServerCertificate !== 'Y' ? false : true,
+      trustServerCertificate: config.dbTrustServerCertificate === 'Y',
+      instanceName: config.dbInstanceName
     }
   });
   
@@ -34,12 +35,20 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   const providerConfig = new SQLServerProviderConfigData(
     dataSource,
     'system@sync.cli', // Default user for CLI
-    '__mj',
+    config.mjCoreSchema || '__mj',
     0
   );
   
   // Use setupSQLServerClient to properly initialize
   return await setupSQLServerClient(providerConfig);
+}
+
+export function getSystemUser(): UserInfo {
+  const sysUser = UserCache.Instance.UserByName("System", false);
+  if (!sysUser) {
+    throw new Error("System user not found in cache. Ensure the system user exists in the database.");    
+  }
+  return sysUser;
 }
 
 /**
@@ -72,7 +81,8 @@ export function findEntityDirectories(dir: string, specificDir?: string): string
   
   // If specific directory is provided, only search within it
   if (specificDir) {
-    const targetDir = path.join(dir, specificDir);
+    // Handle both absolute and relative paths
+    const targetDir = path.isAbsolute(specificDir) ? specificDir : path.join(dir, specificDir);
     if (fs.existsSync(targetDir)) {
       search(targetDir);
     }

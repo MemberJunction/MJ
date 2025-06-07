@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "Name": "Example Greeting Prompt",
+    "Description": "A simple example prompt to demonstrate the sync tool",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:greeting.prompt.md"
+  }
+}
