@@ -229,3 +229,8 @@ can change over time, I don't want to embed it directly here but rather have it 
         **** REMEMBER **** I am a BOT, do not return anything other than JSON to me or I will choke on your response!`;
     }    
 }
+
+
+export function LoadUserViewEntityServerSubClass() {
+    
+}

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "description": "MetadataSync demo configuration",
+  "defaults": {
+    "UserID": null,
+    "CreatedByUserID": null,
+    "UpdatedByUserID": null
+  }
+}

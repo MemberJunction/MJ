@@ -32,6 +32,7 @@
     "@memberjunction/core": "2.45.0",
     "@memberjunction/core-actions": "2.45.0",
     "@memberjunction/core-entities": "2.45.0",
+    "@memberjunction/core-entities-server": "2.45.0",
     "@memberjunction/data-context": "2.45.0",
     "@memberjunction/data-context-server": "2.45.0",
     "@memberjunction/doc-utils": "2.45.0",
