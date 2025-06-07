@@ -132,22 +132,40 @@ export default class Push extends Command {
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
         const subDir = path.join(entityDir, entry.name);
         
-        // Check if subdirectory has its own .mj-sync.json (new entity type)
-        const hasOwnSync = await fs.pathExists(path.join(subDir, '.mj-sync.json'));
-        if (!hasOwnSync) {
-          // Process as part of current entity
-          const subResult = await this.processEntityDirectory(
-            subDir,
-            entityConfig,
-            syncEngine,
-            flags,
-            syncConfig
-          );
+        // Load subdirectory config and merge with parent config
+        let subEntityConfig = { ...entityConfig };
+        const subDirConfig = await loadEntityConfig(subDir);
+        
+        if (subDirConfig) {
+          // Check if this is a new entity type (has different entity name)
+          if (subDirConfig.entity && subDirConfig.entity !== entityConfig.entity) {
+            // This is a different entity type, skip it (will be processed separately)
+            continue;
+          }
           
-          result.created += subResult.created;
-          result.updated += subResult.updated;
-          result.errors += subResult.errors;
+          // Merge defaults: parent defaults + subdirectory overrides
+          subEntityConfig = {
+            ...entityConfig,
+            ...subDirConfig,
+            defaults: {
+              ...entityConfig.defaults,
+              ...(subDirConfig.defaults || {})
+            }
+          };
         }
+        
+        // Process subdirectory with merged config
+        const subResult = await this.processEntityDirectory(
+          subDir,
+          subEntityConfig,
+          syncEngine,
+          flags,
+          syncConfig
+        );
+        
+        result.created += subResult.created;
+        result.updated += subResult.updated;
+        result.errors += subResult.errors;
       }
     }
     
