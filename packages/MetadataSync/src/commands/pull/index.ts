@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Pull command implementation for MetadataSync
+ * @module commands/pull
+ * 
+ * This module implements the pull command which retrieves metadata records from
+ * the MemberJunction database and saves them as local JSON files. It supports:
+ * - Filtering records with SQL expressions
+ * - Pulling related entities with foreign key relationships
+ * - Externalizing large text fields to separate files
+ * - Creating multi-record JSON files
+ * - Recursive directory search for entity configurations
+ */
+
 import { Command, Flags } from '@oclif/core';
 import fs from 'fs-extra';
 import path from 'path';
@@ -8,6 +21,24 @@ import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView } from '@memberjunction/core';
 import { getSystemUser, initializeProvider, cleanupProvider } from '../../lib/provider-utils';
 
+/**
+ * Pull metadata records from database to local files
+ * 
+ * @class Pull
+ * @extends Command
+ * 
+ * @example
+ * ```bash
+ * # Pull all records for an entity
+ * mj-sync pull --entity="AI Prompts"
+ * 
+ * # Pull with filter
+ * mj-sync pull --entity="AI Prompts" --filter="CategoryID='123'"
+ * 
+ * # Pull to multi-record file
+ * mj-sync pull --entity="AI Prompts" --multi-file="all-prompts.json"
+ * ```
+ */
 export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
   
@@ -164,6 +195,17 @@ export default class Pull extends Command {
     }
   }
   
+  /**
+   * Find directories containing configuration for the specified entity
+   * 
+   * Recursively searches the current working directory for .mj-sync.json files
+   * that specify the given entity name. Returns all matching directories to
+   * allow user selection when multiple locations exist.
+   * 
+   * @param entityName - Name of the entity to search for
+   * @returns Promise resolving to array of directory paths
+   * @private
+   */
   private async findEntityDirectories(entityName: string): Promise<string[]> {
     const dirs: string[] = [];
     
@@ -190,6 +232,20 @@ export default class Pull extends Command {
     return dirs;
   }
   
+  /**
+   * Process a single record and save to file
+   * 
+   * Converts a database record into the file format and writes it to disk.
+   * This is a wrapper around processRecordData that handles file writing.
+   * 
+   * @param record - Raw database record
+   * @param primaryKey - Primary key fields and values
+   * @param targetDir - Directory to save the file
+   * @param entityConfig - Entity configuration with pull settings
+   * @param syncEngine - Sync engine instance
+   * @returns Promise that resolves when file is written
+   * @private
+   */
   private async processRecord(
     record: any, 
     primaryKey: Record<string, any>,
@@ -207,6 +263,20 @@ export default class Pull extends Command {
     await fs.writeJson(filePath, recordData, { spaces: 2 });
   }
   
+  /**
+   * Process record data for storage
+   * 
+   * Transforms a raw database record into the RecordData format used for file storage.
+   * Handles field externalization, related entity pulling, and checksum calculation.
+   * 
+   * @param record - Raw database record
+   * @param primaryKey - Primary key fields and values  
+   * @param targetDir - Directory where files will be saved
+   * @param entityConfig - Entity configuration with defaults and settings
+   * @param syncEngine - Sync engine for checksum calculation
+   * @returns Promise resolving to formatted RecordData
+   * @private
+   */
   private async processRecordData(
     record: any, 
     primaryKey: Record<string, any>,
@@ -265,6 +335,19 @@ export default class Pull extends Command {
     return recordData;
   }
   
+  /**
+   * Determine if a field should be saved to an external file
+   * 
+   * Checks if a field contains substantial text content that would be better
+   * stored in a separate file rather than inline in the JSON. Uses heuristics
+   * based on field name and content length.
+   * 
+   * @param fieldName - Name of the field to check
+   * @param fieldValue - Value of the field
+   * @param entityConfig - Entity configuration (for future extension)
+   * @returns Promise resolving to true if field should be externalized
+   * @private
+   */
   private async shouldExternalizeField(
     fieldName: string, 
     fieldValue: any,
@@ -287,6 +370,20 @@ export default class Pull extends Command {
     return false;
   }
   
+  /**
+   * Create an external file for a field value
+   * 
+   * Saves large text content to a separate file and returns the filename.
+   * Automatically determines appropriate file extension based on field name
+   * and content type (e.g., .md for prompts, .html for templates).
+   * 
+   * @param targetDir - Directory to save the file
+   * @param primaryKey - Primary key for filename generation
+   * @param fieldName - Name of the field being externalized
+   * @param content - Content to write to the file
+   * @returns Promise resolving to the created filename
+   * @private
+   */
   private async createExternalFile(
     targetDir: string,
     primaryKey: Record<string, any>,
@@ -319,6 +416,18 @@ export default class Pull extends Command {
     return fileName;
   }
   
+  /**
+   * Build a filename from primary key values
+   * 
+   * Creates a safe filename based on the entity's primary key values.
+   * Handles GUIDs by using first 8 characters, sanitizes special characters,
+   * and creates composite names for multi-field keys.
+   * 
+   * @param primaryKey - Primary key fields and values
+   * @param entityConfig - Entity configuration (for future extension)
+   * @returns Filename with .json extension
+   * @private
+   */
   private buildFileName(primaryKey: Record<string, any>, entityConfig: any): string {
     // Use primary key values to build filename
     const keys = Object.values(primaryKey);
@@ -340,6 +449,19 @@ export default class Pull extends Command {
     return keys.map(k => String(k).replace(/[^a-zA-Z0-9-_]/g, '_')).join('-') + '.json';
   }
   
+  /**
+   * Pull related entities for a parent record
+   * 
+   * Retrieves child records that have foreign key relationships to the parent.
+   * Converts foreign key values to @parent references and supports nested
+   * related entities for deep object graphs.
+   * 
+   * @param parentRecord - Parent entity record
+   * @param relatedConfig - Configuration for related entities to pull
+   * @param syncEngine - Sync engine instance
+   * @returns Promise resolving to map of entity names to related records
+   * @private
+   */
   private async pullRelatedEntities(
     parentRecord: any,
     relatedConfig: Record<string, RelatedEntityConfig>,
@@ -422,6 +544,18 @@ export default class Pull extends Command {
     return relatedEntities;
   }
   
+  /**
+   * Find which field in the parent record contains a specific value
+   * 
+   * Used to convert foreign key references to @parent references by finding
+   * the parent field that contains the foreign key value. Typically finds
+   * the primary key field but can match any field.
+   * 
+   * @param parentRecord - Parent record to search
+   * @param value - Value to search for
+   * @returns Field name containing the value, or null if not found
+   * @private
+   */
   private findParentField(parentRecord: any, value: any): string | null {
     // Find which field in the parent contains this value
     // Typically this will be the primary key field

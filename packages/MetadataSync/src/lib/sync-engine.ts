@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Core synchronization engine for MemberJunction metadata
+ * @module sync-engine
+ * 
+ * This module provides the core functionality for synchronizing metadata between
+ * the MemberJunction database and local file system representations. It handles
+ * special reference types (@file, @url, @lookup, @env, @parent, @root, @template),
+ * manages entity operations, and provides utilities for data transformation.
+ */
+
 import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
@@ -5,25 +15,55 @@ import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 
+/**
+ * Represents the structure of a metadata record with optional sync tracking
+ */
 export interface RecordData {
+  /** Primary key field(s) and their values */
   primaryKey?: Record<string, any>;
+  /** Entity field names and their values */
   fields: Record<string, any>;
+  /** Related entities organized by entity name */
   relatedEntities?: Record<string, RecordData[]>;
+  /** Synchronization metadata for change tracking */
   sync?: {
+    /** ISO timestamp of last modification */
     lastModified: string;
+    /** SHA256 checksum of the fields object */
     checksum: string;
   };
 }
 
+/**
+ * Core engine for synchronizing MemberJunction metadata between database and files
+ * 
+ * @class SyncEngine
+ * @example
+ * ```typescript
+ * const syncEngine = new SyncEngine(systemUser);
+ * await syncEngine.initialize();
+ * 
+ * // Process a field value with special references
+ * const value = await syncEngine.processFieldValue('@lookup:Users.Email=admin@example.com', '/path/to/base');
+ * ```
+ */
 export class SyncEngine {
   private metadata: Metadata;
   private contextUser: UserInfo;
 
+  /**
+   * Creates a new SyncEngine instance
+   * @param contextUser - The user context for database operations
+   */
   constructor(contextUser: UserInfo) {
     this.metadata = new Metadata();
     this.contextUser = contextUser;
   }
   
+  /**
+   * Initializes the sync engine by refreshing metadata cache
+   * @returns Promise that resolves when initialization is complete
+   */
   async initialize(): Promise<void> {
     // Initialize metadata
     await this.metadata.Refresh();
@@ -31,6 +71,30 @@ export class SyncEngine {
   
   /**
    * Process special references in field values
+   * 
+   * Handles the following reference types:
+   * - `@parent:fieldName` - References a field from the parent record
+   * - `@root:fieldName` - References a field from the root record
+   * - `@file:path` - Reads content from an external file
+   * - `@url:address` - Fetches content from a URL
+   * - `@lookup:Entity.Field=Value` - Looks up an entity ID by field value
+   * - `@env:VARIABLE` - Reads an environment variable
+   * 
+   * @param value - The field value to process
+   * @param baseDir - Base directory for resolving relative file paths
+   * @param parentRecord - Optional parent entity for @parent references
+   * @param rootRecord - Optional root entity for @root references
+   * @returns The processed value with all references resolved
+   * @throws Error if a reference cannot be resolved
+   * 
+   * @example
+   * ```typescript
+   * // File reference
+   * const content = await processFieldValue('@file:template.md', '/path/to/dir');
+   * 
+   * // Lookup with auto-create
+   * const userId = await processFieldValue('@lookup:Users.Email=john@example.com?create', '/path');
+   * ```
    */
   async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null): Promise<any> {
     if (typeof value !== 'string') {
@@ -138,6 +202,26 @@ export class SyncEngine {
   
   /**
    * Resolve a lookup reference to an ID, optionally creating the record if it doesn't exist
+   * 
+   * @param entityName - Name of the entity to search in
+   * @param fieldName - Field to match against
+   * @param fieldValue - Value to search for
+   * @param autoCreate - Whether to create the record if not found
+   * @param createFields - Additional fields to set when creating
+   * @returns The ID of the found or created record
+   * @throws Error if lookup fails and autoCreate is false
+   * 
+   * @example
+   * ```typescript
+   * // Simple lookup
+   * const categoryId = await resolveLookup('Categories', 'Name', 'Technology');
+   * 
+   * // Lookup with auto-create
+   * const tagId = await resolveLookup('Tags', 'Name', 'New Tag', true, {
+   *   Description: 'Auto-created tag',
+   *   Status: 'Active'
+   * });
+   * ```
    */
   async resolveLookup(
     entityName: string, 
@@ -212,6 +296,15 @@ export class SyncEngine {
   
   /**
    * Build cascading defaults for a file path and process field values
+   * 
+   * Walks up the directory tree from the file location, collecting defaults from
+   * entity config and folder configs, with deeper folders overriding parent values.
+   * All default values are processed for special references.
+   * 
+   * @param filePath - Path to the file being processed
+   * @param entityConfig - Entity configuration containing base defaults
+   * @returns Processed defaults with all references resolved
+   * @throws Error if any default value processing fails
    */
   async buildDefaults(filePath: string, entityConfig: EntityConfig): Promise<Record<string, any>> {
     const parts = path.dirname(filePath).split(path.sep);
@@ -244,7 +337,11 @@ export class SyncEngine {
   }
   
   /**
-   * Load folder configuration
+   * Load folder configuration from .mj-folder.json file
+   * 
+   * @param dir - Directory to check for configuration
+   * @returns Folder configuration or null if not found/invalid
+   * @private
    */
   private async loadFolderConfig(dir: string): Promise<FolderConfig | null> {
     const configPath = path.join(dir, '.mj-folder.json');
@@ -262,7 +359,24 @@ export class SyncEngine {
   }
   
   /**
-   * Calculate checksum for data
+   * Calculate SHA256 checksum for data
+   * 
+   * Generates a deterministic hash of the provided data by converting it to
+   * formatted JSON and calculating a SHA256 digest. Used for change detection
+   * in sync operations.
+   * 
+   * @param data - Any data structure to calculate checksum for
+   * @returns Hexadecimal string representation of the SHA256 hash
+   * 
+   * @example
+   * ```typescript
+   * const checksum = syncEngine.calculateChecksum({
+   *   name: 'Test Record',
+   *   value: 42,
+   *   tags: ['a', 'b']
+   * });
+   * // Returns consistent hash for same data structure
+   * ```
    */
   calculateChecksum(data: any): string {
     const hash = crypto.createHash('sha256');
@@ -271,14 +385,43 @@ export class SyncEngine {
   }
   
   /**
-   * Get entity info by name
+   * Get entity metadata information by name
+   * 
+   * Retrieves the EntityInfo object containing schema metadata for the specified entity.
+   * Returns null if the entity is not found in the metadata cache.
+   * 
+   * @param entityName - Name of the entity to look up
+   * @returns EntityInfo object with schema details or null if not found
+   * 
+   * @example
+   * ```typescript
+   * const entityInfo = syncEngine.getEntityInfo('AI Prompts');
+   * if (entityInfo) {
+   *   console.log(`Primary keys: ${entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ')}`);
+   * }
+   * ```
    */
   getEntityInfo(entityName: string): EntityInfo | null {
     return this.metadata.EntityByName(entityName);
   }
   
   /**
-   * Create a new entity object
+   * Create a new entity object instance
+   * 
+   * Uses the MemberJunction metadata system to properly instantiate an entity object.
+   * This ensures correct class registration and respects any custom entity subclasses.
+   * 
+   * @param entityName - Name of the entity to create
+   * @returns Promise resolving to the new BaseEntity instance
+   * @throws Error if entity creation fails
+   * 
+   * @example
+   * ```typescript
+   * const entity = await syncEngine.createEntityObject('AI Prompts');
+   * entity.NewRecord();
+   * entity.Set('Name', 'My Prompt');
+   * await entity.Save();
+   * ```
    */
   async createEntityObject(entityName: string): Promise<BaseEntity> {
     const entity = await this.metadata.GetEntityObject(entityName, this.contextUser);
@@ -289,7 +432,27 @@ export class SyncEngine {
   }
   
   /**
-   * Load an entity by primary key
+   * Load an entity record by primary key
+   * 
+   * Retrieves an existing entity record from the database using its primary key values.
+   * Supports both single and composite primary keys. Returns null if the record is not found.
+   * 
+   * @param entityName - Name of the entity to load
+   * @param primaryKey - Object containing primary key field names and values
+   * @returns Promise resolving to the loaded entity or null if not found
+   * @throws Error if entity metadata is not found
+   * 
+   * @example
+   * ```typescript
+   * // Single primary key
+   * const entity = await syncEngine.loadEntity('Users', { ID: '123-456' });
+   * 
+   * // Composite primary key
+   * const entity = await syncEngine.loadEntity('UserRoles', { 
+   *   UserID: '123-456',
+   *   RoleID: '789-012'
+   * });
+   * ```
    */
   async loadEntity(entityName: string, primaryKey: Record<string, any>): Promise<BaseEntity | null> {
     const entity = await this.createEntityObject(entityName);
@@ -309,7 +472,31 @@ export class SyncEngine {
   
   /**
    * Process JSON object with template references
-   * Templates can be used at any level and are recursively resolved
+   * 
+   * Recursively processes JSON data structures to resolve `@template` references.
+   * Templates can be defined at any level and support:
+   * - Single template references: `"@template:path/to/template.json"`
+   * - Object with @template field: `{ "@template": "file.json", "override": "value" }`
+   * - Array of templates for merging: `{ "@template": ["base.json", "overrides.json"] }`
+   * - Nested template references within templates
+   * 
+   * @param data - JSON data structure to process
+   * @param baseDir - Base directory for resolving relative template paths
+   * @returns Promise resolving to the processed data with all templates resolved
+   * @throws Error if template file is not found or contains invalid JSON
+   * 
+   * @example
+   * ```typescript
+   * // Input data with template reference
+   * const data = {
+   *   "@template": "defaults/ai-prompt.json",
+   *   "Name": "Custom Prompt",
+   *   "Prompt": "Override the template prompt"
+   * };
+   * 
+   * // Resolves template and merges with overrides
+   * const result = await syncEngine.processTemplates(data, '/path/to/dir');
+   * ```
    */
   async processTemplates(data: any, baseDir: string): Promise<any> {
     // Handle arrays
@@ -362,6 +549,16 @@ export class SyncEngine {
   
   /**
    * Load and process a template file
+   * 
+   * Loads a JSON template file from the filesystem and recursively processes any
+   * nested template references within it. Template paths are resolved relative to
+   * the template file's directory, enabling template composition.
+   * 
+   * @param templatePath - Path to the template file (relative or absolute)
+   * @param baseDir - Base directory for resolving relative paths
+   * @returns Promise resolving to the processed template content
+   * @throws Error if template file not found or contains invalid JSON
+   * @private
    */
   private async loadAndProcessTemplate(templatePath: string, baseDir: string): Promise<any> {
     const fullPath = path.resolve(baseDir, templatePath);
@@ -382,7 +579,32 @@ export class SyncEngine {
   }
   
   /**
-   * Deep merge two objects (target takes precedence)
+   * Deep merge two objects with target taking precedence
+   * 
+   * Recursively merges two objects, with values from the target object overriding
+   * values from the source object. Arrays and primitive values are not merged but
+   * replaced entirely by the target value. Undefined values in target are skipped.
+   * 
+   * @param source - Base object to merge from
+   * @param target - Object with values that override source
+   * @returns New object with merged values
+   * @private
+   * 
+   * @example
+   * ```typescript
+   * const source = {
+   *   a: 1,
+   *   b: { x: 10, y: 20 },
+   *   c: [1, 2, 3]
+   * };
+   * const target = {
+   *   a: 2,
+   *   b: { y: 30, z: 40 },
+   *   d: 'new'
+   * };
+   * const result = deepMerge(source, target);
+   * // Result: { a: 2, b: { x: 10, y: 30, z: 40 }, c: [1, 2, 3], d: 'new' }
+   * ```
    */
   private deepMerge(source: any, target: any): any {
     if (!source) return target;
