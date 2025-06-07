@@ -39,6 +39,7 @@ This tool preserves the power of MJ's metadata-driven architecture while adding 
 The Metadata Sync tool bridges the gap between database-stored metadata and file-based workflows by:
 - Pulling metadata entities from database to JSON files with external file support
 - Pushing local file changes back to the database
+- Supporting embedded collections for related entities
 - Enabling version control for all MJ metadata through Git
 - Supporting CI/CD workflows for metadata deployment
 - Providing a familiar file-based editing experience
@@ -50,9 +51,19 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 - **External files**: Store large text fields (prompts, templates, etc.) in appropriate formats (.md, .html, .sql)
 - **File references**: Use `@file:filename.ext` to link external files from JSON
 
+### Embedded Collections (NEW)
+- **Related Entities**: Store related records as arrays within parent JSON files
+- **Hierarchical References**: Use `@parent:` and `@root:` to reference parent/root entity fields
+- **Automatic Metadata**: Related entities maintain their own primaryKey and sync metadata
+- **Nested Support**: Support for multiple levels of nested relationships
+
 ### Synchronization Operations
 - **Pull**: Download metadata from database to local files
+  - Optionally pull related entities based on configuration
+  - Filter support for selective pulling
 - **Push**: Upload local file changes to database
+  - Process embedded collections automatically
+  - Verbose mode (`-v`) for detailed output
 - **Status**: Show what would change without making modifications
 
 ### Development Workflow Integration
@@ -67,6 +78,7 @@ The Metadata Sync tool bridges the gap between database-stored metadata and file
 - Full support for all AI Prompt fields
 - Markdown files for prompt content
 - Category-based organization
+- AI Prompt Models as embedded collections
 
 ### Future Phases
 - Templates
@@ -93,7 +105,7 @@ metadata/
 │   ├── .mj-sync.json               # Defines entity: "AI Prompts"
 │   ├── customer-service/
 │   │   ├── .mj-folder.json         # Folder metadata (CategoryID, etc.)
-│   │   ├── greeting.json           # AI Prompt record
+│   │   ├── greeting.json           # AI Prompt record with embedded models
 │   │   ├── greeting.prompt.md      # Prompt content (referenced)
 │   │   └── greeting.notes.md       # Notes field (referenced)
 │   └── analytics/
@@ -117,13 +129,10 @@ metadata/
 ### Individual Record (e.g., ai-prompts/customer-service/greeting.json)
 ```json
 {
-  "_primaryKey": {
-    "ID": "550e8400-e29b-41d4-a716-446655440000"
-  },
-  "_fields": {
+  "fields": {
     "Name": "Customer Greeting",
     "Description": "Friendly customer service greeting",
-    "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
     "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Service",
     "Temperature": 0.7,
     "MaxTokens": 1000,
@@ -131,27 +140,78 @@ metadata/
     "Notes": "@file:../shared/notes/greeting-notes.md",
     "SystemPrompt": "@url:https://raw.githubusercontent.com/company/prompts/main/system/customer-service.md"
   },
-  "_sync": {
+  "primaryKey": {
+    "ID": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "sync": {
     "lastModified": "2024-01-15T10:30:00Z",
     "checksum": "sha256:abcd1234..."
   }
 }
 ```
 
-### Composite Primary Key Example (e.g., entity-relationships/user-role.json)
+### Record with Embedded Collections (NEW)
 ```json
 {
-  "_primaryKey": {
+  "fields": {
+    "Name": "Customer Service Chat",
+    "Description": "Main customer service prompt",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:customer-service.md",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+          "Priority": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BFA2433E-F36B-1410-8DB0-00021F8B792E"
+        },
+        "sync": {
+          "lastModified": "2025-06-07T17:18:31.687Z",
+          "checksum": "a642ebea748cb1f99467af2a7e6f4ffd3649761be27453b988af973bed57f070"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Claude 4 Sonnet",
+          "Priority": 2,
+          "Status": "Active"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "C2A1433E-F36B-1410-8DB0-00021F8B792E"
+  },
+  "sync": {
+    "lastModified": "2025-06-07T17:18:31.698Z",
+    "checksum": "7cbd241cbf0d67c068c1434e572a78c87bb31751cbfe7734bfd32f8cea17a2c9"
+  }
+}
+```
+
+### Composite Primary Key Example
+```json
+{
+  "primaryKey": {
     "UserID": "550e8400-e29b-41d4-a716-446655440000",
     "RoleID": "660f9400-f39c-51e5-b827-557766551111"
   },
-  "_fields": {
+  "fields": {
     "GrantedAt": "2024-01-15T10:30:00Z",
     "GrantedBy": "@lookup:Users.Email=admin@company.com",
     "ExpiresAt": "2025-01-15T10:30:00Z",
     "Notes": "@file:user-role-notes.md"
   },
-  "_sync": {
+  "sync": {
     "lastModified": "2024-01-15T10:30:00Z",
     "checksum": "sha256:abcd1234..."
   }
@@ -214,10 +274,28 @@ Examples:
 - `@url:https://raw.githubusercontent.com/company/prompts/main/customer.md` - GitHub raw content
 - `@url:file:///shared/network/drive/prompts/standard.md` - Local file URL
 
-### @lookup: References
+### @lookup: References (ENHANCED)
 Enable entity relationships using human-readable values:
-- `@lookup:EntityName.FieldName=Value`
-- Resolved to IDs during sync operations
+- Basic syntax: `@lookup:EntityName.FieldName=Value`
+- Auto-create syntax: `@lookup:EntityName.FieldName=Value?create`
+- With additional fields: `@lookup:EntityName.FieldName=Value?create&Field2=Value2`
+
+Examples:
+- `@lookup:AI Prompt Types.Name=Chat` - Fails if not found
+- `@lookup:AI Prompt Categories.Name=Examples?create` - Creates if missing
+- `@lookup:AI Prompt Categories.Name=Examples?create&Description=Example prompts` - Creates with description
+
+### @parent: References (NEW)
+Reference fields from the immediate parent entity in embedded collections:
+- `@parent:ID` - Get the parent's ID field
+- `@parent:Name` - Get the parent's Name field
+- Works with any field from the parent entity
+
+### @root: References (NEW)
+Reference fields from the root entity in nested structures:
+- `@root:ID` - Get the root entity's ID
+- `@root:CategoryID` - Get the root's CategoryID
+- Useful for deeply nested relationships
 
 ### @env: References
 Support environment-specific values:
@@ -241,6 +319,10 @@ mj-sync push
 
 # Push only specific entity directory
 mj-sync push --dir="ai-prompts"
+
+# Push with verbose output (NEW)
+mj-sync push -v
+mj-sync push --verbose
 
 # Dry run to see what would change
 mj-sync push --dry-run
@@ -285,10 +367,20 @@ Configuration follows a hierarchical structure:
   "entity": "AI Prompts",
   "filePattern": "*.json",
   "defaults": {
-    "PromptTypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
     "Temperature": 0.7,
     "MaxTokens": 1500,
-    "IsActive": true
+    "Status": "Active"
+  },
+  "pull": {
+    "filter": "Status = 'Active'",
+    "relatedEntities": {
+      "MJ: AI Prompt Models": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "ID",
+        "filter": "Status = 'Active'"
+      }
+    }
   }
 }
 ```
@@ -315,21 +407,108 @@ Configuration follows a hierarchical structure:
 }
 ```
 
+## Embedded Collections (NEW)
+
+The tool now supports managing related entities as embedded collections within parent JSON files. This is ideal for entities that have a strong parent-child relationship.
+
+### Benefits
+- **Single File Management**: Keep related data together
+- **Atomic Operations**: Parent and children sync together
+- **Cleaner Organization**: Fewer files to manage
+- **Relationship Clarity**: Visual representation of data relationships
+
+### Configuration for Pull
+Configure which related entities to pull in `.mj-sync.json`:
+```json
+{
+  "entity": "AI Prompts",
+  "pull": {
+    "relatedEntities": {
+      "MJ: AI Prompt Models": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "ID",
+        "filter": "Status = 'Active'"
+      },
+      "AI Prompt Parameters": {
+        "entity": "AI Prompt Parameters",
+        "foreignKey": "ID"
+      }
+    }
+  }
+}
+```
+
+### Nested Related Entities
+Support for multiple levels of nesting:
+```json
+{
+  "fields": {
+    "Name": "Parent Entity"
+  },
+  "relatedEntities": {
+    "Child Entity": [
+      {
+        "fields": {
+          "ParentID": "@parent:ID",
+          "Name": "Child 1"
+        },
+        "relatedEntities": {
+          "Grandchild Entity": [
+            {
+              "fields": {
+                "ChildID": "@parent:ID",
+                "RootID": "@root:ID",
+                "Name": "Grandchild 1"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+## Console Output
+
+### Normal Mode
+Shows high-level progress:
+```
+Processing AI Prompts in demo/ai-prompts
+  ↳ Processing 2 related MJ: AI Prompt Models records
+Created: 1
+Updated: 2
+```
+
+### Verbose Mode (-v flag)
+Shows detailed field-level operations with hierarchical indentation:
+```
+Processing AI Prompts in demo/ai-prompts
+  Setting Name: "Example Greeting Prompt 3" -> "Example Greeting Prompt 3"
+  Setting Description: "A simple example prompt..." -> "A simple example prompt..."
+  ↳ Processing 2 related MJ: AI Prompt Models records
+    Setting PromptID: "@parent:ID" -> "C2A1433E-F36B-1410-8DB0-00021F8B792E"
+    Setting ModelID: "@lookup:AI Models.Name=GPT 4.1" -> "123-456-789"
+    Setting Priority: 1 -> 1
+    ✓ Created MJ: AI Prompt Models record
+```
+
 ## Use Cases
 
 ### Developer Workflow
-1. `mj-sync pull` to get latest prompts
-2. Edit prompts in VS Code with full markdown support
+1. `mj-sync pull --entity="AI Prompts"` to get latest prompts with their models
+2. Edit prompts and adjust model configurations in VS Code
 3. Test locally with `mj-sync push --dry-run`
 4. Commit changes to Git
 5. PR review with diff visualization
-6. CI/CD runs `mj-sync push` on merge
+6. CI/CD runs `mj-sync push --ci` on merge
 
 ### Content Team Workflow
 1. Pull prompts to local directory
 2. Edit in preferred markdown editor
-3. Preview changes
-4. Push updates back to database
+3. Adjust model priorities in JSON
+4. Preview changes
+5. Push updates back to database
 
 ### CI/CD Integration
 ```yaml
@@ -347,17 +526,19 @@ Configuration follows a hierarchical structure:
 4. **Backup**: File-based backups of critical metadata
 5. **Portability**: Easy migration between environments
 6. **Automation**: CI/CD pipeline integration
+7. **Related Data**: Manage parent-child relationships easily
 
 ## Technical Architecture
 
 - Built with Node.js and TypeScript
-- Uses Commander.js for CLI framework
+- Uses oclif for CLI framework
 - Integrates with MJ Core infrastructure
 - Leverages existing data providers
 - Supports watch mode via chokidar
 - Checksums for change detection
 - Dynamic primary key detection from entity metadata
 - No hardcoded assumptions about entity structure
+- Proper database connection cleanup
 
 ## Future Enhancements
 
@@ -367,3 +548,5 @@ Configuration follows a hierarchical structure:
 - Metadata validation rules
 - Schema migration support
 - Team collaboration features
+- Bidirectional sync for related entities
+- Custom transformation pipelines

@@ -1,6 +1,6 @@
 {
   "fields": {
-    "Name": "Example Greeting Prompt 3",
+    "Name": "Example Greeting Prompt",
     "Description": "A simple example prompt to demonstrate the sync tool",
     "TypeID": "@lookup:AI Prompt Types.Name=Chat",
     "TemplateText": "@file:greeting.prompt.md",
@@ -15,13 +15,6 @@
           "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
           "Priority": 1,
           "Status": "Active"
-        },
-        "primaryKey": {
-          "ID": "BFA2433E-F36B-1410-8DB0-00021F8B792E"
-        },
-        "sync": {
-          "lastModified": "2025-06-07T17:22:55.678Z",
-          "checksum": "a642ebea748cb1f99467af2a7e6f4ffd3649761be27453b988af973bed57f070"
         }
       },
       {
@@ -31,22 +24,8 @@
           "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
           "Priority": 2,
           "Status": "Active"
-        },
-        "primaryKey": {
-          "ID": "CDA2433E-F36B-1410-8DB0-00021F8B792E"
-        },
-        "sync": {
-          "lastModified": "2025-06-07T17:22:55.685Z",
-          "checksum": "a07efc136a6d87663c8541e1c681ced89a4735c21801a28f1a9e00e523eed69e"
         }
       }
     ]
-  },
-  "primaryKey": {
-    "ID": "C2A1433E-F36B-1410-8DB0-00021F8B792E"
-  },
-  "sync": {
-    "lastModified": "2025-06-07T17:22:55.685Z",
-    "checksum": "7cbd241cbf0d67c068c1434e572a78c87bb31751cbfe7734bfd32f8cea17a2c9"
   }
 }
