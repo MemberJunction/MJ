@@ -1,0 +1,188 @@
+[
+  {
+    "fields": {
+      "Name": "Simple Greeting Assistant",
+      "Description": "A friendly AI assistant that provides warm and personalized greetings",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Customer Experience",
+      "TemplateText": "@file:greeting.prompt.md",
+      "Status": "Active",
+      "ResponseFormat": "Unstructured",
+      "ModelTypeID": "@lookup:AI Model Types.Name=Language",
+      "SelectionStrategy": "RoundRobin",
+      "PowerPreference": "Medium",
+      "ParallelizationMode": "None",
+      "OutputType": "text",
+      "ValidationBehavior": "None",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "EnableCaching": true,
+      "CacheTTLSeconds": 3600,
+      "CacheMatchType": "Exact",
+      "CacheMustMatchModel": false,
+      "CacheMustMatchVendor": false,
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4 Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "MaxTokens": 200,
+            "Temperature": 0.7,
+            "TopP": 0.9,
+            "Notes": "Primary model for simple greeting interactions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Analysis Pipeline",
+      "Description": "Multi-stage data analysis with parallel processing and escalation",
+      "TypeID": "@lookup:AI Prompt Types.Name=Analysis",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Business Intelligence?create&Description=Prompts for data analysis and insights",
+      "TemplateText": "@file:data-analysis.prompt.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "ModelTypeID": "@lookup:AI Model Types.Name=Language",
+      "MinPowerRank": 7,
+      "SelectionStrategy": "ParallelAll",
+      "PowerPreference": "High",
+      "ParallelizationMode": "Consensus",
+      "OutputType": "object",
+      "OutputExample": "{ \"insights\": [], \"recommendations\": [], \"nextSteps\": [] }",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 2000,
+      "RetryStrategy": "Exponential",
+      "EnableCaching": false,
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4o",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "MaxTokens": 2000,
+            "Temperature": 0.3,
+            "TopP": 0.8,
+            "Notes": "Primary model for comprehensive analysis"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Sonnet",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "MaxTokens": 2500,
+            "Temperature": 0.2,
+            "TopP": 0.9,
+            "ConfigData": "{ \"analysisDepth\": \"deep\", \"outputFormat\": \"structured\" }",
+            "Notes": "Parallel analysis for consensus building"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Gemini Ultra",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "MaxTokens": 3000,
+            "Temperature": 0.4,
+            "TopP": 0.85,
+            "Notes": "Third parallel processor for diverse perspective"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Content Moderation Pipeline",
+      "Description": "Multi-model content moderation system with escalation logic",
+      "TypeID": "@lookup:AI Prompt Types.Name=Moderation",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Safety & Compliance?create&Description=Prompts for content moderation and safety checks",
+      "TemplateText": "@file:content-moderation.prompt.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "ModelTypeID": "@lookup:AI Model Types.Name=Language",
+      "MinPowerRank": 5,
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "{ \"safe\": true, \"categories\": { \"violence\": 0.1, \"adult\": 0.05, \"hate\": 0.0 }, \"reasoning\": \"string\", \"action\": \"approve|flag|block\" }",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "EnableCaching": true,
+      "CacheTTLSeconds": 300,
+      "CacheMatchType": "Exact",
+      "CacheMustMatchModel": true,
+      "CacheMustMatchVendor": true,
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4 Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "MaxTokens": 500,
+            "Temperature": 0.1,
+            "TopP": 0.7,
+            "Notes": "Primary fast model for initial content screening"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude 4.5 Haiku",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 2,
+            "Status": "Active",
+            "MaxTokens": 1000,
+            "Temperature": 0.2,
+            "TopP": 0.8,
+            "ConfigData": "{ \"moderationLevel\": \"strict\", \"returnExplanation\": true }",
+            "Notes": "Secondary model for edge cases and when primary is unavailable"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Llama Guard 3",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Meta",
+            "Priority": 3,
+            "Status": "Active",
+            "MaxTokens": 800,
+            "Temperature": 0.0,
+            "TopP": 1.0,
+            "Notes": "Specialized safety model for final verification on flagged content"
+          }
+        }
+      ]
+    }
+  }
+]

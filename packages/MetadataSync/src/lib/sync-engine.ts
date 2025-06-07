@@ -306,4 +306,116 @@ export class SyncEngine {
     
     return loaded ? entity : null;
   }
+  
+  /**
+   * Process JSON object with template references
+   * Templates can be used at any level and are recursively resolved
+   */
+  async processTemplates(data: any, baseDir: string): Promise<any> {
+    // Handle arrays
+    if (Array.isArray(data)) {
+      const processedArray = [];
+      for (const item of data) {
+        processedArray.push(await this.processTemplates(item, baseDir));
+      }
+      return processedArray;
+    }
+    
+    // Handle objects
+    if (data && typeof data === 'object') {
+      // Check for @template reference
+      if (typeof data === 'string' && data.startsWith('@template:')) {
+        const templatePath = data.substring(10);
+        return await this.loadAndProcessTemplate(templatePath, baseDir);
+      }
+      
+      // Process object with possible @template field
+      const processed: any = {};
+      let templateData: any = {};
+      
+      // First, check if there's a @template field to process
+      if (data['@template']) {
+        const templates = Array.isArray(data['@template']) ? data['@template'] : [data['@template']];
+        
+        // Process templates in order, merging them
+        for (const templateRef of templates) {
+          const templateContent = await this.loadAndProcessTemplate(templateRef, baseDir);
+          templateData = this.deepMerge(templateData, templateContent);
+        }
+      }
+      
+      // Process all other fields
+      for (const [key, value] of Object.entries(data)) {
+        if (key === '@template') continue; // Skip the template field itself
+        
+        // Process the value recursively
+        processed[key] = await this.processTemplates(value, baseDir);
+      }
+      
+      // Merge template data with processed data (processed data takes precedence)
+      return this.deepMerge(templateData, processed);
+    }
+    
+    // Return primitive values as-is
+    return data;
+  }
+  
+  /**
+   * Load and process a template file
+   */
+  private async loadAndProcessTemplate(templatePath: string, baseDir: string): Promise<any> {
+    const fullPath = path.resolve(baseDir, templatePath);
+    
+    if (!await fs.pathExists(fullPath)) {
+      throw new Error(`Template file not found: ${fullPath}`);
+    }
+    
+    try {
+      const templateContent = await fs.readJson(fullPath);
+      
+      // Recursively process any nested templates
+      const templateDir = path.dirname(fullPath);
+      return await this.processTemplates(templateContent, templateDir);
+    } catch (error) {
+      throw new Error(`Failed to load template ${fullPath}: ${error}`);
+    }
+  }
+  
+  /**
+   * Deep merge two objects (target takes precedence)
+   */
+  private deepMerge(source: any, target: any): any {
+    if (!source) return target;
+    if (!target) return source;
+    
+    // If target is not an object, it completely overrides source
+    if (typeof target !== 'object' || target === null || Array.isArray(target)) {
+      return target;
+    }
+    
+    // If source is not an object, target wins
+    if (typeof source !== 'object' || source === null || Array.isArray(source)) {
+      return target;
+    }
+    
+    // Both are objects, merge them
+    const result: any = { ...source };
+    
+    for (const [key, value] of Object.entries(target)) {
+      if (value === undefined) {
+        continue; // Skip undefined values
+      }
+      
+      if (typeof value === 'object' && value !== null && !Array.isArray(value) &&
+          typeof result[key] === 'object' && result[key] !== null && !Array.isArray(result[key])) {
+        // Both are objects, merge recursively
+        result[key] = this.deepMerge(result[key], value);
+      } else {
+        // Otherwise, target value wins
+        result[key] = value;
+      }
+    }
+    
+    return result;
+  }
 }

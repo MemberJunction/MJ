@@ -20,6 +20,7 @@ export default class Pull extends Command {
     entity: Flags.string({ description: 'Entity name to pull', required: true }),
     filter: Flags.string({ description: 'Additional filter for pulling specific records' }),
     'dry-run': Flags.boolean({ description: 'Show what would be pulled without actually pulling' }),
+    'multi-file': Flags.string({ description: 'Create a single file with multiple records (provide filename)' }),
   };
   
   async run(): Promise<void> {
@@ -101,25 +102,58 @@ export default class Pull extends Command {
       spinner.start('Processing records');
       let processed = 0;
       
-      for (const record of result.Results) {
-        try {
-          // Build primary key
-          const primaryKey: Record<string, any> = {};
-          for (const pk of entityInfo.PrimaryKeys) {
-            primaryKey[pk.Name] = record[pk.Name];
+      // If multi-file flag is set, collect all records
+      if (flags['multi-file']) {
+        const allRecords: RecordData[] = [];
+        
+        for (const record of result.Results) {
+          try {
+            // Build primary key
+            const primaryKey: Record<string, any> = {};
+            for (const pk of entityInfo.PrimaryKeys) {
+              primaryKey[pk.Name] = record[pk.Name];
+            }
+            
+            // Process record for multi-file
+            const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine);
+            allRecords.push(recordData);
+            processed++;
+            
+            spinner.text = `Processing records (${processed}/${result.Results.length})`;
+          } catch (error) {
+            this.warn(`Failed to process record: ${(error as any).message || error}`);
           }
-          
-          // Process record
-          await this.processRecord(record, primaryKey, targetDir, entityConfig, syncEngine);
-          processed++;
-          
-          spinner.text = `Processing records (${processed}/${result.Results.length})`;
-        } catch (error) {
-          this.warn(`Failed to process record: ${(error as any).message || error}`);
         }
+        
+        // Write all records to single file
+        if (allRecords.length > 0) {
+          const fileName = flags['multi-file'].endsWith('.json') ? flags['multi-file'] : `${flags['multi-file']}.json`;
+          const filePath = path.join(targetDir, fileName);
+          await fs.writeJson(filePath, allRecords, { spaces: 2 });
+          spinner.succeed(`Pulled ${processed} records to ${filePath}`);
+        }
+      } else {
+        // Original single-file-per-record logic
+        for (const record of result.Results) {
+          try {
+            // Build primary key
+            const primaryKey: Record<string, any> = {};
+            for (const pk of entityInfo.PrimaryKeys) {
+              primaryKey[pk.Name] = record[pk.Name];
+            }
+            
+            // Process record
+            await this.processRecord(record, primaryKey, targetDir, entityConfig, syncEngine);
+            processed++;
+            
+            spinner.text = `Processing records (${processed}/${result.Results.length})`;
+          } catch (error) {
+            this.warn(`Failed to process record: ${(error as any).message || error}`);
+          }
+        }
+        
+        spinner.succeed(`Pulled ${processed} records to ${targetDir}`);
       }
-      
-      spinner.succeed(`Pulled ${processed} records to ${targetDir}`);
       
     } catch (error) {
       spinner.fail('Pull failed');
@@ -163,6 +197,23 @@ export default class Pull extends Command {
     entityConfig: any,
     syncEngine: SyncEngine
   ): Promise<void> {
+    const recordData = await this.processRecordData(record, primaryKey, targetDir, entityConfig, syncEngine);
+    
+    // Determine file path
+    const fileName = this.buildFileName(primaryKey, entityConfig);
+    const filePath = path.join(targetDir, fileName);
+    
+    // Write JSON file
+    await fs.writeJson(filePath, recordData, { spaces: 2 });
+  }
+  
+  private async processRecordData(
+    record: any, 
+    primaryKey: Record<string, any>,
+    targetDir: string, 
+    entityConfig: any,
+    syncEngine: SyncEngine
+  ): Promise<RecordData> {
     // Build record data
     const recordData: RecordData = {
       primaryKey: primaryKey,
@@ -211,12 +262,7 @@ export default class Pull extends Command {
     // Calculate checksum
     recordData.sync!.checksum = syncEngine.calculateChecksum(recordData.fields);
     
-    // Determine file path
-    const fileName = this.buildFileName(primaryKey, entityConfig);
-    const filePath = path.join(targetDir, fileName);
-    
-    // Write JSON file
-    await fs.writeJson(filePath, recordData, { spaces: 2 });
+    return recordData;
   }
   
   private async shouldExternalizeField(

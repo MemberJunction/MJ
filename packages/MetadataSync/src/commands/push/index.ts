@@ -142,35 +142,56 @@ export default class Push extends Command {
     const spinner = ora();
     spinner.start('Processing records');
     
+    let totalRecords = 0;
+    
     for (const file of jsonFiles) {
       try {
         const filePath = path.join(entityDir, file);
-        const recordData: RecordData = await fs.readJson(filePath);
+        const fileContent = await fs.readJson(filePath);
+        
+        // Process templates in the loaded content
+        const processedContent = await syncEngine.processTemplates(fileContent, entityDir);
+        
+        // Check if the file contains a single record or an array of records
+        const isArray = Array.isArray(processedContent);
+        const records: RecordData[] = isArray ? processedContent : [processedContent];
+        totalRecords += records.length;
         
         // Build and process defaults (including lookups)
         const defaults = await syncEngine.buildDefaults(filePath, entityConfig);
         
-        // Process the record
-        const isNew = await this.pushRecord(
-          recordData,
-          entityConfig.entity,
-          path.dirname(filePath),
-          file,
-          defaults,
-          syncEngine,
-          flags['dry-run'],
-          flags.verbose
-        );
-        
-        if (!flags['dry-run']) {
-          if (isNew) {
-            result.created++;
-          } else {
-            result.updated++;
+        // Process each record in the file
+        for (let i = 0; i < records.length; i++) {
+          const recordData = records[i];
+          
+          // Process the record
+          const isNew = await this.pushRecord(
+            recordData,
+            entityConfig.entity,
+            path.dirname(filePath),
+            file,
+            defaults,
+            syncEngine,
+            flags['dry-run'],
+            flags.verbose,
+            isArray ? i : undefined
+          );
+          
+          if (!flags['dry-run']) {
+            if (isNew) {
+              result.created++;
+            } else {
+              result.updated++;
+            }
           }
+          
+          spinner.text = `Processing records (${result.created + result.updated + result.errors}/${totalRecords})`;
         }
         
-        spinner.text = `Processing records (${result.created + result.updated + result.errors}/${jsonFiles.length})`;
+        // Write back the entire file if it's an array
+        if (isArray && !flags['dry-run']) {
+          await fs.writeJson(filePath, records, { spaces: 2 });
+        }
         
       } catch (error) {
         result.errors++;
@@ -179,7 +200,7 @@ export default class Push extends Command {
       }
     }
     
-    spinner.succeed(`Processed ${jsonFiles.length} records`);
+    spinner.succeed(`Processed ${totalRecords} records from ${jsonFiles.length} files`);
     return result;
   }
   
@@ -191,7 +212,8 @@ export default class Push extends Command {
     defaults: Record<string, any>,
     syncEngine: SyncEngine,
     dryRun: boolean,
-    verbose: boolean = false
+    verbose: boolean = false,
+    arrayIndex?: number
   ): Promise<boolean> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -268,16 +290,19 @@ export default class Push extends Command {
       }
     }
     
-    // Always update sync metadata and write back to file
+    // Always update sync metadata
     // This ensures related entities are persisted with their metadata
     recordData.sync = {
       lastModified: new Date().toISOString(),
       checksum: syncEngine.calculateChecksum(recordData.fields)
     };
     
-    // Write back to file
-    const filePath = path.join(baseDir, fileName);
-    await fs.writeJson(filePath, recordData, { spaces: 2 });
+    // Write back to file only if it's a single record (not part of an array)
+    // Array records are written back in bulk after all records are processed
+    if (arrayIndex === undefined) {
+      const filePath = path.join(baseDir, fileName);
+      await fs.writeJson(filePath, recordData, { spaces: 2 });
+    }
     
     return isNew;
   }
