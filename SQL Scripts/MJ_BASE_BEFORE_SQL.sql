@@ -1655,3 +1655,19 @@ BEGIN
         RAISERROR (@ErrorMessage, @ErrorSeverity, @ErrorState);
     END CATCH
 END
+
+/**
+    UNIQUE CONSTRAINT on EntityField to ensure that no two fields can have the same EntityID and Sequence
+**/
+
+-- Drop the constraint if it exists
+IF OBJECT_ID('UQ_EntityField_EntityID_Sequence', 'UQ') IS NOT NULL
+BEGIN
+    ALTER TABLE [__mj].[EntityField]
+    DROP CONSTRAINT UQ_EntityField_EntityID_Sequence;
+END
+
+-- Add the unique constraint
+ALTER TABLE [__mj].[EntityField]
+ADD CONSTRAINT UQ_EntityField_EntityID_Sequence 
+UNIQUE (EntityID, Sequence);

@@ -586,7 +586,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           const aiDetail = convoDetails[0];
           if (aiDetail) {
             this.AddMessageToCurrentConversation(aiDetail, true, true);
-            this.scrollToBottom();
+            
+            // Ensure scroll to bottom after adding AI message from status polling
+            setTimeout(() => {
+              this.scrollToBottom();
+            }, 100);
             
             // Automatically show artifact if the new AI message has one
             this.autoShowArtifactIfPresent(aiDetail);
@@ -594,7 +598,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
 
-        this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
         if (this.SelectedConversation) {
           this.setProcessingStatus(this.SelectedConversation.ID, false);
         }
@@ -1037,7 +1040,10 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         MJGlobal.Instance.ObjectCache.Add('Conversations', [convo, ...this.Conversations]);
       }
       await this.SelectConversation(convo);
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
+      // Ensure scroll to bottom for new conversation
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 100);
     } else {
       this.notificationService.CreateSimpleNotification('Error creating data context', 'error', 5000);
     }
@@ -1103,9 +1109,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
    * @returns 
    */
   public async SelectConversation(conversation: ConversationEntity) {
-    if (this.IsSkipProcessing(conversation)) {
-      return; // already processing this conversation so don't go back and forth
-    }
     
       // load up the conversation if not already the one that's loaded
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
@@ -1186,12 +1189,32 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         for (const m of this.Messages) {
           this.AddMessageToPanel(m, false);
         }
-
-        this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
         this.cdRef.reattach(); // resume change detection
+        
+        // Force scroll to bottom after rendering messages
+        setTimeout(() => {
+          this.scrollToBottom();
+        }, 300); // Give DOM time to render all messages
       }
 
       this.setProcessingStatus(conversation.ID, oldStatus); // set back to old status as it might have been processing
+      
+      // Check if this conversation is in 'Processing' status and restore the streaming state
+      if (conversation.Status === 'Processing') {
+        // This conversation is currently being processed
+        this.setProcessingStatus(conversation.ID, true);
+        this._conversationsInProgress[conversation.ID] = true;
+        this._messageInProgress = true;
+        this.AllowSend = false;
+        
+        // Create the temporary status message after a brief delay to ensure DOM is ready
+        setTimeout(() => {
+          this.SetSkipStatusMessage("Processing...", 0, conversation.__mj_UpdatedAt);
+          // Start polling after the temporary message is created
+          this.startRequestStatusPolling(conversation.ID);
+        }, 100);
+      }
+      
       InvokeManualResize(500);
 
       // ensure the list box has the conversation in view
@@ -1299,14 +1322,17 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       convoDetail.Role = 'User';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true, true);
-      this.scrollToBottom();
-
-      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
 
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
+      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
+      
+      // Ensure scroll to bottom after adding user message AND progress message
+      setTimeout(() => {
+        this.scrollToBottom();
+      }, 950); // Slightly after the progress message is shown (850ms + 100ms buffer)
+
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
       // temporarily ask Angular to stop its change detection as many of the ops below are slow and async, we don't want flicker in the UI as stuff happens
@@ -1354,7 +1380,11 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
           const aiDetail = <ConversationDetailEntity>await p.GetEntityObject('Conversation Details', p.CurrentUser);
           await aiDetail.Load(skipResult.AIMessageConversationDetailId); // get record from the database
           this.AddMessageToCurrentConversation(aiDetail, true, true);
-          this.scrollToBottom();
+          
+          // Ensure scroll to bottom after AI response
+          setTimeout(() => {
+            this.scrollToBottom();
+          }, 100);
           
           // Automatically show artifact if the new AI message has one
           this.autoShowArtifactIfPresent(aiDetail);
@@ -1362,7 +1392,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         }
       }
 
-      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       if (this.SelectedConversation) {
         this.setProcessingStatus(this.SelectedConversation.ID, false);
       }
@@ -1394,6 +1423,9 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
 
   public ClearMessages() {
     this.Messages = []; // clear out the messages
+    
+    // Clear the temporary message reference
+    this._temporaryMessage = undefined;
 
     // Get the first mjContainer in the DOM which is the one we're injecting into
     const containerElements = document.querySelectorAll('div[mjContainer]');
@@ -1545,9 +1577,6 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message
     (<any>messageDetail)._componentRef = componentRef;
 
-    // set flag to scroll to the bottom of the chat panel
-    this._scrollToBottom = true;
-
     // Resume change detection
     if (stopChangeDetection) 
       this.cdRef.reattach();
@@ -1572,10 +1601,31 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     }
   }
 
-  scrollToBottom(): void {
+  scrollToBottom(retryCount: number = 0): void {
     try {
-      this.askSkipPanel.nativeElement.scrollTop = this.askSkipPanel.nativeElement.scrollHeight;
-    } catch (err) {}
+      if (!this.scrollContainer) {
+        // If scrollContainer is not available yet, retry
+        if (retryCount < 10) {
+          setTimeout(() => {
+            this.scrollToBottom(retryCount + 1);
+          }, 50);
+        }
+        return;
+      }
+      
+      const element = this.scrollContainer.nativeElement;
+      if (element.scrollHeight === 0 && retryCount < 10) {
+        // If scrollHeight is 0, the content hasn't rendered yet, so retry after a delay
+        // But limit retries to prevent infinite loops
+        setTimeout(() => {
+          this.scrollToBottom(retryCount + 1);
+        }, 50);
+      } else if (element.scrollHeight > 0) {
+        element.scrollTop = element.scrollHeight;
+      }
+    } catch (err) {
+      console.error('Error scrolling to bottom:', err);
+    }
   }
 
   scrollToBottomAnimate() {
@@ -1583,6 +1633,20 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /**
+   * Calculates the horizontal position for the scroll-to-bottom icon
+   * to center it within the conversation panel
+   */
+  getScrollToBottomIconPosition(): number {
+    if (!this.scrollContainer) {
+      return window.innerWidth / 2; // Fallback to viewport center
+    }
+    
+    const rect = this.scrollContainer.nativeElement.getBoundingClientRect();
+    // Calculate the center of the conversation panel
+    return rect.left + (rect.width / 2);
   }
 
   protected async GetCreateDataContextID(): Promise<string> {
@@ -1768,7 +1832,7 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
         filter((e) => e instanceof ActivationEnd),
         take(1)
       )
-      .subscribe((e) => {
+      .subscribe(() => {
         this.onNavBackToCachedComponent();
       });
   }
@@ -1997,6 +2061,100 @@ export class SkipChatComponent extends BaseAngularComponent implements OnInit, A
     
     if (info.selectedVersionId) {
       this.selectedArtifactVersionId = info.selectedVersionId;
+    }
+  }
+
+  /**
+   * Stops the current processing conversation
+   * - Updates conversation status to Available
+   * - Deletes the last user message
+   * - Restores the text to the input area
+   */
+  public async stopProcessing(): Promise<void> {
+    if (!this.SelectedConversation || !this.IsSkipProcessing(this.SelectedConversation)) {
+      return;
+    }
+
+    try {
+      // Get proper entity object for conversation if needed
+      let conversationEntity: ConversationEntity;
+      if (this.SelectedConversation.Save !== undefined) {
+        conversationEntity = this.SelectedConversation;
+      } else {
+        const p = this.ProviderToUse;
+        conversationEntity = await p.GetEntityObject<ConversationEntity>('Conversations', p.CurrentUser);
+        await conversationEntity.Load(this.SelectedConversation.ID);
+      }
+
+      // Find the last user message
+      const lastUserMessage = this.Messages
+        .slice()
+        .reverse()
+        .find(m => m.Role === 'User');
+
+      if (lastUserMessage) {
+        // Store the message text to restore to input
+        const messageText = lastUserMessage.Message;
+
+        // Update conversation status to Available
+        conversationEntity.Status = 'Available';
+        await conversationEntity.Save();
+        
+        // Update the selected conversation object if we loaded a new one
+        if (this.SelectedConversation !== conversationEntity) {
+          this.SelectedConversation = conversationEntity;
+          // Also update in the conversations list
+          const idx = this.Conversations.findIndex(c => c.ID === conversationEntity.ID);
+          if (idx >= 0) {
+            this.Conversations[idx] = conversationEntity;
+          }
+        }
+
+        // Get proper entity object for the message if needed
+        let messageEntity: ConversationDetailEntity;
+        if (lastUserMessage.Delete !== undefined) {
+          messageEntity = lastUserMessage;
+        } else {
+          const p = this.ProviderToUse;
+          messageEntity = await p.GetEntityObject<ConversationDetailEntity>('Conversation Details', p.CurrentUser);
+          await messageEntity.Load(lastUserMessage.ID);
+        }
+
+        // Delete the last user message
+        await messageEntity.Delete();
+        
+        // Remove from UI
+        this.RemoveMessageFromCurrentConversation(lastUserMessage);
+
+        // Restore text to input area
+        if (this.askSkipInput && this.askSkipInput.nativeElement) {
+          this.askSkipInput.nativeElement.value = messageText;
+          this.resizeTextInput();
+        }
+      }
+
+      // Clear processing state
+      this.setProcessingStatus(this.SelectedConversation.ID, false);
+      this._conversationsInProgress[this.SelectedConversation.ID] = false;
+      this._messageInProgress = false;
+      this.AllowSend = true;
+      
+      // Stop polling
+      this.stopRequestStatusPolling(this.SelectedConversation.ID);
+      
+      // Clear any temporary messages
+      this.SetSkipStatusMessage('', 0);
+      
+      // Update the UI
+      this.cdRef.detectChanges();
+      
+      // Focus on the input
+      if (this.askSkipInput && this.askSkipInput.nativeElement) {
+        this.askSkipInput.nativeElement.focus();
+      }
+    } catch (error) {
+      LogError(`Error stopping processing: ${error}`);
+      this.notificationService.CreateSimpleNotification('Failed to stop processing', 'error', 3000);
     }
   }
 

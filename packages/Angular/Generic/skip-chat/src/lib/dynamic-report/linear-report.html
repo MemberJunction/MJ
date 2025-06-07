@@ -42,17 +42,23 @@
 
         <!-- Bottom Bar with Explanation -->
         @if (SkipData.userExplanation || SkipData.analysis) {
-            <div style="border-top: 1px solid #e0e0e0; padding: 10px; background-color: #f8f9fa; display: flex; gap: 20px; align-items: flex-start;">
+            <div style="border-top: 2px solid #e0e0e0; background-color: #f8f9fa;">
                 @if (SkipData.userExplanation) {
-                    <div style="flex: 1;">
-                        <strong style="color: #666;">Explanation:</strong>
-                        <span style="margin-left: 5px;">{{SkipData.userExplanation}}</span>
+                    <div style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0;">
+                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                            <strong style="color: #333; font-size: 14px; min-width: 90px;">Explanation:</strong>
+                            <div style="color: #555; line-height: 1.5;">{{SkipData.userExplanation}}</div>
+                        </div>
                     </div>
                 }
                 @if (SkipData.analysis) {
-                    <div style="flex: 1;">
-                        <strong style="color: #666;">Analysis:</strong>
-                        <markdown [data]="SkipData.analysis" style="display: inline; margin-left: 5px;"></markdown>
+                    <div style="padding: 15px 20px; max-height: 300px; overflow-y: auto;">
+                        <div style="margin-bottom: 10px;">
+                            <strong style="color: #333; font-size: 14px;">Analysis:</strong>
+                        </div>
+                        <div style="padding-left: 10px; border-left: 3px solid #007bff; margin-left: 5px;">
+                            <markdown [data]="SkipData.analysis" style="display: block; color: #444; line-height: 1.6;"></markdown>
+                        </div>
                     </div>
                 }
             </div>

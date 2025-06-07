@@ -382,11 +382,6 @@ export type SkipComponentRootSpec = {
  */
 export interface SkipComponentChildSpec {
     /**
-     * The placeholder text used to identify where this component should be inserted
-     */
-    placeholder: string;
-    
-    /**
      * The programmatic name of the component
      */
     componentName: string;

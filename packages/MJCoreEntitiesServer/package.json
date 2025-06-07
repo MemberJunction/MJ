@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/core-entities",
+  "name": "@memberjunction/core-entities-server",
   "version": "2.45.0",
-  "description": "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually '__mj'), distributed as part of each release of MemberJunction",
+  "description": "Entity subclasses for the metadata layer of MemberJunction that are only used on server side applications like MJAPI, distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

@@ -68,6 +68,91 @@
       "sourceMapPathOverrides": {
         "webpack:///./src/*": "${workspaceFolder}/packages/MJExplorer/src/*"
       }
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "MetadataSync CLI - Push Demo",
+      "program": "${workspaceFolder}/packages/MetadataSync/bin/run.js",
+      "args": ["push", "--dir", "packages/MetadataSync/demo/ai-prompts"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/**",
+        "!**/node_modules/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/**/dist/**/*.js",
+        "${workspaceFolder}/packages/**/lib/**/*.js"
+      ],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "preLaunchTask": "Build MetadataSync",
+      "runtimeArgs": ["--enable-source-maps"],
+      "sourceMapPathOverrides": {
+        "${workspaceFolder}/packages/*": "${workspaceFolder}/packages/*"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "metadataSyncCommand",
+      "type": "pickString",
+      "description": "Select MetadataSync command",
+      "options": [
+        {
+          "label": "Push Demo AI Prompts",
+          "value": "push --dir packages/MetadataSync/demo/ai-prompts"
+        },
+        {
+          "label": "Push Demo AI Prompts (Dry Run)",
+          "value": "push --dir packages/MetadataSync/demo/ai-prompts --dry-run"
+        },
+        {
+          "label": "Pull AI Prompts",
+          "value": "pull --entity \"AI Prompts\""
+        },
+        {
+          "label": "Status",
+          "value": "status"
+        },
+        {
+          "label": "Watch",
+          "value": "watch"
+        },
+        {
+          "label": "Custom Command",
+          "value": "${input:customCommand}"
+        }
+      ],
+      "default": "push --dir packages/MetadataSync/demo/ai-prompts"
+    },
+    {
+      "id": "metadataSyncArg1",
+      "type": "promptString",
+      "description": "Arg 1 (e.g., --dir or --entity)",
+      "default": "--dir"
+    },
+    {
+      "id": "metadataSyncArg2",
+      "type": "promptString",
+      "description": "Arg 2 (e.g., path or entity name)",
+      "default": "packages/MetadataSync/demo/ai-prompts"
+    },
+    {
+      "id": "metadataSyncArg3",
+      "type": "promptString",
+      "description": "Arg 3 (optional, e.g., --dry-run)",
+      "default": ""
+    },
+    {
+      "id": "metadataSyncArg4",
+      "type": "promptString",
+      "description": "Arg 4 (optional)",
+      "default": ""
     }
   ]
 }

@@ -2569,6 +2569,7 @@ cycle.`);
               item.Type = 'sql';
               item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
+              item.CodeName = dr.codeName;
               if (!(await item.LoadData(dataSource, false, false, 0, user)))
                 throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               break;
