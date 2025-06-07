@@ -127,6 +127,14 @@ export class AIPromptParams {
    * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
    */
   agentRunId?: string;
+
+  /**
+   * Optional system prompt ID for AI prompt embedding
+   * When provided, this prompt will be embedded into the specified system prompt template.
+   * The system prompt template must support AI prompt embedding using {% AIPrompt %} syntax.
+   * Only compatible with prompts that can be embedded into agent system prompts.
+   */
+  systemPromptId?: string;
 }
 
 /**
@@ -374,6 +382,11 @@ export class AIPromptRunner {
 
       if (prompt.Status !== 'Active') {
         throw new Error(`Prompt ${prompt.Name} is not active (Status: ${prompt.Status})`);
+      }
+
+      // Validate AI prompt embedding if systemPromptId is provided
+      if (params.systemPromptId) {
+        await this.validatePromptEmbedding(prompt, params.systemPromptId, params.contextUser);
       }
 
       let renderedPromptText: string = '';
@@ -1615,6 +1628,70 @@ export class AIPromptRunner {
       }
     } catch (error) {
       LogError(`Error updating prompt run: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validates that an AI prompt can be embedded into a system prompt.
+   * 
+   * This validation ensures that the current AI prompt is properly linked to an agent
+   * that uses the specified system prompt. The linkage is verified through:
+   * 1. Finding agents that use the system prompt (via AIAgentType.SystemPromptID)
+   * 2. Checking if any of those agents are linked to the current prompt (via AIAgentPrompt table)
+   * 
+   * @param prompt - The AI prompt that wants to be embedded
+   * @param systemPromptId - The ID of the system prompt template
+   * @param contextUser - User context for permissions
+   * @throws Error if the prompt cannot be embedded into the system prompt
+   */
+  private async validatePromptEmbedding(prompt: AIPromptEntity, systemPromptId: string, contextUser?: UserInfo): Promise<void> {
+    try {
+      // Ensure AI Engine is configured to access cached collections
+      await AIEngine.Instance.Config(false, contextUser);
+      
+      // First, find all AIAgentType entities that use this system prompt using cached data
+      const agentTypesUsingSystemPrompt = AIEngine.Instance.AgentTypes.filter(at => 
+        at.SystemPromptID === systemPromptId
+      );
+
+      if (agentTypesUsingSystemPrompt.length === 0) {
+        throw new Error(`No agent types found using system prompt ID ${systemPromptId}`);
+      }
+
+      // Get all agent type IDs that use this system prompt
+      const agentTypeIds = agentTypesUsingSystemPrompt.map(at => at.ID);
+
+      // Now find all agents that belong to these agent types using cached data
+      const agentsUsingSystemPrompt = AIEngine.Instance.Agents.filter(agent => 
+        agentTypeIds.includes(agent.TypeID)
+      );
+
+      if (agentsUsingSystemPrompt.length === 0) {
+        throw new Error(`No agents found for agent types that use system prompt ID ${systemPromptId}`);
+      }
+
+      // Get all agent IDs
+      const agentIds = agentsUsingSystemPrompt.map(a => a.ID);
+
+      // Finally, check if any of these agents are linked to the current prompt via cached AIAgentPrompt data
+      const agentPromptLinks = AIEngine.Instance.AgentPrompts.filter(ap => 
+        agentIds.includes(ap.AgentID) && ap.PromptID === prompt.ID
+      );
+
+      if (agentPromptLinks.length === 0) {
+        throw new Error(
+          `AI prompt "${prompt.Name}" (ID: ${prompt.ID}) cannot be embedded into system prompt ID ${systemPromptId}. ` +
+          `The prompt must be linked to an agent that uses this system prompt through the AI Agent Prompts table.`
+        );
+      }
+
+      // Validation passed - the prompt is properly linked to an agent that uses this system prompt
+      LogStatus(`Validation passed: AI prompt "${prompt.Name}" can be embedded into system prompt ID ${systemPromptId}`);
+      LogStatus(`Found ${agentPromptLinks.length} valid agent-prompt link(s) for embedding validation`);
+
+    } catch (error) {
+      LogError(`AI prompt embedding validation failed: ${error.message}`);
+      throw error;
     }
   }
 }
