@@ -33,6 +33,9 @@ LoadActionEntityServer(); // prevent tree shaking for this dynamic module
 import { LoadGeneratedActions } from '@memberjunction/core-actions';
 LoadGeneratedActions(); // prevent tree shaking for this dynamic module
 
+import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic module
+
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -42,11 +45,7 @@ export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo } from './config.js';
 export * from './directives/index.js';
-export * from './entitySubclasses/userViewEntity.server.js';
 export * from './entitySubclasses/entityPermissions.server.js';
-export * from './entitySubclasses/DuplicateRunEntity.server.js';
-export * from './entitySubclasses/reportEntity.server.js';
-export * from './entitySubclasses/AIPromptEntityExtended.server.js'
 export * from './types.js';
 export { TokenExpiredError, getSystemUser } from './auth/index.js';
 

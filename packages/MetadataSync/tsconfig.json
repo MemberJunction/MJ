@@ -6,7 +6,8 @@
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
-    "target": "es2022"
+    "target": "es2022",
+    "skipLibCheck": true
   },
   "include": ["src/**/*"]
 }

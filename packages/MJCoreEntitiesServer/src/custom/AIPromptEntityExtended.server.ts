@@ -233,7 +233,6 @@ export class AIPromptEntityExtendedServer extends AIPromptEntityExtended {
         t.IsActive = true;
         if (tg) {
             t.TransactionGroup = tg;
-            tg.AddVariable
         }
         if (await t.Save()) {
             // now create the template contents
