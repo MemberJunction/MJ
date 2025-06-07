@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 2.46.0
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.46.0
+- @memberjunction/actions@2.46.0
+- @memberjunction/core@2.46.0
+- @memberjunction/core-entities@2.46.0
+- @memberjunction/global@2.46.0
+- @memberjunction/sqlserver-dataprovider@2.46.0
+
 ## 2.45.0
 
 ### Patch Changes
