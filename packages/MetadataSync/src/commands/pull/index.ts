@@ -6,9 +6,7 @@ import ora from 'ora-classic';
 import { loadMJConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MJConfig } from '../../config';
-import { DataSource } from 'typeorm';
+import { initializeProvider } from '../../lib/provider-utils';
 
 export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
@@ -37,8 +35,7 @@ export default class Pull extends Command {
       }
       
       // Initialize data provider
-      const provider = new SQLServerDataProvider();
-      await this.initializeProvider(provider, mjConfig);
+      const provider = await initializeProvider(mjConfig);
       
       // Initialize sync engine
       const syncEngine = new SyncEngine(provider);
@@ -126,39 +123,6 @@ export default class Pull extends Command {
       spinner.fail('Pull failed');
       this.error(error as Error);
     }
-  }
-  
-  private async initializeProvider(provider: SQLServerDataProvider, config: MJConfig): Promise<SQLServerDataProvider> {
-    // Create TypeORM DataSource
-    const dataSource = new DataSource({
-      type: 'mssql',
-      host: config.db.host,
-      port: config.db.port || 1433,
-      database: config.db.database,
-      username: config.db.username,
-      password: config.db.password,
-      synchronize: false,
-      logging: false,
-      options: {
-        ...config.db.options,
-        encrypt: config.db.options?.encrypt !== false,
-        trustServerCertificate: config.db.options?.trustServerCertificate !== false
-      }
-    });
-    
-    // Initialize the data source
-    await dataSource.initialize();
-    
-    // Create provider config
-    const providerConfig = new SQLServerProviderConfigData(
-      dataSource,
-      'system@sync.cli', // Default user for CLI
-      '__mj',
-      0
-    );
-    
-    // Use setupSQLServerClient to properly initialize
-    return await setupSQLServerClient(providerConfig);
   }
   
   private async findEntityDirectories(entityName: string): Promise<string[]> {
