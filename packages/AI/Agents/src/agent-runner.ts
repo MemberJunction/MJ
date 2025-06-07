@@ -404,87 +404,96 @@ export class AgentRunner {
   protected _metadata: Metadata;
   
   /**
-   * Optimized system prompt template for AI agent decision-making.
+   * System prompt template that wraps agent-specific prompts with execution control.
    * 
-   * This template provides clear, concise instructions for autonomous agent behavior,
-   * execution planning, and JSON response formatting with proper execution order semantics.
+   * This template serves as a control wrapper that:
+   * 1. Enforces deterministic JSON response format for AgentRunner parsing
+   * 2. Provides context about available actions and sub-agents  
+   * 3. Embeds the agent's specific AI prompt (e.g., DATA_GATHER instructions)
+   * 4. Maintains execution control and response predictability
+   * 
+   * Architecture:
+   * - Each agent has at least one AI prompt with specialized instructions
+   * - The system prompt wraps this with execution framework and response format
+   * - AgentRunner can deterministically parse responses and take next actions
+   * - Agent-specific logic is separated from execution control logic
+   * 
+   * The {% PromptEmbed %} will insert the agent's specific prompt while maintaining
+   * the consistent response format and execution context that AgentRunner expects.
    */
-  private static readonly SYSTEM_PROMPT_TEMPLATE = `# AI Agent Instructions
+  private static readonly SYSTEM_PROMPT_TEMPLATE = `# AI Agent Execution Framework
 
 You are "{{ agentName }}", an autonomous AI agent in the MemberJunction framework.
 
 **Purpose:** {{ agentDescription }}
 
+## Agent-Specific Instructions
+
 {% if agentPrompt %}
-**Specialized Instructions:**
 {{ agentPrompt }}
+{% else %}
+{% PromptEmbed "{{ agentName }}Instructions", data={agentName: agentName, agentDescription: agentDescription, availableActions: availableActions, availableSubAgents: availableSubAgents} %}
 {% endif %}
 
 ## Available Resources
 
 {% if availableActions.length > 0 %}
-**Actions:**
+**Actions You Can Execute:**
 {% for action in availableActions %}
 - {{ action.name }} ({{ action.id }}): {{ action.description }}
 {% endfor %}
 {% endif %}
 
 {% if availableSubAgents.length > 0 %}
-**Sub-Agents:**
+**Sub-Agents You Can Delegate To:**
 {% for subagent in availableSubAgents %}
 - {{ subagent.name }} ({{ subagent.id }}): {{ subagent.description }}
 {% endfor %}
 {% endif %}
 
-## Decision Process
+## CRITICAL: Response Format Requirements
 
-1. Analyze context and goal
-2. Choose optimal strategy 
-3. Plan execution order
-4. Execute and evaluate
-5. Complete or continue
-
-## Required JSON Response Format
+**You MUST respond with valid JSON in exactly this format:**
 
 \`\`\`json
 {
   "decision": "execute_action|execute_subagent|complete_task|request_clarification|continue_processing",
-  "reasoning": "Your thought process",
+  "reasoning": "Your detailed thought process and why you chose this approach",
   "executionPlan": [
     {
       "type": "action|subagent",
-      "targetId": "ID_to_execute",
+      "targetId": "ID_from_available_resources_above",
       "parameters": {},
       "executionOrder": 1,
       "allowParallel": true,
-      "description": "What this accomplishes"
+      "description": "What this step accomplishes"
     }
   ],
   "isTaskComplete": false,
-  "finalResponse": "Response if complete",
+  "finalResponse": "Only if isTaskComplete=true, provide the final answer",
   "confidence": 0.8
 }
 \`\`\`
 
 ## Execution Order Rules
 
-**CRITICAL:** 
+**CRITICAL for parallel/sequential execution:**
 - Same executionOrder = PARALLEL execution
-- Different executionOrder = SEQUENTIAL execution
+- Different executionOrder = SEQUENTIAL execution  
+- allowParallel: false = Forces sequential even with same executionOrder
 
 **Examples:**
 - \`[{executionOrder: 1}, {executionOrder: 1}]\` → Both run simultaneously
 - \`[{executionOrder: 1}, {executionOrder: 2}]\` → First completes, then second runs
-- \`allowParallel: false\` → Forces sequential even with same executionOrder
 
-## Strategy Guidelines
+## Decision Guidelines
 
-- **Parallel:** Use same executionOrder for independent tasks
-- **Sequential:** Use different executionOrder when results depend on each other
-- **Mixed:** Combine as needed (e.g., Action1 → [Action2 + Action3] → SubAgent1)
-- **Efficiency:** Minimize total execution time through smart parallelization
+1. **Analyze** the current situation and your specific instructions above
+2. **Choose** the most effective approach using available resources
+3. **Plan** execution order for optimal efficiency
+4. **Respond** with the required JSON format
 
-Analyze the current situation and respond with your optimal decision plan.`;
+Focus on your agent-specific role while using the execution framework provided.`;
 
   /**
    * Creates a new AgentRunner instance for executing agents of a specific type.
@@ -1400,11 +1409,8 @@ Analyze the current situation and respond with your optimal decision plan.`;
         availableSubAgents: decisionInput.availableSubAgents
       };
 
-      // Render the enhanced system prompt template
-      const systemPromptResult = await TemplateEngineServer.Instance.RenderTemplateSimple(
-        AgentRunner.SYSTEM_PROMPT_TEMPLATE,
-        systemPromptData
-      );
+      // Get system prompt from database instead of hardcoded template
+      const systemPromptResult = await this.renderSystemPrompt(context, systemPromptData);
 
       if (!systemPromptResult.Success) {
         throw new Error(`Failed to render system prompt: ${systemPromptResult.Message}`);
@@ -2467,6 +2473,140 @@ Consider:
     } catch (error) {
       LogError(`Error during cleanup of failed runs: ${error.message}`);
       return 0;
+    }
+  }
+
+  /**
+   * Renders the system prompt for an agent using database-stored prompt templates.
+   * 
+   * This method replaces the hardcoded SYSTEM_PROMPT_TEMPLATE with a database-driven approach:
+   * 1. Gets the SystemPromptID from the agent's type
+   * 2. Loads the system prompt from the AI Prompts table
+   * 3. Renders the prompt template with the provided data
+   * 4. Supports AI prompt embedding via {% PromptEmbed %} syntax
+   * 
+   * @param context - The agent execution context
+   * @param systemPromptData - Data to use for template rendering
+   * @returns Promise resolving to the rendered system prompt result
+   */
+  private async renderSystemPrompt(context: AgentExecutionContext, systemPromptData: any): Promise<any> {
+    try {
+      // Get the system prompt ID from the agent type
+      const systemPromptId = this.agentType.SystemPromptID;
+      if (!systemPromptId) {
+        // Fallback to hardcoded template if no SystemPromptID is configured
+        LogStatus(`No SystemPromptID configured for agent type ${this.agentType.Name}, using hardcoded template`);
+        return await TemplateEngineServer.Instance.RenderTemplateSimple(
+          AgentRunner.SYSTEM_PROMPT_TEMPLATE,
+          systemPromptData
+        );
+      }
+
+      // Load the system prompt from the database
+      const systemPrompt = await this.loadSystemPrompt(systemPromptId, context.params.contextUser);
+      if (!systemPrompt) {
+        LogError(`System prompt with ID ${systemPromptId} not found, falling back to hardcoded template`);
+        return await TemplateEngineServer.Instance.RenderTemplateSimple(
+          AgentRunner.SYSTEM_PROMPT_TEMPLATE,
+          systemPromptData
+        );
+      }
+
+      // Get the system prompt's template content
+      const promptTemplate = await this.getSystemPromptTemplate(systemPrompt, context.params.contextUser);
+      
+      // Render the system prompt template with the provided data
+      // This will automatically handle any {% PromptEmbed %} tags within the template
+      const result = await TemplateEngineServer.Instance.RenderTemplateSimple(
+        promptTemplate,
+        systemPromptData
+      );
+
+      if (result.Success) {
+        LogStatus(`Successfully rendered system prompt ${systemPrompt.Name} for agent ${context.agentEntity.Name}`);
+      }
+
+      return result;
+
+    } catch (error) {
+      LogError(`Error rendering system prompt: ${error.message}`);
+      // Fallback to hardcoded template on error
+      LogStatus('Falling back to hardcoded system prompt template due to error');
+      return await TemplateEngineServer.Instance.RenderTemplateSimple(
+        AgentRunner.SYSTEM_PROMPT_TEMPLATE,
+        systemPromptData
+      );
+    }
+  }
+
+  /**
+   * Loads a system prompt from the database by ID.
+   * 
+   * @param systemPromptId - The ID of the system prompt to load
+   * @param contextUser - User context for permissions
+   * @returns Promise resolving to the system prompt entity or null if not found
+   */
+  private async loadSystemPrompt(systemPromptId: string, contextUser?: UserInfo): Promise<AIPromptEntity | null> {
+    try {
+      // Ensure AI Engine is configured to access prompts
+      await AIEngine.Instance.Config(false, contextUser);
+
+      // Find the system prompt by ID
+      const systemPrompt = AIEngine.Instance.Prompts.find(p => p.ID === systemPromptId);
+      
+      if (!systemPrompt) {
+        LogError(`System prompt with ID ${systemPromptId} not found in AI Engine prompts collection`);
+        return null;
+      }
+
+      if (systemPrompt.Status !== 'Active') {
+        LogError(`System prompt ${systemPrompt.Name} (ID: ${systemPromptId}) is not active (Status: ${systemPrompt.Status})`);
+        return null;
+      }
+
+      return systemPrompt;
+
+    } catch (error) {
+      LogError(`Error loading system prompt with ID ${systemPromptId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Gets the template text from a system prompt entity.
+   * 
+   * @param systemPrompt - The system prompt entity
+   * @param contextUser - User context for permissions
+   * @returns Promise resolving to the template text
+   */
+  private async getSystemPromptTemplate(systemPrompt: AIPromptEntity, contextUser?: UserInfo): Promise<string> {
+    try {
+      // System prompts are linked to templates, so we need to load the template and get its content
+      if (!systemPrompt.TemplateID) {
+        throw new Error(`System prompt "${systemPrompt.Name}" has no associated template`);
+      }
+
+      // Initialize template engine and load the template
+      await TemplateEngineServer.Instance.Config(false, contextUser);
+      
+      const template = TemplateEngineServer.Instance.FindTemplate(systemPrompt.TemplateID);
+      if (!template) {
+        throw new Error(`Template with ID ${systemPrompt.TemplateID} not found for system prompt "${systemPrompt.Name}"`);
+      }
+
+      // Get the highest priority template content
+      const templateContent = template.GetHighestPriorityContent();
+      if (!templateContent) {
+        throw new Error(`No template content found for system prompt "${systemPrompt.Name}"`);
+      }
+
+      // Return the raw template text (not rendered) so it can be rendered with the system prompt data
+      return templateContent.TemplateText || '';
+
+    } catch (error) {
+      LogError(`Error getting template for system prompt "${systemPrompt.Name}": ${error.message}`);
+      // Fallback to hardcoded template on error
+      return AgentRunner.SYSTEM_PROMPT_TEMPLATE;
     }
   }
 }
