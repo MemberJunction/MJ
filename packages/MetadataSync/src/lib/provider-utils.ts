@@ -65,42 +65,38 @@ export function getSystemUser(): UserInfo {
 }
 
 /**
- * Recursively find all entity directories with .mj-sync.json files
+ * Find entity directories (with .mj-sync.json files) at the immediate level only
  * @param dir Directory to search
- * @param specificDir Optional specific directory to limit search to
+ * @param specificDir Optional specific directory to check
  * @returns Array of directory paths containing .mj-sync.json files
  */
 export function findEntityDirectories(dir: string, specificDir?: string): string[] {
   const results: string[] = [];
   
-  function search(currentDir: string) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    
-    // Check if this directory has .mj-sync.json (and it's not the root)
-    const hasSyncConfig = entries.some(e => e.name === '.mj-sync.json');
-    const isRoot = currentDir === dir;
-    
-    if (hasSyncConfig && !isRoot) {
-      results.push(currentDir);
-    }
-    
-    // Recursively search subdirectories
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        search(path.join(currentDir, entry.name));
-      }
-    }
-  }
-  
-  // If specific directory is provided, only search within it
+  // If specific directory is provided, check if it's an entity directory
   if (specificDir) {
-    // Handle both absolute and relative paths
     const targetDir = path.isAbsolute(specificDir) ? specificDir : path.join(dir, specificDir);
     if (fs.existsSync(targetDir)) {
-      search(targetDir);
+      const hasSyncConfig = fs.existsSync(path.join(targetDir, '.mj-sync.json'));
+      if (hasSyncConfig) {
+        results.push(targetDir);
+      }
     }
-  } else {
-    search(dir);
+    return results;
+  }
+  
+  // Otherwise, find all immediate subdirectories with .mj-sync.json
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  
+  for (const entry of entries) {
+    if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      const subDir = path.join(dir, entry.name);
+      const hasSyncConfig = fs.existsSync(path.join(subDir, '.mj-sync.json'));
+      
+      if (hasSyncConfig) {
+        results.push(subDir);
+      }
+    }
   }
   
   return results;
