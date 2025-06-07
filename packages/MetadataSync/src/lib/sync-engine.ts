@@ -8,6 +8,7 @@ import { EntityConfig, FolderConfig } from '../config';
 export interface RecordData {
   primaryKey?: Record<string, any>;
   fields: Record<string, any>;
+  relatedEntities?: Record<string, RecordData[]>;
   sync?: {
     lastModified: string;
     checksum: string;
@@ -31,9 +32,27 @@ export class SyncEngine {
   /**
    * Process special references in field values
    */
-  async processFieldValue(value: any, baseDir: string): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null): Promise<any> {
     if (typeof value !== 'string') {
       return value;
+    }
+    
+    // Check for @parent: reference
+    if (value.startsWith('@parent:')) {
+      if (!parentRecord) {
+        throw new Error(`@parent reference used but no parent record available: ${value}`);
+      }
+      const fieldName = value.substring(8);
+      return parentRecord.Get(fieldName);
+    }
+    
+    // Check for @root: reference
+    if (value.startsWith('@root:')) {
+      if (!rootRecord) {
+        throw new Error(`@root reference used but no root record available: ${value}`);
+      }
+      const fieldName = value.substring(6);
+      return rootRecord.Get(fieldName);
     }
     
     // Check for @file: reference
@@ -127,7 +146,7 @@ export class SyncEngine {
     autoCreate: boolean = false,
     createFields: Record<string, any> = {}
   ): Promise<string> {
-    console.log(`Resolving lookup: ${entityName}.${fieldName}=${fieldValue}${autoCreate ? ' (auto-create enabled)' : ''}`);
+    // Debug logging handled by caller if needed
     
     const rv = new RunView();
     const entityInfo = this.metadata.EntityByName(entityName);
@@ -147,14 +166,12 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const id = result.Results[0][pkeyField];
-        console.log(`Lookup resolved to ID: ${id}`);
         return id;
       }
     }
     
     // If not found and auto-create is enabled, create the record
     if (autoCreate) {
-      console.log(`Record not found, creating new ${entityName} with ${fieldName}='${fieldValue}'`);
       
       const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
       if (!newEntity) {
@@ -186,7 +203,6 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const newId = newEntity.Get(pkeyField);
-        console.log(`Created new ${entityName} with ID: ${newId}`);
         return newId;
       }
     }
@@ -218,7 +234,7 @@ export class SyncEngine {
     
     for (const [field, value] of Object.entries(defaults)) {
       try {
-        processedDefaults[field] = await this.processFieldValue(value, baseDir);
+        processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null);
       } catch (error) {
         throw new Error(`Failed to process default for field '${field}': ${error}`);
       }

@@ -26,10 +26,21 @@ export interface SyncConfig {
   };
 }
 
+export interface RelatedEntityConfig {
+  entity: string;
+  foreignKey: string; // Field that links to parent (e.g., "PromptID")
+  filter?: string; // Additional filter
+  relatedEntities?: Record<string, RelatedEntityConfig>; // Nested related entities
+}
+
 export interface EntityConfig {
   entity: string;
   filePattern?: string;
   defaults?: Record<string, any>;
+  pull?: {
+    filter?: string; // Default filter for pulling records
+    relatedEntities?: Record<string, RelatedEntityConfig>;
+  };
 }
 
 export interface FolderConfig {

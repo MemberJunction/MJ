@@ -3,10 +3,10 @@ import fs from 'fs-extra';
 import path from 'path';
 import { select } from '@inquirer/prompts';
 import ora from 'ora-classic';
-import { loadMJConfig, loadEntityConfig } from '../../config';
+import { loadMJConfig, loadEntityConfig, RelatedEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { RunView } from '@memberjunction/core';
-import { getSystemUser, initializeProvider } from '../../lib/provider-utils';
+import { getSystemUser, initializeProvider, cleanupProvider } from '../../lib/provider-utils';
 
 export default class Pull extends Command {
   static description = 'Pull metadata from database to local files';
@@ -72,12 +72,14 @@ export default class Pull extends Command {
       let filter = '';
       if (flags.filter) {
         filter = flags.filter;
+      } else if (entityConfig.pull?.filter) {
+        filter = entityConfig.pull.filter;
       }
       
       const result = await rv.RunView({
         EntityName: flags.entity,
         ExtraFilter: filter
-      });
+      }, getSystemUser());
       
       if (!result.Success) {
         this.error(`Failed to pull records: ${result.ErrorMessage}`);
@@ -122,6 +124,9 @@ export default class Pull extends Command {
     } catch (error) {
       spinner.fail('Pull failed');
       this.error(error as Error);
+    } finally {
+      // Clean up database connection
+      await cleanupProvider();
     }
   }
   
@@ -192,6 +197,15 @@ export default class Pull extends Command {
       } else {
         recordData.fields[fieldName] = fieldValue;
       }
+    }
+    
+    // Pull related entities if configured
+    if (entityConfig.pull?.relatedEntities) {
+      recordData.relatedEntities = await this.pullRelatedEntities(
+        record,
+        entityConfig.pull.relatedEntities,
+        syncEngine
+      );
     }
     
     // Calculate checksum
@@ -278,5 +292,98 @@ export default class Pull extends Command {
     
     // Multiple keys or numeric - create composite name
     return keys.map(k => String(k).replace(/[^a-zA-Z0-9-_]/g, '_')).join('-') + '.json';
+  }
+  
+  private async pullRelatedEntities(
+    parentRecord: any,
+    relatedConfig: Record<string, RelatedEntityConfig>,
+    syncEngine: SyncEngine
+  ): Promise<Record<string, RecordData[]>> {
+    const relatedEntities: Record<string, RecordData[]> = {};
+    
+    for (const [key, config] of Object.entries(relatedConfig)) {
+      try {
+        // Get the parent's primary key value
+        const parentKeyValue = parentRecord[config.foreignKey];
+        if (!parentKeyValue) {
+          continue; // Skip if parent doesn't have the foreign key field
+        }
+        
+        // Build filter for related records
+        let filter = `${config.foreignKey} = '${String(parentKeyValue).replace(/'/g, "''")}'`;
+        if (config.filter) {
+          filter += ` AND (${config.filter})`;
+        }
+        
+        // Pull related records
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: config.entity,
+          ExtraFilter: filter
+        }, getSystemUser());
+        
+        if (!result.Success) {
+          this.warn(`Failed to pull related ${config.entity}: ${result.ErrorMessage}`);
+          continue;
+        }
+        
+        // Process each related record
+        const relatedRecords: RecordData[] = [];
+        for (const relatedRecord of result.Results) {
+          const recordData: RecordData = {
+            fields: {}
+          };
+          
+          // Process fields, omitting the foreign key since it will be set via @parent
+          for (const [fieldName, fieldValue] of Object.entries(relatedRecord)) {
+            // Skip internal fields
+            if (fieldName.startsWith('__mj_')) {
+              continue;
+            }
+            
+            // Convert foreign key reference to @parent
+            if (fieldName === config.foreignKey) {
+              const parentFieldName = this.findParentField(parentRecord, parentKeyValue);
+              if (parentFieldName) {
+                recordData.fields[fieldName] = `@parent:${parentFieldName}`;
+              }
+              continue;
+            }
+            
+            recordData.fields[fieldName] = fieldValue;
+          }
+          
+          // Pull nested related entities if configured
+          if (config.relatedEntities) {
+            recordData.relatedEntities = await this.pullRelatedEntities(
+              relatedRecord,
+              config.relatedEntities,
+              syncEngine
+            );
+          }
+          
+          relatedRecords.push(recordData);
+        }
+        
+        if (relatedRecords.length > 0) {
+          relatedEntities[key] = relatedRecords;
+        }
+      } catch (error) {
+        this.warn(`Error pulling related ${key}: ${error}`);
+      }
+    }
+    
+    return relatedEntities;
+  }
+  
+  private findParentField(parentRecord: any, value: any): string | null {
+    // Find which field in the parent contains this value
+    // Typically this will be the primary key field
+    for (const [fieldName, fieldValue] of Object.entries(parentRecord)) {
+      if (fieldValue === value && !fieldName.startsWith('__mj_')) {
+        return fieldName;
+      }
+    }
+    return null;
   }
 }

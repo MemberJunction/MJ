@@ -8,6 +8,7 @@ import { loadMJConfig, loadSyncConfig, loadEntityConfig } from '../../config';
 import { SyncEngine, RecordData } from '../../lib/sync-engine';
 import { initializeProvider, findEntityDirectories, getSystemUser } from '../../lib/provider-utils';
 import { BaseEntity } from '@memberjunction/core';
+import { cleanupProvider } from '../../lib/provider-utils';
 
 export default class Push extends Command {
   static description = 'Push local file changes to the database';
@@ -23,6 +24,7 @@ export default class Push extends Command {
     dir: Flags.string({ description: 'Specific entity directory to push' }),
     'dry-run': Flags.boolean({ description: 'Show what would be pushed without actually pushing' }),
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
+    verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
   };
   
   async run(): Promise<void> {
@@ -96,6 +98,9 @@ export default class Push extends Command {
     } catch (error) {
       spinner.fail('Push failed');
       this.error(error as Error);
+    } finally {
+      // Clean up database connection
+      await cleanupProvider();
     }
   }
   
@@ -153,7 +158,8 @@ export default class Push extends Command {
           file,
           defaults,
           syncEngine,
-          flags['dry-run']
+          flags['dry-run'],
+          flags.verbose
         );
         
         if (!flags['dry-run']) {
@@ -184,7 +190,8 @@ export default class Push extends Command {
     fileName: string,
     defaults: Record<string, any>,
     syncEngine: SyncEngine,
-    dryRun: boolean
+    dryRun: boolean,
+    verbose: boolean = false
   ): Promise<boolean> {
     // Load or create entity
     let entity: BaseEntity | null = null;
@@ -212,8 +219,10 @@ export default class Push extends Command {
     for (const [field, value] of Object.entries(recordData.fields)) {
       if (field in entity) {
         try {
-          const processedValue = await syncEngine.processFieldValue(value, baseDir);
-          console.log(`Setting field ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+          const processedValue = await syncEngine.processFieldValue(value, baseDir, null, null);
+          if (verbose) {
+            this.log(`  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+          }
           (entity as any)[field] = processedValue;
         } catch (error) {
           throw new Error(`Failed to process field '${field}': ${error}`);
@@ -235,6 +244,18 @@ export default class Push extends Command {
       throw new Error(`Failed to save record: ${errors}`);
     }
     
+    // Process related entities after saving parent
+    if (recordData.relatedEntities && !dryRun) {
+      await this.processRelatedEntities(
+        recordData.relatedEntities,
+        entity,
+        entity, // root is same as parent for top level
+        baseDir,
+        syncEngine,
+        verbose
+      );
+    }
+    
     // Update the local file with new primary key if created
     if (isNew) {
       const entityInfo = syncEngine.getEntityInfo(entityName);
@@ -244,19 +265,120 @@ export default class Push extends Command {
           newPrimaryKey[pk.Name] = entity.Get(pk.Name);
         }
         recordData.primaryKey = newPrimaryKey;
-        
-        // Update sync metadata
-        recordData.sync = {
-          lastModified: new Date().toISOString(),
-          checksum: syncEngine.calculateChecksum(recordData.fields)
-        };
-        
-        // Write back to file
-        const filePath = path.join(baseDir, fileName);
-        await fs.writeJson(filePath, recordData, { spaces: 2 });
       }
     }
     
+    // Always update sync metadata and write back to file
+    // This ensures related entities are persisted with their metadata
+    recordData.sync = {
+      lastModified: new Date().toISOString(),
+      checksum: syncEngine.calculateChecksum(recordData.fields)
+    };
+    
+    // Write back to file
+    const filePath = path.join(baseDir, fileName);
+    await fs.writeJson(filePath, recordData, { spaces: 2 });
+    
     return isNew;
+  }
+  
+  private async processRelatedEntities(
+    relatedEntities: Record<string, RecordData[]>,
+    parentEntity: BaseEntity,
+    rootEntity: BaseEntity,
+    baseDir: string,
+    syncEngine: SyncEngine,
+    verbose: boolean = false,
+    indentLevel: number = 1
+  ): Promise<void> {
+    const indent = '  '.repeat(indentLevel);
+    
+    for (const [entityName, records] of Object.entries(relatedEntities)) {
+      this.log(`${indent}↳ Processing ${records.length} related ${entityName} records`);
+      
+      for (const relatedRecord of records) {
+        try {
+          // Load or create entity
+          let entity = null;
+          let isNew = false;
+          
+          if (relatedRecord.primaryKey) {
+            entity = await syncEngine.loadEntity(entityName, relatedRecord.primaryKey);
+          }
+          
+          if (!entity) {
+            entity = await syncEngine.createEntityObject(entityName);
+            entity.NewRecord();
+            isNew = true;
+          }
+          
+          // Apply fields with parent/root context
+          for (const [field, value] of Object.entries(relatedRecord.fields)) {
+            if (field in entity) {
+              try {
+                const processedValue = await syncEngine.processFieldValue(
+                  value, 
+                  baseDir, 
+                  parentEntity, 
+                  rootEntity
+                );
+                if (verbose) {
+                  this.log(`${indent}  Setting ${field}: ${JSON.stringify(value)} -> ${JSON.stringify(processedValue)}`);
+                }
+                (entity as any)[field] = processedValue;
+              } catch (error) {
+                throw new Error(`Failed to process field '${field}' in ${entityName}: ${error}`);
+              }
+            } else {
+              this.warn(`${indent}  Field '${field}' does not exist on entity '${entityName}'`);
+            }
+          }
+          
+          // Save the related entity
+          const saved = await entity.Save();
+          if (!saved) {
+            const errors = entity.LatestResult?.Errors?.join(', ') || 'Unknown error';
+            throw new Error(`Failed to save related ${entityName}: ${errors}`);
+          }
+          
+          if (verbose) {
+            this.log(`${indent}  ✓ ${isNew ? 'Created' : 'Updated'} ${entityName} record`);
+          }
+          
+          // Update the related record with primary key and sync metadata
+          const entityInfo = syncEngine.getEntityInfo(entityName);
+          if (entityInfo) {
+            // Update primary key if new
+            if (isNew) {
+              relatedRecord.primaryKey = {};
+              for (const pk of entityInfo.PrimaryKeys) {
+                relatedRecord.primaryKey[pk.Name] = entity.Get(pk.Name);
+              }
+            }
+            
+            // Always update sync metadata
+            relatedRecord.sync = {
+              lastModified: new Date().toISOString(),
+              checksum: syncEngine.calculateChecksum(relatedRecord.fields)
+            };
+          }
+          
+          // Process nested related entities if any
+          if (relatedRecord.relatedEntities) {
+            await this.processRelatedEntities(
+              relatedRecord.relatedEntities,
+              entity,
+              rootEntity,
+              baseDir,
+              syncEngine,
+              verbose,
+              indentLevel + 1
+            );
+          }
+        } catch (error) {
+          throw new Error(`Failed to process related ${entityName}: ${error}`);
+        }
+      }
+    }
   }
 }

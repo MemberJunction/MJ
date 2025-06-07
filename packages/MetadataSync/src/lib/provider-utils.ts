@@ -10,6 +10,8 @@ import { UserInfo } from '@memberjunction/core';
  * @param config MemberJunction configuration with database connection details
  * @returns Initialized SQLServerDataProvider instance
  */
+let globalDataSource: DataSource | null = null;
+
 export async function initializeProvider(config: MJConfig): Promise<SQLServerDataProvider> {
   // Create TypeORM DataSource
   const dataSource = new DataSource({
@@ -31,6 +33,9 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   // Initialize the data source
   await dataSource.initialize();
   
+  // Store for cleanup
+  globalDataSource = dataSource;
+  
   // Create provider config
   const providerConfig = new SQLServerProviderConfigData(
     dataSource,
@@ -41,6 +46,13 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
   
   // Use setupSQLServerClient to properly initialize
   return await setupSQLServerClient(providerConfig);
+}
+
+export async function cleanupProvider(): Promise<void> {
+  if (globalDataSource && globalDataSource.isInitialized) {
+    await globalDataSource.destroy();
+    globalDataSource = null;
+  }
 }
 
 export function getSystemUser(): UserInfo {
