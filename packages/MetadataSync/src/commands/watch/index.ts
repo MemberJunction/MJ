@@ -69,7 +69,7 @@ export default class Watch extends Command {
         
         // Watch for JSON files and external files
         const patterns = [
-          path.join(entityDir, entityConfig.filePattern || '*.json'),
+          path.join(entityDir, entityConfig.filePattern || '**/*.json'),
           path.join(entityDir, '**/*.md'),
           path.join(entityDir, '**/*.txt'),
           path.join(entityDir, '**/*.html'),

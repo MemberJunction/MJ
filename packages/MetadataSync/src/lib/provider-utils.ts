@@ -24,7 +24,8 @@ export async function initializeProvider(config: MJConfig): Promise<SQLServerDat
     synchronize: false,
     logging: false,
     options: {
-      encrypt: config.dbTrustServerCertificate !== 'Y' ? false : true,
+      encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' || 
+               config.dbHost.includes('.database.windows.net'), // Auto-detect Azure SQL
       trustServerCertificate: config.dbTrustServerCertificate === 'Y',
       instanceName: config.dbInstanceName
     }

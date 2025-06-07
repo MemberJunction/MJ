@@ -9,7 +9,10 @@ const hook: Hook<'init'> = async function () {
   dotenv.config({ path: path.join(__dirname, '../../../../.env') });
   
   // Then load local .env from package directory to override
-  dotenv.config({ path: path.join(__dirname, '../../.env') });
+  dotenv.config({ 
+    path: path.join(__dirname, '../../.env'),
+    override: true  // This ensures local values override already loaded ones
+  });
   
   // Load core entities server subclasses
   LoadCoreEntitiesServerSubClasses();

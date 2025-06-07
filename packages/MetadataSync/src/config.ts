@@ -9,6 +9,7 @@ export interface MJConfig {
   dbUsername: string;
   dbPassword: string;
   dbTrustServerCertificate?: string;
+  dbEncrypt?: string;  // Add explicit encrypt option
   dbInstanceName?: string;
   mjCoreSchema?: string;
   [key: string]: any; // Allow other properties

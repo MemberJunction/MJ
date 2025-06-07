@@ -102,11 +102,12 @@ export default class Status extends Command {
   ): Promise<{ new: number; modified: number; deleted: number; unchanged: number }> {
     const result = { new: 0, modified: 0, deleted: 0, unchanged: 0 };
     
-    // Find all JSON files
+    // Find JSON files in the current directory only (not subdirectories)
     const pattern = entityConfig.filePattern || '*.json';
     const jsonFiles = await fastGlob(pattern, {
       cwd: entityDir,
-      ignore: ['.mj-sync.json', '.mj-folder.json']
+      ignore: ['.mj-sync.json', '.mj-folder.json'],
+      dot: true  // Include dotfiles (files starting with .)
     });
     
     for (const file of jsonFiles) {
@@ -136,6 +137,30 @@ export default class Status extends Command {
         
       } catch (error) {
         this.warn(`Failed to check ${file}: ${error}`);
+      }
+    }
+    
+    // Recursively process subdirectories
+    const entries = await fs.readdir(entityDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        const subDir = path.join(entityDir, entry.name);
+        
+        // Check if subdirectory has its own .mj-sync.json (new entity type)
+        const hasOwnSync = await fs.pathExists(path.join(subDir, '.mj-sync.json'));
+        if (!hasOwnSync) {
+          // Process as part of current entity
+          const subResult = await this.checkEntityDirectory(
+            subDir,
+            entityConfig,
+            syncEngine
+          );
+          
+          result.new += subResult.new;
+          result.modified += subResult.modified;
+          result.deleted += subResult.deleted;
+          result.unchanged += subResult.unchanged;
+        }
       }
     }
     
