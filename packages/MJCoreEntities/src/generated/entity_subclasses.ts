@@ -1087,6 +1087,10 @@ export const AIAgentSchema = z.object({
         * * Field Name: ContextCompressionPrompt
         * * Display Name: Context Compression Prompt
         * * SQL Data Type: nvarchar(255)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIAgentEntityType = z.infer<typeof AIAgentSchema>;
@@ -7288,6 +7292,18 @@ export const AIAgentRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Conversation: z.string().nullable().describe(`
+        * * Field Name: Conversation
+        * * Display Name: Conversation
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -7334,6 +7350,10 @@ export const AIAgentTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SystemPrompt: z.string().nullable().describe(`
+        * * Field Name: SystemPrompt
+        * * Display Name: System Prompt
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentTypeEntityType = z.infer<typeof AIAgentTypeSchema>;
@@ -7737,14 +7757,14 @@ export const AIPromptRunSchema = z.object({
     RunAt: z.date().describe(`
         * * Field Name: RunAt
         * * Display Name: Run At
-        * * SQL Data Type: datetime2
-        * * Default Value: getutcdate()
-    * * Description: When the prompt execution started.`),
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+    * * Description: When the prompt run started, with timezone offset information.`),
     CompletedAt: z.date().nullable().describe(`
         * * Field Name: CompletedAt
         * * Display Name: Completed At
-        * * SQL Data Type: datetime2
-    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.`),
+        * * SQL Data Type: datetimeoffset
+    * * Description: When the prompt run completed, with timezone offset information.`),
     ExecutionTimeMS: z.number().nullable().describe(`
         * * Field Name: ExecutionTimeMS
         * * Display Name: Execution Time MS
@@ -14550,6 +14570,15 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     get ContextCompressionPrompt(): string | null {
         return this.Get('ContextCompressionPrompt');
     }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
 }
 
 
@@ -15281,11 +15310,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
     * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
     * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
     * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.  
+    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.  
     * @public
     * @method
     * @override
@@ -15294,11 +15323,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         const result = super.Validate();
         this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsGreaterThanZero(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
         this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
         this.ValidateOutputExampleWhenOutputTypeObject(result);
-        this.ValidateResultSelectorPromptIDNotEqualID(result);
 
         return result;
     }
@@ -15324,6 +15353,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
     	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
     		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -15372,18 +15413,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
     	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
     		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -30799,6 +30828,33 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
 }
 
 
@@ -30914,6 +30970,15 @@ export class AIAgentTypeEntity extends BaseEntity<AIAgentTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SystemPrompt
+    * * Display Name: System Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SystemPrompt(): string | null {
+        return this.Get('SystemPrompt');
     }
 }
 
@@ -31928,30 +31993,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
 
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
+    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.
+    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.  
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
         this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
+        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
-    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
-    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
-    	}
     }
 
     /**
@@ -31968,6 +32021,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     		)
     	) {
     		result.Errors.push(new ValidationErrorInfo("TokensUsed", "TokensUsed must be equal to the sum of TokensPrompt and TokensCompletion, unless one or more of these values are NULL (except if TokensPrompt and TokensCompletion are both NULL).", this.TokensUsed, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
     	}
     }
 
@@ -32054,9 +32119,9 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: RunAt
     * * Display Name: Run At
-    * * SQL Data Type: datetime2
-    * * Default Value: getutcdate()
-    * * Description: When the prompt execution started.
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the prompt run started, with timezone offset information.
     */
     get RunAt(): Date {
         return this.Get('RunAt');
@@ -32068,8 +32133,8 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: CompletedAt
     * * Display Name: Completed At
-    * * SQL Data Type: datetime2
-    * * Description: When the prompt execution finished. NULL indicates a pending or interrupted execution.
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the prompt run completed, with timezone offset information.
     */
     get CompletedAt(): Date | null {
         return this.Get('CompletedAt');

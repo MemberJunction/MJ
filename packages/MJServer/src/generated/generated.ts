@@ -1244,6 +1244,18 @@ export class AIAgentRun_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
     
@@ -1982,6 +1994,10 @@ export class AIAgent_ {
     @MaxLength(510)
     ContextCompressionPrompt?: string;
         
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+        
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_AgentIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
     
@@ -2555,6 +2571,10 @@ export class AIAgentType_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SystemPrompt?: string;
         
     @Field(() => [AIAgent_])
     AIAgents_TypeIDArray: AIAgent_[]; // Link to AIAgents
@@ -7999,14 +8019,14 @@ export class User_ {
     @Field(() => [UserFavorite_])
     UserFavorites_UserIDArray: UserFavorite_[]; // Link to UserFavorites
     
+    @Field(() => [ResourceLink_])
+    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
+    
     @Field(() => [ListCategory_])
     ListCategories_UserIDArray: ListCategory_[]; // Link to ListCategories
     
     @Field(() => [ScheduledAction_])
     ScheduledActions_CreatedByUserIDArray: ScheduledAction_[]; // Link to ScheduledActions
-    
-    @Field(() => [ResourceLink_])
-    ResourceLinks_UserIDArray: ResourceLink_[]; // Link to ResourceLinks
     
     @Field(() => [AIAgentRequest_])
     AIAgentRequests_ResponseByUserIDArray: AIAgentRequest_[]; // Link to AIAgentRequests
@@ -8457,6 +8477,15 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [ResourceLink_])
+    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Resource Links', userPayload);
+        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @FieldResolver(() => [ListCategory_])
     async ListCategories_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Categories', userPayload);
@@ -8472,15 +8501,6 @@ export class UserResolverBase extends ResolverBase {
         const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledActions] WHERE [CreatedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Scheduled Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Scheduled Actions', await dataSource.query(sSQL));
-        return result;
-    }
-        
-    @FieldResolver(() => [ResourceLink_])
-    async ResourceLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Links', userPayload);
-        const dataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwResourceLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause('Resource Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Links', await dataSource.query(sSQL));
         return result;
     }
         
@@ -35843,10 +35863,12 @@ export class AIPromptRun_ {
     @MaxLength(16)
     ConfigurationID?: string;
         
-    @Field(() => Int, {description: `When the prompt execution started.`}) 
+    @Field({description: `When the prompt run started, with timezone offset information.`}) 
+    @MaxLength(10)
     RunAt: Date;
         
-    @Field(() => Int, {nullable: true, description: `When the prompt execution finished. NULL indicates a pending or interrupted execution.`}) 
+    @Field({nullable: true, description: `When the prompt run completed, with timezone offset information.`}) 
+    @MaxLength(10)
     CompletedAt?: Date;
         
     @Field(() => Int, {nullable: true, description: `Total execution time in milliseconds.`}) 
@@ -35947,10 +35969,10 @@ export class CreateAIPromptRunInput {
     @Field({ nullable: true })
     ConfigurationID: string | null;
 
-    @Field(() => Int, { nullable: true })
+    @Field({ nullable: true })
     RunAt?: Date;
 
-    @Field(() => Int, { nullable: true })
+    @Field({ nullable: true })
     CompletedAt: Date | null;
 
     @Field(() => Int, { nullable: true })
@@ -36017,10 +36039,10 @@ export class UpdateAIPromptRunInput {
     @Field({ nullable: true })
     ConfigurationID?: string | null;
 
-    @Field(() => Int, { nullable: true })
+    @Field({ nullable: true })
     RunAt?: Date;
 
-    @Field(() => Int, { nullable: true })
+    @Field({ nullable: true })
     CompletedAt?: Date | null;
 
     @Field(() => Int, { nullable: true })
